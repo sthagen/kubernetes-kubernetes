@@ -23,12 +23,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/onsi/gomega"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/sets"
 	clientset "k8s.io/client-go/kubernetes"
-	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	nodectlr "k8s.io/kubernetes/pkg/controller/nodelifecycle"
 	schedulernodeinfo "k8s.io/kubernetes/pkg/scheduler/nodeinfo"
 	e2elog "k8s.io/kubernetes/test/e2e/framework/log"
@@ -404,9 +405,34 @@ func isNodeUntaintedWithNonblocking(node *v1.Node, nonblockingTaints string) boo
 		return false
 	}
 
-	return v1helper.TolerationsTolerateTaintsWithFilter(fakePod.Spec.Tolerations, taints, func(t *v1.Taint) bool {
-		return t.Effect == v1.TaintEffectNoExecute || t.Effect == v1.TaintEffectNoSchedule
-	})
+	return toleratesTaintsWithNoScheduleNoExecuteEffects(taints, fakePod.Spec.Tolerations)
+}
+
+func toleratesTaintsWithNoScheduleNoExecuteEffects(taints []v1.Taint, tolerations []v1.Toleration) bool {
+	filteredTaints := []v1.Taint{}
+	for _, taint := range taints {
+		if taint.Effect == v1.TaintEffectNoExecute || taint.Effect == v1.TaintEffectNoSchedule {
+			filteredTaints = append(filteredTaints, taint)
+		}
+	}
+
+	toleratesTaint := func(taint v1.Taint) bool {
+		for _, toleration := range tolerations {
+			if toleration.ToleratesTaint(&taint) {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	for _, taint := range filteredTaints {
+		if !toleratesTaint(taint) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // IsNodeSchedulable returns true if:
@@ -491,4 +517,27 @@ func GetClusterZones(c clientset.Interface) (sets.String, error) {
 		}
 	}
 	return zones, nil
+}
+
+// CreatePodsPerNodeForSimpleApp creates pods w/ labels.  Useful for tests which make a bunch of pods w/o any networking.
+func CreatePodsPerNodeForSimpleApp(c clientset.Interface, namespace, appName string, podSpec func(n v1.Node) v1.PodSpec, maxCount int) map[string]string {
+	nodes, err := GetBoundedReadySchedulableNodes(c, maxCount)
+	// TODO use wrapper methods in expect.go after removing core e2e dependency on node
+	gomega.ExpectWithOffset(2, err).NotTo(gomega.HaveOccurred())
+	podLabels := map[string]string{
+		"app": appName + "-pod",
+	}
+	for i, node := range nodes.Items {
+		e2elog.Logf("%v/%v : Creating container with label app=%v-pod", i, maxCount, appName)
+		_, err := c.CoreV1().Pods(namespace).Create(context.TODO(), &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   fmt.Sprintf(appName+"-pod-%v", i),
+				Labels: podLabels,
+			},
+			Spec: podSpec(node),
+		}, metav1.CreateOptions{})
+		// TODO use wrapper methods in expect.go after removing core e2e dependency on node
+		gomega.ExpectWithOffset(2, err).NotTo(gomega.HaveOccurred())
+	}
+	return podLabels
 }

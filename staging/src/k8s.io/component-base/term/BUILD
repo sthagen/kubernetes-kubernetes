@@ -2,15 +2,11 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["podlogs.go"],
-    importpath = "k8s.io/kubernetes/test/e2e/framework/podlogs",
+    srcs = ["term.go"],
+    importmap = "k8s.io/kubernetes/vendor/k8s.io/component-base/term",
+    importpath = "k8s.io/component-base/term",
     visibility = ["//visibility:public"],
-    deps = [
-        "//staging/src/k8s.io/api/core/v1:go_default_library",
-        "//staging/src/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
-        "//staging/src/k8s.io/client-go/kubernetes:go_default_library",
-        "//vendor/github.com/pkg/errors:go_default_library",
-    ],
+    deps = ["//vendor/github.com/moby/term:go_default_library"],
 )
 
 filegroup(
