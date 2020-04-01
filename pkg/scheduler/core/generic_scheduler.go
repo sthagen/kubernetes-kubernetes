@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"k8s.io/klog"
+	"k8s.io/kubernetes/pkg/scheduler/internal/parallelize"
 
 	v1 "k8s.io/api/core/v1"
 	policy "k8s.io/api/policy/v1beta1"
@@ -35,7 +36,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	policylisters "k8s.io/client-go/listers/policy/v1beta1"
-	"k8s.io/client-go/util/workqueue"
 	extenderv1 "k8s.io/kube-scheduler/extender/v1"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
@@ -166,12 +166,6 @@ func (g *genericScheduler) Schedule(ctx context.Context, prof *profile.Profile, 
 	}
 
 	// Run "prefilter" plugins.
-	preFilterStatus := prof.RunPreFilterPlugins(ctx, state, pod)
-	if !preFilterStatus.IsSuccess() {
-		return result, preFilterStatus.AsError()
-	}
-	trace.Step("Running prefilter plugins done")
-
 	startPredicateEvalTime := time.Now()
 	filteredNodes, filteredNodesStatuses, err := g.findNodesThatFitPod(ctx, prof, state, pod)
 	if err != nil {
@@ -186,13 +180,6 @@ func (g *genericScheduler) Schedule(ctx context.Context, prof *profile.Profile, 
 			FilteredNodesStatuses: filteredNodesStatuses,
 		}
 	}
-
-	// Run "prescore" plugins.
-	prescoreStatus := prof.RunPreScorePlugins(ctx, state, pod, filteredNodes)
-	if !prescoreStatus.IsSuccess() {
-		return result, prescoreStatus.AsError()
-	}
-	trace.Step("Running prescore plugins done")
 
 	metrics.DeprecatedSchedulingAlgorithmPredicateEvaluationSecondsDuration.Observe(metrics.SinceInSeconds(startPredicateEvalTime))
 	metrics.DeprecatedSchedulingDuration.WithLabelValues(metrics.PredicateEvaluation).Observe(metrics.SinceInSeconds(startPredicateEvalTime))
@@ -412,6 +399,11 @@ func (g *genericScheduler) numFeasibleNodesToFind(numAllNodes int32) (numNodes i
 // Filters the nodes to find the ones that fit the pod based on the framework
 // filter plugins and filter extenders.
 func (g *genericScheduler) findNodesThatFitPod(ctx context.Context, prof *profile.Profile, state *framework.CycleState, pod *v1.Pod) ([]*v1.Node, framework.NodeToStatusMap, error) {
+	s := prof.RunPreFilterPlugins(ctx, state, pod)
+	if !s.IsSuccess() {
+		return nil, nil, s.AsError()
+	}
+
 	filteredNodesStatuses := make(framework.NodeToStatusMap)
 	filtered, err := g.findNodesThatPassFilters(ctx, prof, state, pod, filteredNodesStatuses)
 	if err != nil {
@@ -487,7 +479,7 @@ func (g *genericScheduler) findNodesThatPassFilters(ctx context.Context, prof *p
 
 	// Stops searching for more nodes once the configured number of feasible nodes
 	// are found.
-	workqueue.ParallelizeUntil(ctx, 16, len(allNodes), checkNode)
+	parallelize.Until(ctx, len(allNodes), checkNode)
 	processedNodes := int(filteredLen) + len(statuses)
 	g.nextStartNodeIndex = (g.nextStartNodeIndex + processedNodes) % len(allNodes)
 
@@ -643,10 +635,22 @@ func (g *genericScheduler) prioritizeNodes(
 		return result, nil
 	}
 
+	// Run PreScore plugins.
+	preScoreStatus := prof.RunPreScorePlugins(ctx, state, pod, nodes)
+	if !preScoreStatus.IsSuccess() {
+		return nil, preScoreStatus.AsError()
+	}
+
 	// Run the Score plugins.
 	scoresMap, scoreStatus := prof.RunScorePlugins(ctx, state, pod, nodes)
 	if !scoreStatus.IsSuccess() {
-		return framework.NodeScoreList{}, scoreStatus.AsError()
+		return nil, scoreStatus.AsError()
+	}
+
+	if klog.V(10) {
+		for plugin, nodeScoreList := range scoresMap {
+			klog.Infof("Plugin %s scores on %v/%v => %v", plugin, pod.Namespace, pod.Name, nodeScoreList)
+		}
 	}
 
 	// Summarize all scores.
@@ -872,7 +876,7 @@ func (g *genericScheduler) selectNodesForPreemption(
 			resultLock.Unlock()
 		}
 	}
-	workqueue.ParallelizeUntil(context.TODO(), 16, len(potentialNodes), checkNode)
+	parallelize.Until(ctx, len(potentialNodes), checkNode)
 	return nodeToVictims, nil
 }
 

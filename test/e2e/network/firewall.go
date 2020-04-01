@@ -32,6 +32,7 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2enetwork "k8s.io/kubernetes/test/e2e/framework/network"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	"k8s.io/kubernetes/test/e2e/framework/providers/gce"
 	e2eservice "k8s.io/kubernetes/test/e2e/framework/service"
 	e2eskipper "k8s.io/kubernetes/test/e2e/framework/skipper"
@@ -145,7 +146,7 @@ var _ = SIGDescribe("Firewall rule", func() {
 			podName := fmt.Sprintf("netexec%v", i)
 
 			framework.Logf("Creating netexec pod %q on node %v in namespace %q", podName, nodeName, ns)
-			pod := f.NewAgnhostPod(podName,
+			pod := newAgnhostPod(podName,
 				"netexec",
 				fmt.Sprintf("--http-port=%d", firewallTestHTTPPort),
 				fmt.Sprintf("--udp-port=%d", firewallTestUDPPort))
@@ -154,7 +155,7 @@ var _ = SIGDescribe("Firewall rule", func() {
 			pod.Spec.HostNetwork = true
 			_, err := cs.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 			framework.ExpectNoError(err)
-			framework.ExpectNoError(f.WaitForPodReady(podName))
+			framework.ExpectNoError(e2epod.WaitTimeoutForPodReadyInNamespace(f.ClientSet, podName, f.Namespace.Name, framework.PodStartTimeout))
 			framework.Logf("Netexec pod %q in namespace %q running", podName, ns)
 
 			defer func() {

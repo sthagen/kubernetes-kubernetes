@@ -16,7 +16,7 @@ require (
 	github.com/go-openapi/jsonreference v0.19.3 // indirect
 	github.com/go-openapi/spec v0.19.3
 	github.com/gogo/protobuf v1.3.1
-	github.com/google/go-cmp v0.3.1
+	github.com/google/go-cmp v0.4.0
 	github.com/google/gofuzz v1.1.0
 	github.com/google/uuid v1.1.1
 	github.com/googleapis/gnostic v0.1.0
@@ -33,9 +33,10 @@ require (
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200224211402-c65a9e2dd1fd
 	go.uber.org/zap v1.10.0
 	golang.org/x/crypto v0.0.0-20200220183623-bac4c82f6975
-	golang.org/x/net v0.0.0-20191004110552-13f9640d40b9
+	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200302150141-5c8b2ff67527
+	google.golang.org/genproto v0.0.0-20191230161307-f3c370f40bfb // indirect
 	google.golang.org/grpc v1.26.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/square/go-jose.v2 v2.2.2
@@ -46,7 +47,7 @@ require (
 	k8s.io/component-base v0.0.0
 	k8s.io/klog v1.0.0
 	k8s.io/kube-openapi v0.0.0-20200121204235-bf4fb3bd569c
-	k8s.io/utils v0.0.0-20200320200009-4a6ff033650d
+	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.7
 	sigs.k8s.io/structured-merge-diff/v3 v3.0.0
 	sigs.k8s.io/yaml v1.2.0

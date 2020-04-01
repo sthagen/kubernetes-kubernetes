@@ -53,7 +53,6 @@ import (
 
 	// TODO: Remove the following imports (ref: https://github.com/kubernetes/kubernetes/issues/81245)
 	e2emetrics "k8s.io/kubernetes/test/e2e/framework/metrics"
-	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 )
 
 const (
@@ -508,22 +507,6 @@ func (f *Framework) AddNamespacesToDelete(namespaces ...*v1.Namespace) {
 		f.namespacesToDelete = append(f.namespacesToDelete, ns)
 
 	}
-}
-
-// WaitForPodTerminated waits for the pod to be terminated with the given reason.
-func (f *Framework) WaitForPodTerminated(podName, reason string) error {
-	return e2epod.WaitForPodTerminatedInNamespace(f.ClientSet, podName, reason, f.Namespace.Name)
-}
-
-// WaitForPodReady waits for the pod to flip to ready in the namespace.
-func (f *Framework) WaitForPodReady(podName string) error {
-	return e2epod.WaitTimeoutForPodReadyInNamespace(f.ClientSet, podName, f.Namespace.Name, PodStartTimeout)
-}
-
-// WaitForPodRunningSlow waits for the pod to run in the namespace.
-// It has a longer timeout then WaitForPodRunning (util.slowPodStartTimeout).
-func (f *Framework) WaitForPodRunningSlow(podName string) error {
-	return e2epod.WaitForPodRunningInNamespaceSlow(f.ClientSet, podName, f.Namespace.Name)
 }
 
 // ClientConfig an externally accessible method for reading the kube client config.

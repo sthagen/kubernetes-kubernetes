@@ -19,6 +19,7 @@ package network
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -37,13 +38,14 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/kubernetes/test/e2e/framework"
-	e2edeploy "k8s.io/kubernetes/test/e2e/framework/deployment"
+	e2edeployment "k8s.io/kubernetes/test/e2e/framework/deployment"
 	e2eendpoints "k8s.io/kubernetes/test/e2e/framework/endpoints"
 	e2enetwork "k8s.io/kubernetes/test/e2e/framework/network"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
@@ -84,6 +86,9 @@ const (
 	// AffinityConfirmCount is the number of needed continuous requests to confirm that
 	// affinity is enabled.
 	AffinityConfirmCount = 15
+
+	// ssh port
+	sshPort = "22"
 )
 
 var (
@@ -902,11 +907,11 @@ var _ = SIGDescribe("Services", func() {
 
 		ginkgo.By("Creating a webserver pod to be part of the TCP service which echoes back source ip")
 		serverPodName := "echo-sourceip"
-		pod := f.NewAgnhostPod(serverPodName, "netexec", "--http-port", strconv.Itoa(servicePort))
+		pod := newAgnhostPod(serverPodName, "netexec", "--http-port", strconv.Itoa(servicePort))
 		pod.Labels = jig.Labels
 		_, err = cs.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 		framework.ExpectNoError(err)
-		framework.ExpectNoError(f.WaitForPodReady(pod.Name))
+		framework.ExpectNoError(e2epod.WaitTimeoutForPodReadyInNamespace(f.ClientSet, pod.Name, f.Namespace.Name, framework.PodStartTimeout))
 		defer func() {
 			framework.Logf("Cleaning up the echo server pod")
 			err := cs.CoreV1().Pods(ns).Delete(context.TODO(), serverPodName, metav1.DeleteOptions{})
@@ -926,7 +931,7 @@ var _ = SIGDescribe("Services", func() {
 			framework.ExpectNoError(err, "Failed to delete deployment %s", deployment.Name)
 		}()
 
-		framework.ExpectNoError(e2edeploy.WaitForDeploymentComplete(cs, deployment), "Failed to complete pause pod deployment")
+		framework.ExpectNoError(e2edeployment.WaitForDeploymentComplete(cs, deployment), "Failed to complete pause pod deployment")
 
 		deployment, err = cs.AppsV1().Deployments(ns).Get(context.TODO(), deployment.Name, metav1.GetOptions{})
 		framework.ExpectNoError(err, "Error in retrieving pause pod deployment")
@@ -935,7 +940,7 @@ var _ = SIGDescribe("Services", func() {
 		pausePods, err := cs.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector.String()})
 		framework.ExpectNoError(err, "Error in listing pods associated with pause pod deployments")
 
-		gomega.Expect(pausePods.Items[0].Spec.NodeName).ToNot(gomega.Equal(pausePods.Items[1].Spec.NodeName))
+		framework.ExpectNotEqual(pausePods.Items[0].Spec.NodeName, pausePods.Items[1].Spec.NodeName)
 
 		serviceAddress := net.JoinHostPort(serviceIP, strconv.Itoa(servicePort))
 
@@ -960,11 +965,11 @@ var _ = SIGDescribe("Services", func() {
 
 		ginkgo.By("creating a client/server pod")
 		serverPodName := "hairpin"
-		podTemplate := f.NewAgnhostPod(serverPodName, "netexec", "--http-port", strconv.Itoa(servicePort))
+		podTemplate := newAgnhostPod(serverPodName, "netexec", "--http-port", strconv.Itoa(servicePort))
 		podTemplate.Labels = jig.Labels
 		pod, err := cs.CoreV1().Pods(ns).Create(context.TODO(), podTemplate, metav1.CreateOptions{})
 		framework.ExpectNoError(err)
-		framework.ExpectNoError(f.WaitForPodReady(pod.Name))
+		framework.ExpectNoError(e2epod.WaitTimeoutForPodReadyInNamespace(f.ClientSet, pod.Name, f.Namespace.Name, framework.PodStartTimeout))
 
 		ginkgo.By("waiting for the service to expose an endpoint")
 		err = validateEndpointsPorts(cs, ns, serviceName, portsByPodName{serverPodName: {servicePort}})
@@ -1107,7 +1112,7 @@ var _ = SIGDescribe("Services", func() {
 
 		// Restart apiserver
 		ginkgo.By("Restarting apiserver")
-		if err := framework.RestartApiserver(ns, cs); err != nil {
+		if err := restartApiserver(ns, cs); err != nil {
 			framework.Failf("error restarting apiserver: %v", err)
 		}
 		ginkgo.By("Waiting for apiserver to come up by polling /healthz")
@@ -2679,6 +2684,119 @@ var _ = SIGDescribe("Services", func() {
 
 		framework.ExpectEqual(foundSvc, true, "could not find service 'kubernetes' in service list in all namespaces")
 	})
+
+	ginkgo.It("should test the lifecycle of an Endpoint", func() {
+		ns := f.Namespace.Name
+		testEndpointName := "testservice"
+
+		ginkgo.By("creating an Endpoint")
+		_, err := f.ClientSet.CoreV1().Endpoints(ns).Create(context.TODO(), &v1.Endpoints{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      testEndpointName,
+				Namespace: ns,
+				Labels: map[string]string{
+					"testendpoint-static": "true",
+				},
+			},
+			Subsets: []v1.EndpointSubset{{
+				Addresses: []v1.EndpointAddress{{
+					IP: "10.0.0.24",
+				}},
+				Ports: []v1.EndpointPort{{
+					Name:     "http",
+					Port:     80,
+					Protocol: v1.ProtocolTCP,
+				}},
+			}},
+		}, metav1.CreateOptions{})
+		framework.ExpectNoError(err, "failed to create Endpoint")
+
+		// set up a watch for the Endpoint
+		// this timeout was chosen as there was timeout failure from the CI
+		endpointWatchTimeoutSeconds := int64(180)
+		endpointWatch, err := f.ClientSet.CoreV1().Endpoints(ns).Watch(context.TODO(), metav1.ListOptions{LabelSelector: "testendpoint-static=true", TimeoutSeconds: &endpointWatchTimeoutSeconds})
+		framework.ExpectNoError(err, "failed to setup watch on newly created Endpoint")
+		endpointWatchChan := endpointWatch.ResultChan()
+		ginkgo.By("waiting for available Endpoint")
+		for watchEvent := range endpointWatchChan {
+			if watchEvent.Type == "ADDED" {
+				break
+			}
+		}
+
+		ginkgo.By("listing all Endpoints")
+		endpointsList, err := f.ClientSet.CoreV1().Endpoints("").List(context.TODO(), metav1.ListOptions{LabelSelector: "testendpoint-static=true"})
+		framework.ExpectNoError(err, "failed to list Endpoints")
+		foundEndpointService := false
+		var foundEndpoint v1.Endpoints
+		for _, endpoint := range endpointsList.Items {
+			if endpoint.ObjectMeta.Name == testEndpointName && endpoint.ObjectMeta.Namespace == ns {
+				foundEndpointService = true
+				foundEndpoint = endpoint
+				break
+			}
+		}
+		framework.ExpectEqual(foundEndpointService, true, "unable to find Endpoint Service in list of Endpoints")
+
+		ginkgo.By("updating the Endpoint")
+		foundEndpoint.ObjectMeta.Labels["testservice"] = "first-modification"
+		_, err = f.ClientSet.CoreV1().Endpoints(ns).Update(context.TODO(), &foundEndpoint, metav1.UpdateOptions{})
+		framework.ExpectNoError(err, "failed to update Endpoint with new label")
+
+		ginkgo.By("fetching the Endpoint")
+		_, err = f.ClientSet.CoreV1().Endpoints(ns).Get(context.TODO(), testEndpointName, metav1.GetOptions{})
+		framework.ExpectNoError(err, "failed to fetch Endpoint")
+		framework.ExpectEqual(foundEndpoint.ObjectMeta.Labels["testservice"], "first-modification", "label not patched")
+
+		endpointPatch, err := json.Marshal(map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"labels": map[string]string{
+					"testservice": "second-modification",
+				},
+			},
+			"subsets": []map[string]interface{}{
+				{
+					"addresses": []map[string]string{
+						{
+							"ip": "10.0.0.25",
+						},
+					},
+					"ports": []map[string]interface{}{
+						{
+							"name": "http-test",
+							"port": int32(8080),
+						},
+					},
+				},
+			},
+		})
+		framework.ExpectNoError(err, "failed to marshal JSON for WatchEvent patch")
+		ginkgo.By("patching the Endpoint")
+		_, err = f.ClientSet.CoreV1().Endpoints(ns).Patch(context.TODO(), testEndpointName, types.StrategicMergePatchType, []byte(endpointPatch), metav1.PatchOptions{})
+		framework.ExpectNoError(err, "failed to patch Endpoint")
+
+		ginkgo.By("fetching the Endpoint")
+		endpoint, err := f.ClientSet.CoreV1().Endpoints(ns).Get(context.TODO(), testEndpointName, metav1.GetOptions{})
+		framework.ExpectNoError(err, "failed to fetch Endpoint")
+		framework.ExpectEqual(endpoint.ObjectMeta.Labels["testservice"], "second-modification", "failed to patch Endpoint with Label")
+		endpointSubsetOne := endpoint.Subsets[0]
+		endpointSubsetOneAddresses := endpointSubsetOne.Addresses[0]
+		endpointSubsetOnePorts := endpointSubsetOne.Ports[0]
+		framework.ExpectEqual(endpointSubsetOneAddresses.IP, "10.0.0.25", "failed to patch Endpoint")
+		framework.ExpectEqual(endpointSubsetOnePorts.Name, "http-test", "failed to patch Endpoint")
+		framework.ExpectEqual(endpointSubsetOnePorts.Port, int32(8080), "failed to patch Endpoint")
+
+		ginkgo.By("deleting the Endpoint by Collection")
+		err = f.ClientSet.CoreV1().Endpoints(ns).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "testendpoint-static=true"})
+		framework.ExpectNoError(err, "failed to delete Endpoint by Collection")
+
+		ginkgo.By("waiting for Endpoint deletion")
+		for watchEvent := range endpointWatchChan {
+			if watchEvent.Type == "DELETED" {
+				break
+			}
+		}
+	})
 })
 
 // TODO: Get rid of [DisabledForLargeClusters] tag when issue #56138 is fixed.
@@ -2874,7 +2992,7 @@ var _ = SIGDescribe("ESIPP [Slow] [DisabledForLargeClusters]", func() {
 
 		ginkgo.By("Creating pause pod deployment to make sure, pausePods are in desired state")
 		deployment := createPausePodDeployment(cs, "pause-pod-deployment", namespace, 1)
-		framework.ExpectNoError(e2edeploy.WaitForDeploymentComplete(cs, deployment), "Failed to complete pause pod deployment")
+		framework.ExpectNoError(e2edeployment.WaitForDeploymentComplete(cs, deployment), "Failed to complete pause pod deployment")
 
 		defer func() {
 			framework.Logf("Deleting deployment")
@@ -3242,7 +3360,7 @@ func createAndGetExternalServiceFQDN(cs clientset.Interface, ns, serviceName str
 
 func createPausePodDeployment(cs clientset.Interface, name, ns string, replicas int) *appsv1.Deployment {
 	labels := map[string]string{"deployment": "agnhost-pause"}
-	pauseDeployment := e2edeploy.NewDeployment(name, int32(replicas), labels, "", "", appsv1.RollingUpdateDeploymentStrategyType)
+	pauseDeployment := e2edeployment.NewDeployment(name, int32(replicas), labels, "", "", appsv1.RollingUpdateDeploymentStrategyType)
 
 	pauseDeployment.Spec.Template.Spec.Containers[0] = v1.Container{
 		Name:  "agnhost-pause",
@@ -3334,7 +3452,7 @@ func proxyMode(f *framework.Framework) (string, error) {
 			Containers: []v1.Container{
 				{
 					Name:  "detector",
-					Image: framework.AgnHostImage,
+					Image: agnHostImage,
 					Args:  []string{"pause"},
 				},
 			},
@@ -3430,4 +3548,84 @@ func validateEndpointsPorts(c clientset.Interface, namespace, serviceName string
 		framework.Logf("Can't list pod debug info: %v", err)
 	}
 	return fmt.Errorf("Timed out waiting for service %s in namespace %s to expose endpoints %v (%v elapsed)", serviceName, namespace, expectedEndpoints, framework.ServiceStartTimeout)
+}
+
+// restartApiserver restarts the kube-apiserver.
+func restartApiserver(namespace string, cs clientset.Interface) error {
+	// TODO: Make it work for all providers.
+	if !framework.ProviderIs("gce", "gke", "aws") {
+		return fmt.Errorf("unsupported provider for RestartApiserver: %s", framework.TestContext.Provider)
+	}
+	if framework.ProviderIs("gce", "aws") {
+		initialRestartCount, err := getApiserverRestartCount(cs)
+		if err != nil {
+			return fmt.Errorf("failed to get apiserver's restart count: %v", err)
+		}
+		if err := sshRestartMaster(); err != nil {
+			return fmt.Errorf("failed to restart apiserver: %v", err)
+		}
+		return waitForApiserverRestarted(cs, initialRestartCount)
+	}
+	// GKE doesn't allow ssh access, so use a same-version master
+	// upgrade to teardown/recreate master.
+	v, err := cs.Discovery().ServerVersion()
+	if err != nil {
+		return err
+	}
+	return framework.MasterUpgradeGKE(namespace, v.GitVersion[1:]) // strip leading 'v'
+}
+
+func sshRestartMaster() error {
+	if !framework.ProviderIs("gce", "aws") {
+		return fmt.Errorf("unsupported provider for sshRestartMaster: %s", framework.TestContext.Provider)
+	}
+	var command string
+	if framework.ProviderIs("gce") {
+		command = "pidof kube-apiserver | xargs sudo kill"
+	} else {
+		command = "sudo /etc/init.d/kube-apiserver restart"
+	}
+	framework.Logf("Restarting master via ssh, running: %v", command)
+	result, err := e2essh.SSH(command, net.JoinHostPort(framework.GetMasterHost(), sshPort), framework.TestContext.Provider)
+	if err != nil || result.Code != 0 {
+		e2essh.LogResult(result)
+		return fmt.Errorf("couldn't restart apiserver: %v", err)
+	}
+	return nil
+}
+
+// waitForApiserverRestarted waits until apiserver's restart count increased.
+func waitForApiserverRestarted(c clientset.Interface, initialRestartCount int32) error {
+	for start := time.Now(); time.Since(start) < time.Minute; time.Sleep(5 * time.Second) {
+		restartCount, err := getApiserverRestartCount(c)
+		if err != nil {
+			framework.Logf("Failed to get apiserver's restart count: %v", err)
+			continue
+		}
+		if restartCount > initialRestartCount {
+			framework.Logf("Apiserver has restarted.")
+			return nil
+		}
+		framework.Logf("Waiting for apiserver restart count to increase")
+	}
+	return fmt.Errorf("timed out waiting for apiserver to be restarted")
+}
+
+func getApiserverRestartCount(c clientset.Interface) (int32, error) {
+	label := labels.SelectorFromSet(labels.Set(map[string]string{"component": "kube-apiserver"}))
+	listOpts := metav1.ListOptions{LabelSelector: label.String()}
+	pods, err := c.CoreV1().Pods(metav1.NamespaceSystem).List(context.TODO(), listOpts)
+	if err != nil {
+		return -1, err
+	}
+	if len(pods.Items) != 1 {
+		return -1, fmt.Errorf("unexpected number of apiserver pod: %d", len(pods.Items))
+	}
+	for _, s := range pods.Items[0].Status.ContainerStatuses {
+		if s.Name != "kube-apiserver" {
+			continue
+		}
+		return s.RestartCount, nil
+	}
+	return -1, fmt.Errorf("Failed to find kube-apiserver container in pod")
 }

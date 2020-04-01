@@ -409,7 +409,7 @@ var _ = SIGDescribe("DNS", func() {
 		ginkgo.By("Creating a pod with dnsPolicy=None and customized dnsConfig...")
 		testServerIP := "1.1.1.1"
 		testSearchPath := "resolv.conf.local"
-		testAgnhostPod := f.NewAgnhostPod(f.Namespace.Name, "pause")
+		testAgnhostPod := newAgnhostPod(f.Namespace.Name, "pause")
 		testAgnhostPod.Spec.DNSPolicy = v1.DNSNone
 		testAgnhostPod.Spec.DNSConfig = &v1.PodDNSConfig{
 			Nameservers: []string{testServerIP},
@@ -424,7 +424,7 @@ var _ = SIGDescribe("DNS", func() {
 				framework.Failf("ginkgo.Failed to delete pod %s: %v", testAgnhostPod.Name, err)
 			}
 		}()
-		err = f.WaitForPodReady(testAgnhostPod.Name)
+		err = e2epod.WaitTimeoutForPodReadyInNamespace(f.ClientSet, testAgnhostPod.Name, f.Namespace.Name, framework.PodStartTimeout)
 		framework.ExpectNoError(err, "failed to wait for pod %s to be running", testAgnhostPod.Name)
 
 		runCommand := func(arg string) string {

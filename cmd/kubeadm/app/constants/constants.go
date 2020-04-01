@@ -265,7 +265,7 @@ const (
 	MinExternalEtcdVersion = "3.2.18"
 
 	// DefaultEtcdVersion indicates the default etcd version that kubeadm uses
-	DefaultEtcdVersion = "3.4.3-0"
+	DefaultEtcdVersion = "3.4.4-0"
 
 	// Etcd defines variable used internally when referring to etcd component
 	Etcd = "etcd"
@@ -279,6 +279,12 @@ const (
 	KubeProxy = "kube-proxy"
 	// HyperKube defines variable used internally when referring to the hyperkube image
 	HyperKube = "hyperkube"
+	// CoreDNS defines variable used internally when referring to the CoreDNS component
+	CoreDNS = "CoreDNS"
+	// KubeDNS defines variable used internally when referring to the KubeDNS component
+	KubeDNS = "kube-dns"
+	// Kubelet defines variable used internally when referring to the Kubelet
+	Kubelet = "kubelet"
 
 	// SelfHostingPrefix describes the prefix workloads that are self-hosted by kubeadm has
 	SelfHostingPrefix = "self-hosted-"
@@ -436,7 +442,7 @@ var (
 		16: "3.3.17-0",
 		17: "3.4.3-0",
 		18: "3.4.3-0",
-		19: "3.4.3-0",
+		19: "3.4.4-0",
 	}
 
 	// KubeadmCertsClusterRoleName sets the name for the ClusterRole that allows

@@ -36,7 +36,7 @@ import (
 	e2epv "k8s.io/kubernetes/test/e2e/framework/pv"
 	e2eskipper "k8s.io/kubernetes/test/e2e/framework/skipper"
 	e2essh "k8s.io/kubernetes/test/e2e/framework/ssh"
-	"k8s.io/kubernetes/test/e2e/framework/volume"
+	e2evolume "k8s.io/kubernetes/test/e2e/framework/volume"
 	"k8s.io/kubernetes/test/e2e/storage/utils"
 )
 
@@ -98,7 +98,7 @@ var _ = utils.SIGDescribe("NFSPersistentVolumes[Disruptive][Flaky]", func() {
 		volLabel = labels.Set{e2epv.VolumeSelectorKey: ns}
 		selector = metav1.SetAsLabelSelector(volLabel)
 		// Start the NFS server pod.
-		_, nfsServerPod, nfsServerIP = volume.NewNFSServer(c, ns, []string{"-G", "777", "/exports"})
+		_, nfsServerPod, nfsServerIP = e2evolume.NewNFSServer(c, ns, []string{"-G", "777", "/exports"})
 		nfsPVconfig = e2epv.PersistentVolumeConfig{
 			NamePrefix: "nfs-",
 			Labels:     volLabel,
@@ -332,6 +332,6 @@ func tearDownTestCase(c clientset.Interface, f *framework.Framework, ns string, 
 		e2epv.DeletePersistentVolume(c, pv.Name)
 		return
 	}
-	err := framework.WaitForPersistentVolumeDeleted(c, pv.Name, 5*time.Second, 5*time.Minute)
+	err := e2epv.WaitForPersistentVolumeDeleted(c, pv.Name, 5*time.Second, 5*time.Minute)
 	framework.ExpectNoError(err, "Persistent Volume %v not deleted by dynamic provisioner", pv.Name)
 }

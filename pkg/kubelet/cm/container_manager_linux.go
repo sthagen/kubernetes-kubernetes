@@ -49,8 +49,8 @@ import (
 	kubefeatures "k8s.io/kubernetes/pkg/features"
 	podresourcesapi "k8s.io/kubernetes/pkg/kubelet/apis/podresources/v1alpha1"
 	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
+	"k8s.io/kubernetes/pkg/kubelet/cm/containermap"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager"
-	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/containermap"
 	cputopology "k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
 	"k8s.io/kubernetes/pkg/kubelet/cm/devicemanager"
 	"k8s.io/kubernetes/pkg/kubelet/cm/topologymanager"
@@ -159,6 +159,10 @@ func validateSystemRequirements(mountUtil mount.Interface) (features, error) {
 	mountPoints, err := mountUtil.List()
 	if err != nil {
 		return f, fmt.Errorf("%s - %v", localErr, err)
+	}
+
+	if cgroups.IsCgroup2UnifiedMode() {
+		return f, nil
 	}
 
 	expectedCgroups := sets.NewString("cpu", "cpuacct", "cpuset", "memory")
@@ -882,6 +886,11 @@ func getContainer(pid int) (string, error) {
 	cgs, err := cgroups.ParseCgroupFile(fmt.Sprintf("/proc/%d/cgroup", pid))
 	if err != nil {
 		return "", err
+	}
+
+	if cgroups.IsCgroup2UnifiedMode() {
+		c, _ := cgs[""]
+		return c, nil
 	}
 
 	cpu, found := cgs["cpu"]

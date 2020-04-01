@@ -11,7 +11,7 @@ require (
 	github.com/go-openapi/strfmt v0.19.3
 	github.com/go-openapi/validate v0.19.5
 	github.com/gogo/protobuf v1.3.1
-	github.com/google/go-cmp v0.3.1
+	github.com/google/go-cmp v0.4.0
 	github.com/google/gofuzz v1.1.0
 	github.com/google/uuid v1.1.1
 	github.com/googleapis/gnostic v0.1.0
@@ -29,7 +29,7 @@ require (
 	k8s.io/component-base v0.0.0
 	k8s.io/klog v1.0.0
 	k8s.io/kube-openapi v0.0.0-20200121204235-bf4fb3bd569c
-	k8s.io/utils v0.0.0-20200320200009-4a6ff033650d
+	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
 	sigs.k8s.io/yaml v1.2.0
 )
 
