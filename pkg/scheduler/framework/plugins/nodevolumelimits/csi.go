@@ -29,7 +29,6 @@ import (
 	csitrans "k8s.io/csi-translation-lib"
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
-	schedulertypes "k8s.io/kubernetes/pkg/scheduler/types"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
 
 	"k8s.io/klog"
@@ -68,7 +67,7 @@ func (pl *CSILimits) Name() string {
 }
 
 // Filter invoked at the filter extension point.
-func (pl *CSILimits) Filter(ctx context.Context, _ *framework.CycleState, pod *v1.Pod, nodeInfo *schedulertypes.NodeInfo) *framework.Status {
+func (pl *CSILimits) Filter(ctx context.Context, _ *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
 	// If the new pod doesn't have any volume attached to it, the predicate will always be true
 	if len(pod.Spec.Volumes) == 0 {
 		return nil
@@ -103,8 +102,8 @@ func (pl *CSILimits) Filter(ctx context.Context, _ *framework.CycleState, pod *v
 	}
 
 	attachedVolumes := make(map[string]string)
-	for _, existingPod := range nodeInfo.Pods() {
-		if err := pl.filterAttachableVolumes(csiNode, existingPod.Spec.Volumes, existingPod.Namespace, attachedVolumes); err != nil {
+	for _, existingPod := range nodeInfo.Pods {
+		if err := pl.filterAttachableVolumes(csiNode, existingPod.Pod.Spec.Volumes, existingPod.Pod.Namespace, attachedVolumes); err != nil {
 			return framework.NewStatus(framework.Error, err.Error())
 		}
 	}
@@ -269,7 +268,7 @@ func (pl *CSILimits) getCSIDriverInfoFromSC(csiNode *storagev1.CSINode, pvc *v1.
 }
 
 // NewCSI initializes a new plugin and returns it.
-func NewCSI(_ *runtime.Unknown, handle framework.FrameworkHandle) (framework.Plugin, error) {
+func NewCSI(_ runtime.Object, handle framework.FrameworkHandle) (framework.Plugin, error) {
 	informerFactory := handle.SharedInformerFactory()
 	pvLister := informerFactory.Core().V1().PersistentVolumes().Lister()
 	pvcLister := informerFactory.Core().V1().PersistentVolumeClaims().Lister()
@@ -285,9 +284,9 @@ func NewCSI(_ *runtime.Unknown, handle framework.FrameworkHandle) (framework.Plu
 	}, nil
 }
 
-func getVolumeLimits(nodeInfo *schedulertypes.NodeInfo, csiNode *storagev1.CSINode) map[v1.ResourceName]int64 {
+func getVolumeLimits(nodeInfo *framework.NodeInfo, csiNode *storagev1.CSINode) map[v1.ResourceName]int64 {
 	// TODO: stop getting values from Node object in v1.18
-	nodeVolumeLimits := nodeInfo.VolumeLimits()
+	nodeVolumeLimits := volumeLimits(nodeInfo)
 	if csiNode != nil {
 		for i := range csiNode.Spec.Drivers {
 			d := csiNode.Spec.Drivers[i]

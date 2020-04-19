@@ -111,14 +111,6 @@ const (
 	// Allows running an ephemeral container in pod namespaces to troubleshoot a running pod.
 	EphemeralContainers featuregate.Feature = "EphemeralContainers"
 
-	// owner: @verb
-	// alpha: v1.10
-	// beta: v1.12
-	// GA: v1.17
-	//
-	// Allows all containers in a pod to share a process namespace.
-	PodShareProcessNamespace featuregate.Feature = "PodShareProcessNamespace"
-
 	// owner: @sjenning
 	// alpha: v1.11
 	//
@@ -154,18 +146,21 @@ const (
 
 	// owner @smarterclayton
 	// alpha: v1.16
+	// beta:  v1.19
 	//
 	// Enable legacy behavior to vary cluster functionality on the node-role.kubernetes.io labels. On by default (legacy), will be turned off in 1.18.
 	LegacyNodeRoleBehavior featuregate.Feature = "LegacyNodeRoleBehavior"
 
 	// owner @brendandburns
 	// alpha: v1.9
+	// beta:  v1.19
 	//
 	// Enable nodes to exclude themselves from service load balancers
 	ServiceNodeExclusion featuregate.Feature = "ServiceNodeExclusion"
 
 	// owner @smarterclayton
 	// alpha: v1.16
+	// beta:  v1.19
 	//
 	// Enable nodes to exclude themselves from network disruption checks
 	NodeDisruptionExclusion featuregate.Feature = "NodeDisruptionExclusion"
@@ -541,6 +536,7 @@ const (
 
 	// owner: @robscott
 	// alpha: v1.18
+	// beta:  v1.19
 	//
 	// Enables AppProtocol field for Services and Endpoints.
 	ServiceAppProtocol featuregate.Feature = "ServiceAppProtocol"
@@ -597,7 +593,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	LocalStorageCapacityIsolation:  {Default: true, PreRelease: featuregate.Beta},
 	Sysctls:                        {Default: true, PreRelease: featuregate.Beta},
 	EphemeralContainers:            {Default: false, PreRelease: featuregate.Alpha},
-	PodShareProcessNamespace:       {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.19
 	QOSReserved:                    {Default: false, PreRelease: featuregate.Alpha},
 	ExpandPersistentVolumes:        {Default: true, PreRelease: featuregate.Beta},
 	ExpandInUsePersistentVolumes:   {Default: true, PreRelease: featuregate.Beta},
@@ -606,8 +601,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	CPUManager:                     {Default: true, PreRelease: featuregate.Beta},
 	CPUCFSQuotaPeriod:              {Default: false, PreRelease: featuregate.Alpha},
 	TopologyManager:                {Default: true, PreRelease: featuregate.Beta},
-	ServiceNodeExclusion:           {Default: false, PreRelease: featuregate.Alpha},
-	NodeDisruptionExclusion:        {Default: false, PreRelease: featuregate.Alpha},
+	ServiceNodeExclusion:           {Default: true, PreRelease: featuregate.Beta},
+	NodeDisruptionExclusion:        {Default: true, PreRelease: featuregate.Beta},
 	CSIDriverRegistry:              {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.20
 	CSINodeInfo:                    {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.19
 	BlockVolume:                    {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.20
@@ -661,7 +656,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	AllowInsecureBackendProxy:                      {Default: true, PreRelease: featuregate.Beta},
 	PodDisruptionBudget:                            {Default: true, PreRelease: featuregate.Beta},
 	ServiceTopology:                                {Default: false, PreRelease: featuregate.Alpha},
-	ServiceAppProtocol:                             {Default: false, PreRelease: featuregate.Alpha},
+	ServiceAppProtocol:                             {Default: true, PreRelease: featuregate.Beta},
 	ImmutableEphemeralVolumes:                      {Default: false, PreRelease: featuregate.Alpha},
 	DefaultIngressClass:                            {Default: true, PreRelease: featuregate.Beta},
 	HugePageStorageMediumSize:                      {Default: false, PreRelease: featuregate.Alpha},
@@ -683,5 +678,5 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	// features that enable backwards compatibility but are scheduled to be removed
 	// ...
 	HPAScaleToZero:         {Default: false, PreRelease: featuregate.Alpha},
-	LegacyNodeRoleBehavior: {Default: true, PreRelease: featuregate.Alpha},
+	LegacyNodeRoleBehavior: {Default: true, PreRelease: featuregate.Beta},
 }

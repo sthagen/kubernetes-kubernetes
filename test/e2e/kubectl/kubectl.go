@@ -65,6 +65,8 @@ import (
 	e2eauth "k8s.io/kubernetes/test/e2e/framework/auth"
 	e2eendpoints "k8s.io/kubernetes/test/e2e/framework/endpoints"
 	e2ekubectl "k8s.io/kubernetes/test/e2e/framework/kubectl"
+	e2enetwork "k8s.io/kubernetes/test/e2e/framework/network"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	e2eservice "k8s.io/kubernetes/test/e2e/framework/service"
 	e2etestfiles "k8s.io/kubernetes/test/e2e/framework/testfiles"
@@ -853,6 +855,71 @@ metadata:
 		})
 	})
 
+	ginkgo.Describe("Kubectl diff", func() {
+		/*
+			Release : v1.18
+			Testname: Kubectl, diff Deployment
+			Description: Create a Deployment with httpd image. Declare the same Deployment with a different image, busybox. Diff of live Deployment with declared Deployment MUST include the difference between live and declared image.
+		*/
+		ginkgo.It("should find diff in Deployment", func() {
+			ginkgo.By("create deployment with httpd image")
+			deployment := commonutils.SubstituteImageName(string(readTestFileOrDie(httpdDeployment3Filename)))
+			framework.RunKubectlOrDieInput(ns, deployment, "create", "-f", "-")
+
+			ginkgo.By("verify diff finds difference between live and declared image")
+			deployment = strings.Replace(deployment, httpdImage, busyboxImage, 1)
+			if !strings.Contains(deployment, busyboxImage) {
+				framework.Failf("Failed replacing image from %s to %s in:\n%s\n", httpdImage, busyboxImage, deployment)
+			}
+			output, err := framework.RunKubectlInput(ns, deployment, "diff", "-f", "-")
+			if err, ok := err.(*exec.ExitError); ok && err.ExitCode() == 1 {
+				framework.Failf("Expected kubectl diff exit code of 1, but got %d: %v\n", err.ExitCode(), err)
+			}
+			requiredItems := []string{httpdImage, busyboxImage}
+			for _, item := range requiredItems {
+				if !strings.Contains(output, item) {
+					framework.Failf("Missing %s in kubectl diff output:\n%s\n%v\n", item, output, err)
+				}
+			}
+
+			framework.RunKubectlOrDieInput(ns, deployment, "delete", "-f", "-")
+		})
+	})
+
+	ginkgo.Describe("Kubectl server-side dry-run", func() {
+		/*
+			Release : v1.18
+			Testname: Kubectl, server-side dry-run Pod
+			Description: The command 'kubectl run' must create a pod with the specified image name. After, the command 'kubectl replace --dry-run=server' should update the Pod with the new image name and server-side dry-run enabled. The image name must not change.
+		*/
+		ginkgo.It("should dry-run update the Pod", func() {
+			ginkgo.By("running the image " + httpdImage)
+			podName := "e2e-test-httpd-pod"
+			nsFlag := fmt.Sprintf("--namespace=%v", ns)
+			framework.RunKubectlOrDie(ns, "run", podName, "--image="+httpdImage, "--labels=run="+podName, nsFlag)
+
+			ginkgo.By("replace the image in the pod with server-side dry-run")
+			podJSON := framework.RunKubectlOrDie(ns, "get", "pod", podName, "-o", "json", nsFlag)
+			podJSON = strings.Replace(podJSON, httpdImage, busyboxImage, 1)
+			if !strings.Contains(podJSON, busyboxImage) {
+				framework.Failf("Failed replacing image from %s to %s in:\n%s\n", httpdImage, busyboxImage, podJSON)
+			}
+			framework.RunKubectlOrDieInput(ns, podJSON, "replace", "-f", "-", "--dry-run", "server", nsFlag)
+
+			ginkgo.By("verifying the pod " + podName + " has the right image " + httpdImage)
+			pod, err := c.CoreV1().Pods(ns).Get(context.TODO(), podName, metav1.GetOptions{})
+			if err != nil {
+				framework.Failf("Failed getting pod %s: %v", podName, err)
+			}
+			containers := pod.Spec.Containers
+			if checkContainersImage(containers, httpdImage) {
+				framework.Failf("Failed creating pod with expected image %s", httpdImage)
+			}
+
+			framework.RunKubectlOrDie(ns, "delete", "pods", podName, nsFlag)
+		})
+	})
+
 	// definitionMatchesGVK returns true if the specified GVK is listed as an x-kubernetes-group-version-kind extension
 	definitionMatchesGVK := func(extensions []*openapi_v2.NamedAny, desiredGVK schema.GroupVersionKind) bool {
 		for _, extension := range extensions {
@@ -1220,12 +1287,12 @@ metadata:
 
 			ginkgo.By("exposing RC")
 			framework.RunKubectlOrDie(ns, "expose", "rc", "agnhost-master", "--name=rm2", "--port=1234", fmt.Sprintf("--target-port=%d", agnhostPort), nsFlag)
-			framework.WaitForService(c, ns, "rm2", true, framework.Poll, framework.ServiceStartTimeout)
+			e2enetwork.WaitForService(c, ns, "rm2", true, framework.Poll, framework.ServiceStartTimeout)
 			validateService("rm2", 1234, framework.ServiceStartTimeout)
 
 			ginkgo.By("exposing service")
 			framework.RunKubectlOrDie(ns, "expose", "service", "rm2", "--name=rm3", "--port=2345", fmt.Sprintf("--target-port=%d", agnhostPort), nsFlag)
-			framework.WaitForService(c, ns, "rm3", true, framework.Poll, framework.ServiceStartTimeout)
+			e2enetwork.WaitForService(c, ns, "rm3", true, framework.Poll, framework.ServiceStartTimeout)
 			validateService("rm3", 2345, framework.ServiceStartTimeout)
 		})
 	})
@@ -1604,7 +1671,7 @@ metadata:
 
 			ginkgo.By("adding the taint " + testTaint.ToString() + " to a node")
 			runKubectlRetryOrDie(ns, "taint", "nodes", nodeName, testTaint.ToString())
-			defer framework.RemoveTaintOffNode(f.ClientSet, nodeName, testTaint)
+			defer e2enode.RemoveTaintOffNode(f.ClientSet, nodeName, testTaint)
 
 			ginkgo.By("verifying the node has the taint " + testTaint.ToString())
 			output := runKubectlRetryOrDie(ns, "describe", "node", nodeName)
@@ -1635,7 +1702,7 @@ metadata:
 
 			ginkgo.By("adding the taint " + testTaint.ToString() + " to a node")
 			runKubectlRetryOrDie(ns, "taint", "nodes", nodeName, testTaint.ToString())
-			defer framework.RemoveTaintOffNode(f.ClientSet, nodeName, testTaint)
+			defer e2enode.RemoveTaintOffNode(f.ClientSet, nodeName, testTaint)
 
 			ginkgo.By("verifying the node has the taint " + testTaint.ToString())
 			output := runKubectlRetryOrDie(ns, "describe", "node", nodeName)
@@ -1653,7 +1720,7 @@ metadata:
 			}
 			ginkgo.By("adding another taint " + newTestTaint.ToString() + " to the node")
 			runKubectlRetryOrDie(ns, "taint", "nodes", nodeName, newTestTaint.ToString())
-			defer framework.RemoveTaintOffNode(f.ClientSet, nodeName, newTestTaint)
+			defer e2enode.RemoveTaintOffNode(f.ClientSet, nodeName, newTestTaint)
 
 			ginkgo.By("verifying the node has the taint " + newTestTaint.ToString())
 			output = runKubectlRetryOrDie(ns, "describe", "node", nodeName)
@@ -1671,7 +1738,7 @@ metadata:
 			}
 			ginkgo.By("adding NoExecute taint " + noExecuteTaint.ToString() + " to the node")
 			runKubectlRetryOrDie(ns, "taint", "nodes", nodeName, noExecuteTaint.ToString())
-			defer framework.RemoveTaintOffNode(f.ClientSet, nodeName, noExecuteTaint)
+			defer e2enode.RemoveTaintOffNode(f.ClientSet, nodeName, noExecuteTaint)
 
 			ginkgo.By("verifying the node has the taint " + noExecuteTaint.ToString())
 			output = runKubectlRetryOrDie(ns, "describe", "node", nodeName)

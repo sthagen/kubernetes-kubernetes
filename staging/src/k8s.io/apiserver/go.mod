@@ -30,7 +30,7 @@ require (
 	github.com/prometheus/client_model v0.2.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.4.0
-	go.etcd.io/etcd v0.5.0-alpha.5.0.20200224211402-c65a9e2dd1fd
+	go.etcd.io/etcd v0.5.0-alpha.5.0.20200401174654-e694b7bb0875
 	go.uber.org/zap v1.10.0
 	golang.org/x/crypto v0.0.0-20200220183623-bac4c82f6975
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
@@ -46,7 +46,7 @@ require (
 	k8s.io/client-go v0.0.0
 	k8s.io/component-base v0.0.0
 	k8s.io/klog v1.0.0
-	k8s.io/kube-openapi v0.0.0-20200401025727-01dfbe2eec3d
+	k8s.io/kube-openapi v0.0.0-20200403204345-e1beb1bd0f35
 	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.7
 	sigs.k8s.io/structured-merge-diff/v3 v3.0.0

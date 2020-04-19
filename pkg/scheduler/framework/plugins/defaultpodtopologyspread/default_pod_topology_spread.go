@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/helper"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
-	schedulertypes "k8s.io/kubernetes/pkg/scheduler/types"
 	utilnode "k8s.io/kubernetes/pkg/util/node"
 )
 
@@ -189,23 +188,23 @@ func (pl *DefaultPodTopologySpread) PreScore(ctx context.Context, cycleState *fr
 }
 
 // New initializes a new plugin and returns it.
-func New(_ *runtime.Unknown, handle framework.FrameworkHandle) (framework.Plugin, error) {
+func New(_ runtime.Object, handle framework.FrameworkHandle) (framework.Plugin, error) {
 	return &DefaultPodTopologySpread{
 		handle: handle,
 	}, nil
 }
 
 // countMatchingPods counts pods based on namespace and matching all selectors
-func countMatchingPods(namespace string, selector labels.Selector, nodeInfo *schedulertypes.NodeInfo) int {
-	if len(nodeInfo.Pods()) == 0 || selector.Empty() {
+func countMatchingPods(namespace string, selector labels.Selector, nodeInfo *framework.NodeInfo) int {
+	if len(nodeInfo.Pods) == 0 || selector.Empty() {
 		return 0
 	}
 	count := 0
-	for _, pod := range nodeInfo.Pods() {
+	for _, p := range nodeInfo.Pods {
 		// Ignore pods being deleted for spreading purposes
 		// Similar to how it is done for SelectorSpreadPriority
-		if namespace == pod.Namespace && pod.DeletionTimestamp == nil {
-			if selector.Matches(labels.Set(pod.Labels)) {
+		if namespace == p.Pod.Namespace && p.Pod.DeletionTimestamp == nil {
+			if selector.Matches(labels.Set(p.Pod.Labels)) {
 				count++
 			}
 		}

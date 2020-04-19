@@ -124,6 +124,7 @@ aliases:
     - calebamiles # SIG Chair
     - cpanato # Branch Manager
     - feiskyer # Patch Release Team
+    - hasheddan # Branch Manager
     - hoegaarden # Patch Release Team
     - justaugustus # SIG Chair
     - saschagrunert # Branch Manager
@@ -179,6 +180,7 @@ aliases:
     - mengqiy
     - smarterclayton
     - soltysh
+    - pwittrock
   sig-cli:
     - adohe
     - deads2k
@@ -193,6 +195,7 @@ aliases:
     - shiywang
     - smarterclayton
     - soltysh
+    - pwittrock
   sig-testing-reviewers:
     - bentheelder
     - cblecker

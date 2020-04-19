@@ -22,10 +22,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -41,21 +39,17 @@ import (
 	"github.com/onsi/gomega"
 	gomegatypes "github.com/onsi/gomega/types"
 
-	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
-	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/apimachinery/pkg/watch"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -404,32 +398,6 @@ func CheckTestingNSDeletedExcept(c clientset.Interface, skip string) error {
 	return fmt.Errorf("Waiting for terminating namespaces to be deleted timed out")
 }
 
-// WaitForService waits until the service appears (exist == true), or disappears (exist == false)
-func WaitForService(c clientset.Interface, namespace, name string, exist bool, interval, timeout time.Duration) error {
-	err := wait.PollImmediate(interval, timeout, func() (bool, error) {
-		_, err := c.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-		switch {
-		case err == nil:
-			Logf("Service %s in namespace %s found.", name, namespace)
-			return exist, nil
-		case apierrors.IsNotFound(err):
-			Logf("Service %s in namespace %s disappeared.", name, namespace)
-			return !exist, nil
-		case !testutils.IsRetryableAPIError(err):
-			Logf("Non-retryable failure while getting service.")
-			return false, err
-		default:
-			Logf("Get service %s in namespace %s failed: %v", name, namespace, err)
-			return false, nil
-		}
-	})
-	if err != nil {
-		stateMsg := map[bool]string{true: "to appear", false: "to disappear"}
-		return fmt.Errorf("error waiting for service %s/%s %s: %v", namespace, name, stateMsg[exist], err)
-	}
-	return nil
-}
-
 //WaitForServiceEndpointsNum waits until the amount of endpoints that implement service to expectNum.
 func WaitForServiceEndpointsNum(c clientset.Interface, namespace, serviceName string, expectNum int, interval, timeout time.Duration) error {
 	return wait.Poll(interval, timeout, func() (bool, error) {
@@ -643,7 +611,7 @@ func (b KubectlBuilder) Exec() (string, error) {
 				rc = int(ee.Sys().(syscall.WaitStatus).ExitStatus())
 				Logf("rc: %d", rc)
 			}
-			return "", uexec.CodeExitError{
+			return stdout.String(), uexec.CodeExitError{
 				Err:  fmt.Errorf("error running %v:\nCommand stdout:\n%v\nstderr:\n%v\nerror:\n%v", cmd, cmd.Stdout, cmd.Stderr, err),
 				Code: rc,
 			}
@@ -978,12 +946,6 @@ func ExpectNodeHasLabel(c clientset.Interface, nodeName string, labelKey string,
 	ExpectEqual(node.Labels[labelKey], labelValue)
 }
 
-// RemoveTaintOffNode removes the given taint from the given node.
-func RemoveTaintOffNode(c clientset.Interface, nodeName string, taint v1.Taint) {
-	ExpectNoError(controller.RemoveTaintOffNode(c, nodeName, nil, &taint))
-	verifyThatTaintIsGone(c, nodeName, &taint)
-}
-
 // AddOrUpdateTaintOnNode adds the given taint to the given node or updates taint.
 func AddOrUpdateTaintOnNode(c clientset.Interface, nodeName string, taint v1.Taint) {
 	ExpectNoError(controller.AddOrUpdateTaintOnNode(c, nodeName, &taint))
@@ -997,15 +959,6 @@ func RemoveLabelOffNode(c clientset.Interface, nodeName string, labelKey string)
 
 	ginkgo.By("verifying the node doesn't have the label " + labelKey)
 	ExpectNoError(testutils.VerifyLabelsRemoved(c, nodeName, []string{labelKey}))
-}
-
-func verifyThatTaintIsGone(c clientset.Interface, nodeName string, taint *v1.Taint) {
-	ginkgo.By("verifying the node doesn't have the taint " + taint.ToString())
-	nodeUpdated, err := c.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
-	ExpectNoError(err)
-	if taintExists(nodeUpdated.Spec.Taints, taint) {
-		Failf("Failed removing taint " + taint.ToString() + " of the node " + nodeName)
-	}
 }
 
 // ExpectNodeHasTaint expects that the node has the given taint.
@@ -1236,14 +1189,6 @@ func GetAllMasterAddresses(c clientset.Interface) []string {
 	return ips.List()
 }
 
-// DescribeIng describes information of ingress by running kubectl describe ing.
-func DescribeIng(ns string) {
-	Logf("\nOutput of kubectl describe ing:\n")
-	desc, _ := RunKubectl(
-		ns, "describe", "ing", fmt.Sprintf("--namespace=%v", ns))
-	Logf(desc)
-}
-
 // CreateEmptyFileOnPod creates empty file at given path on the pod.
 // TODO(alejandrox1): move to subpkg pod once kubectl methods have been refactored.
 func CreateEmptyFileOnPod(namespace string, podName string, filePath string) error {
@@ -1261,51 +1206,6 @@ func DumpDebugInfo(c clientset.Interface, ns string) {
 		l, _ := RunKubectl(ns, "logs", s.Name, fmt.Sprintf("--namespace=%v", ns), "--tail=100")
 		Logf("\nLast 100 log lines of %v:\n%v", s.Name, l)
 	}
-}
-
-// DsFromManifest reads a .json/yaml file and returns the daemonset in it.
-func DsFromManifest(url string) (*appsv1.DaemonSet, error) {
-	Logf("Parsing ds from %v", url)
-
-	var response *http.Response
-	var err error
-
-	for i := 1; i <= 5; i++ {
-		response, err = http.Get(url)
-		if err == nil && response.StatusCode == 200 {
-			break
-		}
-		time.Sleep(time.Duration(i) * time.Second)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("Failed to get url: %v", err)
-	}
-	if response.StatusCode != 200 {
-		return nil, fmt.Errorf("invalid http response status: %v", response.StatusCode)
-	}
-	defer response.Body.Close()
-
-	data, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read html response body: %v", err)
-	}
-	return DsFromData(data)
-}
-
-// DsFromData reads a byte slice and returns the daemonset in it.
-func DsFromData(data []byte) (*appsv1.DaemonSet, error) {
-	var ds appsv1.DaemonSet
-	dataJSON, err := utilyaml.ToJSON(data)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse data to json: %v", err)
-	}
-
-	err = runtime.DecodeInto(scheme.Codecs.UniversalDecoder(), dataJSON, &ds)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to decode DaemonSet spec: %v", err)
-	}
-	return &ds, nil
 }
 
 // PrettyPrintJSON converts metrics to JSON format.

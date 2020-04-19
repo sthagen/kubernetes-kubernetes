@@ -42,13 +42,13 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.2 // indirect
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docker/distribution v2.7.1+incompatible
-	github.com/docker/docker v0.7.3-0.20190327010347-be7ac8be2ae0
+	github.com/docker/docker v1.4.2-0.20200309214505-aa6a9891b09c
 	github.com/docker/go-connections v0.3.0
 	github.com/docker/go-units v0.4.0
 	github.com/elazarl/goproxy v0.0.0-20180725130230-947c36da3153
 	github.com/emicklei/go-restful v2.9.5+incompatible
 	github.com/evanphx/json-patch v4.2.0+incompatible
-	github.com/fsnotify/fsnotify v1.4.7
+	github.com/fsnotify/fsnotify v1.4.9
 	github.com/go-bindata/go-bindata v3.1.1+incompatible
 	github.com/go-openapi/analysis v0.19.5
 	github.com/go-openapi/loads v0.19.4
@@ -103,7 +103,7 @@ require (
 	github.com/urfave/negroni v1.0.0 // indirect
 	github.com/vishvananda/netlink v1.1.0
 	github.com/vmware/govmomi v0.20.3
-	go.etcd.io/etcd v0.5.0-alpha.5.0.20200224211402-c65a9e2dd1fd
+	go.etcd.io/etcd v0.5.0-alpha.5.0.20200401174654-e694b7bb0875
 	golang.org/x/crypto v0.0.0-20200220183623-bac4c82f6975
 	golang.org/x/lint v0.0.0-20190409202823-959b441ac422
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
@@ -138,7 +138,7 @@ require (
 	k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator v0.0.0
 	k8s.io/kube-controller-manager v0.0.0
-	k8s.io/kube-openapi v0.0.0-20200401025727-01dfbe2eec3d
+	k8s.io/kube-openapi v0.0.0-20200403204345-e1beb1bd0f35
 	k8s.io/kube-proxy v0.0.0
 	k8s.io/kube-scheduler v0.0.0
 	k8s.io/kubectl v0.0.0
@@ -147,7 +147,7 @@ require (
 	k8s.io/metrics v0.0.0
 	k8s.io/repo-infra v0.0.1-alpha.1
 	k8s.io/sample-apiserver v0.0.0
-	k8s.io/system-validators v1.0.4
+	k8s.io/system-validators v1.1.2
 	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
 	sigs.k8s.io/kustomize v2.0.3+incompatible
 	sigs.k8s.io/yaml v1.2.0
@@ -231,7 +231,7 @@ replace (
 	github.com/dgrijalva/jwt-go => github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dnaeon/go-vcr => github.com/dnaeon/go-vcr v1.0.1
 	github.com/docker/distribution => github.com/docker/distribution v2.7.1+incompatible
-	github.com/docker/docker => github.com/docker/docker v0.7.3-0.20190327010347-be7ac8be2ae0
+	github.com/docker/docker => github.com/docker/docker v1.4.2-0.20200309214505-aa6a9891b09c
 	github.com/docker/go-connections => github.com/docker/go-connections v0.3.0
 	github.com/docker/go-units => github.com/docker/go-units v0.4.0
 	github.com/docker/spdystream => github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96
@@ -248,7 +248,7 @@ replace (
 	github.com/fatih/color => github.com/fatih/color v1.7.0
 	github.com/flynn/go-shlex => github.com/flynn/go-shlex v0.0.0-20150515145356-3f9db97f8568
 	github.com/fogleman/gg => github.com/fogleman/gg v1.2.1-0.20190220221249-0403632d5b90
-	github.com/fsnotify/fsnotify => github.com/fsnotify/fsnotify v1.4.7
+	github.com/fsnotify/fsnotify => github.com/fsnotify/fsnotify v1.4.9
 	github.com/ghodss/yaml => github.com/ghodss/yaml v1.0.0
 	github.com/gliderlabs/ssh => github.com/gliderlabs/ssh v0.1.1
 	github.com/go-acme/lego => github.com/go-acme/lego v2.5.0+incompatible
@@ -469,7 +469,7 @@ replace (
 	github.com/xlab/handysort => github.com/xlab/handysort v0.0.0-20150421192137-fb3537ed64a1
 	github.com/xordataexchange/crypt => github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77
 	go.etcd.io/bbolt => go.etcd.io/bbolt v1.3.3
-	go.etcd.io/etcd => go.etcd.io/etcd v0.5.0-alpha.5.0.20200224211402-c65a9e2dd1fd // c65a9e2dd1fd is the SHA for git tag v3.4.4
+	go.etcd.io/etcd => go.etcd.io/etcd v0.5.0-alpha.5.0.20200401174654-e694b7bb0875 // e694b7bb0875 is the SHA for git tag v3.4.7
 	go.mongodb.org/mongo-driver => go.mongodb.org/mongo-driver v1.1.2
 	go.opencensus.io => go.opencensus.io v0.21.0
 	go.uber.org/atomic => go.uber.org/atomic v1.3.2
@@ -537,7 +537,7 @@ replace (
 	k8s.io/klog => k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator => ./staging/src/k8s.io/kube-aggregator
 	k8s.io/kube-controller-manager => ./staging/src/k8s.io/kube-controller-manager
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20200401025727-01dfbe2eec3d
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20200403204345-e1beb1bd0f35
 	k8s.io/kube-proxy => ./staging/src/k8s.io/kube-proxy
 	k8s.io/kube-scheduler => ./staging/src/k8s.io/kube-scheduler
 	k8s.io/kubectl => ./staging/src/k8s.io/kubectl
@@ -548,7 +548,7 @@ replace (
 	k8s.io/sample-apiserver => ./staging/src/k8s.io/sample-apiserver
 	k8s.io/sample-cli-plugin => ./staging/src/k8s.io/sample-cli-plugin
 	k8s.io/sample-controller => ./staging/src/k8s.io/sample-controller
-	k8s.io/system-validators => k8s.io/system-validators v1.0.4
+	k8s.io/system-validators => k8s.io/system-validators v1.1.2
 	k8s.io/utils => k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
 	modernc.org/cc => modernc.org/cc v1.0.0
 	modernc.org/golex => modernc.org/golex v1.0.0

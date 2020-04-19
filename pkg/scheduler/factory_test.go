@@ -20,8 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apicore "k8s.io/kubernetes/pkg/apis/core"
 	"reflect"
 	"strings"
 	"testing"
@@ -29,6 +27,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/clock"
@@ -40,7 +39,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
 	extenderv1 "k8s.io/kube-scheduler/extender/v1"
-	apitesting "k8s.io/kubernetes/pkg/api/testing"
+	apicore "k8s.io/kubernetes/pkg/apis/core"
 	kubefeatures "k8s.io/kubernetes/pkg/features"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config/scheme"
@@ -53,9 +52,7 @@ import (
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	internalcache "k8s.io/kubernetes/pkg/scheduler/internal/cache"
 	internalqueue "k8s.io/kubernetes/pkg/scheduler/internal/queue"
-	"k8s.io/kubernetes/pkg/scheduler/listers"
 	"k8s.io/kubernetes/pkg/scheduler/profile"
-	schedulertypes "k8s.io/kubernetes/pkg/scheduler/types"
 )
 
 const (
@@ -253,7 +250,7 @@ func TestCreateFromConfigWithHardPodAffinitySymmetricWeight(t *testing.T) {
 	for _, cfg := range factory.profiles[0].PluginConfig {
 		if cfg.Name == interpodaffinity.Name {
 			foundAffinityCfg = true
-			wantArgs := runtime.Unknown{Raw: []byte(`{"hardPodAffinityWeight":10}`)}
+			wantArgs := &runtime.Unknown{Raw: []byte(`{"hardPodAffinityWeight":10}`)}
 
 			if diff := cmp.Diff(wantArgs, cfg.Args); diff != "" {
 				t.Errorf("wrong InterPodAffinity args (-want, +got): %s", diff)
@@ -316,9 +313,15 @@ func TestCreateFromConfigWithUnspecifiedPredicatesOrPriorities(t *testing.T) {
 }
 
 func TestDefaultErrorFunc(t *testing.T) {
+	grace := int64(30)
 	testPod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
-		Spec:       apitesting.V1DeepEqualSafePodSpec(),
+		Spec: v1.PodSpec{
+			RestartPolicy:                 v1.RestartPolicyAlways,
+			DNSPolicy:                     v1.DNSClusterFirst,
+			TerminationGracePeriodSeconds: &grace,
+			SecurityContext:               &v1.PodSecurityContext{},
+		},
 	}
 
 	nodeBar, nodeFoo :=
@@ -538,7 +541,7 @@ func (f *fakeExtender) IsIgnorable() bool {
 func (f *fakeExtender) ProcessPreemption(
 	pod *v1.Pod,
 	nodeToVictims map[*v1.Node]*extenderv1.Victims,
-	nodeInfos listers.NodeInfoLister,
+	nodeInfos framework.NodeInfoLister,
 ) (map[*v1.Node]*extenderv1.Victims, error) {
 	return nil, nil
 }
@@ -593,6 +596,6 @@ func (t *TestPlugin) ScoreExtensions() framework.ScoreExtensions {
 	return nil
 }
 
-func (t *TestPlugin) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeInfo *schedulertypes.NodeInfo) *framework.Status {
+func (t *TestPlugin) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
 	return nil
 }

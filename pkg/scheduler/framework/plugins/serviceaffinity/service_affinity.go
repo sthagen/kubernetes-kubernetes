@@ -24,10 +24,9 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	corelisters "k8s.io/client-go/listers/core/v1"
+	schedulerv1alpha2 "k8s.io/kube-scheduler/config/v1alpha2"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/helper"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
-	schedulerlisters "k8s.io/kubernetes/pkg/scheduler/listers"
-	schedulertypes "k8s.io/kubernetes/pkg/scheduler/types"
 )
 
 const (
@@ -41,16 +40,6 @@ const (
 	// ErrReason is used for CheckServiceAffinity predicate error.
 	ErrReason = "node(s) didn't match service affinity"
 )
-
-// Args holds the args that are used to configure the plugin.
-type Args struct {
-	// Labels are homogeneous for pods that are scheduled to a node.
-	// (i.e. it returns true IFF this pod can be added to this node such that all other pods in
-	// the same service are running on nodes with the exact same values for Labels).
-	AffinityLabels []string `json:"affinityLabels,omitempty"`
-	// AntiAffinityLabelsPreference are the labels to consider for service anti affinity scoring.
-	AntiAffinityLabelsPreference []string `json:"antiAffinityLabelsPreference,omitempty"`
-}
 
 // preFilterState computed at PreFilter and used at Filter.
 type preFilterState struct {
@@ -74,8 +63,8 @@ func (s *preFilterState) Clone() framework.StateData {
 }
 
 // New initializes a new plugin and returns it.
-func New(plArgs *runtime.Unknown, handle framework.FrameworkHandle) (framework.Plugin, error) {
-	args := Args{}
+func New(plArgs runtime.Object, handle framework.FrameworkHandle) (framework.Plugin, error) {
+	args := schedulerv1alpha2.ServiceAffinityArgs{}
 	if err := framework.DecodeInto(plArgs, &args); err != nil {
 		return nil, err
 	}
@@ -91,8 +80,8 @@ func New(plArgs *runtime.Unknown, handle framework.FrameworkHandle) (framework.P
 
 // ServiceAffinity is a plugin that checks service affinity.
 type ServiceAffinity struct {
-	args          Args
-	sharedLister  schedulerlisters.SharedLister
+	args          schedulerv1alpha2.ServiceAffinityArgs
+	sharedLister  framework.SharedLister
 	serviceLister corelisters.ServiceLister
 }
 
@@ -146,7 +135,7 @@ func (pl *ServiceAffinity) PreFilterExtensions() framework.PreFilterExtensions {
 }
 
 // AddPod from pre-computed data in cycleState.
-func (pl *ServiceAffinity) AddPod(ctx context.Context, cycleState *framework.CycleState, podToSchedule *v1.Pod, podToAdd *v1.Pod, nodeInfo *schedulertypes.NodeInfo) *framework.Status {
+func (pl *ServiceAffinity) AddPod(ctx context.Context, cycleState *framework.CycleState, podToSchedule *v1.Pod, podToAdd *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
 	s, err := getPreFilterState(cycleState)
 	if err != nil {
 		return framework.NewStatus(framework.Error, err.Error())
@@ -167,7 +156,7 @@ func (pl *ServiceAffinity) AddPod(ctx context.Context, cycleState *framework.Cyc
 }
 
 // RemovePod from pre-computed data in cycleState.
-func (pl *ServiceAffinity) RemovePod(ctx context.Context, cycleState *framework.CycleState, podToSchedule *v1.Pod, podToRemove *v1.Pod, nodeInfo *schedulertypes.NodeInfo) *framework.Status {
+func (pl *ServiceAffinity) RemovePod(ctx context.Context, cycleState *framework.CycleState, podToSchedule *v1.Pod, podToRemove *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
 	s, err := getPreFilterState(cycleState)
 	if err != nil {
 		return framework.NewStatus(framework.Error, err.Error())
@@ -230,7 +219,7 @@ func getPreFilterState(cycleState *framework.CycleState) (*preFilterState, error
 // 		- L is a label that the ServiceAffinity object needs as a matching constraint.
 // 		- L is not defined in the pod itself already.
 // 		- and SOME pod, from a service, in the same namespace, ALREADY scheduled onto a node, has a matching value.
-func (pl *ServiceAffinity) Filter(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeInfo *schedulertypes.NodeInfo) *framework.Status {
+func (pl *ServiceAffinity) Filter(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
 	if len(pl.args.AffinityLabels) == 0 {
 		return nil
 	}
@@ -289,15 +278,15 @@ func (pl *ServiceAffinity) Score(ctx context.Context, state *framework.CycleStat
 		selector = labels.NewSelector()
 	}
 
-	if len(nodeInfo.Pods()) == 0 || selector.Empty() {
+	if len(nodeInfo.Pods) == 0 || selector.Empty() {
 		return 0, nil
 	}
 	var score int64
-	for _, existingPod := range nodeInfo.Pods() {
+	for _, existingPod := range nodeInfo.Pods {
 		// Ignore pods being deleted for spreading purposes
 		// Similar to how it is done for SelectorSpreadPriority
-		if pod.Namespace == existingPod.Namespace && existingPod.DeletionTimestamp == nil {
-			if selector.Matches(labels.Set(existingPod.Labels)) {
+		if pod.Namespace == existingPod.Pod.Namespace && existingPod.Pod.DeletionTimestamp == nil {
+			if selector.Matches(labels.Set(existingPod.Pod.Labels)) {
 				score++
 			}
 		}
@@ -332,7 +321,7 @@ func (pl *ServiceAffinity) NormalizeScore(ctx context.Context, _ *framework.Cycl
 // we need to modify the old priority to be able to handle multiple labels so that it can be mapped
 // to a single plugin.
 // TODO: This will be deprecated soon.
-func (pl *ServiceAffinity) updateNodeScoresForLabel(sharedLister schedulerlisters.SharedLister, mapResult framework.NodeScoreList, reduceResult []float64, label string) error {
+func (pl *ServiceAffinity) updateNodeScoresForLabel(sharedLister framework.SharedLister, mapResult framework.NodeScoreList, reduceResult []float64, label string) error {
 	var numServicePods int64
 	var labelValue string
 	podCounts := map[string]int64{}

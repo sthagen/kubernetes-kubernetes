@@ -9,6 +9,7 @@ require (
 	github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96
 	github.com/elazarl/goproxy v0.0.0-20180725130230-947c36da3153
 	github.com/evanphx/json-patch v4.2.0+incompatible
+	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/groupcache v0.0.0-20160516000752-02826c3e7903
 	github.com/golang/protobuf v1.3.3
@@ -29,7 +30,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1
 	gopkg.in/yaml.v2 v2.2.8
 	k8s.io/klog v1.0.0
-	k8s.io/kube-openapi v0.0.0-20200401025727-01dfbe2eec3d
+	k8s.io/kube-openapi v0.0.0-20200403204345-e1beb1bd0f35
 	sigs.k8s.io/structured-merge-diff/v3 v3.0.0
 	sigs.k8s.io/yaml v1.2.0
 )

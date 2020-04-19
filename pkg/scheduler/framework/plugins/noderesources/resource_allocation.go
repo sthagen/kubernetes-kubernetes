@@ -23,7 +23,6 @@ import (
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"k8s.io/kubernetes/pkg/features"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
-	schedulertypes "k8s.io/kubernetes/pkg/scheduler/types"
 	schedutil "k8s.io/kubernetes/pkg/scheduler/util"
 )
 
@@ -46,7 +45,7 @@ type resourceToValueMap map[v1.ResourceName]int64
 // score will use `scorer` function to calculate the score.
 func (r *resourceAllocationScorer) score(
 	pod *v1.Pod,
-	nodeInfo *schedulertypes.NodeInfo) (int64, *framework.Status) {
+	nodeInfo *framework.NodeInfo) (int64, *framework.Status) {
 	node := nodeInfo.Node()
 	if node == nil {
 		return 0, framework.NewStatus(framework.Error, "node not found")
@@ -90,21 +89,19 @@ func (r *resourceAllocationScorer) score(
 }
 
 // calculateResourceAllocatableRequest returns resources Allocatable and Requested values
-func calculateResourceAllocatableRequest(nodeInfo *schedulertypes.NodeInfo, pod *v1.Pod, resource v1.ResourceName) (int64, int64) {
-	allocatable := nodeInfo.AllocatableResource()
-	requested := nodeInfo.RequestedResource()
+func calculateResourceAllocatableRequest(nodeInfo *framework.NodeInfo, pod *v1.Pod, resource v1.ResourceName) (int64, int64) {
 	podRequest := calculatePodResourceRequest(pod, resource)
 	switch resource {
 	case v1.ResourceCPU:
-		return allocatable.MilliCPU, (nodeInfo.NonZeroRequest().MilliCPU + podRequest)
+		return nodeInfo.Allocatable.MilliCPU, (nodeInfo.NonZeroRequested.MilliCPU + podRequest)
 	case v1.ResourceMemory:
-		return allocatable.Memory, (nodeInfo.NonZeroRequest().Memory + podRequest)
+		return nodeInfo.Allocatable.Memory, (nodeInfo.NonZeroRequested.Memory + podRequest)
 
 	case v1.ResourceEphemeralStorage:
-		return allocatable.EphemeralStorage, (requested.EphemeralStorage + podRequest)
+		return nodeInfo.Allocatable.EphemeralStorage, (nodeInfo.Requested.EphemeralStorage + podRequest)
 	default:
 		if v1helper.IsScalarResourceName(resource) {
-			return allocatable.ScalarResources[resource], (requested.ScalarResources[resource] + podRequest)
+			return nodeInfo.Allocatable.ScalarResources[resource], (nodeInfo.Requested.ScalarResources[resource] + podRequest)
 		}
 	}
 	if klog.V(10) {

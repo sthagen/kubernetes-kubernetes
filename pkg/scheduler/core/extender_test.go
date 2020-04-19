@@ -40,10 +40,8 @@ import (
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	internalcache "k8s.io/kubernetes/pkg/scheduler/internal/cache"
 	internalqueue "k8s.io/kubernetes/pkg/scheduler/internal/queue"
-	"k8s.io/kubernetes/pkg/scheduler/listers"
 	"k8s.io/kubernetes/pkg/scheduler/profile"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
-	schedulertypes "k8s.io/kubernetes/pkg/scheduler/types"
 	"k8s.io/kubernetes/pkg/scheduler/util"
 )
 
@@ -112,7 +110,7 @@ func machine2PrioritizerExtender(pod *v1.Pod, nodes []*v1.Node) (*framework.Node
 type machine2PrioritizerPlugin struct{}
 
 func newMachine2PrioritizerPlugin() framework.PluginFactory {
-	return func(_ *runtime.Unknown, _ framework.FrameworkHandle) (framework.Plugin, error) {
+	return func(_ runtime.Object, _ framework.FrameworkHandle) (framework.Plugin, error) {
 		return &machine2PrioritizerPlugin{}, nil
 	}
 }
@@ -143,7 +141,7 @@ type FakeExtender struct {
 	ignorable        bool
 
 	// Cached node information for fake extender
-	cachedNodeNameToInfo map[string]*schedulertypes.NodeInfo
+	cachedNodeNameToInfo map[string]*framework.NodeInfo
 }
 
 func (f *FakeExtender) Name() string {
@@ -162,7 +160,7 @@ func (f *FakeExtender) SupportsPreemption() bool {
 func (f *FakeExtender) ProcessPreemption(
 	pod *v1.Pod,
 	nodeToVictims map[*v1.Node]*extenderv1.Victims,
-	nodeInfos listers.NodeInfoLister,
+	nodeInfos framework.NodeInfoLister,
 ) (map[*v1.Node]*extenderv1.Victims, error) {
 	nodeToVictimsCopy := map[*v1.Node]*extenderv1.Victims{}
 	// We don't want to change the original nodeToVictims
@@ -227,10 +225,10 @@ func (f *FakeExtender) selectVictimsOnNodeByExtender(pod *v1.Pod, node *v1.Node)
 	// As the first step, remove all the lower priority pods from the node and
 	// check if the given pod can be scheduled.
 	podPriority := podutil.GetPodPriority(pod)
-	for _, p := range nodeInfoCopy.Pods() {
-		if podutil.GetPodPriority(p) < podPriority {
-			potentialVictims = append(potentialVictims, p)
-			removePod(p)
+	for _, p := range nodeInfoCopy.Pods {
+		if podutil.GetPodPriority(p.Pod) < podPriority {
+			potentialVictims = append(potentialVictims, p.Pod)
+			removePod(p.Pod)
 		}
 	}
 	sort.Slice(potentialVictims, func(i, j int) bool { return util.MoreImportantPod(potentialVictims[i], potentialVictims[j]) })

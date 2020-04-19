@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	apiextensionsapiserver "k8s.io/apiextensions-apiserver/pkg/apiserver"
+	genericfeatures "k8s.io/apiserver/pkg/features"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/component-base/metrics"
 	aggregatorscheme "k8s.io/kube-aggregator/pkg/apiserver/scheme"
@@ -74,7 +75,7 @@ func validateClusterIPFlags(options *ServerRunOptions) []error {
 			errs = append(errs, errors.New("--service-cluster-ip-range and --secondary-service-cluster-ip-range must be of different IP family"))
 		}
 
-		// should be smallish sized cidr, this thing is kept in etcd
+		// Should be smallish sized cidr, this thing is kept in etcd
 		// bigger cidr (specially those offered by IPv6) will add no value
 		// significantly increase snapshotting time.
 		var ones, bits = options.SecondaryServiceClusterIPRange.Mask.Size()
@@ -127,6 +128,25 @@ func validateTokenRequest(options *ServerRunOptions) []error {
 	return errs
 }
 
+func validateAPIPriorityAndFairness(options *ServerRunOptions) []error {
+	if utilfeature.DefaultFeatureGate.Enabled(genericfeatures.APIPriorityAndFairness) && options.GenericServerRunOptions.EnablePriorityAndFairness {
+		// We need the alpha API enabled.  There are only a few ways to turn it on
+		enabledAPIString := options.APIEnablement.RuntimeConfig.String()
+		switch {
+		case strings.Contains(enabledAPIString, "api/all=true"):
+			return nil
+		case strings.Contains(enabledAPIString, "api/alpha=true"):
+			return nil
+		case strings.Contains(enabledAPIString, "flowcontrol.apiserver.k8s.io/v1alpha1=true"):
+			return nil
+		default:
+			return []error{fmt.Errorf("enabling APIPriorityAndFairness requires --runtime-confg=flowcontrol.apiserver.k8s.io/v1alpha1=true to enable the required API")}
+		}
+	}
+
+	return nil
+}
+
 // Validate checks ServerRunOptions and return a slice of found errs.
 func (s *ServerRunOptions) Validate() []error {
 	var errs []error
@@ -136,6 +156,7 @@ func (s *ServerRunOptions) Validate() []error {
 	errs = append(errs, s.Etcd.Validate()...)
 	errs = append(errs, validateClusterIPFlags(s)...)
 	errs = append(errs, validateServiceNodePort(s)...)
+	errs = append(errs, validateAPIPriorityAndFairness(s)...)
 	errs = append(errs, s.SecureServing.Validate()...)
 	errs = append(errs, s.Authentication.Validate()...)
 	errs = append(errs, s.Authorization.Validate()...)

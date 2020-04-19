@@ -32,10 +32,10 @@ import (
 )
 
 // getExistingVolumeCountForNode gets the current number of volumes on node.
-func getExistingVolumeCountForNode(pods []*v1.Pod, maxVolumes int) int {
+func getExistingVolumeCountForNode(podInfos []*framework.PodInfo, maxVolumes int) int {
 	volumeCount := 0
-	for _, pod := range pods {
-		volumeCount += len(pod.Spec.Volumes)
+	for _, p := range podInfos {
+		volumeCount += len(p.Pod.Spec.Volumes)
 	}
 	if maxVolumes-volumeCount > 0 {
 		return maxVolumes - volumeCount
@@ -384,7 +384,7 @@ func TestNodeResourcesBalancedAllocation(t *testing.T) {
 				maxVolumes := 5
 				nodeInfoList, _ := snapshot.NodeInfos().List()
 				for _, info := range nodeInfoList {
-					info.TransientInfo.TransNodeInfo.AllocatableVolumesCount = getExistingVolumeCountForNode(info.Pods(), maxVolumes)
+					info.TransientInfo.TransNodeInfo.AllocatableVolumesCount = getExistingVolumeCountForNode(info.Pods, maxVolumes)
 					info.TransientInfo.TransNodeInfo.RequestedVolumes = len(test.pod.Spec.Volumes)
 				}
 			}
