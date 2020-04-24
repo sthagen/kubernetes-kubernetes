@@ -34,9 +34,10 @@ import (
 
 var generation int64
 
-// PodInfo is a wrapper to a Pod with additional information for purposes such as tracking
-// the timestamp when it's added to the queue or recording per-pod metrics.
-type PodInfo struct {
+// QueuedPodInfo is a Pod wrapper with additional information related to
+// the pod's status in the scheduling queue, such as the timestamp when
+// it's added to the queue.
+type QueuedPodInfo struct {
 	Pod *v1.Pod
 	// The time pod added to the scheduling queue.
 	Timestamp time.Time
@@ -50,14 +51,21 @@ type PodInfo struct {
 	InitialAttemptTimestamp time.Time
 }
 
-// DeepCopy returns a deep copy of the PodInfo object.
-func (podInfo *PodInfo) DeepCopy() *PodInfo {
-	return &PodInfo{
-		Pod:                     podInfo.Pod.DeepCopy(),
-		Timestamp:               podInfo.Timestamp,
-		Attempts:                podInfo.Attempts,
-		InitialAttemptTimestamp: podInfo.InitialAttemptTimestamp,
+// DeepCopy returns a deep copy of the QueuedPodInfo object.
+func (pqi *QueuedPodInfo) DeepCopy() *QueuedPodInfo {
+	return &QueuedPodInfo{
+		Pod:                     pqi.Pod.DeepCopy(),
+		Timestamp:               pqi.Timestamp,
+		Attempts:                pqi.Attempts,
+		InitialAttemptTimestamp: pqi.InitialAttemptTimestamp,
 	}
+}
+
+// PodInfo is a wrapper to a Pod with additional pre-computed information to
+// accelerate processing. This information is typically immutable (e.g., pre-processed
+// inter-pod affinity selectors).
+type PodInfo struct {
+	Pod *v1.Pod
 }
 
 // NewPodInfo return a new PodInfo
@@ -200,7 +208,10 @@ func (r *Resource) Add(rl v1.ResourceList) {
 		case v1.ResourcePods:
 			r.AllowedPodNumber += int(rQuant.Value())
 		case v1.ResourceEphemeralStorage:
-			r.EphemeralStorage += rQuant.Value()
+			if utilfeature.DefaultFeatureGate.Enabled(features.LocalStorageCapacityIsolation) {
+				// if the local storage capacity isolation feature gate is disabled, pods request 0 disk.
+				r.EphemeralStorage += rQuant.Value()
+			}
 		default:
 			if v1helper.IsScalarResourceName(rName) {
 				r.AddScalar(rName, rQuant.Value())
@@ -359,7 +370,6 @@ func (n *NodeInfo) String() string {
 
 // AddPod adds pod information to this NodeInfo.
 func (n *NodeInfo) AddPod(pod *v1.Pod) {
-	// TODO(#89528): AddPod should accept a PodInfo as an input argument.
 	podInfo := NewPodInfo(pod)
 	res, non0CPU, non0Mem := calculateResource(pod)
 	n.Requested.MilliCPU += res.MilliCPU
@@ -451,21 +461,32 @@ func (n *NodeInfo) resetSlicesIfEmpty() {
 	}
 }
 
+// resourceRequest = max(sum(podSpec.Containers), podSpec.InitContainers) + overHead
 func calculateResource(pod *v1.Pod) (res Resource, non0CPU int64, non0Mem int64) {
 	resPtr := &res
 	for _, c := range pod.Spec.Containers {
 		resPtr.Add(c.Resources.Requests)
-
 		non0CPUReq, non0MemReq := schedutil.GetNonzeroRequests(&c.Resources.Requests)
 		non0CPU += non0CPUReq
 		non0Mem += non0MemReq
 		// No non-zero resources for GPUs or opaque resources.
 	}
 
+	for _, ic := range pod.Spec.InitContainers {
+		resPtr.SetMaxResource(ic.Resources.Requests)
+		non0CPUReq, non0MemReq := schedutil.GetNonzeroRequests(&ic.Resources.Requests)
+		if non0CPU < non0CPUReq {
+			non0CPU = non0CPUReq
+		}
+
+		if non0Mem < non0MemReq {
+			non0Mem = non0MemReq
+		}
+	}
+
 	// If Overhead is being utilized, add to the total requests for the pod
 	if pod.Spec.Overhead != nil && utilfeature.DefaultFeatureGate.Enabled(features.PodOverhead) {
 		resPtr.Add(pod.Spec.Overhead)
-
 		if _, found := pod.Spec.Overhead[v1.ResourceCPU]; found {
 			non0CPU += pod.Spec.Overhead.Cpu().MilliValue()
 		}

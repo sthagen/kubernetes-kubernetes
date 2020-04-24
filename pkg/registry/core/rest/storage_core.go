@@ -21,7 +21,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -66,6 +65,7 @@ import (
 	serviceaccountstore "k8s.io/kubernetes/pkg/registry/core/serviceaccount/storage"
 	kubeschedulerconfig "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/serviceaccount"
+	utilsnet "k8s.io/utils/net"
 )
 
 // LegacyRESTStorageProvider provides information needed to build RESTStorage for core, but
@@ -85,6 +85,7 @@ type LegacyRESTStorageProvider struct {
 
 	ServiceAccountIssuer        serviceaccount.TokenGenerator
 	ServiceAccountMaxExpiration time.Duration
+	ExtendExpiration            bool
 
 	APIAudiences authenticator.Audiences
 
@@ -181,9 +182,9 @@ func (c LegacyRESTStorageProvider) NewLegacyRESTStorage(restOptionsGetter generi
 
 	var serviceAccountStorage *serviceaccountstore.REST
 	if c.ServiceAccountIssuer != nil && utilfeature.DefaultFeatureGate.Enabled(features.TokenRequest) {
-		serviceAccountStorage, err = serviceaccountstore.NewREST(restOptionsGetter, c.ServiceAccountIssuer, c.APIAudiences, c.ServiceAccountMaxExpiration, podStorage.Pod.Store, secretStorage.Store)
+		serviceAccountStorage, err = serviceaccountstore.NewREST(restOptionsGetter, c.ServiceAccountIssuer, c.APIAudiences, c.ServiceAccountMaxExpiration, podStorage.Pod.Store, secretStorage.Store, c.ExtendExpiration)
 	} else {
-		serviceAccountStorage, err = serviceaccountstore.NewREST(restOptionsGetter, nil, nil, 0, nil, nil)
+		serviceAccountStorage, err = serviceaccountstore.NewREST(restOptionsGetter, nil, nil, 0, nil, nil, false)
 	}
 	if err != nil {
 		return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
@@ -360,7 +361,7 @@ func (s componentStatusStorage) serversToValidate() map[string]*componentstatus.
 				klog.Errorf("Failed to split host/port: %s (%v)", etcdUrl.Host, err)
 				continue
 			}
-			port, _ = strconv.Atoi(portString)
+			port, _ = utilsnet.ParsePort(portString, true)
 		} else {
 			addr = etcdUrl.Host
 			port = 2379

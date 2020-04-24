@@ -60,7 +60,6 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
-	"k8s.io/component-base/metrics"
 	_ "k8s.io/component-base/metrics/prometheus/workqueue" // for workqueue metric registration
 	"k8s.io/component-base/term"
 	"k8s.io/component-base/version"
@@ -86,7 +85,6 @@ import (
 	"k8s.io/kubernetes/pkg/registry/cachesize"
 	rbacrest "k8s.io/kubernetes/pkg/registry/rbac/rest"
 	"k8s.io/kubernetes/pkg/serviceaccount"
-	utilflag "k8s.io/kubernetes/pkg/util/flag"
 	"k8s.io/kubernetes/plugin/pkg/auth/authenticator/token/bootstrap"
 )
 
@@ -104,9 +102,12 @@ func NewAPIServerCommand() *cobra.Command {
 for the api objects which include pods, services, replicationcontrollers, and
 others. The API Server services REST operations and provides the frontend to the
 cluster's shared state through which all other components interact.`,
+
+		// stop printing usage when the command errors
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verflag.PrintAndExitIfRequested()
-			utilflag.PrintFlags(cmd.Flags())
+			cliflag.PrintFlags(cmd.Flags())
 
 			// set default options
 			completedOptions, err := Complete(s)
@@ -303,9 +304,7 @@ func CreateKubeAPIServerConfig(
 		PerConnectionBandwidthLimitBytesPerSec: s.MaxConnectionBytesPerSec,
 	})
 
-	if len(s.ShowHiddenMetricsForVersion) > 0 {
-		metrics.SetShowHidden()
-	}
+	s.Metrics.Apply()
 
 	serviceIPRange, apiServerServiceIP, err := master.ServiceIPRange(s.PrimaryServiceClusterIPRange)
 	if err != nil {
@@ -348,6 +347,7 @@ func CreateKubeAPIServerConfig(
 
 			ServiceAccountIssuer:        s.ServiceAccountIssuer,
 			ServiceAccountMaxExpiration: s.ServiceAccountTokenMaxExpiration,
+			ExtendExpiration:            s.Authentication.ServiceAccounts.ExtendExpiration,
 
 			VersionedInformers: versionedInformers,
 		},
@@ -685,6 +685,14 @@ func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 			if s.Authentication.ServiceAccounts.MaxExpiration < lowBound ||
 				s.Authentication.ServiceAccounts.MaxExpiration > upBound {
 				return options, fmt.Errorf("the serviceaccount max expiration must be between 1 hour to 2^32 seconds")
+			}
+			if s.Authentication.ServiceAccounts.ExtendExpiration {
+				if s.Authentication.ServiceAccounts.MaxExpiration < serviceaccount.WarnOnlyBoundTokenExpirationSeconds*time.Second {
+					klog.Warningf("service-account-extend-token-expiration is true, in order to correctly trigger safe transition logic, service-account-max-token-expiration must be set longer than 3607 seconds (currently %s)", s.Authentication.ServiceAccounts.MaxExpiration)
+				}
+				if s.Authentication.ServiceAccounts.MaxExpiration < serviceaccount.ExpirationExtensionSeconds*time.Second {
+					klog.Warningf("service-account-extend-token-expiration is true, enabling tokens valid up to 1 year, which is longer than service-account-max-token-expiration set to %s", s.Authentication.ServiceAccounts.MaxExpiration)
+				}
 			}
 		}
 
