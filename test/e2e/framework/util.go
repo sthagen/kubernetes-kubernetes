@@ -50,6 +50,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	restclient "k8s.io/client-go/rest"
@@ -57,8 +58,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	watchtools "k8s.io/client-go/tools/watch"
-	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
-	"k8s.io/kubernetes/pkg/controller"
+	"k8s.io/component-base/featuregate"
 	testutils "k8s.io/kubernetes/test/utils"
 	imageutils "k8s.io/kubernetes/test/utils/image"
 	uexec "k8s.io/utils/exec"
@@ -138,6 +138,10 @@ const (
 
 	// TODO(justinsb): Avoid hardcoding this.
 	awsMasterIP = "172.20.0.9"
+
+	// AllContainers specifies that all containers be visited
+	// Copied from pkg/api/v1/pod to avoid pulling extra dependencies
+	AllContainers = InitContainers | Containers | EphemeralContainers
 )
 
 var (
@@ -300,25 +304,6 @@ func WaitForDefaultServiceAccountInNamespace(c clientset.Interface, namespace st
 	return waitForServiceAccountInNamespace(c, namespace, "default", ServiceAccountProvisionTimeout)
 }
 
-// findAvailableNamespaceName random namespace name starting with baseName.
-func findAvailableNamespaceName(baseName string, c clientset.Interface) (string, error) {
-	var name string
-	err := wait.PollImmediate(Poll, 30*time.Second, func() (bool, error) {
-		name = fmt.Sprintf("%v-%v", baseName, RandomSuffix())
-		_, err := c.CoreV1().Namespaces().Get(context.TODO(), name, metav1.GetOptions{})
-		if err == nil {
-			// Already taken
-			return false, nil
-		}
-		if apierrors.IsNotFound(err) {
-			return true, nil
-		}
-		Logf("Unexpected error while getting namespace: %v", err)
-		return false, nil
-	})
-	return name, err
-}
-
 // CreateTestingNS should be used by every test, note that we append a common prefix to the provided test name.
 // Please see NewFramework instead of using this directly.
 func CreateTestingNS(baseName string, c clientset.Interface, labels map[string]string) (*v1.Namespace, error) {
@@ -330,10 +315,7 @@ func CreateTestingNS(baseName string, c clientset.Interface, labels map[string]s
 	// We don't use ObjectMeta.GenerateName feature, as in case of API call
 	// failure we don't know whether the namespace was created and what is its
 	// name.
-	name, err := findAvailableNamespaceName(baseName, c)
-	if err != nil {
-		return nil, err
-	}
+	name := fmt.Sprintf("%v-%v", baseName, RandomSuffix())
 
 	namespaceObj := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -349,7 +331,13 @@ func CreateTestingNS(baseName string, c clientset.Interface, labels map[string]s
 		var err error
 		got, err = c.CoreV1().Namespaces().Create(context.TODO(), namespaceObj, metav1.CreateOptions{})
 		if err != nil {
-			Logf("Unexpected error while creating namespace: %v", err)
+			if apierrors.IsAlreadyExists(err) {
+				// regenerate on conflict
+				Logf("Namespace name %q was already taken, generate a new name and retry", namespaceObj.Name)
+				namespaceObj.Name = fmt.Sprintf("%v-%v", baseName, RandomSuffix())
+			} else {
+				Logf("Unexpected error while creating namespace: %v", err)
+			}
 			return false, nil
 		}
 		return true, nil
@@ -711,6 +699,66 @@ func (f *Framework) testContainerOutputMatcher(scenarioName string,
 	ExpectNoError(f.MatchContainerOutput(pod, pod.Spec.Containers[containerIndex].Name, expectedOutput, matcher))
 }
 
+// ContainerType signifies container type
+type ContainerType int
+
+const (
+	// FeatureEphemeralContainers allows running an ephemeral container in pod namespaces to troubleshoot a running pod
+	FeatureEphemeralContainers featuregate.Feature = "EphemeralContainers"
+	// Containers is for normal containers
+	Containers ContainerType = 1 << iota
+	// InitContainers is for init containers
+	InitContainers
+	// EphemeralContainers is for ephemeral containers
+	EphemeralContainers
+)
+
+// allFeatureEnabledContainers returns a ContainerType mask which includes all container
+// types except for the ones guarded by feature gate.
+// Copied from pkg/api/v1/pod to avoid pulling extra dependencies
+func allFeatureEnabledContainers() ContainerType {
+	containerType := AllContainers
+	if !utilfeature.DefaultFeatureGate.Enabled(FeatureEphemeralContainers) {
+		containerType &= ^EphemeralContainers
+	}
+	return containerType
+}
+
+// ContainerVisitor is called with each container spec, and returns true
+// if visiting should continue.
+// Copied from pkg/api/v1/pod to avoid pulling extra dependencies
+type ContainerVisitor func(container *v1.Container, containerType ContainerType) (shouldContinue bool)
+
+// visitContainers invokes the visitor function with a pointer to every container
+// spec in the given pod spec with type set in mask. If visitor returns false,
+// visiting is short-circuited. visitContainers returns true if visiting completes,
+// false if visiting was short-circuited.
+// Copied from pkg/api/v1/pod to avoid pulling extra dependencies
+func visitContainers(podSpec *v1.PodSpec, mask ContainerType, visitor ContainerVisitor) bool {
+	if mask&InitContainers != 0 {
+		for i := range podSpec.InitContainers {
+			if !visitor(&podSpec.InitContainers[i], InitContainers) {
+				return false
+			}
+		}
+	}
+	if mask&Containers != 0 {
+		for i := range podSpec.Containers {
+			if !visitor(&podSpec.Containers[i], Containers) {
+				return false
+			}
+		}
+	}
+	if mask&EphemeralContainers != 0 {
+		for i := range podSpec.EphemeralContainers {
+			if !visitor((*v1.Container)(&podSpec.EphemeralContainers[i].EphemeralContainerCommon), EphemeralContainers) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // MatchContainerOutput creates a pod and waits for all it's containers to exit with success.
 // It then tests that the matcher with each expectedOutput matches the output of the specified container.
 func (f *Framework) MatchContainerOutput(
@@ -741,7 +789,7 @@ func (f *Framework) MatchContainerOutput(
 
 	if podErr != nil {
 		// Pod failed. Dump all logs from all containers to see what's wrong
-		_ = podutil.VisitContainers(&podStatus.Spec, podutil.AllFeatureEnabledContainers(), func(c *v1.Container, containerType podutil.ContainerType) bool {
+		_ = visitContainers(&podStatus.Spec, allFeatureEnabledContainers(), func(c *v1.Container, containerType ContainerType) bool {
 			logs, err := e2epod.GetPodLogs(f.ClientSet, ns, podStatus.Name, c.Name)
 			if err != nil {
 				Logf("Failed to get logs from node %q pod %q container %q: %v",
@@ -953,11 +1001,6 @@ func ExpectNodeHasLabel(c clientset.Interface, nodeName string, labelKey string,
 	node, err := c.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 	ExpectNoError(err)
 	ExpectEqual(node.Labels[labelKey], labelValue)
-}
-
-// AddOrUpdateTaintOnNode adds the given taint to the given node or updates taint.
-func AddOrUpdateTaintOnNode(c clientset.Interface, nodeName string, taint v1.Taint) {
-	ExpectNoError(controller.AddOrUpdateTaintOnNode(c, nodeName, &taint))
 }
 
 // RemoveLabelOffNode is for cleaning up labels temporarily added to node,

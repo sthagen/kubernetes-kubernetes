@@ -18,14 +18,14 @@ REGISTRY ?= staging-k8s.gcr.io
 IMAGE ?= $(REGISTRY)/debian-base
 BUILD_IMAGE ?= debian-build
 
-TAG ?= v2.0.1
+TAG ?= v2.1.0
 
 TAR_FILE ?= rootfs.tar
 ARCH?=amd64
 ALL_ARCH = amd64 arm arm64 ppc64le s390x
 
 TEMP_DIR:=$(shell mktemp -d)
-QEMUVERSION=v2.9.1
+QEMUVERSION=v4.2.0-6
 
 SUDO=$(if $(filter 0,$(shell id -u)),,sudo)
 

@@ -485,7 +485,7 @@ github.com/mistifyio/go-zfs
 github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/mapstructure v1.1.2 => github.com/mitchellh/mapstructure v1.1.2
 github.com/mitchellh/mapstructure
-# github.com/moby/ipvs v1.0.0 => github.com/moby/ipvs v1.0.0
+# github.com/moby/ipvs v1.0.1 => github.com/moby/ipvs v1.0.1
 github.com/moby/ipvs
 # github.com/moby/term v0.0.0-20200312100748-672ec06f55cd => github.com/moby/term v0.0.0-20200312100748-672ec06f55cd
 github.com/moby/term
@@ -574,7 +574,7 @@ github.com/opencontainers/runc/libcontainer/system
 github.com/opencontainers/runc/libcontainer/user
 github.com/opencontainers/runc/libcontainer/utils
 github.com/opencontainers/runc/types
-# github.com/opencontainers/runtime-spec v1.0.1 => github.com/opencontainers/runtime-spec v1.0.1
+# github.com/opencontainers/runtime-spec v1.0.2 => github.com/opencontainers/runtime-spec v1.0.2
 github.com/opencontainers/runtime-spec/specs-go
 # github.com/opencontainers/selinux v1.3.3 => github.com/opencontainers/selinux v1.3.3
 github.com/opencontainers/selinux/go-selinux

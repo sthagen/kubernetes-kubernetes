@@ -71,7 +71,7 @@ require (
 	github.com/lpabon/godbc v0.1.1 // indirect
 	github.com/magiconair/properties v1.8.1 // indirect
 	github.com/miekg/dns v1.1.4
-	github.com/moby/ipvs v1.0.0
+	github.com/moby/ipvs v1.0.1
 	github.com/mohae/deepcopy v0.0.0-20170603005431-491d3605edfb // indirect
 	github.com/mrunalp/fileutils v0.0.0-20171103030105-7d4729fb3618 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
@@ -80,6 +80,7 @@ require (
 	github.com/onsi/gomega v1.7.0
 	github.com/opencontainers/go-digest v1.0.0-rc1
 	github.com/opencontainers/runc v1.0.0-rc10
+	github.com/opencontainers/runtime-spec v1.0.2 // indirect
 	github.com/opencontainers/selinux v1.3.3
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
@@ -328,7 +329,7 @@ replace (
 	github.com/mitchellh/go-homedir => github.com/mitchellh/go-homedir v1.1.0
 	github.com/mitchellh/go-wordwrap => github.com/mitchellh/go-wordwrap v1.0.0
 	github.com/mitchellh/mapstructure => github.com/mitchellh/mapstructure v1.1.2
-	github.com/moby/ipvs => github.com/moby/ipvs v1.0.0
+	github.com/moby/ipvs => github.com/moby/ipvs v1.0.1
 	github.com/moby/term => github.com/moby/term v0.0.0-20200312100748-672ec06f55cd
 	github.com/modern-go/concurrent => github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 	github.com/modern-go/reflect2 => github.com/modern-go/reflect2 v1.0.1
@@ -347,7 +348,7 @@ replace (
 	github.com/opencontainers/go-digest => github.com/opencontainers/go-digest v1.0.0-rc1
 	github.com/opencontainers/image-spec => github.com/opencontainers/image-spec v1.0.1
 	github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.0-rc10
-	github.com/opencontainers/runtime-spec => github.com/opencontainers/runtime-spec v1.0.1
+	github.com/opencontainers/runtime-spec => github.com/opencontainers/runtime-spec v1.0.2
 	github.com/opencontainers/selinux => github.com/opencontainers/selinux v1.3.3
 	github.com/pelletier/go-toml => github.com/pelletier/go-toml v1.2.0
 	github.com/peterbourgon/diskv => github.com/peterbourgon/diskv v2.0.1+incompatible
