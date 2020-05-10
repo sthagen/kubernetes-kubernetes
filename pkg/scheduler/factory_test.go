@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -30,7 +29,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/clock"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
@@ -39,7 +37,6 @@ import (
 	"k8s.io/client-go/tools/events"
 	extenderv1 "k8s.io/kube-scheduler/extender/v1"
 	apicore "k8s.io/kubernetes/pkg/apis/core"
-	kubefeatures "k8s.io/kubernetes/pkg/features"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config/scheme"
 	frameworkplugins "k8s.io/kubernetes/pkg/scheduler/framework/plugins"
@@ -96,87 +93,48 @@ func TestCreateFromConfig(t *testing.T) {
 			{"name" : "NodeAffinityPriority", "weight" : 2},
 			{"name" : "ImageLocalityPriority", "weight" : 1}		]
 	}`)
-	cases := []struct {
-		name       string
-		plugins    *schedulerapi.Plugins
-		pluginCfgs []schedulerapi.PluginConfig
-		wantErr    string
-	}{
-		{
-			name: "just policy",
-		},
-		{
-			name: "policy and plugins",
-			plugins: &schedulerapi.Plugins{
-				Filter: &schedulerapi.PluginSet{
-					Disabled: []schedulerapi.Plugin{{Name: nodelabel.Name}},
-				},
-			},
-			wantErr: "using Plugins and Policy simultaneously is not supported",
-		},
-		{
-			name: "policy and plugin config",
-			pluginCfgs: []schedulerapi.PluginConfig{
-				{Name: queuesort.Name},
-			},
-			wantErr: "using PluginConfig and Policy simultaneously is not supported",
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			client := fake.NewSimpleClientset()
-			stopCh := make(chan struct{})
-			defer close(stopCh)
-			factory := newConfigFactory(client, stopCh)
-			factory.profiles[0].Plugins = tc.plugins
-			factory.profiles[0].PluginConfig = tc.pluginCfgs
+	client := fake.NewSimpleClientset()
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	factory := newConfigFactory(client, stopCh)
 
-			var policy schedulerapi.Policy
-			if err := runtime.DecodeInto(scheme.Codecs.UniversalDecoder(), configData, &policy); err != nil {
-				t.Errorf("Invalid configuration: %v", err)
-			}
-
-			sched, err := factory.createFromConfig(policy)
-			if tc.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
-					t.Errorf("got err %q, want %q", err, tc.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("createFromConfig failed: %v", err)
-			}
-			// createFromConfig is the old codepath where we only have one profile.
-			prof := sched.Profiles[testSchedulerName]
-			queueSortPls := prof.ListPlugins()["QueueSortPlugin"]
-			wantQueuePls := []schedulerapi.Plugin{{Name: queuesort.Name}}
-			if diff := cmp.Diff(wantQueuePls, queueSortPls); diff != "" {
-				t.Errorf("Unexpected QueueSort plugins (-want, +got): %s", diff)
-			}
-			bindPls := prof.ListPlugins()["BindPlugin"]
-			wantBindPls := []schedulerapi.Plugin{{Name: defaultbinder.Name}}
-			if diff := cmp.Diff(wantBindPls, bindPls); diff != "" {
-				t.Errorf("Unexpected Bind plugins (-want, +got): %s", diff)
-			}
-
-			// Verify that node label predicate/priority are converted to framework plugins.
-			var wantArgs runtime.Object = &schedulerapi.NodeLabelArgs{
-				PresentLabels:           []string{"zone"},
-				AbsentLabels:            []string{"foo"},
-				PresentLabelsPreference: []string{"l1"},
-				AbsentLabelsPreference:  []string{"l2"},
-			}
-			verifyPluginConvertion(t, nodelabel.Name, []string{"FilterPlugin", "ScorePlugin"}, prof, &factory.profiles[0], 6, wantArgs)
-			// Verify that service affinity custom predicate/priority is converted to framework plugin.
-			wantArgs = &schedulerapi.ServiceAffinityArgs{
-				AffinityLabels:               []string{"zone", "foo"},
-				AntiAffinityLabelsPreference: []string{"rack", "zone"},
-			}
-			verifyPluginConvertion(t, serviceaffinity.Name, []string{"FilterPlugin", "ScorePlugin"}, prof, &factory.profiles[0], 6, wantArgs)
-			// TODO(#87703): Verify all plugin configs.
-		})
+	var policy schedulerapi.Policy
+	if err := runtime.DecodeInto(scheme.Codecs.UniversalDecoder(), configData, &policy); err != nil {
+		t.Errorf("Invalid configuration: %v", err)
 	}
 
+	sched, err := factory.createFromConfig(policy)
+	if err != nil {
+		t.Fatalf("createFromConfig failed: %v", err)
+	}
+	// createFromConfig is the old codepath where we only have one profile.
+	prof := sched.Profiles[testSchedulerName]
+	queueSortPls := prof.ListPlugins()["QueueSortPlugin"]
+	wantQueuePls := []schedulerapi.Plugin{{Name: queuesort.Name}}
+	if diff := cmp.Diff(wantQueuePls, queueSortPls); diff != "" {
+		t.Errorf("Unexpected QueueSort plugins (-want, +got): %s", diff)
+	}
+	bindPls := prof.ListPlugins()["BindPlugin"]
+	wantBindPls := []schedulerapi.Plugin{{Name: defaultbinder.Name}}
+	if diff := cmp.Diff(wantBindPls, bindPls); diff != "" {
+		t.Errorf("Unexpected Bind plugins (-want, +got): %s", diff)
+	}
+
+	// Verify that node label predicate/priority are converted to framework plugins.
+	var wantArgs runtime.Object = &schedulerapi.NodeLabelArgs{
+		PresentLabels:           []string{"zone"},
+		AbsentLabels:            []string{"foo"},
+		PresentLabelsPreference: []string{"l1"},
+		AbsentLabelsPreference:  []string{"l2"},
+	}
+	verifyPluginConvertion(t, nodelabel.Name, []string{"FilterPlugin", "ScorePlugin"}, prof, &factory.profiles[0], 6, wantArgs)
+	// Verify that service affinity custom predicate/priority is converted to framework plugin.
+	wantArgs = &schedulerapi.ServiceAffinityArgs{
+		AffinityLabels:               []string{"zone", "foo"},
+		AntiAffinityLabelsPreference: []string{"rack", "zone"},
+	}
+	verifyPluginConvertion(t, serviceaffinity.Name, []string{"FilterPlugin", "ScorePlugin"}, prof, &factory.profiles[0], 6, wantArgs)
+	// TODO(#87703): Verify all plugin configs.
 }
 
 func verifyPluginConvertion(t *testing.T, name string, extensionPoints []string, prof *profile.Profile, cfg *schedulerapi.KubeSchedulerProfile, wantWeight int32, wantArgs runtime.Object) {
@@ -511,7 +469,6 @@ func newConfigFactoryWithFrameworkRegistry(
 		podInitialBackoffSeconds: podInitialBackoffDurationSeconds,
 		podMaxBackoffSeconds:     podMaxBackoffDurationSeconds,
 		StopEverything:           stopCh,
-		enableNonPreempting:      utilfeature.DefaultFeatureGate.Enabled(kubefeatures.NonPreemptingPriority),
 		registry:                 registry,
 		profiles: []schedulerapi.KubeSchedulerProfile{
 			{SchedulerName: testSchedulerName},

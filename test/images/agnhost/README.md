@@ -375,7 +375,7 @@ HTTP server:
 
 ### netexec
 
-Starts a HTTP server on given port with the following endpoints:
+Starts a HTTP(S) server on given port with the following endpoints:
 
 - `/`: Returns the request's timestamp.
 - `/clientip`: Returns the request's IP address.
@@ -392,8 +392,14 @@ Starts a HTTP server on given port with the following endpoints:
     Acceptable values: `http`, `udp`, `sctp`.
   - `tries`: The number of times the request will be performed. Default value: `1`.
 - `/echo`: Returns the given `msg` (`/echo?msg=echoed_msg`)
-- `/exit`: Closes the server with the given code (`/exit?code=some-code`). The `code`
-  is expected to be an integer [0-127] or empty; if it is not, it will return an error message.
+- `/exit`: Closes the server with the given code and graceful shutdown. The endpoint's parameters
+	are:
+	- `code`: The exit code for the process. Default value: 0. Allows an integer [0-127].
+	- `timeout`: The amount of time to wait for connections to close before shutting down.
+		Acceptable values are golang durations. If 0 the process will exit immediately without
+		shutdown.
+	- `wait`: The amount of time to wait before starting shutdown. Acceptable values are
+	  golang durations. If 0 the process will start shutdown immediately.
 - `/healthz`: Returns `200 OK` if the server is ready, `412 Status Precondition Failed`
   otherwise. The server is considered not ready if the UDP server did not start yet or
   it exited.
@@ -407,6 +413,10 @@ Starts a HTTP server on given port with the following endpoints:
   Returns a JSON with the fields `output` (containing the file's name on the server) and
   `error` containing any potential server side errors.
 
+If `--tls-cert-file` is added (ideally in conjunction with `--tls-private-key-file`, the HTTP server
+will be upgraded to HTTPS. The image has default, `localhost`-based cert/privkey files at
+`/localhost.crt` and `/localhost.key` (see: [`porter` subcommand](#porter))
+
 It will also start a UDP server on the indicated UDP port that responds to the following commands:
 
 - `hostname`: Returns the server's hostname
@@ -419,7 +429,7 @@ responding to the same commands as the UDP server.
 Usage:
 
 ```console
-    kubectl exec test-agnhost -- /agnhost netexec [--http-port <http-port>] [--udp-port <udp-port>] [--sctp-port <sctp-port>]
+    kubectl exec test-agnhost -- /agnhost netexec [--http-port <http-port>] [--udp-port <udp-port>] [--sctp-port <sctp-port>] [--tls-cert-file <cert-file>] [--tls-private-key-file <privkey-file>]
 ```
 
 ### nettest

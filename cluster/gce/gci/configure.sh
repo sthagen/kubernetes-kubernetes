@@ -322,7 +322,7 @@ function install-exec-auth-plugin {
   local -r license_url="${EXEC_AUTH_PLUGIN_LICENSE_URL}"
   echo "Downloading gke-exec-auth-plugin license"
   download-or-bust "" "${license_url}"
-  mv "${KUBE_HOME}/LICENSE" "${KUBE_BIN}/gke-exec-auth-plugin-license"
+  mv "${KUBE_HOME}/LICENSES/LICENSE" "${KUBE_BIN}/gke-exec-auth-plugin-license"
 }
 
 function install-kube-manifests {
@@ -423,12 +423,19 @@ function install-docker {
     software-properties-common \
     lsb-release
 
+  # focal repo for docker is not yet available, so we use bonic for now
+  # https://github.com/kubernetes/kubernetes/issues/90709
+  release=$(lsb_release -cs)
+  if [ "$release" == "focal" ]; then
+    release="bionic";
+  fi
+
   # Add the Docker apt-repository
   curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg \
     | apt-key add -
   add-apt-repository \
     "deb [arch=amd64] https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") \
-    $(lsb_release -cs) stable"
+    $release stable"
 
   # Install Docker
   apt-get update && \
@@ -462,12 +469,19 @@ function install-containerd-ubuntu {
     software-properties-common \
     lsb-release
 
+  # focal repo for docker is not yet available, so we use bonic for now
+  # https://github.com/kubernetes/kubernetes/issues/90709
+  release=$(lsb_release -cs)
+  if [ "$release" == "focal" ]; then
+    release="bionic";
+  fi
+
   # Add the Docker apt-repository (as we install containerd from there)
   curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg \
     | apt-key add -
   add-apt-repository \
     "deb [arch=amd64] https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") \
-    $(lsb_release -cs) stable"
+    $release stable"
 
   # Install containerd from Docker repo
   apt-get update && \
