@@ -127,13 +127,15 @@ type CreateRoleOptions struct {
 	Resources     []ResourceOptions
 	ResourceNames []string
 
-	DryRunStrategy cmdutil.DryRunStrategy
-	DryRunVerifier *resource.DryRunVerifier
-	OutputFormat   string
-	Namespace      string
-	Client         clientgorbacv1.RbacV1Interface
-	Mapper         meta.RESTMapper
-	PrintObj       func(obj runtime.Object) error
+	DryRunStrategy   cmdutil.DryRunStrategy
+	DryRunVerifier   *resource.DryRunVerifier
+	OutputFormat     string
+	Namespace        string
+	EnforceNamespace bool
+	Client           clientgorbacv1.RbacV1Interface
+	Mapper           meta.RESTMapper
+	PrintObj         func(obj runtime.Object) error
+	FieldManager     string
 
 	genericclioptions.IOStreams
 }
@@ -172,7 +174,7 @@ func NewCmdCreateRole(f cmdutil.Factory, ioStreams genericclioptions.IOStreams) 
 	cmd.Flags().StringSliceVar(&o.Verbs, "verb", o.Verbs, "Verb that applies to the resources contained in the rule")
 	cmd.Flags().StringSlice("resource", []string{}, "Resource that the rule applies to")
 	cmd.Flags().StringArrayVar(&o.ResourceNames, "resource-name", o.ResourceNames, "Resource in the white list that the rule applies to, repeat this flag for multiple items")
-
+	cmdutil.AddFieldManagerFlagVar(cmd, &o.FieldManager, "kubectl-create")
 	return cmd
 }
 
@@ -262,7 +264,7 @@ func (o *CreateRoleOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args
 		return printer.PrintObj(obj, o.Out)
 	}
 
-	o.Namespace, _, err = f.ToRawKubeConfigLoader().Namespace()
+	o.Namespace, o.EnforceNamespace, err = f.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
 		return err
 	}
@@ -351,10 +353,16 @@ func (o *CreateRoleOptions) RunCreateRole() error {
 		return err
 	}
 	role.Rules = rules
+	if o.EnforceNamespace {
+		role.Namespace = o.Namespace
+	}
 
 	// Create role.
 	if o.DryRunStrategy != cmdutil.DryRunClient {
 		createOptions := metav1.CreateOptions{}
+		if o.FieldManager != "" {
+			createOptions.FieldManager = o.FieldManager
+		}
 		if o.DryRunStrategy == cmdutil.DryRunServer {
 			if err := o.DryRunVerifier.HasSupport(role.GroupVersionKind()); err != nil {
 				return err

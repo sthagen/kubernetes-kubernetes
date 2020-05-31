@@ -43,6 +43,18 @@ function convert-manifest-params {
   fi
 }
 
+function append-param-if-not-present {
+  # A helper function to add flag to an arguments string
+  # if no such flag is present already
+  local params="$1"
+  local -r flag="$2"
+  local -r value="$3"
+  if [[ ! "${params}" =~ "--${flag}"[=\ ] ]]; then
+    params+=" --${flag}=${value}"
+  fi
+  echo "${params}"
+}
+
 function setup-os-params {
   # Reset core_pattern. On GCI, the default core_pattern pipes the core dumps to
   # /sbin/crash_reporter which is more restrictive in saving crash dumps. So for
@@ -562,6 +574,13 @@ function create-master-pki {
   if [[ -z "${SERVICEACCOUNT_CERT:-}" || -z "${SERVICEACCOUNT_KEY:-}" ]]; then
     SERVICEACCOUNT_CERT="${MASTER_CERT}"
     SERVICEACCOUNT_KEY="${MASTER_KEY}"
+  fi
+
+  if [[ -n "${OLD_MASTER_CERT:-}" && -n "${OLD_MASTER_KEY:-}" ]]; then
+    OLD_MASTER_CERT_PATH="${pki_dir}/oldapiserver.crt"
+    echo "${OLD_MASTER_CERT}" | base64 --decode > "${OLD_MASTER_CERT_PATH}"
+    OLD_MASTER_KEY_PATH="${pki_dir}/oldapiserver.key"
+    echo "${OLD_MASTER_KEY}" | base64 --decode > "${OLD_MASTER_KEY_PATH}"
   fi
 
   SERVICEACCOUNT_CERT_PATH="${pki_dir}/serviceaccount.crt"
@@ -1901,6 +1920,7 @@ function start-kube-controller-manager {
     container_env="\"env\":[{\"name\": \"KUBE_CACHE_MUTATION_DETECTOR\", \"value\": \"${ENABLE_CACHE_MUTATION_DETECTOR}\"}],"
   fi
 
+  params="$(convert-manifest-params "${params}")"
   local -r src_file="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/kube-controller-manager.manifest"
   # Evaluate variables.
   sed -i -e "s@{{pillar\['kube_docker_registry'\]}}@${DOCKER_REGISTRY}@g" "${src_file}"
@@ -2525,6 +2545,7 @@ EOF
 
   # Place addon manager pod manifest.
   src_file="${src_dir}/kube-addon-manager.yaml"
+  sed -i -e "s@{{kubectl_prune_whitelist_override}}@${KUBECTL_PRUNE_WHITELIST_OVERRIDE:-}@g" "${src_file}"
   sed -i -e "s@{{kubectl_extra_prune_whitelist}}@${ADDON_MANAGER_PRUNE_WHITELIST:-}@g" "${src_file}"
   sed -i -e "s@{{runAsUser}}@${KUBE_ADDON_MANAGER_RUNASUSER:-2002}@g" "${src_file}"
   sed -i -e "s@{{runAsGroup}}@${KUBE_ADDON_MANAGER_RUNASGROUP:-2002}@g" "${src_file}"

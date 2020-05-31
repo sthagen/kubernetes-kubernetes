@@ -470,11 +470,22 @@ func recordingPluginFactory(name string, result map[string]runtime.Object) Plugi
 
 func TestNewFrameworkPluginDefaults(t *testing.T) {
 	// In-tree plugins that use args.
-	pluginsWithArgs := []string{"InterPodAffinity", "NodeLabel", "NodeResourcesFit", "RequestedToCapacityRatio", "PodTopologySpread"}
+	pluginsWithArgs := []string{
+		"InterPodAffinity",
+		"NodeLabel",
+		"NodeResourcesFit",
+		"NodeResourcesLeastAllocated",
+		"NodeResourcesMostAllocated",
+		"PodTopologySpread",
+		"RequestedToCapacityRatio",
+		"VolumeBinding",
+	}
 	plugins := config.Plugins{
 		Filter: &config.PluginSet{},
 	}
 	// Use all plugins in Filter.
+	// NOTE: This does not mean those plugins implemented `Filter` interfaces.
+	// `TestPlugin` is created in this test to fake the behavior for test purpose.
 	for _, name := range pluginsWithArgs {
 		plugins.Filter.Enabled = append(plugins.Filter.Enabled, config.Plugin{Name: name})
 	}
@@ -496,10 +507,21 @@ func TestNewFrameworkPluginDefaults(t *testing.T) {
 				"InterPodAffinity": &config.InterPodAffinityArgs{
 					HardPodAffinityWeight: 1,
 				},
-				"NodeLabel":                &config.NodeLabelArgs{},
-				"NodeResourcesFit":         &config.NodeResourcesFitArgs{},
-				"RequestedToCapacityRatio": &config.RequestedToCapacityRatioArgs{},
-				"PodTopologySpread":        &config.PodTopologySpreadArgs{},
+				"NodeLabel":        &config.NodeLabelArgs{},
+				"NodeResourcesFit": &config.NodeResourcesFitArgs{},
+				"NodeResourcesLeastAllocated": &config.NodeResourcesLeastAllocatedArgs{
+					Resources: []config.ResourceSpec{{Name: "cpu", Weight: 1}, {Name: "memory", Weight: 1}},
+				},
+				"NodeResourcesMostAllocated": &config.NodeResourcesMostAllocatedArgs{
+					Resources: []config.ResourceSpec{{Name: "cpu", Weight: 1}, {Name: "memory", Weight: 1}},
+				},
+				"RequestedToCapacityRatio": &config.RequestedToCapacityRatioArgs{
+					Resources: []config.ResourceSpec{{Name: "cpu", Weight: 1}, {Name: "memory", Weight: 1}},
+				},
+				"PodTopologySpread": &config.PodTopologySpreadArgs{},
+				"VolumeBinding": &config.VolumeBindingArgs{
+					BindTimeoutSeconds: 600,
+				},
 			},
 		},
 		{
@@ -517,6 +539,30 @@ func TestNewFrameworkPluginDefaults(t *testing.T) {
 						IgnoredResources: []string{"example.com/foo"},
 					},
 				},
+				{
+					Name: "NodeResourcesLeastAllocated",
+					Args: &config.NodeResourcesLeastAllocatedArgs{
+						Resources: []config.ResourceSpec{{Name: "resource", Weight: 4}},
+					},
+				},
+				{
+					Name: "NodeResourcesMostAllocated",
+					Args: &config.NodeResourcesMostAllocatedArgs{
+						Resources: []config.ResourceSpec{{Name: "resource", Weight: 3}},
+					},
+				},
+				{
+					Name: "RequestedToCapacityRatio",
+					Args: &config.RequestedToCapacityRatioArgs{
+						Resources: []config.ResourceSpec{{Name: "resource", Weight: 2}},
+					},
+				},
+				{
+					Name: "VolumeBinding",
+					Args: &config.VolumeBindingArgs{
+						BindTimeoutSeconds: 300,
+					},
+				},
 			},
 			wantCfg: map[string]runtime.Object{
 				"InterPodAffinity": &config.InterPodAffinityArgs{
@@ -526,8 +572,19 @@ func TestNewFrameworkPluginDefaults(t *testing.T) {
 				"NodeResourcesFit": &config.NodeResourcesFitArgs{
 					IgnoredResources: []string{"example.com/foo"},
 				},
-				"RequestedToCapacityRatio": &config.RequestedToCapacityRatioArgs{},
-				"PodTopologySpread":        &config.PodTopologySpreadArgs{},
+				"NodeResourcesLeastAllocated": &config.NodeResourcesLeastAllocatedArgs{
+					Resources: []config.ResourceSpec{{Name: "resource", Weight: 4}},
+				},
+				"NodeResourcesMostAllocated": &config.NodeResourcesMostAllocatedArgs{
+					Resources: []config.ResourceSpec{{Name: "resource", Weight: 3}},
+				},
+				"PodTopologySpread": &config.PodTopologySpreadArgs{},
+				"RequestedToCapacityRatio": &config.RequestedToCapacityRatioArgs{
+					Resources: []config.ResourceSpec{{Name: "resource", Weight: 2}},
+				},
+				"VolumeBinding": &config.VolumeBindingArgs{
+					BindTimeoutSeconds: 300,
+				},
 			},
 		},
 	}

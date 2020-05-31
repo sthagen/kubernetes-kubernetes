@@ -73,7 +73,7 @@ users:
 	// plugin config
 	pluginConfigFile := filepath.Join(tmpDir, "plugin.yaml")
 	if err := ioutil.WriteFile(pluginConfigFile, []byte(fmt.Sprintf(`
-apiVersion: kubescheduler.config.k8s.io/v1alpha2
+apiVersion: kubescheduler.config.k8s.io/v1beta1
 kind: KubeSchedulerConfiguration
 clientConnection:
   kubeconfig: "%s"
@@ -110,7 +110,7 @@ profiles:
 	// multiple profiles config
 	multiProfilesConfig := filepath.Join(tmpDir, "multi-profiles.yaml")
 	if err := ioutil.WriteFile(multiProfilesConfig, []byte(fmt.Sprintf(`
-apiVersion: kubescheduler.config.k8s.io/v1alpha2
+apiVersion: kubescheduler.config.k8s.io/v1beta1
 kind: KubeSchedulerConfiguration
 clientConnection:
   kubeconfig: "%s"
@@ -189,9 +189,13 @@ profiles:
 			{Name: "NodePreferAvoidPods", Weight: 10000},
 			{Name: "DefaultPodTopologySpread", Weight: 1},
 			{Name: "TaintToleration", Weight: 1},
-			{Name: "PodTopologySpread", Weight: 1},
+			{Name: "PodTopologySpread", Weight: 2},
 		},
-		"BindPlugin": {{Name: "DefaultBinder"}},
+		"BindPlugin":      {{Name: "DefaultBinder"}},
+		"ReservePlugin":   {{Name: "VolumeBinding"}},
+		"UnreservePlugin": {{Name: "VolumeBinding"}},
+		"PreBindPlugin":   {{Name: "VolumeBinding"}},
+		"PostBindPlugin":  {{Name: "VolumeBinding"}},
 	}
 
 	testcases := []struct {
@@ -222,6 +226,10 @@ profiles:
 					"PreScorePlugin":  {{Name: "InterPodAffinity"}, {Name: "TaintToleration"}},
 					"QueueSortPlugin": {{Name: "PrioritySort"}},
 					"ScorePlugin":     {{Name: "InterPodAffinity", Weight: 1}, {Name: "TaintToleration", Weight: 1}},
+					"ReservePlugin":   {{Name: "VolumeBinding"}},
+					"UnreservePlugin": {{Name: "VolumeBinding"}},
+					"PreBindPlugin":   {{Name: "VolumeBinding"}},
+					"PostBindPlugin":  {{Name: "VolumeBinding"}},
 				},
 			},
 		},
@@ -236,6 +244,10 @@ profiles:
 				"profile-disable-all-filter-and-score-plugins": {
 					"BindPlugin":      {{Name: "DefaultBinder"}},
 					"QueueSortPlugin": {{Name: "PrioritySort"}},
+					"ReservePlugin":   {{Name: "VolumeBinding"}},
+					"UnreservePlugin": {{Name: "VolumeBinding"}},
+					"PreBindPlugin":   {{Name: "VolumeBinding"}},
+					"PostBindPlugin":  {{Name: "VolumeBinding"}},
 				},
 			},
 		},
@@ -308,9 +320,13 @@ profiles:
 						{Name: "NodePreferAvoidPods", Weight: 10000},
 						{Name: "DefaultPodTopologySpread", Weight: 1},
 						{Name: "TaintToleration", Weight: 1},
-						{Name: "PodTopologySpread", Weight: 1},
+						{Name: "PodTopologySpread", Weight: 2},
 					},
-					"BindPlugin": {{Name: "DefaultBinder"}},
+					"BindPlugin":      {{Name: "DefaultBinder"}},
+					"ReservePlugin":   {{Name: "VolumeBinding"}},
+					"UnreservePlugin": {{Name: "VolumeBinding"}},
+					"PreBindPlugin":   {{Name: "VolumeBinding"}},
+					"PostBindPlugin":  {{Name: "VolumeBinding"}},
 				},
 			},
 		},
@@ -357,10 +373,9 @@ profiles:
 				t.Fatal(err)
 			}
 
-			var args []string
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			cc, sched, err := Setup(ctx, args, opts)
+			cc, sched, err := Setup(ctx, opts)
 			if err != nil {
 				t.Fatal(err)
 			}

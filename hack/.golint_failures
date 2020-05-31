@@ -12,7 +12,6 @@ pkg/apis/admissionregistration/validation
 pkg/apis/apps/v1
 pkg/apis/apps/v1beta1
 pkg/apis/apps/v1beta2
-pkg/apis/auditregistration/v1alpha1
 pkg/apis/authentication/v1
 pkg/apis/autoscaling/v1
 pkg/apis/autoscaling/v2beta1
@@ -89,7 +88,6 @@ pkg/controller/volume/attachdetach
 pkg/controller/volume/attachdetach/config/v1alpha1
 pkg/controller/volume/attachdetach/statusupdater
 pkg/controller/volume/attachdetach/testing
-pkg/controller/volume/events
 pkg/controller/volume/expand
 pkg/controller/volume/persistentvolume
 pkg/controller/volume/persistentvolume/config/v1alpha1
@@ -101,6 +99,7 @@ pkg/kubelet/apis/config/v1beta1
 pkg/kubelet/cm
 pkg/kubelet/container
 pkg/kubelet/container/testing
+pkg/kubelet/cri/remote
 pkg/kubelet/dockershim
 pkg/kubelet/dockershim/libdocker
 pkg/kubelet/dockershim/network
@@ -113,7 +112,6 @@ pkg/kubelet/lifecycle
 pkg/kubelet/pluginmanager/pluginwatcher
 pkg/kubelet/pod/testing
 pkg/kubelet/preemption
-pkg/kubelet/remote
 pkg/kubelet/stats
 pkg/kubelet/sysctl
 pkg/kubelet/types
@@ -126,7 +124,6 @@ pkg/proxy/userspace
 pkg/proxy/winkernel
 pkg/proxy/winuserspace
 pkg/registry/admissionregistration/rest
-pkg/registry/auditregistration/rest
 pkg/registry/authentication/rest
 pkg/registry/authentication/tokenreview
 pkg/registry/authorization/localsubjectaccessreview
@@ -177,7 +174,7 @@ pkg/registry/scheduling/rest
 pkg/registry/settings/rest
 pkg/registry/storage/rest
 pkg/registry/storage/storageclass
-pkg/scheduler/apis/config/v1alpha2
+pkg/scheduler/apis/config/v1beta1
 pkg/security/podsecuritypolicy
 pkg/security/podsecuritypolicy/group
 pkg/security/podsecuritypolicy/selinux
@@ -218,7 +215,6 @@ staging/src/k8s.io/api/admissionregistration/v1beta1
 staging/src/k8s.io/api/apps/v1
 staging/src/k8s.io/api/apps/v1beta1
 staging/src/k8s.io/api/apps/v1beta2
-staging/src/k8s.io/api/auditregistration/v1alpha1
 staging/src/k8s.io/api/authentication/v1
 staging/src/k8s.io/api/authentication/v1beta1
 staging/src/k8s.io/api/authorization/v1
@@ -262,8 +258,6 @@ staging/src/k8s.io/apimachinery/pkg/api/apitesting/fuzzer
 staging/src/k8s.io/apimachinery/pkg/api/apitesting/roundtrip
 staging/src/k8s.io/apimachinery/pkg/api/meta
 staging/src/k8s.io/apimachinery/pkg/api/resource
-staging/src/k8s.io/apimachinery/pkg/api/validation
-staging/src/k8s.io/apimachinery/pkg/api/validation/path
 staging/src/k8s.io/apimachinery/pkg/apis/meta/fuzzer
 staging/src/k8s.io/apimachinery/pkg/apis/meta/internalversion
 staging/src/k8s.io/apimachinery/pkg/apis/meta/v1

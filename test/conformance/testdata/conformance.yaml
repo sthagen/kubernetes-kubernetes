@@ -244,6 +244,9 @@
     Query for the Pod with the new value for the label MUST be successful.
   release: v1.9
   file: test/e2e/common/pods.go
+  behaviors:
+  - pod/spec/label/create
+  - pod/spec/label/patch
 - testname: Pods, service environment variables
   codename: '[k8s.io] Pods should contain environment variables for services [NodeConformance]
     [Conformance]'
@@ -482,6 +485,8 @@
     have QOSClass set to PodQOSGuaranteed.
   release: v1.9
   file: test/e2e/node/pods.go
+  behaviors:
+  - pod/spec/container/resources
 - testname: Pods, prestop hook
   codename: '[k8s.io] [sig-node] PreStop should call prestop when killing a pod  [Conformance]'
   description: Create a server pod with a rest endpoint '/write' that changes state.Received
@@ -1325,6 +1330,15 @@
     Container.
   release: v1.9
   file: test/e2e/auth/service_accounts.go
+- testname: ServiceAccount lifecycle test
+  codename: '[sig-auth] ServiceAccounts should run through the lifecycle of a ServiceAccount
+    [Conformance]'
+  description: Creates a ServiceAccount with a static Label MUST be added as shown
+    in watch event. Patching the ServiceAccount MUST return it's new property. Listing
+    the ServiceAccounts MUST return the test ServiceAccount with it's patched values.
+    ServiceAccount will be deleted and MUST find a deleted watch event.
+  release: v1.19
+  file: test/e2e/auth/service_accounts.go
 - testname: Kubectl, guestbook application
   codename: '[sig-cli] Kubectl client Guestbook application should create and stop
     a working application  [Conformance]'
@@ -1358,6 +1372,14 @@
     expected. Kubectl describe on rc, service, node and namespace SHOULD also return
     proper information.
   release: v1.9
+  file: test/e2e/kubectl/kubectl.go
+- testname: Kubectl, diff Deployment
+  codename: '[sig-cli] Kubectl client Kubectl diff should check if kubectl diff finds
+    a difference for Deployments [Conformance]'
+  description: Create a Deployment with httpd image. Declare the same Deployment with
+    a different image, busybox. Diff of live Deployment with declared Deployment MUST
+    include the difference between live and declared image.
+  release: v1.19
   file: test/e2e/kubectl/kubectl.go
 - testname: Kubectl, create service, replication controller
   codename: '[sig-cli] Kubectl client Kubectl expose should create services for rc  [Conformance]'
@@ -1415,6 +1437,15 @@
     in the run command. After the run command there SHOULD be a pod that should exist
     with one container running the specified image.
   release: v1.9
+  file: test/e2e/kubectl/kubectl.go
+- testname: Kubectl, server-side dry-run Pod
+  codename: '[sig-cli] Kubectl client Kubectl server-side dry-run should check if
+    kubectl can dry-run update Pods [Conformance]'
+  description: The command 'kubectl run' must create a pod with the specified image
+    name. After, the command 'kubectl replace --dry-run=server' should update the
+    Pod with the new image name and server-side dry-run enabled. The image name must
+    not change.
+  release: v1.19
   file: test/e2e/kubectl/kubectl.go
 - testname: Kubectl, version
   codename: '[sig-cli] Kubectl client Kubectl version should check is all data is
@@ -2245,15 +2276,6 @@
     able to start with Secret and ConfigMap volumes mounted into the container.
   release: v1.13
   file: test/e2e/storage/empty_dir_wrapper.go
-- testname: Host path, volume mode default
-  codename: '[sig-storage] HostPath should give a volume the correct mode [LinuxOnly]
-    [NodeConformance] [Conformance]'
-  description: Create a Pod with host volume mounted. The volume mounted MUST be a
-    directory with permissions mode -rwxrwxrwx and that is has the sticky bit (mode
-    flag t) set. This test is marked LinuxOnly since Windows does not support setting
-    the sticky bit (mode flag t).
-  release: v1.9
-  file: test/e2e/common/host_path.go
 - testname: Projected Volume, multiple projections
   codename: '[sig-storage] Projected combined should project all components that make
     up the projection API [Projection][NodeConformance] [Conformance]'

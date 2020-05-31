@@ -1,6 +1,6 @@
 dependencies:
   - name: "cni"
-    version: 0.8.5
+    version: 0.8.6
     refPaths:
     - path: build/workspace.bzl
       match: CNI_VERSION =
@@ -116,6 +116,8 @@ dependencies:
       match: debian_iptables_version=
     - path: build/workspace.bzl
       match: tag =
+    - path: test/utils/image/manifest.go
+      match: configs\[DebianIptables\] = Config{buildImageRegistry, "debian-iptables", "v\d+\.\d+.\d+"}
 
   - name: "k8s.gcr.io/go-runner"
     version: 0.1.1
@@ -130,6 +132,13 @@ dependencies:
       match: go_runner_version=
     - path: build/workspace.bzl
       match: tag =
+
+  - name: "k8s.gcr.io/kube-cross: dependents"
+    version: v1.13.9-5
+    refPaths:
+    - path: build/build-image/cross/VERSION
+    - path: test/images/sample-apiserver/Dockerfile
+      match: us\.gcr\.io\/k8s-artifacts-prod\/build-image\/kube-cross:v\d+\.\d+\.\d+-\d+
 
   - name: "k8s.gcr.io/pause"
     version: 3.3
@@ -188,3 +197,11 @@ dependencies:
       match: k8s.gcr.io\/pause:\d+\.\d+
     - path: test/utils/image/manifest.go
       match: configs\[Pause\] = Config{gcRegistry, "pause", "\d+\.\d+"}
+
+  - name: "repo-infra"
+    version: 0.0.5
+    refPaths:
+    - path: build/root/WORKSPACE
+      match: strip_prefix = "repo-infra-\d+.\d+.\d+"
+    - path: build/root/WORKSPACE
+      match: https://github.com/kubernetes/repo-infra/archive/v\d+.\d+.\d+.tar.gz

@@ -34,7 +34,7 @@ import (
 	"sort"
 
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -732,6 +732,10 @@ func (instances *instances) InstanceExistsByProviderID(ctx context.Context, prov
 
 func (instances *instances) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
 	return false, errors.New("unimplemented")
+}
+
+func (instances *instances) InstanceMetadataByProviderID(ctx context.Context, providerID string) (*cloudprovider.InstanceMetadata, error) {
+	return nil, errors.New("unimplemented")
 }
 
 func (instances *instances) List(filter string) ([]types.NodeName, error) {

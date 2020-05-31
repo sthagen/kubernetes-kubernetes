@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/features"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/defaultbinder"
@@ -125,9 +125,29 @@ func getDefaultConfig() *schedulerapi.Plugins {
 				{Name: tainttoleration.Name, Weight: 1},
 			},
 		},
+		Reserve: &schedulerapi.PluginSet{
+			Enabled: []schedulerapi.Plugin{
+				{Name: volumebinding.Name},
+			},
+		},
+		Unreserve: &schedulerapi.PluginSet{
+			Enabled: []schedulerapi.Plugin{
+				{Name: volumebinding.Name},
+			},
+		},
+		PreBind: &schedulerapi.PluginSet{
+			Enabled: []schedulerapi.Plugin{
+				{Name: volumebinding.Name},
+			},
+		},
 		Bind: &schedulerapi.PluginSet{
 			Enabled: []schedulerapi.Plugin{
 				{Name: defaultbinder.Name},
+			},
+		},
+		PostBind: &schedulerapi.PluginSet{
+			Enabled: []schedulerapi.Plugin{
+				{Name: volumebinding.Name},
 			},
 		},
 	}
@@ -152,7 +172,10 @@ func applyFeatureGates(config *schedulerapi.Plugins) {
 		config.PreFilter.Enabled = append(config.PreFilter.Enabled, f)
 		config.Filter.Enabled = append(config.Filter.Enabled, f)
 		config.PreScore.Enabled = append(config.PreScore.Enabled, f)
-		s := schedulerapi.Plugin{Name: podtopologyspread.Name, Weight: 1}
+		// Weight is doubled because:
+		// - This is a score coming from user preference.
+		// - It makes its signal comparable to NodeResourcesLeastAllocated.
+		s := schedulerapi.Plugin{Name: podtopologyspread.Name, Weight: 2}
 		config.Score.Enabled = append(config.Score.Enabled, s)
 	}
 

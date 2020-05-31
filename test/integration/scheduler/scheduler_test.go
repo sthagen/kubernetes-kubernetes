@@ -143,7 +143,11 @@ func TestSchedulerCreationFromConfigMap(t *testing.T) {
 					{Name: "DefaultPodTopologySpread", Weight: 1},
 					{Name: "TaintToleration", Weight: 1},
 				},
-				"BindPlugin": {{Name: "DefaultBinder"}},
+				"ReservePlugin":   {{Name: "VolumeBinding"}},
+				"UnreservePlugin": {{Name: "VolumeBinding"}},
+				"PreBindPlugin":   {{Name: "VolumeBinding"}},
+				"BindPlugin":      {{Name: "DefaultBinder"}},
+				"PostBindPlugin":  {{Name: "VolumeBinding"}},
 			},
 		},
 		{
@@ -233,7 +237,11 @@ kind: Policy
 					{Name: "DefaultPodTopologySpread", Weight: 1},
 					{Name: "TaintToleration", Weight: 1},
 				},
-				"BindPlugin": {{Name: "DefaultBinder"}},
+				"ReservePlugin":   {{Name: "VolumeBinding"}},
+				"UnreservePlugin": {{Name: "VolumeBinding"}},
+				"PreBindPlugin":   {{Name: "VolumeBinding"}},
+				"BindPlugin":      {{Name: "DefaultBinder"}},
+				"PostBindPlugin":  {{Name: "VolumeBinding"}},
 			},
 		},
 		{
@@ -503,13 +511,13 @@ func TestMultipleSchedulers(t *testing.T) {
 	}
 
 	defaultScheduler := "default-scheduler"
-	testPodFitsDefault, err := createPausePod(testCtx.ClientSet, initPausePod(testCtx.ClientSet, &pausePodConfig{Name: "pod-fits-default", Namespace: testCtx.NS.Name, SchedulerName: defaultScheduler}))
+	testPodFitsDefault, err := createPausePod(testCtx.ClientSet, initPausePod(&pausePodConfig{Name: "pod-fits-default", Namespace: testCtx.NS.Name, SchedulerName: defaultScheduler}))
 	if err != nil {
 		t.Fatalf("Failed to create pod: %v", err)
 	}
 
 	fooScheduler := "foo-scheduler"
-	testPodFitsFoo, err := createPausePod(testCtx.ClientSet, initPausePod(testCtx.ClientSet, &pausePodConfig{Name: "pod-fits-foo", Namespace: testCtx.NS.Name, SchedulerName: fooScheduler}))
+	testPodFitsFoo, err := createPausePod(testCtx.ClientSet, initPausePod(&pausePodConfig{Name: "pod-fits-foo", Namespace: testCtx.NS.Name, SchedulerName: fooScheduler}))
 	if err != nil {
 		t.Fatalf("Failed to create pod: %v", err)
 	}
@@ -539,6 +547,8 @@ func TestMultipleSchedulers(t *testing.T) {
 	// 5. create and start a scheduler with name "foo-scheduler"
 	fooProf := kubeschedulerconfig.KubeSchedulerProfile{SchedulerName: fooScheduler}
 	testCtx = testutils.InitTestSchedulerWithOptions(t, testCtx, true, nil, time.Second, scheduler.WithProfiles(fooProf))
+	testutils.SyncInformerFactory(testCtx)
+	go testCtx.Scheduler.Run(testCtx.Ctx)
 
 	//	6. **check point-2**:
 	//		- testPodWithAnnotationFitsFoo should be scheduled
@@ -632,7 +642,7 @@ func TestMultipleSchedulingProfiles(t *testing.T) {
 		{Name: "baz", Namespace: testCtx.NS.Name, SchedulerName: "default-scheduler"},
 		{Name: "zet", Namespace: testCtx.NS.Name, SchedulerName: "custom-scheduler"},
 	} {
-		if _, err := createPausePod(testCtx.ClientSet, initPausePod(testCtx.ClientSet, pc)); err != nil {
+		if _, err := createPausePod(testCtx.ClientSet, initPausePod(pc)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -772,7 +782,7 @@ func TestSchedulerInformers(t *testing.T) {
 			description: "Pod cannot be scheduled when node is occupied by pods scheduled by other schedulers",
 			nodes:       []*nodeConfig{{name: "node-1", res: defaultNodeRes}},
 			existingPods: []*v1.Pod{
-				initPausePod(testCtx.ClientSet, &pausePodConfig{
+				initPausePod(&pausePodConfig{
 					Name:          "pod1",
 					Namespace:     testCtx.NS.Name,
 					Resources:     defaultPodRes,
@@ -780,7 +790,7 @@ func TestSchedulerInformers(t *testing.T) {
 					NodeName:      "node-1",
 					SchedulerName: "foo-scheduler",
 				}),
-				initPausePod(testCtx.ClientSet, &pausePodConfig{
+				initPausePod(&pausePodConfig{
 					Name:          "pod2",
 					Namespace:     testCtx.NS.Name,
 					Resources:     defaultPodRes,
@@ -789,7 +799,7 @@ func TestSchedulerInformers(t *testing.T) {
 					SchedulerName: "bar-scheduler",
 				}),
 			},
-			pod: initPausePod(cs, &pausePodConfig{
+			pod: initPausePod(&pausePodConfig{
 				Name:      "unschedulable-pod",
 				Namespace: testCtx.NS.Name,
 				Resources: defaultPodRes,

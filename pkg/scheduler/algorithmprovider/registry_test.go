@@ -96,12 +96,32 @@ func TestClusterAutoscalerProvider(t *testing.T) {
 				{Name: nodepreferavoidpods.Name, Weight: 10000},
 				{Name: defaultpodtopologyspread.Name, Weight: 1},
 				{Name: tainttoleration.Name, Weight: 1},
-				{Name: podtopologyspread.Name, Weight: 1},
+				{Name: podtopologyspread.Name, Weight: 2},
+			},
+		},
+		Reserve: &schedulerapi.PluginSet{
+			Enabled: []schedulerapi.Plugin{
+				{Name: volumebinding.Name},
+			},
+		},
+		Unreserve: &schedulerapi.PluginSet{
+			Enabled: []schedulerapi.Plugin{
+				{Name: volumebinding.Name},
+			},
+		},
+		PreBind: &schedulerapi.PluginSet{
+			Enabled: []schedulerapi.Plugin{
+				{Name: volumebinding.Name},
 			},
 		},
 		Bind: &schedulerapi.PluginSet{
 			Enabled: []schedulerapi.Plugin{
 				{Name: defaultbinder.Name},
+			},
+		},
+		PostBind: &schedulerapi.PluginSet{
+			Enabled: []schedulerapi.Plugin{
+				{Name: volumebinding.Name},
 			},
 		},
 	}
@@ -172,9 +192,29 @@ func TestApplyFeatureGates(t *testing.T) {
 						{Name: tainttoleration.Name, Weight: 1},
 					},
 				},
+				Reserve: &schedulerapi.PluginSet{
+					Enabled: []schedulerapi.Plugin{
+						{Name: volumebinding.Name},
+					},
+				},
+				Unreserve: &schedulerapi.PluginSet{
+					Enabled: []schedulerapi.Plugin{
+						{Name: volumebinding.Name},
+					},
+				},
+				PreBind: &schedulerapi.PluginSet{
+					Enabled: []schedulerapi.Plugin{
+						{Name: volumebinding.Name},
+					},
+				},
 				Bind: &schedulerapi.PluginSet{
 					Enabled: []schedulerapi.Plugin{
 						{Name: defaultbinder.Name},
+					},
+				},
+				PostBind: &schedulerapi.PluginSet{
+					Enabled: []schedulerapi.Plugin{
+						{Name: volumebinding.Name},
 					},
 				},
 			},
@@ -234,13 +274,33 @@ func TestApplyFeatureGates(t *testing.T) {
 						{Name: nodepreferavoidpods.Name, Weight: 10000},
 						{Name: defaultpodtopologyspread.Name, Weight: 1},
 						{Name: tainttoleration.Name, Weight: 1},
-						{Name: podtopologyspread.Name, Weight: 1},
+						{Name: podtopologyspread.Name, Weight: 2},
 						{Name: noderesources.ResourceLimitsName, Weight: 1},
+					},
+				},
+				Reserve: &schedulerapi.PluginSet{
+					Enabled: []schedulerapi.Plugin{
+						{Name: volumebinding.Name},
+					},
+				},
+				Unreserve: &schedulerapi.PluginSet{
+					Enabled: []schedulerapi.Plugin{
+						{Name: volumebinding.Name},
+					},
+				},
+				PreBind: &schedulerapi.PluginSet{
+					Enabled: []schedulerapi.Plugin{
+						{Name: volumebinding.Name},
 					},
 				},
 				Bind: &schedulerapi.PluginSet{
 					Enabled: []schedulerapi.Plugin{
 						{Name: defaultbinder.Name},
+					},
+				},
+				PostBind: &schedulerapi.PluginSet{
+					Enabled: []schedulerapi.Plugin{
+						{Name: volumebinding.Name},
 					},
 				},
 			},

@@ -33,8 +33,6 @@ API rule violation: list_type_missing,k8s.io/api/apps/v1beta2,DeploymentStatus,C
 API rule violation: list_type_missing,k8s.io/api/apps/v1beta2,ReplicaSetStatus,Conditions
 API rule violation: list_type_missing,k8s.io/api/apps/v1beta2,StatefulSetSpec,VolumeClaimTemplates
 API rule violation: list_type_missing,k8s.io/api/apps/v1beta2,StatefulSetStatus,Conditions
-API rule violation: list_type_missing,k8s.io/api/auditregistration/v1alpha1,Policy,Stages
-API rule violation: list_type_missing,k8s.io/api/auditregistration/v1alpha1,WebhookClientConfig,CABundle
 API rule violation: list_type_missing,k8s.io/api/authentication/v1,TokenRequestSpec,Audiences
 API rule violation: list_type_missing,k8s.io/api/authentication/v1,TokenReviewSpec,Audiences
 API rule violation: list_type_missing,k8s.io/api/authentication/v1,TokenReviewStatus,Audiences
@@ -597,10 +595,10 @@ API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,V
 API rule violation: names_match,k8s.io/kube-controller-manager/config/v1alpha1,VolumeConfiguration,PersistentVolumeRecyclerConfiguration
 API rule violation: names_match,k8s.io/kube-proxy/config/v1alpha1,KubeProxyConfiguration,IPTables
 API rule violation: names_match,k8s.io/kube-scheduler/config/v1,Extender,EnableHTTPS
-API rule violation: names_match,k8s.io/kube-scheduler/config/v1alpha2,ResourceSpec,Name
-API rule violation: names_match,k8s.io/kube-scheduler/config/v1alpha2,ResourceSpec,Weight
-API rule violation: names_match,k8s.io/kube-scheduler/config/v1alpha2,UtilizationShapePoint,Score
-API rule violation: names_match,k8s.io/kube-scheduler/config/v1alpha2,UtilizationShapePoint,Utilization
+API rule violation: names_match,k8s.io/kube-scheduler/config/v1beta1,ResourceSpec,Name
+API rule violation: names_match,k8s.io/kube-scheduler/config/v1beta1,ResourceSpec,Weight
+API rule violation: names_match,k8s.io/kube-scheduler/config/v1beta1,UtilizationShapePoint,Score
+API rule violation: names_match,k8s.io/kube-scheduler/config/v1beta1,UtilizationShapePoint,Utilization
 API rule violation: names_match,k8s.io/kubelet/config/v1beta1,KubeletConfiguration,IPTablesDropBit
 API rule violation: names_match,k8s.io/kubelet/config/v1beta1,KubeletConfiguration,IPTablesMasqueradeBit
 API rule violation: names_match,k8s.io/kubelet/config/v1beta1,KubeletConfiguration,ResolverConfig
