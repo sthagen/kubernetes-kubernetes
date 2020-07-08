@@ -24,12 +24,15 @@ import (
 	"fmt"
 	"time"
 
-	capi "k8s.io/api/certificates/v1beta1"
+	capi "k8s.io/api/certificates/v1"
+	capiv1beta1 "k8s.io/api/certificates/v1beta1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
-	certificatesinformers "k8s.io/client-go/informers/certificates/v1beta1"
+	certificatesinformers "k8s.io/client-go/informers/certificates/v1"
 	clientset "k8s.io/client-go/kubernetes"
-	capihelper "k8s.io/kubernetes/pkg/apis/certificates/v1beta1"
+	capihelper "k8s.io/kubernetes/pkg/apis/certificates"
 	"k8s.io/kubernetes/pkg/controller/certificates"
 	"k8s.io/kubernetes/pkg/controller/certificates/authority"
 )
@@ -72,7 +75,7 @@ func NewLegacyUnknownCSRSigningController(
 	caFile, caKeyFile string,
 	certTTL time.Duration,
 ) (*CSRSigningController, error) {
-	return NewCSRSigningController("csrsigning-legacy-unknown", capi.LegacyUnknownSignerName, client, csrInformer, caFile, caKeyFile, certTTL)
+	return NewCSRSigningController("csrsigning-legacy-unknown", capiv1beta1.LegacyUnknownSignerName, client, csrInformer, caFile, caKeyFile, certTTL)
 }
 
 func NewCSRSigningController(
@@ -106,7 +109,7 @@ func (c *CSRSigningController) Run(workers int, stopCh <-chan struct{}) {
 	c.certificateController.Run(workers, stopCh)
 }
 
-type isRequestForSignerFunc func(req *x509.CertificateRequest, usages []capi.KeyUsage, signerName string) bool
+type isRequestForSignerFunc func(req *x509.CertificateRequest, usages []capi.KeyUsage, signerName string) (bool, error)
 
 type signer struct {
 	caProvider *caProvider
@@ -139,13 +142,13 @@ func newSigner(signerName, caFile, caKeyFile string, client clientset.Interface,
 }
 
 func (s *signer) handle(csr *capi.CertificateSigningRequest) error {
-	// Ignore unapproved requests
-	if !certificates.IsCertificateRequestApproved(csr) {
+	// Ignore unapproved or failed requests
+	if !certificates.IsCertificateRequestApproved(csr) || certificates.HasTrueCondition(csr, capi.CertificateFailed) {
 		return nil
 	}
 
 	// Fast-path to avoid any additional processing if the CSRs signerName does not match
-	if *csr.Spec.SignerName != s.signerName {
+	if csr.Spec.SignerName != s.signerName {
 		return nil
 	}
 
@@ -153,9 +156,21 @@ func (s *signer) handle(csr *capi.CertificateSigningRequest) error {
 	if err != nil {
 		return fmt.Errorf("unable to parse csr %q: %v", csr.Name, err)
 	}
-	if !s.isRequestForSignerFn(x509cr, csr.Spec.Usages, *csr.Spec.SignerName) {
-		// TODO: mark the CertificateRequest as being in a terminal state and
-		//  communicate to the user why the request has been refused.
+	if recognized, err := s.isRequestForSignerFn(x509cr, csr.Spec.Usages, csr.Spec.SignerName); err != nil {
+		csr.Status.Conditions = append(csr.Status.Conditions, capi.CertificateSigningRequestCondition{
+			Type:           capi.CertificateFailed,
+			Status:         v1.ConditionTrue,
+			Reason:         "SignerValidationFailure",
+			Message:        err.Error(),
+			LastUpdateTime: metav1.Now(),
+		})
+		_, err = s.client.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), csr, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("error adding failure condition for csr: %v", err)
+		}
+		return nil
+	} else if !recognized {
+		// Ignore requests for kubernetes.io signerNames we don't recognize
 		return nil
 	}
 	cert, err := s.sign(x509cr, csr.Spec.Usages)
@@ -163,7 +178,7 @@ func (s *signer) handle(csr *capi.CertificateSigningRequest) error {
 		return fmt.Errorf("error auto signing csr: %v", err)
 	}
 	csr.Status.Certificate = cert
-	_, err = s.client.CertificatesV1beta1().CertificateSigningRequests().UpdateStatus(context.TODO(), csr, metav1.UpdateOptions{})
+	_, err = s.client.CertificatesV1().CertificateSigningRequests().UpdateStatus(context.TODO(), csr, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("error updating signature for csr: %v", err)
 	}
@@ -195,47 +210,47 @@ func getCSRVerificationFuncForSignerName(signerName string) (isRequestForSignerF
 		return isKubeletClient, nil
 	case capi.KubeAPIServerClientSignerName:
 		return isKubeAPIServerClient, nil
-	case capi.LegacyUnknownSignerName:
+	case capiv1beta1.LegacyUnknownSignerName:
 		return isLegacyUnknown, nil
 	default:
 		// TODO type this error so that a different reporting loop (one without a signing cert), can mark
 		//  CSRs with unknown kube signers as terminal if we wish.  This largely depends on how tightly we want to control
 		//  our signerNames.
-		return nil, fmt.Errorf("unrecongized signerName: %q", signerName)
+		return nil, fmt.Errorf("unrecognized signerName: %q", signerName)
 	}
 }
 
-func isKubeletServing(req *x509.CertificateRequest, usages []capi.KeyUsage, signerName string) bool {
+func isKubeletServing(req *x509.CertificateRequest, usages []capi.KeyUsage, signerName string) (bool, error) {
 	if signerName != capi.KubeletServingSignerName {
-		return false
+		return false, nil
 	}
-	return capihelper.IsKubeletServingCSR(req, usages)
+	return true, capihelper.ValidateKubeletServingCSR(req, usagesToSet(usages))
 }
 
-func isKubeletClient(req *x509.CertificateRequest, usages []capi.KeyUsage, signerName string) bool {
+func isKubeletClient(req *x509.CertificateRequest, usages []capi.KeyUsage, signerName string) (bool, error) {
 	if signerName != capi.KubeAPIServerClientKubeletSignerName {
-		return false
+		return false, nil
 	}
-	return capihelper.IsKubeletClientCSR(req, usages)
+	return true, capihelper.ValidateKubeletClientCSR(req, usagesToSet(usages))
 }
 
-func isKubeAPIServerClient(req *x509.CertificateRequest, usages []capi.KeyUsage, signerName string) bool {
+func isKubeAPIServerClient(req *x509.CertificateRequest, usages []capi.KeyUsage, signerName string) (bool, error) {
 	if signerName != capi.KubeAPIServerClientSignerName {
-		return false
+		return false, nil
 	}
-	return validAPIServerClientUsages(usages)
+	return true, validAPIServerClientUsages(usages)
 }
 
-func isLegacyUnknown(req *x509.CertificateRequest, usages []capi.KeyUsage, signerName string) bool {
-	if signerName != capi.LegacyUnknownSignerName {
-		return false
+func isLegacyUnknown(req *x509.CertificateRequest, usages []capi.KeyUsage, signerName string) (bool, error) {
+	if signerName != capiv1beta1.LegacyUnknownSignerName {
+		return false, nil
 	}
 	// No restrictions are applied to the legacy-unknown signerName to
-	// maintain backward compatibility in v1beta1.
-	return true
+	// maintain backward compatibility in v1.
+	return true, nil
 }
 
-func validAPIServerClientUsages(usages []capi.KeyUsage) bool {
+func validAPIServerClientUsages(usages []capi.KeyUsage) error {
 	hasClientAuth := false
 	for _, u := range usages {
 		switch u {
@@ -244,8 +259,19 @@ func validAPIServerClientUsages(usages []capi.KeyUsage) bool {
 		case capi.UsageClientAuth:
 			hasClientAuth = true
 		default:
-			return false
+			return fmt.Errorf("invalid usage for client certificate: %s", u)
 		}
 	}
-	return hasClientAuth
+	if !hasClientAuth {
+		return fmt.Errorf("missing required usage for client certificate: %s", capi.UsageClientAuth)
+	}
+	return nil
+}
+
+func usagesToSet(usages []capi.KeyUsage) sets.String {
+	result := sets.NewString()
+	for _, usage := range usages {
+		result.Insert(string(usage))
+	}
+	return result
 }

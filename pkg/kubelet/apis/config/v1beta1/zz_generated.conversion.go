@@ -26,6 +26,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+	v1alpha1 "k8s.io/component-base/config/v1alpha1"
 	v1beta1 "k8s.io/kubelet/config/v1beta1"
 	config "k8s.io/kubernetes/pkg/kubelet/apis/config"
 )
@@ -290,6 +291,9 @@ func autoConvert_v1beta1_KubeletConfiguration_To_config_KubeletConfiguration(in 
 	if err := v1.Convert_Pointer_v1_Duration_To_v1_Duration(&in.CPUCFSQuotaPeriod, &out.CPUCFSQuotaPeriod, s); err != nil {
 		return err
 	}
+	if err := v1.Convert_Pointer_int32_To_int32(&in.NodeStatusMaxImages, &out.NodeStatusMaxImages, s); err != nil {
+		return err
+	}
 	out.MaxOpenFiles = in.MaxOpenFiles
 	out.ContentType = in.ContentType
 	if err := v1.Convert_Pointer_int32_To_int32(&in.KubeAPIQPS, &out.KubeAPIQPS, s); err != nil {
@@ -338,6 +342,13 @@ func autoConvert_v1beta1_KubeletConfiguration_To_config_KubeletConfiguration(in 
 	out.AllowedUnsafeSysctls = *(*[]string)(unsafe.Pointer(&in.AllowedUnsafeSysctls))
 	out.VolumePluginDir = in.VolumePluginDir
 	out.ProviderID = in.ProviderID
+	out.KernelMemcgNotification = in.KernelMemcgNotification
+	if err := v1alpha1.Convert_v1alpha1_LoggingConfiguration_To_config_LoggingConfiguration(&in.Logging, &out.Logging, s); err != nil {
+		return err
+	}
+	if err := v1.Convert_Pointer_bool_To_bool(&in.EnableSystemLogHandler, &out.EnableSystemLogHandler, s); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -433,6 +444,9 @@ func autoConvert_config_KubeletConfiguration_To_v1beta1_KubeletConfiguration(in 
 		return err
 	}
 	out.MaxOpenFiles = in.MaxOpenFiles
+	if err := v1.Convert_int32_To_Pointer_int32(&in.NodeStatusMaxImages, &out.NodeStatusMaxImages, s); err != nil {
+		return err
+	}
 	out.ContentType = in.ContentType
 	if err := v1.Convert_int32_To_Pointer_int32(&in.KubeAPIQPS, &out.KubeAPIQPS, s); err != nil {
 		return err
@@ -471,6 +485,7 @@ func autoConvert_config_KubeletConfiguration_To_v1beta1_KubeletConfiguration(in 
 	}
 	out.ConfigMapAndSecretChangeDetectionStrategy = v1beta1.ResourceChangeDetectionStrategy(in.ConfigMapAndSecretChangeDetectionStrategy)
 	out.AllowedUnsafeSysctls = *(*[]string)(unsafe.Pointer(&in.AllowedUnsafeSysctls))
+	out.KernelMemcgNotification = in.KernelMemcgNotification
 	out.SystemReserved = *(*map[string]string)(unsafe.Pointer(&in.SystemReserved))
 	out.KubeReserved = *(*map[string]string)(unsafe.Pointer(&in.KubeReserved))
 	out.SystemReservedCgroup = in.SystemReservedCgroup
@@ -478,6 +493,12 @@ func autoConvert_config_KubeletConfiguration_To_v1beta1_KubeletConfiguration(in 
 	out.EnforceNodeAllocatable = *(*[]string)(unsafe.Pointer(&in.EnforceNodeAllocatable))
 	out.ReservedSystemCPUs = in.ReservedSystemCPUs
 	out.ShowHiddenMetricsForVersion = in.ShowHiddenMetricsForVersion
+	if err := v1alpha1.Convert_config_LoggingConfiguration_To_v1alpha1_LoggingConfiguration(&in.Logging, &out.Logging, s); err != nil {
+		return err
+	}
+	if err := v1.Convert_bool_To_Pointer_bool(&in.EnableSystemLogHandler, &out.EnableSystemLogHandler, s); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -54,6 +54,8 @@ import (
 	fakebatchv1beta1 "k8s.io/client-go/kubernetes/typed/batch/v1beta1/fake"
 	batchv2alpha1 "k8s.io/client-go/kubernetes/typed/batch/v2alpha1"
 	fakebatchv2alpha1 "k8s.io/client-go/kubernetes/typed/batch/v2alpha1/fake"
+	certificatesv1 "k8s.io/client-go/kubernetes/typed/certificates/v1"
+	fakecertificatesv1 "k8s.io/client-go/kubernetes/typed/certificates/v1/fake"
 	certificatesv1beta1 "k8s.io/client-go/kubernetes/typed/certificates/v1beta1"
 	fakecertificatesv1beta1 "k8s.io/client-go/kubernetes/typed/certificates/v1beta1/fake"
 	coordinationv1 "k8s.io/client-go/kubernetes/typed/coordination/v1"
@@ -66,6 +68,8 @@ import (
 	fakediscoveryv1alpha1 "k8s.io/client-go/kubernetes/typed/discovery/v1alpha1/fake"
 	discoveryv1beta1 "k8s.io/client-go/kubernetes/typed/discovery/v1beta1"
 	fakediscoveryv1beta1 "k8s.io/client-go/kubernetes/typed/discovery/v1beta1/fake"
+	eventsv1 "k8s.io/client-go/kubernetes/typed/events/v1"
+	fakeeventsv1 "k8s.io/client-go/kubernetes/typed/events/v1/fake"
 	eventsv1beta1 "k8s.io/client-go/kubernetes/typed/events/v1beta1"
 	fakeeventsv1beta1 "k8s.io/client-go/kubernetes/typed/events/v1beta1/fake"
 	extensionsv1beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
@@ -227,6 +231,11 @@ func (c *Clientset) BatchV2alpha1() batchv2alpha1.BatchV2alpha1Interface {
 	return &fakebatchv2alpha1.FakeBatchV2alpha1{Fake: &c.Fake}
 }
 
+// CertificatesV1 retrieves the CertificatesV1Client
+func (c *Clientset) CertificatesV1() certificatesv1.CertificatesV1Interface {
+	return &fakecertificatesv1.FakeCertificatesV1{Fake: &c.Fake}
+}
+
 // CertificatesV1beta1 retrieves the CertificatesV1beta1Client
 func (c *Clientset) CertificatesV1beta1() certificatesv1beta1.CertificatesV1beta1Interface {
 	return &fakecertificatesv1beta1.FakeCertificatesV1beta1{Fake: &c.Fake}
@@ -255,6 +264,11 @@ func (c *Clientset) DiscoveryV1alpha1() discoveryv1alpha1.DiscoveryV1alpha1Inter
 // DiscoveryV1beta1 retrieves the DiscoveryV1beta1Client
 func (c *Clientset) DiscoveryV1beta1() discoveryv1beta1.DiscoveryV1beta1Interface {
 	return &fakediscoveryv1beta1.FakeDiscoveryV1beta1{Fake: &c.Fake}
+}
+
+// EventsV1 retrieves the EventsV1Client
+func (c *Clientset) EventsV1() eventsv1.EventsV1Interface {
+	return &fakeeventsv1.FakeEventsV1{Fake: &c.Fake}
 }
 
 // EventsV1beta1 retrieves the EventsV1beta1Client

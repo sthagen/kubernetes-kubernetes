@@ -816,7 +816,7 @@
     new message, the check MUST have the update message. The event is deleted and
     MUST NOT show up when listing all events.
   release: v1.19
-  file: test/e2e/framework/events/events.go
+  file: test/e2e/apimachinery/events.go
 - testname: Garbage Collector, delete deployment,  propagation policy background
   codename: '[sig-api-machinery] Garbage collector should delete RS created by deployment
     when not orphaning [Conformance]'
@@ -1301,6 +1301,19 @@
     StorageClass or a dynamic provisioner.
   release: v1.9
   file: test/e2e/apps/statefulset.go
+- testname: CertificateSigningRequest API
+  codename: '[sig-auth] Certificates API [Privileged:ClusterAdmin] should support
+    CSR API operations [Conformance]'
+  description: ' The certificates.k8s.io API group MUST exists in the /apis discovery
+    document. The certificates.k8s.io/v1 API group/version MUST exist in the /apis/certificates.k8s.io
+    discovery document. The certificatesigningrequests, certificatesigningrequests/approval,
+    and certificatesigningrequests/status resources MUST exist in the /apis/certificates.k8s.io/v1
+    discovery document. The certificatesigningrequests resource must support create,
+    get, list, watch, update, patch, delete, and deletecollection. The certificatesigningrequests/approval
+    resource must support get, update, patch. The certificatesigningrequests/status
+    resource must support get, update, patch.'
+  release: v1.19
+  file: test/e2e/auth/certificates.go
 - testname: Service account tokens auto mount optionally
   codename: '[sig-auth] ServiceAccounts should allow opting out of API token automount  [Conformance]'
   description: Ensure that Service Account keys are mounted into the Pod only when
@@ -1342,12 +1355,12 @@
 - testname: Kubectl, guestbook application
   codename: '[sig-cli] Kubectl client Guestbook application should create and stop
     a working application  [Conformance]'
-  description: Create Guestbook application that contains an agnhost master server,
-    2 agnhost slaves, frontend application, frontend service and agnhost master service
-    and agnhost slave service. Using frontend service, the test will write an entry
-    into the guestbook application which will store the entry into the backend agnhost
-    store. Application flow MUST work as expected and the data written MUST be available
-    to read.
+  description: Create Guestbook application that contains an agnhost primary server,
+    2 agnhost replicas, frontend application, frontend service and agnhost primary
+    service and agnhost replica service. Using frontend service, the test will write
+    an entry into the guestbook application which will store the entry into the backend
+    agnhost store. Application flow MUST work as expected and the data written MUST
+    be available to read.
   release: v1.9
   file: test/e2e/kubectl/kubectl.go
 - testname: Kubectl, check version v1
@@ -1384,11 +1397,11 @@
 - testname: Kubectl, create service, replication controller
   codename: '[sig-cli] Kubectl client Kubectl expose should create services for rc  [Conformance]'
   description: Create a Pod running agnhost listening to port 6379. Using kubectl
-    expose the agnhost master replication controllers at port 1234. Validate that
+    expose the agnhost primary replication controllers at port 1234. Validate that
     the replication controller is listening on port 1234 and the target port is set
-    to 6379, port that agnhost master is listening. Using kubectl expose the agnhost
-    master as a service at port 2345. The service MUST be listening on port 2345 and
-    the target port is set to 6379, port that agnhost master is listening.
+    to 6379, port that agnhost primary is listening. Using kubectl expose the agnhost
+    primary as a service at port 2345. The service MUST be listening on port 2345
+    and the target port is set to 6379, port that agnhost primary is listening.
   release: v1.9
   file: test/e2e/kubectl/kubectl.go
 - testname: Kubectl, label update
@@ -1548,6 +1561,27 @@
     DNS configuration MUST be configured in the Pod.
   release: v1.17
   file: test/e2e/network/dns.go
+- testname: Ingress API
+  codename: '[sig-network] Ingress API should support creating Ingress API operations
+    [Conformance]'
+  description: ' The networking.k8s.io API group MUST exist in the /apis discovery
+    document. The networking.k8s.io/v1 API group/version MUST exist in the /apis/networking.k8s.io
+    discovery document. The ingresses resources MUST exist in the /apis/networking.k8s.io/v1
+    discovery document. The ingresses resource must support create, get, list, watch,
+    update, patch, delete, and deletecollection. The ingresses/status resource must
+    support update and patch'
+  release: v1.19
+  file: test/e2e/network/ingress.go
+- testname: IngressClass API
+  codename: '[sig-network] IngressClass API  should support creating IngressClass
+    API operations [Conformance]'
+  description: ' - The networking.k8s.io API group MUST exist in the /apis discovery
+    document. - The networking.k8s.io/v1 API group/version MUST exist in the /apis/networking.k8s.io
+    discovery document. - The ingressclasses resource MUST exist in the /apis/networking.k8s.io/v1
+    discovery document. - The ingressclass resource must support create, get, list,
+    watch, update, patch, delete, and deletecollection.'
+  release: v1.19
+  file: test/e2e/network/ingressclass.go
 - testname: Networking, intra pod http
   codename: '[sig-network] Networking Granular Checks: Pods should function for intra-pod
     communication: http [NodeConformance] [Conformance]'
@@ -1917,6 +1951,22 @@
     restricted by given CPU limits MUST launch. Priority 1 - 3 Pods MUST spawn first
     followed by Priority 4 Pod. The ReplicaSets with Replicas MUST contain the expected
     number of Replicas.
+  release: v1.19
+  file: test/e2e/scheduling/preemption.go
+- testname: Scheduler, Basic Preemption
+  codename: '[sig-scheduling] SchedulerPreemption [Serial] validates basic preemption
+    works [Conformance]'
+  description: When a higher priority pod is created and no node with enough resources
+    is found, the scheduler MUST preempt a lower priority pod and schedule the high
+    priority pod.
+  release: v1.19
+  file: test/e2e/scheduling/preemption.go
+- testname: Scheduler, Preemption for critical pod
+  codename: '[sig-scheduling] SchedulerPreemption [Serial] validates lower priority
+    pod preemption by critical pod [Conformance]'
+  description: When a critical pod is created and no node with enough resources is
+    found, the scheduler MUST preempt a lower priority pod to schedule the critical
+    pod.
   release: v1.19
   file: test/e2e/scheduling/preemption.go
 - testname: ConfigMap Volume, text data, binary data

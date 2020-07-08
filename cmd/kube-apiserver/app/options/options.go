@@ -26,6 +26,7 @@ import (
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
 	cliflag "k8s.io/component-base/cli/flag"
+	"k8s.io/component-base/logs"
 	"k8s.io/component-base/metrics"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	_ "k8s.io/kubernetes/pkg/features" // add the kubernetes feature gates
@@ -51,6 +52,7 @@ type ServerRunOptions struct {
 	APIEnablement           *genericoptions.APIEnablementOptions
 	EgressSelector          *genericoptions.EgressSelectorOptions
 	Metrics                 *metrics.Options
+	Logs                    *logs.Options
 
 	AllowPrivileged           bool
 	EnableLogsHandler         bool
@@ -100,6 +102,7 @@ func NewServerRunOptions() *ServerRunOptions {
 		APIEnablement:           genericoptions.NewAPIEnablementOptions(),
 		EgressSelector:          genericoptions.NewEgressSelectorOptions(),
 		Metrics:                 metrics.NewOptions(),
+		Logs:                    logs.NewOptions(),
 
 		EnableLogsHandler:      true,
 		EventTTL:               1 * time.Hour,
@@ -120,7 +123,6 @@ func NewServerRunOptions() *ServerRunOptions {
 				string(api.NodeExternalDNS),
 				string(api.NodeExternalIP),
 			},
-			EnableHTTPS: true,
 			HTTPTimeout: time.Duration(5) * time.Second,
 		},
 		ServiceNodePortRange: kubeoptions.DefaultServiceNodePortRange,
@@ -149,6 +151,7 @@ func (s *ServerRunOptions) Flags() (fss cliflag.NamedFlagSets) {
 	s.EgressSelector.AddFlags(fss.FlagSet("egress selector"))
 	s.Admission.AddFlags(fss.FlagSet("admission"))
 	s.Metrics.AddFlags(fss.FlagSet("metrics"))
+	s.Logs.AddFlags(fss.FlagSet("logs"))
 
 	// Note: the weird ""+ in below lines seems to be the only way to get gofmt to
 	// arrange these text blocks sensibly. Grrr.
@@ -200,8 +203,9 @@ func (s *ServerRunOptions) Flags() (fss cliflag.NamedFlagSets) {
 		"Example: '30000-32767'. Inclusive at both ends of the range.")
 
 	// Kubelet related flags:
-	fs.BoolVar(&s.KubeletConfig.EnableHTTPS, "kubelet-https", s.KubeletConfig.EnableHTTPS,
-		"Use https for kubelet connections.")
+	kubeletHTTPS := true
+	fs.BoolVar(&kubeletHTTPS, "kubelet-https", kubeletHTTPS, "Use https for kubelet connections.")
+	fs.MarkDeprecated("kubelet-https", "API Server connections to kubelets always use https. This flag will be removed in 1.22.")
 
 	fs.StringSliceVar(&s.KubeletConfig.PreferredAddressTypes, "kubelet-preferred-address-types", s.KubeletConfig.PreferredAddressTypes,
 		"List of the preferred NodeAddressTypes to use for kubelet connections.")

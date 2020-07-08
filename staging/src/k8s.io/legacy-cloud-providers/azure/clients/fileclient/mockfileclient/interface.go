@@ -21,6 +21,7 @@ package mockfileclient
 import (
 	reflect "reflect"
 
+	storage "github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -48,17 +49,17 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // CreateFileShare mocks base method
-func (m *MockInterface) CreateFileShare(resourceGroupName, accountName, name string, sizeGiB int) error {
+func (m *MockInterface) CreateFileShare(resourceGroupName, accountName, name string, protocol storage.EnabledProtocols, sizeGiB int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateFileShare", resourceGroupName, accountName, name, sizeGiB)
+	ret := m.ctrl.Call(m, "CreateFileShare", resourceGroupName, accountName, name, protocol, sizeGiB)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateFileShare indicates an expected call of CreateFileShare
-func (mr *MockInterfaceMockRecorder) CreateFileShare(resourceGroupName, accountName, name, sizeGiB interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) CreateFileShare(resourceGroupName, accountName, name, protocol, sizeGiB interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateFileShare", reflect.TypeOf((*MockInterface)(nil).CreateFileShare), resourceGroupName, accountName, name, sizeGiB)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateFileShare", reflect.TypeOf((*MockInterface)(nil).CreateFileShare), resourceGroupName, accountName, name, protocol, sizeGiB)
 }
 
 // DeleteFileShare mocks base method
@@ -87,4 +88,19 @@ func (m *MockInterface) ResizeFileShare(resourceGroupName, accountName, name str
 func (mr *MockInterfaceMockRecorder) ResizeFileShare(resourceGroupName, accountName, name, sizeGiB interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResizeFileShare", reflect.TypeOf((*MockInterface)(nil).ResizeFileShare), resourceGroupName, accountName, name, sizeGiB)
+}
+
+// GetFileShare mocks base method
+func (m *MockInterface) GetFileShare(resourceGroupName, accountName, name string) (storage.FileShare, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFileShare", resourceGroupName, accountName, name)
+	ret0, _ := ret[0].(storage.FileShare)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetFileShare indicates an expected call of GetFileShare
+func (mr *MockInterfaceMockRecorder) GetFileShare(resourceGroupName, accountName, name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileShare", reflect.TypeOf((*MockInterface)(nil).GetFileShare), resourceGroupName, accountName, name)
 }

@@ -60,6 +60,17 @@ func init() {
 
 type opCounts map[string]int64
 
+// migrationOpCheck validates migrated metrics.
+type migrationOpCheck struct {
+	cs         clientset.Interface
+	pluginName string
+	skipCheck  bool
+
+	// The old ops are not set if skipCheck is true.
+	oldInTreeOps   opCounts
+	oldMigratedOps opCounts
+}
+
 // BaseSuites is a list of storage test suites that work for in-tree and CSI drivers
 var BaseSuites = []func() TestSuite{
 	InitVolumesTestSuite,
@@ -567,14 +578,24 @@ func StartPodLogs(f *framework.Framework, driverNamespace *v1.Namespace) func() 
 		to.LogWriter = ginkgo.GinkgoWriter
 	} else {
 		test := ginkgo.CurrentGinkgoTestDescription()
+		// Clean up each individual component text such that
+		// it contains only characters that are valid as file
+		// name.
 		reg := regexp.MustCompile("[^a-zA-Z0-9_-]+")
+		var components []string
+		for _, component := range test.ComponentTexts {
+			components = append(components, reg.ReplaceAllString(component, "_"))
+		}
 		// We end the prefix with a slash to ensure that all logs
 		// end up in a directory named after the current test.
 		//
-		// TODO: use a deeper directory hierarchy once gubernator
-		// supports that (https://github.com/kubernetes/test-infra/issues/10289).
+		// Each component name maps to a directory. This
+		// avoids cluttering the root artifact directory and
+		// keeps each directory name smaller (the full test
+		// name at one point exceeded 256 characters, which was
+		// too much for some filesystems).
 		to.LogPathPrefix = framework.TestContext.ReportDir + "/" +
-			reg.ReplaceAllString(test.FullTestText, "_") + "/"
+			strings.Join(components, "/") + "/"
 	}
 	podlogs.CopyAllLogs(ctx, cs, ns, to)
 
@@ -625,7 +646,7 @@ func getVolumeOpCounts(c clientset.Interface, pluginName string) opCounts {
 		framework.ExpectNoError(err, "Error creating metrics grabber: %v", err)
 	}
 
-	if !metricsGrabber.HasRegisteredMaster() {
+	if !metricsGrabber.HasControlPlanePods() {
 		framework.Logf("Warning: Environment does not support getting controller-manager metrics")
 		return opCounts{}
 	}
@@ -687,24 +708,18 @@ func getMigrationVolumeOpCounts(cs clientset.Interface, pluginName string) (opCo
 	return opCounts{}, opCounts{}
 }
 
-func validateMigrationVolumeOpCounts(cs clientset.Interface, pluginName string, oldInTreeOps, oldMigratedOps opCounts) {
+func newMigrationOpCheck(cs clientset.Interface, pluginName string) *migrationOpCheck {
+	moc := migrationOpCheck{
+		cs:         cs,
+		pluginName: pluginName,
+	}
 	if len(pluginName) == 0 {
 		// This is a native CSI Driver and we don't check ops
-		return
+		moc.skipCheck = true
+		return &moc
 	}
 
-	if sets.NewString(strings.Split(*migratedPlugins, ",")...).Has(pluginName) {
-		// If this plugin is migrated based on the test flag storage.migratedPlugins
-		newInTreeOps, _ := getMigrationVolumeOpCounts(cs, pluginName)
-
-		for op, count := range newInTreeOps {
-			if count != oldInTreeOps[op] {
-				framework.Failf("In-tree plugin %v migrated to CSI Driver, however found %v %v metrics for in-tree plugin", pluginName, count-oldInTreeOps[op], op)
-			}
-		}
-		// We don't check for migrated metrics because some negative test cases
-		// may not do any volume operations and therefore not emit any metrics
-	} else {
+	if !sets.NewString(strings.Split(*migratedPlugins, ",")...).Has(pluginName) {
 		// In-tree plugin is not migrated
 		framework.Logf("In-tree plugin %v is not migrated, not validating any metrics", pluginName)
 
@@ -721,7 +736,27 @@ func validateMigrationVolumeOpCounts(cs clientset.Interface, pluginName string, 
 		// and native CSI Driver metrics. This way we can check the counts for
 		// migrated version of the driver for stronger negative test case
 		// guarantees (as well as more informative metrics).
+		moc.skipCheck = true
+		return &moc
 	}
+	moc.oldInTreeOps, moc.oldMigratedOps = getMigrationVolumeOpCounts(cs, pluginName)
+	return &moc
+}
+
+func (moc *migrationOpCheck) validateMigrationVolumeOpCounts() {
+	if moc.skipCheck {
+		return
+	}
+
+	newInTreeOps, _ := getMigrationVolumeOpCounts(moc.cs, moc.pluginName)
+
+	for op, count := range newInTreeOps {
+		if count != moc.oldInTreeOps[op] {
+			framework.Failf("In-tree plugin %v migrated to CSI Driver, however found %v %v metrics for in-tree plugin", moc.pluginName, count-moc.oldInTreeOps[op], op)
+		}
+	}
+	// We don't check for migrated metrics because some negative test cases
+	// may not do any volume operations and therefore not emit any metrics
 }
 
 // Skip skipVolTypes patterns if the driver supports dynamic provisioning

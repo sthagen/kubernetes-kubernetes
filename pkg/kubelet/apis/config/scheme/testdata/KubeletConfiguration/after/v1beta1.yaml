@@ -25,6 +25,7 @@ cpuManagerReconcilePeriod: 10s
 enableControllerAttachDetach: true
 enableDebuggingHandlers: true
 enableServer: true
+enableSystemLogHandler: true
 enforceNodeAllocatable:
 - pods
 eventBurst: 10
@@ -49,10 +50,13 @@ iptablesMasqueradeBit: 14
 kind: KubeletConfiguration
 kubeAPIBurst: 10
 kubeAPIQPS: 5
+logging:
+  format: text
 makeIPTablesUtilChains: true
 maxOpenFiles: 1000000
 maxPods: 110
 nodeLeaseDurationSeconds: 40
+nodeStatusMaxImages: 50
 nodeStatusReportFrequency: 5m0s
 nodeStatusUpdateFrequency: 10s
 oomScoreAdj: -999

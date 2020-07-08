@@ -21,11 +21,16 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	componentbaseconfig "k8s.io/component-base/config/v1alpha1"
+	"k8s.io/component-base/featuregate"
+	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/kube-scheduler/config/v1beta1"
+	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/utils/pointer"
 )
 
@@ -62,7 +67,6 @@ func TestSchedulerDefaults(t *testing.T) {
 				},
 				DisablePreemption:        pointer.BoolPtr(false),
 				PercentageOfNodesToScore: pointer.Int32Ptr(0),
-				BindTimeoutSeconds:       pointer.Int64Ptr(600),
 				PodInitialBackoffSeconds: pointer.Int64Ptr(1),
 				PodMaxBackoffSeconds:     pointer.Int64Ptr(10),
 				Profiles: []v1beta1.KubeSchedulerProfile{
@@ -104,7 +108,6 @@ func TestSchedulerDefaults(t *testing.T) {
 				},
 				DisablePreemption:        pointer.BoolPtr(false),
 				PercentageOfNodesToScore: pointer.Int32Ptr(0),
-				BindTimeoutSeconds:       pointer.Int64Ptr(600),
 				PodInitialBackoffSeconds: pointer.Int64Ptr(1),
 				PodMaxBackoffSeconds:     pointer.Int64Ptr(10),
 				Profiles: []v1beta1.KubeSchedulerProfile{
@@ -161,7 +164,6 @@ func TestSchedulerDefaults(t *testing.T) {
 				},
 				DisablePreemption:        pointer.BoolPtr(false),
 				PercentageOfNodesToScore: pointer.Int32Ptr(0),
-				BindTimeoutSeconds:       pointer.Int64Ptr(600),
 				PodInitialBackoffSeconds: pointer.Int64Ptr(1),
 				PodMaxBackoffSeconds:     pointer.Int64Ptr(10),
 				Profiles: []v1beta1.KubeSchedulerProfile{
@@ -212,7 +214,6 @@ func TestSchedulerDefaults(t *testing.T) {
 				},
 				DisablePreemption:        pointer.BoolPtr(false),
 				PercentageOfNodesToScore: pointer.Int32Ptr(0),
-				BindTimeoutSeconds:       pointer.Int64Ptr(600),
 				PodInitialBackoffSeconds: pointer.Int64Ptr(1),
 				PodMaxBackoffSeconds:     pointer.Int64Ptr(10),
 				Profiles: []v1beta1.KubeSchedulerProfile{
@@ -249,7 +250,6 @@ func TestSchedulerDefaults(t *testing.T) {
 				},
 				DisablePreemption:        pointer.BoolPtr(false),
 				PercentageOfNodesToScore: pointer.Int32Ptr(0),
-				BindTimeoutSeconds:       pointer.Int64Ptr(600),
 				PodInitialBackoffSeconds: pointer.Int64Ptr(1),
 				PodMaxBackoffSeconds:     pointer.Int64Ptr(10),
 				Profiles: []v1beta1.KubeSchedulerProfile{
@@ -270,9 +270,10 @@ func TestSchedulerDefaults(t *testing.T) {
 
 func TestPluginArgsDefaults(t *testing.T) {
 	tests := []struct {
-		name string
-		in   runtime.Object
-		want runtime.Object
+		name    string
+		feature featuregate.Feature
+		in      runtime.Object
+		want    runtime.Object
 	}{
 		{
 			name: "InterPodAffinityArgs empty",
@@ -368,11 +369,59 @@ func TestPluginArgsDefaults(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "PodTopologySpreadArgs resources empty",
+			in:   &v1beta1.PodTopologySpreadArgs{},
+			want: &v1beta1.PodTopologySpreadArgs{},
+		},
+		{
+			name: "PodTopologySpreadArgs resources with value",
+			in: &v1beta1.PodTopologySpreadArgs{
+				DefaultConstraints: []v1.TopologySpreadConstraint{
+					{
+						TopologyKey:       "planet",
+						WhenUnsatisfiable: v1.DoNotSchedule,
+						MaxSkew:           2,
+					},
+				},
+			},
+			want: &v1beta1.PodTopologySpreadArgs{
+				DefaultConstraints: []v1.TopologySpreadConstraint{
+					{
+						TopologyKey:       "planet",
+						WhenUnsatisfiable: v1.DoNotSchedule,
+						MaxSkew:           2,
+					},
+				},
+			},
+		},
+		{
+			name:    "PodTopologySpreadArgs resources empty, NewPodTopologySpread feature enabled",
+			feature: features.DefaultPodTopologySpread,
+			in:      &v1beta1.PodTopologySpreadArgs{},
+			want: &v1beta1.PodTopologySpreadArgs{
+				DefaultConstraints: []v1.TopologySpreadConstraint{
+					{
+						TopologyKey:       v1.LabelHostname,
+						WhenUnsatisfiable: v1.ScheduleAnyway,
+						MaxSkew:           3,
+					},
+					{
+						TopologyKey:       v1.LabelZoneFailureDomainStable,
+						WhenUnsatisfiable: v1.ScheduleAnyway,
+						MaxSkew:           5,
+					},
+				},
+			},
+		},
 	}
 	for _, tc := range tests {
 		scheme := runtime.NewScheme()
 		utilruntime.Must(AddToScheme(scheme))
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.feature != "" {
+				defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, tc.feature, true)()
+			}
 			scheme.Default(tc.in)
 			if diff := cmp.Diff(tc.in, tc.want); diff != "" {
 				t.Errorf("Got unexpected defaults (-want, +got):\n%s", diff)

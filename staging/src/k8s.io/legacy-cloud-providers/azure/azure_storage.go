@@ -36,17 +36,21 @@ const (
 
 // CreateFileShare creates a file share, using a matching storage account type, account kind, etc.
 // storage account will be created if specified account is not found
-func (az *Cloud) CreateFileShare(shareName, accountName, accountType, accountKind, resourceGroup, location string, requestGiB int) (string, string, error) {
+func (az *Cloud) CreateFileShare(shareName, accountName, accountType, accountKind, resourceGroup, location string, protocol storage.EnabledProtocols, requestGiB int) (string, string, error) {
 	if resourceGroup == "" {
 		resourceGroup = az.resourceGroup
 	}
 
-	account, key, err := az.EnsureStorageAccount(accountName, accountType, accountKind, resourceGroup, location, fileShareAccountNamePrefix)
+	enableHTTPSTrafficOnly := true
+	if protocol == storage.NFS {
+		enableHTTPSTrafficOnly = false
+	}
+	account, key, err := az.EnsureStorageAccount(accountName, accountType, accountKind, resourceGroup, location, fileShareAccountNamePrefix, enableHTTPSTrafficOnly)
 	if err != nil {
 		return "", "", fmt.Errorf("could not get storage key for storage account %s: %v", accountName, err)
 	}
 
-	if err := az.createFileShare(resourceGroup, account, shareName, requestGiB); err != nil {
+	if err := az.createFileShare(resourceGroup, account, shareName, protocol, requestGiB); err != nil {
 		return "", "", fmt.Errorf("failed to create share %s in account %s: %v", shareName, account, err)
 	}
 	klog.V(4).Infof("created share %s in account %s", shareName, account)
@@ -65,4 +69,9 @@ func (az *Cloud) DeleteFileShare(resourceGroup, accountName, shareName string) e
 // ResizeFileShare resizes a file share
 func (az *Cloud) ResizeFileShare(resourceGroup, accountName, name string, sizeGiB int) error {
 	return az.resizeFileShare(resourceGroup, accountName, name, sizeGiB)
+}
+
+// GetFileShare gets a file share
+func (az *Cloud) GetFileShare(resourceGroupName, accountName, name string) (storage.FileShare, error) {
+	return az.getFileShare(resourceGroupName, accountName, name)
 }

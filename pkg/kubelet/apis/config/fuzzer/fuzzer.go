@@ -59,6 +59,7 @@ func Funcs(codecs runtimeserializer.CodecFactory) []interface{} {
 			obj.ImageMinimumGCAge = metav1.Duration{Duration: 2 * time.Minute}
 			obj.ImageGCHighThresholdPercent = 85
 			obj.ImageGCLowThresholdPercent = 80
+			obj.KernelMemcgNotification = false
 			obj.MaxOpenFiles = 1000000
 			obj.MaxPods = 110
 			obj.PodPidsLimit = -1
@@ -67,6 +68,7 @@ func Funcs(codecs runtimeserializer.CodecFactory) []interface{} {
 			obj.NodeLeaseDurationSeconds = 40
 			obj.CPUManagerPolicy = "none"
 			obj.CPUManagerReconcilePeriod = obj.NodeStatusUpdateFrequency
+			obj.NodeStatusMaxImages = 50
 			obj.TopologyManagerPolicy = kubeletconfig.NoneTopologyManagerPolicy
 			obj.QOSReserved = map[string]string{
 				"memory": "50%",
@@ -98,6 +100,10 @@ func Funcs(codecs runtimeserializer.CodecFactory) []interface{} {
 			obj.ConfigMapAndSecretChangeDetectionStrategy = "Watch"
 			obj.AllowedUnsafeSysctls = []string{}
 			obj.VolumePluginDir = kubeletconfigv1beta1.DefaultVolumePluginDir
+			if obj.Logging.Format == "" {
+				obj.Logging.Format = "text"
+			}
+			obj.EnableSystemLogHandler = true
 		},
 	}
 }

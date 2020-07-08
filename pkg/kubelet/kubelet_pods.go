@@ -58,6 +58,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/images"
 	"k8s.io/kubernetes/pkg/kubelet/status"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
+	"k8s.io/kubernetes/pkg/kubelet/util"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
 	"k8s.io/kubernetes/pkg/volume/util/hostutil"
@@ -442,12 +443,18 @@ func (kl *Kubelet) GenerateRunContainerOptions(pod *v1.Pod, container *v1.Contai
 	if err != nil {
 		return nil, nil, err
 	}
-
+	// The value of hostname is the short host name and it is sent to makeMounts to create /etc/hosts file.
 	hostname, hostDomainName, err := kl.GeneratePodHostNameAndDomain(pod)
 	if err != nil {
 		return nil, nil, err
 	}
-	opts.Hostname = hostname
+	// nodename will be equals to hostname if SetHostnameAsFQDN is nil or false. If SetHostnameFQDN
+	// is true and hostDomainName is defined, nodename will be the FQDN (hostname.hostDomainName)
+	nodename, err := util.GetNodenameForKernel(hostname, hostDomainName, pod.Spec.SetHostnameAsFQDN)
+	if err != nil {
+		return nil, nil, err
+	}
+	opts.Hostname = nodename
 	podName := volumeutil.GetUniquePodName(pod)
 	volumes := kl.volumeManager.GetMountedVolumesForPod(podName)
 
@@ -1482,7 +1489,7 @@ func (kl *Kubelet) convertStatusToAPIStatus(pod *v1.Pod, podStatus *kubecontaine
 // convertToAPIContainerStatuses converts the given internal container
 // statuses into API container statuses.
 func (kl *Kubelet) convertToAPIContainerStatuses(pod *v1.Pod, podStatus *kubecontainer.PodStatus, previousStatus []v1.ContainerStatus, containers []v1.Container, hasInitContainers, isInitContainer bool) []v1.ContainerStatus {
-	convertContainerStatus := func(cs *kubecontainer.ContainerStatus) *v1.ContainerStatus {
+	convertContainerStatus := func(cs *kubecontainer.Status) *v1.ContainerStatus {
 		cid := cs.ID.String()
 		status := &v1.ContainerStatus{
 			Name:         cs.Name,
@@ -1609,18 +1616,17 @@ func (kl *Kubelet) convertToAPIContainerStatuses(pod *v1.Pod, podStatus *kubecon
 		statuses[container.Name] = status
 	}
 
+	// Sort the container statuses since clients of this interface expect the list
+	// of containers in a pod has a deterministic order.
+	if isInitContainer {
+		return kubetypes.SortStatusesOfInitContainers(pod, statuses)
+	}
 	var containerStatuses []v1.ContainerStatus
 	for _, status := range statuses {
 		containerStatuses = append(containerStatuses, *status)
 	}
 
-	// Sort the container statuses since clients of this interface expect the list
-	// of containers in a pod has a deterministic order.
-	if isInitContainer {
-		kubetypes.SortInitContainerStatuses(pod, containerStatuses)
-	} else {
-		sort.Sort(kubetypes.SortedContainerStatuses(containerStatuses))
-	}
+	sort.Sort(kubetypes.SortedContainerStatuses(containerStatuses))
 	return containerStatuses
 }
 

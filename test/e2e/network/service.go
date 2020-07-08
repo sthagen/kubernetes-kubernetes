@@ -101,42 +101,81 @@ var (
 // portsByPodName is a map that maps pod name to container ports.
 type portsByPodName map[string][]int
 
+// affinityCheckFromPod returns interval, timeout and function pinging the service and
+// returning pinged hosts for pinging the service from execPod.
+func affinityCheckFromPod(execPod *v1.Pod, serviceIP string, servicePort int) (time.Duration, time.Duration, func() []string) {
+	timeout := AffinityTimeout
+	// interval considering a maximum of 2 seconds per connection
+	interval := 2 * AffinityConfirmCount * time.Second
+
+	serviceIPPort := net.JoinHostPort(serviceIP, strconv.Itoa(servicePort))
+	curl := fmt.Sprintf(`curl -q -s --connect-timeout 2 http://%s/`, serviceIPPort)
+	cmd := fmt.Sprintf("for i in $(seq 0 %d); do echo; %s ; done", AffinityConfirmCount, curl)
+	getHosts := func() []string {
+		stdout, err := framework.RunHostCmd(execPod.Namespace, execPod.Name, cmd)
+		if err != nil {
+			framework.Logf("Failed to get response from %s. Retry until timeout", serviceIPPort)
+			return nil
+		}
+		return strings.Split(stdout, "\n")
+	}
+
+	return interval, timeout, getHosts
+}
+
+// affinityCheckFromTest returns interval, timeout and function pinging the service and
+// returning pinged hosts for pinging the service from the test itself.
+func affinityCheckFromTest(cs clientset.Interface, serviceIP string, servicePort int) (time.Duration, time.Duration, func() []string) {
+	interval := 2 * time.Second
+	timeout := e2eservice.GetServiceLoadBalancerPropagationTimeout(cs)
+
+	params := &e2enetwork.HTTPPokeParams{Timeout: 2 * time.Second}
+	getHosts := func() []string {
+		var hosts []string
+		for i := 0; i < AffinityConfirmCount; i++ {
+			result := e2enetwork.PokeHTTP(serviceIP, servicePort, "", params)
+			if result.Status == e2enetwork.HTTPSuccess {
+				hosts = append(hosts, string(result.Body))
+			}
+		}
+		return hosts
+	}
+
+	return interval, timeout, getHosts
+}
+
 // CheckAffinity function tests whether the service affinity works as expected.
 // If affinity is expected, the test will return true once affinityConfirmCount
 // number of same response observed in a row. If affinity is not expected, the
 // test will keep observe until different responses observed. The function will
 // return false only in case of unexpected errors.
 func checkAffinity(cs clientset.Interface, execPod *v1.Pod, serviceIP string, servicePort int, shouldHold bool) bool {
-	serviceIPPort := net.JoinHostPort(serviceIP, strconv.Itoa(servicePort))
-	curl := fmt.Sprintf(`curl -q -s --connect-timeout 2 http://%s/`, serviceIPPort)
-	cmd := fmt.Sprintf("for i in $(seq 0 %d); do echo; %s ; done", AffinityConfirmCount, curl)
-	timeout := AffinityTimeout
-	if execPod == nil {
-		timeout = e2eservice.GetServiceLoadBalancerPropagationTimeout(cs)
+	var interval, timeout time.Duration
+	var getHosts func() []string
+	if execPod != nil {
+		interval, timeout, getHosts = affinityCheckFromPod(execPod, serviceIP, servicePort)
+	} else {
+		interval, timeout, getHosts = affinityCheckFromTest(cs, serviceIP, servicePort)
 	}
+
 	var tracker affinityTracker
-	// interval considering a maximum of 2 seconds per connection
-	interval := 2 * AffinityConfirmCount * time.Second
 	if pollErr := wait.PollImmediate(interval, timeout, func() (bool, error) {
-		if execPod != nil {
-			stdout, err := framework.RunHostCmd(execPod.Namespace, execPod.Name, cmd)
-			if err != nil {
-				framework.Logf("Failed to get response from %s. Retry until timeout", serviceIPPort)
-				return false, nil
-			}
-			hosts := strings.Split(stdout, "\n")
-			for _, host := range hosts {
+		hosts := getHosts()
+		for _, host := range hosts {
+			if len(host) > 0 {
 				tracker.recordHost(strings.TrimSpace(host))
 			}
-		} else {
-			rawResponse := GetHTTPContent(serviceIP, servicePort, timeout, "")
-			tracker.recordHost(rawResponse.String())
 		}
+
 		trackerFulfilled, affinityHolds := tracker.checkHostTrace(AffinityConfirmCount)
+		if !trackerFulfilled {
+			return false, nil
+		}
+
 		if !shouldHold && !affinityHolds {
 			return true, nil
 		}
-		if shouldHold && trackerFulfilled && affinityHolds {
+		if shouldHold && affinityHolds {
 			return true, nil
 		}
 		return false, nil
@@ -147,7 +186,7 @@ func checkAffinity(cs clientset.Interface, execPod *v1.Pod, serviceIP string, se
 			return false
 		}
 		if !trackerFulfilled {
-			checkAffinityFailed(tracker, fmt.Sprintf("Connection to %s timed out or not enough responses.", serviceIPPort))
+			checkAffinityFailed(tracker, fmt.Sprintf("Connection timed out or not enough responses."))
 		}
 		if shouldHold {
 			checkAffinityFailed(tracker, "Affinity should hold but didn't.")
@@ -517,123 +556,6 @@ func pokeUDP(host string, port int, request string, params *UDPPokeParams) UDPPo
 	ret.Status = UDPSuccess
 	framework.Logf("Poke(%q): success", url)
 	return ret
-}
-
-// continuousEcho() uses the same connection for multiple requests, made to run as a goroutine so that
-// manipulations can be made to the service and backend pods while a connection is ongoing
-// it starts by sending a series of packets to establish conntrack entries and waits for a signal to keep
-// sending packts. It returns an error if the number of failed attempts is >= 5
-func continuousEcho(host string, port int, timeout time.Duration, maxAttempts int, signal chan struct{}, errorChannel chan error) {
-	defer ginkgo.GinkgoRecover()
-	const threshold = 10
-
-	// Sanity check inputs, because it has happened.  These are the only things
-	// that should hard fail the test - they are basically ASSERT()s.
-	if host == "" {
-		errorChannel <- fmt.Errorf("Got empty host for continuous echo (%s)", host)
-		return
-	}
-	if port == 0 {
-		errorChannel <- fmt.Errorf("Got port ==0 for continuous echo (%d)", port)
-		return
-	}
-
-	hostPort := net.JoinHostPort(host, strconv.Itoa(port))
-	url := fmt.Sprintf("udp://%s", hostPort)
-
-	ret := UDPPokeResult{}
-
-	con, err := net.Dial("udp", hostPort)
-	if err != nil {
-		ret.Status = UDPError
-		ret.Error = err
-		errorChannel <- fmt.Errorf("Connection to %q failed: %v", url, err)
-		return
-	}
-
-	numErrors := 0
-	bufsize := len(strconv.Itoa(maxAttempts)) + 1
-	var buf = make([]byte, bufsize)
-
-	for i := 0; i < maxAttempts; i++ {
-		if i == threshold {
-			framework.Logf("Continuous echo waiting for signal to continue")
-			<-signal
-			if numErrors == threshold {
-				errorChannel <- fmt.Errorf("continuous echo was not able to communicate with initial server pod")
-				return
-			}
-		}
-		time.Sleep(1 * time.Second)
-		err = con.SetDeadline(time.Now().Add(timeout))
-		if err != nil {
-			ret.Status = UDPError
-			ret.Error = err
-			framework.Logf("Continuous echo (%q): %v", url, err)
-			numErrors++
-			continue
-		}
-		myRequest := fmt.Sprintf("echo %d", i)
-		_, err = con.Write([]byte(fmt.Sprintf("%s\n", myRequest)))
-		if err != nil {
-			ret.Error = err
-			neterr, ok := err.(net.Error)
-			if ok && neterr.Timeout() {
-				ret.Status = UDPTimeout
-			} else if strings.Contains(err.Error(), "connection refused") {
-				ret.Status = UDPRefused
-			} else {
-				ret.Status = UDPError
-			}
-			numErrors++
-			framework.Logf("Continuous echo (%q): %v - %d errors seen so far", url, err, numErrors)
-			continue
-		}
-
-		err = con.SetDeadline(time.Now().Add(timeout))
-		if err != nil {
-			ret.Status = UDPError
-			ret.Error = err
-			numErrors++
-			framework.Logf("Continuous echo (%q): %v - %d errors seen so far", url, err, numErrors)
-			continue
-		}
-
-		n, err := con.Read(buf)
-		if err != nil {
-			ret.Error = err
-			neterr, ok := err.(net.Error)
-			if ok && neterr.Timeout() {
-				ret.Status = UDPTimeout
-			} else if strings.Contains(err.Error(), "connection refused") {
-				ret.Status = UDPRefused
-			} else {
-				ret.Status = UDPError
-			}
-			numErrors++
-			framework.Logf("Continuous echo (%q): %v - %d errors seen so far", url, err, numErrors)
-			continue
-		}
-		ret.Response = buf[0:n]
-
-		if string(ret.Response) != fmt.Sprintf("%d", i) {
-			ret.Status = UDPBadResponse
-			ret.Error = fmt.Errorf("response does not match expected string: %q", string(ret.Response))
-			framework.Logf("Continuous echo (%q): %v", url, ret.Error)
-			numErrors++
-			continue
-
-		}
-		ret.Status = UDPSuccess
-		framework.Logf("Continuous echo(%q): success", url)
-	}
-
-	err = nil
-	if numErrors >= threshold {
-		err = fmt.Errorf("Too many Errors in continuous echo")
-	}
-
-	errorChannel <- err
 }
 
 // testReachableUDP tests that the given host serves UDP on the given port.
@@ -1239,69 +1161,6 @@ var _ = SIGDescribe("Services", func() {
 		}
 		framework.ExpectNoError(verifyServeHostnameServiceUp(cs, ns, host, podNames1, svc1IP, servicePort))
 		framework.ExpectNoError(verifyServeHostnameServiceUp(cs, ns, host, podNames2, svc2IP, servicePort))
-	})
-
-	ginkgo.It("should be able to preserve UDP traffic when server pod cycles for a NodePort service", func() {
-		serviceName := "clusterip-test"
-		serverPod1Name := "server-1"
-		serverPod2Name := "server-2"
-
-		ns := f.Namespace.Name
-
-		nodeIP, err := e2enode.PickIP(cs) // for later
-		framework.ExpectNoError(err)
-
-		// Create a NodePort service
-		udpJig := e2eservice.NewTestJig(cs, ns, serviceName)
-		ginkgo.By("creating a UDP service " + serviceName + " with type=NodePort in " + ns)
-		udpService, err := udpJig.CreateUDPService(func(svc *v1.Service) {
-			svc.Spec.Type = v1.ServiceTypeNodePort
-			svc.Spec.Ports = []v1.ServicePort{
-				{Port: 80, Name: "http", Protocol: v1.ProtocolUDP, TargetPort: intstr.FromInt(80)},
-			}
-		})
-		framework.ExpectNoError(err)
-
-		// Add a backend pod to the service
-		ginkgo.By("creating a backend pod for the service " + serviceName)
-		serverPod1 := newAgnhostPod(serverPod1Name, "netexec", fmt.Sprintf("--udp-port=%d", 80))
-		serverPod1.Labels = udpJig.Labels
-		_, err = cs.CoreV1().Pods(ns).Create(context.TODO(), serverPod1, metav1.CreateOptions{})
-		ginkgo.By(fmt.Sprintf("checking NodePort service %s on node with public IP %s", serviceName, nodeIP))
-		framework.ExpectNoError(err)
-		framework.ExpectNoError(e2epod.WaitTimeoutForPodReadyInNamespace(f.ClientSet, serverPod1.Name, f.Namespace.Name, framework.PodStartTimeout))
-
-		// Waiting for service to expose endpoint.
-		err = validateEndpointsPorts(cs, ns, serviceName, portsByPodName{serverPod1Name: {80}})
-		framework.ExpectNoError(err, "failed to validate endpoints for service %s in namespace: %s", serviceName, ns)
-
-		// Check that the pod reveives the traffic
-		ginkgo.By("Sending UDP traffic to NodePort service " + serviceName + " on node with publicIP " + nodeIP)
-		errorChannel := make(chan error)
-		signal := make(chan struct{}, 1)
-		go continuousEcho(nodeIP, int(udpService.Spec.Ports[0].NodePort), 3*time.Second, 20, signal, errorChannel)
-
-		// Create a second pod
-		ginkgo.By("creating a second pod for the service " + serviceName)
-		serverPod2 := newAgnhostPod(serverPod2Name, "netexec", fmt.Sprintf("--udp-port=%d", 80))
-		serverPod2.Labels = udpJig.Labels
-		_, err = cs.CoreV1().Pods(ns).Create(context.TODO(), serverPod2, metav1.CreateOptions{})
-		framework.ExpectNoError(err)
-		framework.ExpectNoError(e2epod.WaitTimeoutForPodReadyInNamespace(f.ClientSet, serverPod2.Name, f.Namespace.Name, framework.PodStartTimeout))
-
-		// and delete the first pod
-		framework.Logf("Cleaning up %s pod", serverPod1Name)
-		err = cs.CoreV1().Pods(ns).Delete(context.TODO(), serverPod1Name, metav1.DeleteOptions{})
-		framework.ExpectNoError(err, "failed to delete pod: %s on node", serverPod1Name)
-
-		// Check that the second pod keeps receiving traffic
-		ginkgo.By("Sending UDP traffic to NodePort service " + serviceName + " on node with publicIP " + nodeIP)
-		signal <- struct{}{}
-
-		// Check that there are no errors
-		err = <-errorChannel
-		framework.ExpectNoError(err, "pod communication failed")
-
 	})
 
 	/*
@@ -3749,40 +3608,42 @@ func translatePodNameToUID(c clientset.Interface, ns string, expectedEndpoints p
 // validateEndpointsPorts validates that the given service exists and is served by the given expectedEndpoints.
 func validateEndpointsPorts(c clientset.Interface, namespace, serviceName string, expectedEndpoints portsByPodName) error {
 	ginkgo.By(fmt.Sprintf("waiting up to %v for service %s in namespace %s to expose endpoints %v", framework.ServiceStartTimeout, serviceName, namespace, expectedEndpoints))
-	i := 1
-	for start := time.Now(); time.Since(start) < framework.ServiceStartTimeout; time.Sleep(1 * time.Second) {
+	expectedPortsByPodUID, err := translatePodNameToUID(c, namespace, expectedEndpoints)
+	if err != nil {
+		return err
+	}
+
+	i := 0
+	if pollErr := wait.PollImmediate(time.Second, framework.ServiceStartTimeout, func() (bool, error) {
 		ep, err := c.CoreV1().Endpoints(namespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 		if err != nil {
-			framework.Logf("Get endpoints failed (%v elapsed, ignoring for 5s): %v", time.Since(start), err)
-			continue
+			framework.Logf("Failed go get Endpoints object: %v", err)
+			// Retry the error
+			return false, nil
 		}
 		portsByPodUID := e2eendpoints.GetContainerPortsByPodUID(ep)
-		expectedPortsByPodUID, err := translatePodNameToUID(c, namespace, expectedEndpoints)
-		if err != nil {
-			return err
-		}
-		if len(portsByPodUID) == len(expectedEndpoints) {
-			err := validatePorts(portsByPodUID, expectedPortsByPodUID)
-			if err != nil {
-				return err
-			}
-			framework.Logf("successfully validated that service %s in namespace %s exposes endpoints %v (%v elapsed)",
-				serviceName, namespace, expectedEndpoints, time.Since(start))
-			return nil
-		}
-		if i%5 == 0 {
-			framework.Logf("Unexpected endpoints: found %v, expected %v (%v elapsed, will retry)", portsByPodUID, expectedEndpoints, time.Since(start))
-		}
+
 		i++
-	}
-	if pods, err := c.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{}); err == nil {
-		for _, pod := range pods.Items {
-			framework.Logf("Pod %s\t%s\t%s\t%s", pod.Namespace, pod.Name, pod.Spec.NodeName, pod.DeletionTimestamp)
+		if err := validatePorts(portsByPodUID, expectedPortsByPodUID); err != nil {
+			if i%5 == 0 {
+				framework.Logf("Unexpected endpoints: found %v, expected %v, will retry", portsByPodUID, expectedEndpoints)
+			}
+			return false, nil
 		}
-	} else {
-		framework.Logf("Can't list pod debug info: %v", err)
+		framework.Logf("successfully validated that service %s in namespace %s exposes endpoints %v",
+			serviceName, namespace, expectedEndpoints)
+		return true, nil
+	}); pollErr != nil {
+		if pods, err := c.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{}); err == nil {
+			for _, pod := range pods.Items {
+				framework.Logf("Pod %s\t%s\t%s\t%s", pod.Namespace, pod.Name, pod.Spec.NodeName, pod.DeletionTimestamp)
+			}
+		} else {
+			framework.Logf("Can't list pod debug info: %v", err)
+		}
+		return fmt.Errorf("error waithing for service %s in namespace %s to expose endpoints %v: %v", serviceName, namespace, expectedEndpoints, pollErr)
 	}
-	return fmt.Errorf("Timed out waiting for service %s in namespace %s to expose endpoints %v (%v elapsed)", serviceName, namespace, expectedEndpoints, framework.ServiceStartTimeout)
+	return nil
 }
 
 // restartApiserver restarts the kube-apiserver.

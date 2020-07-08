@@ -18,12 +18,9 @@ package plugins
 
 import (
 	"k8s.io/apimachinery/pkg/util/sets"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
 
 	"k8s.io/klog/v2"
-	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/defaultpodtopologyspread"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/imagelocality"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/interpodaffinity"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodeaffinity"
@@ -35,6 +32,7 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodeunschedulable"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodevolumelimits"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/podtopologyspread"
+	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/selectorspread"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/serviceaffinity"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/tainttoleration"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/volumebinding"
@@ -75,8 +73,6 @@ const (
 	// ImageLocalityPriority defines the name of prioritizer function that prioritizes nodes that have images
 	// requested by the pod present.
 	ImageLocalityPriority = "ImageLocalityPriority"
-	// ResourceLimitsPriority defines the nodes of prioritizer function ResourceLimitsPriority.
-	ResourceLimitsPriority = "ResourceLimitsPriority"
 	// EvenPodsSpreadPriority defines the name of prioritizer function that prioritizes nodes
 	// which have pods and labels matching the incoming pod's topologySpreadConstraints.
 	EvenPodsSpreadPriority = "EvenPodsSpreadPriority"
@@ -200,6 +196,7 @@ func NewLegacyRegistry() *LegacyRegistry {
 			PodToleratesNodeTaintsPred,
 			CheckVolumeBindingPred,
 			CheckNodeUnschedulablePred,
+			EvenPodsSpreadPred,
 		),
 
 		// Used as the default set of predicates if Policy was specified, but priorities was nil.
@@ -212,6 +209,7 @@ func NewLegacyRegistry() *LegacyRegistry {
 			NodeAffinityPriority:        1,
 			TaintTolerationPriority:     1,
 			ImageLocalityPriority:       1,
+			EvenPodsSpreadPriority:      2,
 		},
 
 		PredicateToConfigProducer: make(map[string]ConfigProducer),
@@ -271,11 +269,10 @@ func NewLegacyRegistry() *LegacyRegistry {
 		})
 	registry.registerPredicateConfigProducer(CheckVolumeBindingPred,
 		func(args ConfigProducerArgs) (plugins config.Plugins, pluginConfig []config.PluginConfig) {
+			plugins.PreFilter = appendToPluginSet(plugins.PreFilter, volumebinding.Name, nil)
 			plugins.Filter = appendToPluginSet(plugins.Filter, volumebinding.Name, nil)
 			plugins.Reserve = appendToPluginSet(plugins.Reserve, volumebinding.Name, nil)
 			plugins.PreBind = appendToPluginSet(plugins.PreBind, volumebinding.Name, nil)
-			plugins.Unreserve = appendToPluginSet(plugins.Unreserve, volumebinding.Name, nil)
-			plugins.PostBind = appendToPluginSet(plugins.PostBind, volumebinding.Name, nil)
 			return
 		})
 	registry.registerPredicateConfigProducer(NoDiskConflictPred,
@@ -338,12 +335,18 @@ func NewLegacyRegistry() *LegacyRegistry {
 			plugins.PreFilter = appendToPluginSet(plugins.PreFilter, serviceaffinity.Name, nil)
 			return
 		})
+	registry.registerPredicateConfigProducer(EvenPodsSpreadPred,
+		func(_ ConfigProducerArgs) (plugins config.Plugins, pluginConfig []config.PluginConfig) {
+			plugins.PreFilter = appendToPluginSet(plugins.PreFilter, podtopologyspread.Name, nil)
+			plugins.Filter = appendToPluginSet(plugins.Filter, podtopologyspread.Name, nil)
+			return
+		})
 
 	// Register Priorities.
 	registry.registerPriorityConfigProducer(SelectorSpreadPriority,
 		func(args ConfigProducerArgs) (plugins config.Plugins, pluginConfig []config.PluginConfig) {
-			plugins.Score = appendToPluginSet(plugins.Score, defaultpodtopologyspread.Name, &args.Weight)
-			plugins.PreScore = appendToPluginSet(plugins.PreScore, defaultpodtopologyspread.Name, nil)
+			plugins.Score = appendToPluginSet(plugins.Score, selectorspread.Name, &args.Weight)
+			plugins.PreScore = appendToPluginSet(plugins.PreScore, selectorspread.Name, nil)
 			return
 		})
 	registry.registerPriorityConfigProducer(TaintTolerationPriority,
@@ -401,7 +404,6 @@ func NewLegacyRegistry() *LegacyRegistry {
 			}
 			return
 		})
-
 	registry.registerPriorityConfigProducer(nodelabel.Name,
 		func(args ConfigProducerArgs) (plugins config.Plugins, pluginConfig []config.PluginConfig) {
 			// If there are n LabelPreference priorities in the policy, the weight for the corresponding
@@ -428,42 +430,12 @@ func NewLegacyRegistry() *LegacyRegistry {
 			}
 			return
 		})
-
-	// The following two features are the last ones to be supported as predicate/priority.
-	// Once they graduate to GA, there will be no more checking for feature gates here.
-	// Only register EvenPodsSpread predicate & priority if the feature is enabled
-	if utilfeature.DefaultFeatureGate.Enabled(features.EvenPodsSpread) {
-		klog.Infof("Registering EvenPodsSpread predicate and priority function")
-
-		registry.registerPredicateConfigProducer(EvenPodsSpreadPred,
-			func(_ ConfigProducerArgs) (plugins config.Plugins, pluginConfig []config.PluginConfig) {
-				plugins.PreFilter = appendToPluginSet(plugins.PreFilter, podtopologyspread.Name, nil)
-				plugins.Filter = appendToPluginSet(plugins.Filter, podtopologyspread.Name, nil)
-				return
-			})
-		registry.DefaultPredicates.Insert(EvenPodsSpreadPred)
-
-		registry.registerPriorityConfigProducer(EvenPodsSpreadPriority,
-			func(args ConfigProducerArgs) (plugins config.Plugins, pluginConfig []config.PluginConfig) {
-				plugins.PreScore = appendToPluginSet(plugins.PreScore, podtopologyspread.Name, nil)
-				plugins.Score = appendToPluginSet(plugins.Score, podtopologyspread.Name, &args.Weight)
-				return
-			})
-		registry.DefaultPriorities[EvenPodsSpreadPriority] = 1
-	}
-
-	// Prioritizes nodes that satisfy pod's resource limits
-	if utilfeature.DefaultFeatureGate.Enabled(features.ResourceLimitsPriorityFunction) {
-		klog.Infof("Registering resourcelimits priority function")
-
-		registry.registerPriorityConfigProducer(ResourceLimitsPriority,
-			func(args ConfigProducerArgs) (plugins config.Plugins, pluginConfig []config.PluginConfig) {
-				plugins.PreScore = appendToPluginSet(plugins.PreScore, noderesources.ResourceLimitsName, nil)
-				plugins.Score = appendToPluginSet(plugins.Score, noderesources.ResourceLimitsName, &args.Weight)
-				return
-			})
-		registry.DefaultPriorities[ResourceLimitsPriority] = 1
-	}
+	registry.registerPriorityConfigProducer(EvenPodsSpreadPriority,
+		func(args ConfigProducerArgs) (plugins config.Plugins, pluginConfig []config.PluginConfig) {
+			plugins.PreScore = appendToPluginSet(plugins.PreScore, podtopologyspread.Name, nil)
+			plugins.Score = appendToPluginSet(plugins.Score, podtopologyspread.Name, &args.Weight)
+			return
+		})
 
 	return registry
 }

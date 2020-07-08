@@ -372,12 +372,13 @@ func testDeploymentCleanUpPolicy(f *framework.Framework) {
 	w, err := c.CoreV1().Pods(ns).Watch(context.TODO(), options)
 	framework.ExpectNoError(err)
 	go func() {
+		defer ginkgo.GinkgoRecover()
 		// There should be only one pod being created, which is the pod with the agnhost image.
 		// The old RS shouldn't create new pod when deployment controller adding pod template hash label to its selector.
 		numPodCreation := 1
 		for {
 			select {
-			case event, _ := <-w.ResultChan():
+			case event := <-w.ResultChan():
 				if event.Type != watch.Added {
 					continue
 				}
@@ -454,6 +455,7 @@ func testRolloverDeployment(f *framework.Framework) {
 	framework.Logf("Make sure deployment %q performs scaling operations", deploymentName)
 	// Make sure the deployment starts to scale up and down replica sets by checking if its updated replicas >= 1
 	err = waitForDeploymentUpdatedReplicasGTE(c, ns, deploymentName, deploymentReplicas, deployment.Generation)
+	framework.ExpectNoError(err)
 	// Check if it's updated to revision 1 correctly
 	framework.Logf("Check revision of new replica set for deployment %q", deploymentName)
 	err = checkDeploymentRevisionAndImage(c, ns, deploymentName, "1", deploymentImage)
@@ -625,6 +627,7 @@ func testIterativeDeployments(f *framework.Framework) {
 		deployment, err = e2edeployment.UpdateDeploymentWithRetries(c, ns, deployment.Name, func(update *appsv1.Deployment) {
 			update.Spec.Paused = false
 		})
+		framework.ExpectNoError(err)
 	}
 
 	framework.Logf("Waiting for deployment %q to be observed by the controller", deploymentName)
@@ -798,7 +801,7 @@ func testProportionalScalingDeployment(f *framework.Framework) {
 	// Scale the deployment to 30 replicas.
 	newReplicas = int32(30)
 	framework.Logf("Scaling up the deployment %q from %d to %d", deploymentName, replicas, newReplicas)
-	deployment, err = e2edeployment.UpdateDeploymentWithRetries(c, ns, deployment.Name, func(update *appsv1.Deployment) {
+	_, err = e2edeployment.UpdateDeploymentWithRetries(c, ns, deployment.Name, func(update *appsv1.Deployment) {
 		update.Spec.Replicas = &newReplicas
 	})
 	framework.ExpectNoError(err)

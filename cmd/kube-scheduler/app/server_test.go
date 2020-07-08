@@ -124,6 +124,9 @@ profiles:
     filter:
       disabled:
       - name: "*"
+    postFilter:
+      disabled:
+      - name: "*"
     preScore:
       disabled:
       - name: "*"
@@ -154,8 +157,9 @@ profiles:
 		"PreFilterPlugin": {
 			{Name: "NodeResourcesFit"},
 			{Name: "NodePorts"},
-			{Name: "InterPodAffinity"},
 			{Name: "PodTopologySpread"},
+			{Name: "InterPodAffinity"},
+			{Name: "VolumeBinding"},
 		},
 		"FilterPlugin": {
 			{Name: "NodeUnschedulable"},
@@ -171,14 +175,17 @@ profiles:
 			{Name: "AzureDiskLimits"},
 			{Name: "VolumeBinding"},
 			{Name: "VolumeZone"},
-			{Name: "InterPodAffinity"},
 			{Name: "PodTopologySpread"},
+			{Name: "InterPodAffinity"},
+		},
+		"PostFilterPlugin": {
+			{Name: "DefaultPreemption"},
 		},
 		"PreScorePlugin": {
 			{Name: "InterPodAffinity"},
-			{Name: "DefaultPodTopologySpread"},
-			{Name: "TaintToleration"},
 			{Name: "PodTopologySpread"},
+			{Name: "TaintToleration"},
+			{Name: "SelectorSpread"},
 		},
 		"ScorePlugin": {
 			{Name: "NodeResourcesBalancedAllocation", Weight: 1},
@@ -187,15 +194,13 @@ profiles:
 			{Name: "NodeResourcesLeastAllocated", Weight: 1},
 			{Name: "NodeAffinity", Weight: 1},
 			{Name: "NodePreferAvoidPods", Weight: 10000},
-			{Name: "DefaultPodTopologySpread", Weight: 1},
-			{Name: "TaintToleration", Weight: 1},
 			{Name: "PodTopologySpread", Weight: 2},
+			{Name: "TaintToleration", Weight: 1},
+			{Name: "SelectorSpread", Weight: 1},
 		},
-		"BindPlugin":      {{Name: "DefaultBinder"}},
-		"ReservePlugin":   {{Name: "VolumeBinding"}},
-		"UnreservePlugin": {{Name: "VolumeBinding"}},
-		"PreBindPlugin":   {{Name: "VolumeBinding"}},
-		"PostBindPlugin":  {{Name: "VolumeBinding"}},
+		"BindPlugin":    {{Name: "DefaultBinder"}},
+		"ReservePlugin": {{Name: "VolumeBinding"}},
+		"PreBindPlugin": {{Name: "VolumeBinding"}},
 	}
 
 	testcases := []struct {
@@ -220,16 +225,15 @@ profiles:
 			},
 			wantPlugins: map[string]map[string][]kubeschedulerconfig.Plugin{
 				"default-scheduler": {
-					"BindPlugin":      {{Name: "DefaultBinder"}},
-					"FilterPlugin":    {{Name: "NodeResourcesFit"}, {Name: "NodePorts"}},
-					"PreFilterPlugin": {{Name: "NodeResourcesFit"}, {Name: "NodePorts"}},
-					"PreScorePlugin":  {{Name: "InterPodAffinity"}, {Name: "TaintToleration"}},
-					"QueueSortPlugin": {{Name: "PrioritySort"}},
-					"ScorePlugin":     {{Name: "InterPodAffinity", Weight: 1}, {Name: "TaintToleration", Weight: 1}},
-					"ReservePlugin":   {{Name: "VolumeBinding"}},
-					"UnreservePlugin": {{Name: "VolumeBinding"}},
-					"PreBindPlugin":   {{Name: "VolumeBinding"}},
-					"PostBindPlugin":  {{Name: "VolumeBinding"}},
+					"BindPlugin":       {{Name: "DefaultBinder"}},
+					"FilterPlugin":     {{Name: "NodeResourcesFit"}, {Name: "NodePorts"}},
+					"PreFilterPlugin":  {{Name: "NodeResourcesFit"}, {Name: "NodePorts"}},
+					"PostFilterPlugin": {{Name: "DefaultPreemption"}},
+					"PreScorePlugin":   {{Name: "InterPodAffinity"}, {Name: "TaintToleration"}},
+					"QueueSortPlugin":  {{Name: "PrioritySort"}},
+					"ScorePlugin":      {{Name: "InterPodAffinity", Weight: 1}, {Name: "TaintToleration", Weight: 1}},
+					"ReservePlugin":    {{Name: "VolumeBinding"}},
+					"PreBindPlugin":    {{Name: "VolumeBinding"}},
 				},
 			},
 		},
@@ -245,9 +249,7 @@ profiles:
 					"BindPlugin":      {{Name: "DefaultBinder"}},
 					"QueueSortPlugin": {{Name: "PrioritySort"}},
 					"ReservePlugin":   {{Name: "VolumeBinding"}},
-					"UnreservePlugin": {{Name: "VolumeBinding"}},
 					"PreBindPlugin":   {{Name: "VolumeBinding"}},
-					"PostBindPlugin":  {{Name: "VolumeBinding"}},
 				},
 			},
 		},
@@ -285,8 +287,9 @@ profiles:
 					"PreFilterPlugin": {
 						{Name: "NodeResourcesFit"},
 						{Name: "NodePorts"},
-						{Name: "InterPodAffinity"},
 						{Name: "PodTopologySpread"},
+						{Name: "InterPodAffinity"},
+						{Name: "VolumeBinding"},
 					},
 					"FilterPlugin": {
 						{Name: "NodeUnschedulable"},
@@ -302,14 +305,17 @@ profiles:
 						{Name: "AzureDiskLimits"},
 						{Name: "VolumeBinding"},
 						{Name: "VolumeZone"},
-						{Name: "InterPodAffinity"},
 						{Name: "PodTopologySpread"},
+						{Name: "InterPodAffinity"},
+					},
+					"PostFilterPlugin": {
+						{Name: "DefaultPreemption"},
 					},
 					"PreScorePlugin": {
 						{Name: "InterPodAffinity"},
-						{Name: "DefaultPodTopologySpread"},
-						{Name: "TaintToleration"},
 						{Name: "PodTopologySpread"},
+						{Name: "TaintToleration"},
+						{Name: "SelectorSpread"},
 					},
 					"ScorePlugin": {
 						{Name: "NodeResourcesBalancedAllocation", Weight: 1},
@@ -318,15 +324,13 @@ profiles:
 						{Name: "NodeResourcesMostAllocated", Weight: 1},
 						{Name: "NodeAffinity", Weight: 1},
 						{Name: "NodePreferAvoidPods", Weight: 10000},
-						{Name: "DefaultPodTopologySpread", Weight: 1},
-						{Name: "TaintToleration", Weight: 1},
 						{Name: "PodTopologySpread", Weight: 2},
+						{Name: "TaintToleration", Weight: 1},
+						{Name: "SelectorSpread", Weight: 1},
 					},
-					"BindPlugin":      {{Name: "DefaultBinder"}},
-					"ReservePlugin":   {{Name: "VolumeBinding"}},
-					"UnreservePlugin": {{Name: "VolumeBinding"}},
-					"PreBindPlugin":   {{Name: "VolumeBinding"}},
-					"PostBindPlugin":  {{Name: "VolumeBinding"}},
+					"BindPlugin":    {{Name: "DefaultBinder"}},
+					"ReservePlugin": {{Name: "VolumeBinding"}},
+					"PreBindPlugin": {{Name: "VolumeBinding"}},
 				},
 			},
 		},

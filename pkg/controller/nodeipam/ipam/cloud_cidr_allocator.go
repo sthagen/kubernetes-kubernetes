@@ -88,7 +88,7 @@ func NewCloudCIDRAllocator(client clientset.Interface, cloud cloudprovider.Inter
 
 	eventBroadcaster := record.NewBroadcaster()
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cidrAllocator"})
-	eventBroadcaster.StartLogging(klog.Infof)
+	eventBroadcaster.StartStructuredLogging(0)
 	klog.V(0).Infof("Sending events to api server.")
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: client.CoreV1().Events("")})
 
@@ -230,7 +230,7 @@ func (ca *cloudCIDRAllocator) AllocateOrOccupyCIDR(node *v1.Node) error {
 		return nil
 	}
 	if !ca.insertNodeToProcessing(node.Name) {
-		klog.V(2).Infof("Node %v is already in a process of CIDR assignment.", node.Name)
+		klog.V(2).InfoS("Node is already in a process of CIDR assignment", "node", klog.KObj(node))
 		return nil
 	}
 

@@ -396,9 +396,11 @@ func patchPDBOrDie(cs kubernetes.Interface, dc dynamic.Interface, ns string, nam
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		old := getPDBStatusOrDie(dc, ns, name)
 		patchBytes, err := f(old)
+		framework.ExpectNoError(err)
 		if updated, err = cs.PolicyV1beta1().PodDisruptionBudgets(ns).Patch(context.TODO(), old.Name, types.MergePatchType, patchBytes, metav1.PatchOptions{}, subresources...); err != nil {
 			return err
 		}
+		framework.ExpectNoError(err)
 		return nil
 	})
 
@@ -607,6 +609,7 @@ func waitForPdbToObserveHealthyPods(cs kubernetes.Interface, ns string, healthyC
 func getPDBStatusOrDie(dc dynamic.Interface, ns string, name string) *policyv1beta1.PodDisruptionBudget {
 	pdbStatusResource := policyv1beta1.SchemeGroupVersion.WithResource("poddisruptionbudgets")
 	unstruct, err := dc.Resource(pdbStatusResource).Namespace(ns).Get(context.TODO(), name, metav1.GetOptions{}, "status")
+	framework.ExpectNoError(err)
 	pdb, err := unstructuredToPDB(unstruct)
 	framework.ExpectNoError(err, "Getting the status of the pdb %s in namespace %s", name, ns)
 	return pdb

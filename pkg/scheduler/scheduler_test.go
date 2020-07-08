@@ -33,7 +33,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/api/events/v1beta1"
+	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -42,14 +42,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes/fake"
 	clientsetfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	clienttesting "k8s.io/client-go/testing"
 	clientcache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/kubernetes/pkg/controller/volume/scheduling"
-	"k8s.io/kubernetes/pkg/scheduler/apis/config"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/core"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/defaultbinder"
@@ -57,6 +55,7 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/noderesources"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/queuesort"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/volumebinding"
+	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	internalcache "k8s.io/kubernetes/pkg/scheduler/internal/cache"
 	fakecache "k8s.io/kubernetes/pkg/scheduler/internal/cache/fake"
@@ -64,20 +63,6 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/profile"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
 )
-
-type fakePodPreemptor struct{}
-
-func (fp fakePodPreemptor) getUpdatedPod(pod *v1.Pod) (*v1.Pod, error) {
-	return pod, nil
-}
-
-func (fp fakePodPreemptor) deletePod(pod *v1.Pod) error {
-	return nil
-}
-
-func (fp fakePodPreemptor) removeNominatedNodeName(pod *v1.Pod) error {
-	return nil
-}
 
 func podWithID(id, desiredHost string) *v1.Pod {
 	return &v1.Pod{
@@ -136,15 +121,11 @@ func (es mockScheduler) Extenders() []framework.Extender {
 	return nil
 }
 
-func (es mockScheduler) Preempt(ctx context.Context, profile *profile.Profile, state *framework.CycleState, pod *v1.Pod, scheduleErr error) (string, []*v1.Pod, []*v1.Pod, error) {
-	return "", nil, nil, nil
-}
-
 func TestSchedulerCreation(t *testing.T) {
-	invalidRegistry := map[string]framework.PluginFactory{
+	invalidRegistry := map[string]frameworkruntime.PluginFactory{
 		defaultbinder.Name: defaultbinder.New,
 	}
-	validRegistry := map[string]framework.PluginFactory{
+	validRegistry := map[string]frameworkruntime.PluginFactory{
 		"Foo": defaultbinder.New,
 	}
 	cases := []struct {
@@ -192,7 +173,7 @@ func TestSchedulerCreation(t *testing.T) {
 			client := clientsetfake.NewSimpleClientset()
 			informerFactory := informers.NewSharedInformerFactory(client, 0)
 
-			eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: client.EventsV1beta1().Events("")})
+			eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: client.EventsV1()})
 
 			stopCh := make(chan struct{})
 			defer close(stopCh)
@@ -228,7 +209,7 @@ func TestSchedulerCreation(t *testing.T) {
 func TestSchedulerScheduleOne(t *testing.T) {
 	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "machine1", UID: types.UID("machine1")}}
 	client := clientsetfake.NewSimpleClientset(&testNode)
-	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: client.EventsV1beta1().Events("")})
+	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: client.EventsV1()})
 	errS := errors.New("scheduler")
 	errB := errors.New("binder")
 
@@ -318,7 +299,7 @@ func TestSchedulerScheduleOne(t *testing.T) {
 			fwk, err := st.NewFramework([]st.RegisterPluginFunc{
 				st.RegisterQueueSortPlugin(queuesort.Name, queuesort.New),
 				st.RegisterBindPlugin(defaultbinder.Name, defaultbinder.New),
-			}, framework.WithClientSet(client))
+			}, frameworkruntime.WithClientSet(client))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -338,12 +319,13 @@ func TestSchedulerScheduleOne(t *testing.T) {
 					testSchedulerName: &profile.Profile{
 						Framework: fwk,
 						Recorder:  eventBroadcaster.NewRecorder(scheme.Scheme, testSchedulerName),
+						Name:      testSchedulerName,
 					},
 				},
 			}
 			called := make(chan struct{})
 			stopFunc := eventBroadcaster.StartEventWatcher(func(obj runtime.Object) {
-				e, _ := obj.(*v1beta1.Event)
+				e, _ := obj.(*eventsv1.Event)
 				if e.Reason != item.eventReason {
 					t.Errorf("got event %v, want %v", e.Reason, item.eventReason)
 				}
@@ -381,7 +363,7 @@ type fakeNodeSelector struct {
 
 func newFakeNodeSelector(args runtime.Object, _ framework.FrameworkHandle) (framework.Plugin, error) {
 	pl := &fakeNodeSelector{}
-	if err := framework.DecodeInto(args, &pl.fakeNodeSelectorArgs); err != nil {
+	if err := frameworkruntime.DecodeInto(args, &pl.fakeNodeSelectorArgs); err != nil {
 		return nil, err
 	}
 	return pl, nil
@@ -427,7 +409,7 @@ func TestSchedulerMultipleProfilesScheduling(t *testing.T) {
 	// We use a fake filter that only allows one particular node. We create two
 	// profiles, each with a different node in the filter configuration.
 	client := clientsetfake.NewSimpleClientset(nodes...)
-	broadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: client.EventsV1beta1().Events("")})
+	broadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: client.EventsV1()})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -464,7 +446,7 @@ func TestSchedulerMultipleProfilesScheduling(t *testing.T) {
 				},
 			},
 		),
-		WithFrameworkOutOfTreeRegistry(framework.Registry{
+		WithFrameworkOutOfTreeRegistry(frameworkruntime.Registry{
 			"FakeNodeSelector": newFakeNodeSelector,
 		}),
 	)
@@ -487,7 +469,7 @@ func TestSchedulerMultipleProfilesScheduling(t *testing.T) {
 	})
 	controllers := make(map[string]string)
 	stopFn := broadcaster.StartEventWatcher(func(obj runtime.Object) {
-		e, ok := obj.(*v1beta1.Event)
+		e, ok := obj.(*eventsv1.Event)
 		if !ok || e.Reason != "Scheduled" {
 			return
 		}
@@ -785,10 +767,11 @@ func setupTestScheduler(queuedPodStore *clientcache.FIFO, scache internalcache.C
 		return true, b, nil
 	})
 
-	fwk, _ := st.NewFramework(fns, framework.WithClientSet(client))
+	fwk, _ := st.NewFramework(fns, frameworkruntime.WithClientSet(client), frameworkruntime.WithPodNominator(internalqueue.NewPodNominator()))
 	prof := &profile.Profile{
 		Framework: fwk,
 		Recorder:  &events.FakeRecorder{},
+		Name:      testSchedulerName,
 	}
 	if broadcaster != nil {
 		prof.Recorder = broadcaster.NewRecorder(scheme.Scheme, testSchedulerName)
@@ -799,11 +782,9 @@ func setupTestScheduler(queuedPodStore *clientcache.FIFO, scache internalcache.C
 
 	algo := core.NewGenericScheduler(
 		scache,
-		internalqueue.NewSchedulingQueue(nil),
 		internalcache.NewEmptySnapshot(),
 		[]framework.Extender{},
 		informerFactory.Core().V1().PersistentVolumeClaims().Lister(),
-		informerFactory.Policy().V1beta1().PodDisruptionBudgets().Lister(),
 		false,
 		schedulerapi.DefaultPercentageOfNodesToScore,
 	)
@@ -818,9 +799,8 @@ func setupTestScheduler(queuedPodStore *clientcache.FIFO, scache internalcache.C
 		Error: func(p *framework.QueuedPodInfo, err error) {
 			errChan <- err
 		},
-		Profiles:     profiles,
-		client:       client,
-		podPreemptor: fakePodPreemptor{},
+		Profiles: profiles,
+		client:   client,
 	}
 
 	return sched, bindingChan, errChan
@@ -845,7 +825,7 @@ func setupTestSchedulerWithVolumeBinding(volumeBinder scheduling.SchedulerVolume
 		st.RegisterBindPlugin(defaultbinder.Name, defaultbinder.New),
 		st.RegisterPluginAsExtensions(volumebinding.Name, func(plArgs runtime.Object, handle framework.FrameworkHandle) (framework.Plugin, error) {
 			return &volumebinding.VolumeBinding{Binder: volumeBinder}, nil
-		}, "Filter", "Reserve", "Unreserve", "PreBind", "PostBind"),
+		}, "PreFilter", "Filter", "Reserve", "PreBind"),
 	}
 	s, bindingChan, errChan := setupTestScheduler(queuedPodStore, scache, informerFactory, broadcaster, fns...)
 	informerFactory.Start(stop)
@@ -867,7 +847,7 @@ func TestSchedulerWithVolumeBinding(t *testing.T) {
 	bindErr := fmt.Errorf("bind err")
 	client := clientsetfake.NewSimpleClientset()
 
-	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: client.EventsV1beta1().Events("")})
+	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: client.EventsV1()})
 
 	// This can be small because we wait for pod to finish scheduling first
 	chanTimeout := 2 * time.Second
@@ -938,7 +918,7 @@ func TestSchedulerWithVolumeBinding(t *testing.T) {
 			},
 			expectAssumeCalled: true,
 			eventReason:        "FailedScheduling",
-			expectError:        fmt.Errorf("error while running %q reserve plugin for pod %q: %v", volumebinding.Name, "foo", assumeErr),
+			expectError:        fmt.Errorf("error while running Reserve in %q reserve plugin for pod %q: %v", volumebinding.Name, "foo", assumeErr),
 		},
 		{
 			name: "bind error",
@@ -959,7 +939,7 @@ func TestSchedulerWithVolumeBinding(t *testing.T) {
 			s, bindingChan, errChan := setupTestSchedulerWithVolumeBinding(fakeVolumeBinder, stop, eventBroadcaster)
 			eventChan := make(chan struct{})
 			stopFunc := eventBroadcaster.StartEventWatcher(func(obj runtime.Object) {
-				e, _ := obj.(*v1beta1.Event)
+				e, _ := obj.(*eventsv1.Event)
 				if e, a := item.eventReason, e.Reason; e != a {
 					t.Errorf("expected %v, got %v", e, a)
 				}
@@ -1140,7 +1120,7 @@ func TestSchedulerBinding(t *testing.T) {
 			fwk, err := st.NewFramework([]st.RegisterPluginFunc{
 				st.RegisterQueueSortPlugin(queuesort.Name, queuesort.New),
 				st.RegisterBindPlugin(defaultbinder.Name, defaultbinder.New),
-			}, framework.WithClientSet(client))
+			}, frameworkruntime.WithClientSet(client))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1154,9 +1134,7 @@ func TestSchedulerBinding(t *testing.T) {
 			algo := core.NewGenericScheduler(
 				scache,
 				nil,
-				nil,
 				test.extenders,
-				nil,
 				nil,
 				false,
 				0,
@@ -1183,180 +1161,6 @@ func TestSchedulerBinding(t *testing.T) {
 				}
 			}
 
-		})
-	}
-}
-
-// TestInjectingPluginConfigForVolumeBinding tests injecting
-// KubeSchedulerConfiguration.BindTimeoutSeconds as args for VolumeBinding if
-// no plugin args is configured for it.
-// TODO remove when KubeSchedulerConfiguration.BindTimeoutSeconds is eliminated
-func TestInjectingPluginConfigForVolumeBinding(t *testing.T) {
-	defaultPluginConfigs := []config.PluginConfig{
-		{
-			Name: "VolumeBinding",
-			Args: &config.VolumeBindingArgs{
-				BindTimeoutSeconds: 600,
-			},
-		},
-	}
-
-	tests := []struct {
-		name             string
-		opts             []Option
-		wantPluginConfig []config.PluginConfig
-	}{
-		{
-			name:             "default with provider",
-			wantPluginConfig: defaultPluginConfigs,
-		},
-		{
-			name: "default with policy",
-			opts: []Option{
-				WithAlgorithmSource(schedulerapi.SchedulerAlgorithmSource{
-					Policy: &config.SchedulerPolicySource{},
-				}),
-			},
-			wantPluginConfig: defaultPluginConfigs,
-		},
-		{
-			name: "customize BindTimeoutSeconds with provider",
-			opts: []Option{
-				WithBindTimeoutSeconds(100),
-			},
-			wantPluginConfig: []config.PluginConfig{
-				{
-					Name: "VolumeBinding",
-					Args: &config.VolumeBindingArgs{
-						BindTimeoutSeconds: 100,
-					},
-				},
-			},
-		},
-		{
-			name: "customize BindTimeoutSeconds with policy",
-			opts: []Option{
-				WithAlgorithmSource(schedulerapi.SchedulerAlgorithmSource{
-					Policy: &config.SchedulerPolicySource{},
-				}),
-				WithBindTimeoutSeconds(100),
-			},
-			wantPluginConfig: []config.PluginConfig{
-				{
-					Name: "VolumeBinding",
-					Args: &config.VolumeBindingArgs{
-						BindTimeoutSeconds: 100,
-					},
-				},
-			},
-		},
-		{
-			name: "PluginConfig is preferred",
-			opts: []Option{
-				WithBindTimeoutSeconds(100),
-				WithProfiles(config.KubeSchedulerProfile{
-					SchedulerName: v1.DefaultSchedulerName,
-					PluginConfig: []config.PluginConfig{
-						{
-							Name: "VolumeBinding",
-							Args: &config.VolumeBindingArgs{
-								BindTimeoutSeconds: 200,
-							},
-						},
-					},
-				}),
-			},
-			wantPluginConfig: []config.PluginConfig{
-				{
-					Name: "VolumeBinding",
-					Args: &config.VolumeBindingArgs{
-						BindTimeoutSeconds: 200,
-					},
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		client := fake.NewSimpleClientset()
-		informerFactory := informers.NewSharedInformerFactory(client, 0)
-		recorderFactory := profile.NewRecorderFactory(events.NewBroadcaster(&events.EventSinkImpl{Interface: client.EventsV1beta1().Events("")}))
-
-		opts := append(tt.opts, WithBuildFrameworkCapturer(func(p config.KubeSchedulerProfile) {
-			if p.SchedulerName != v1.DefaultSchedulerName {
-				t.Errorf("unexpected scheduler name (want %q, got %q)", v1.DefaultSchedulerName, p.SchedulerName)
-			}
-			if diff := cmp.Diff(tt.wantPluginConfig, p.PluginConfig); diff != "" {
-				t.Errorf("unexpected plugins diff (-want, +got): %s", diff)
-			}
-		}))
-
-		_, err := New(
-			client,
-			informerFactory,
-			informerFactory.Core().V1().Pods(),
-			recorderFactory,
-			make(chan struct{}),
-			opts...,
-		)
-
-		if err != nil {
-			t.Fatalf("Error constructing: %v", err)
-		}
-	}
-}
-
-func TestRemoveNominatedNodeName(t *testing.T) {
-	tests := []struct {
-		name                     string
-		currentNominatedNodeName string
-		newNominatedNodeName     string
-		expectedPatchRequests    int
-		expectedPatchData        string
-	}{
-		{
-			name:                     "Should make patch request to clear node name",
-			currentNominatedNodeName: "node1",
-			expectedPatchRequests:    1,
-			expectedPatchData:        `{"status":{"nominatedNodeName":null}}`,
-		},
-		{
-			name:                     "Should not make patch request if nominated node is already cleared",
-			currentNominatedNodeName: "",
-			expectedPatchRequests:    0,
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			actualPatchRequests := 0
-			var actualPatchData string
-			cs := &clientsetfake.Clientset{}
-			cs.AddReactor("patch", "pods", func(action clienttesting.Action) (bool, runtime.Object, error) {
-				actualPatchRequests++
-				patch := action.(clienttesting.PatchAction)
-				actualPatchData = string(patch.GetPatch())
-				// For this test, we don't care about the result of the patched pod, just that we got the expected
-				// patch request, so just returning &v1.Pod{} here is OK because scheduler doesn't use the response.
-				return true, &v1.Pod{}, nil
-			})
-
-			pod := &v1.Pod{
-				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
-				Status:     v1.PodStatus{NominatedNodeName: test.currentNominatedNodeName},
-			}
-
-			preemptor := &podPreemptorImpl{Client: cs}
-			if err := preemptor.removeNominatedNodeName(pod); err != nil {
-				t.Fatalf("Error calling removeNominatedNodeName: %v", err)
-			}
-
-			if actualPatchRequests != test.expectedPatchRequests {
-				t.Fatalf("Actual patch requests (%d) dos not equal expected patch requests (%d)", actualPatchRequests, test.expectedPatchRequests)
-			}
-
-			if test.expectedPatchRequests > 0 && actualPatchData != test.expectedPatchData {
-				t.Fatalf("Patch data mismatch: Actual was %v, but expected %v", actualPatchData, test.expectedPatchData)
-			}
 		})
 	}
 }

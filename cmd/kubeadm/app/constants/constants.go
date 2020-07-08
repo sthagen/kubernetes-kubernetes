@@ -185,6 +185,10 @@ const (
 	TLSBootstrapTimeout = 5 * time.Minute
 	// TLSBootstrapRetryInterval specifies how long kubeadm should wait before retrying the TLS Bootstrap check
 	TLSBootstrapRetryInterval = 5 * time.Second
+	// APICallWithWriteTimeout specifies how long kubeadm should wait for api calls with at least one write
+	APICallWithWriteTimeout = 40 * time.Second
+	// APICallWithReadTimeout specifies how long kubeadm should wait for api calls with only reads
+	APICallWithReadTimeout = 15 * time.Second
 	// PullImageRetry specifies how many times ContainerRuntime retries when pulling image failed
 	PullImageRetry = 5
 
@@ -365,6 +369,9 @@ const (
 	// KubeAPIServerAdvertiseAddressEndpointAnnotationKey is the annotation key on every apiserver pod,
 	// describing the API endpoint (advertise address and bind port of the api server)
 	KubeAPIServerAdvertiseAddressEndpointAnnotationKey = "kubeadm.kubernetes.io/kube-apiserver.advertise-address.endpoint"
+	// ComponentConfigHashAnnotationKey holds the config map annotation key that kubeadm uses to store
+	// a SHA256 sum to check for user changes
+	ComponentConfigHashAnnotationKey = "kubeadm.kubernetes.io/component-config.hash"
 
 	// ControlPlaneTier is the value used in the tier label to identify control plane components
 	ControlPlaneTier = "control-plane"

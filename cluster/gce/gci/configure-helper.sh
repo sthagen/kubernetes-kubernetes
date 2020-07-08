@@ -25,6 +25,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+### Hardcoded constants
+METADATA_SERVER_IP="${METADATA_SERVER_IP:-169.254.169.254}"
+
 function convert-manifest-params {
   # A helper function to convert the manifest args from a string to a list of
   # flag arguments.
@@ -96,6 +99,28 @@ function secure_random {
   echo -n "${out}" | xxd -r -p | base64 -w 0
 }
 
+# Helper for configuring iptables rules for metadata server.
+#
+# $1 is the command flag (-I or -D).
+# $2 is the firewall action (LOG or REJECT).
+# $3 is the prefix for log output.
+# $4 is "!" to optionally invert the uid range.
+function gce-metadata-fw-helper {
+  local -r command="$1"
+  local action="$2"
+  local -r prefix="$3"
+  local -r invert="${4:-}"
+
+  # Expand rule action to include relevant option flags.
+  case "${action}" in
+    LOG)
+      action="LOG --log-prefix "${prefix}:" --log-uid --log-tcp-options --log-ip-option"
+      ;;
+  esac
+
+  iptables ${command} OUTPUT -p tcp --dport 80 -d ${METADATA_SERVER_IP} -m owner ${invert:-} --uid-owner=${METADATA_SERVER_ALLOWED_UID_RANGE:-0-2999} -j ${action}
+}
+
 function config-ip-firewall {
   echo "Configuring IP firewall rules"
 
@@ -146,8 +171,17 @@ function config-ip-firewall {
   # node because we don't expect the daemonset to run on this node.
   if [[ "${ENABLE_METADATA_CONCEALMENT:-}" == "true" ]] && [[ ! "${METADATA_CONCEALMENT_NO_FIREWALL:-}" == "true" ]]; then
     echo "Add rule for metadata concealment"
-    iptables -w -t nat -I PREROUTING -p tcp -d 169.254.169.254 --dport 80 -m comment --comment "metadata-concealment: bridge traffic to metadata server goes to metadata proxy" -j DNAT --to-destination 127.0.0.1:988
+    iptables -w -t nat -I PREROUTING -p tcp -d ${METADATA_SERVER_IP} --dport 80 -m comment --comment "metadata-concealment: bridge traffic to metadata server goes to metadata proxy" -j DNAT --to-destination 127.0.0.1:988
   fi
+
+  # Log all metadata access not from approved processes.
+  case "${METADATA_SERVER_FIREWALL_MODE:-off}" in
+    log)
+      echo "Installing metadata firewall logging rules"
+      gce-metadata-fw-helper -I LOG "MetadataServerFirewallReject" !
+      gce-metadata-fw-helper -I LOG "MetadataServerFirewallAccept"
+      ;;
+  esac
 }
 
 function create-dirs {
@@ -364,6 +398,13 @@ function ensure-local-ssds() {
   # The following mounts or symlinks NVMe devices
   get-local-disk-num "nvme" "block"
   local nvmeblocknum="${localdisknum}"
+  get-local-disk-num "nvme" "fs"
+  local nvmefsnum="${localdisknum}"
+  # Check if NVMe SSD specified.
+  if [ "${nvmeblocknum}" -eq "0" ] && [ "${nvmefsnum}" -eq "0" ]; then
+    echo "No local NVMe SSD specified."
+    return
+  fi
   local i=0
   for ssd in /dev/nvme*; do
     if [ -e "${ssd}" ]; then
@@ -522,16 +563,6 @@ function create-node-pki {
     KUBELET_KEY_PATH="${pki_dir}/kubelet.key"
     write-pki-data "${KUBELET_KEY}" "${KUBELET_KEY_PATH}"
   fi
-
-  if [[ "${ENABLE_EGRESS_VIA_KONNECTIVITY_SERVICE:-false}" == "true" ]]; then
-    mkdir -p "${pki_dir}/konnectivity-agent"
-    KONNECTIVITY_AGENT_CA_CERT_PATH="${pki_dir}/konnectivity-agent/ca.crt"
-    KONNECTIVITY_AGENT_CLIENT_KEY_PATH="${pki_dir}/konnectivity-agent/client.key"
-    KONNECTIVITY_AGENT_CLIENT_CERT_PATH="${pki_dir}/konnectivity-agent/client.crt"
-    write-pki-data "${KONNECTIVITY_AGENT_CA_CERT}" "${KONNECTIVITY_AGENT_CA_CERT_PATH}"
-    write-pki-data "${KONNECTIVITY_AGENT_CLIENT_KEY}" "${KONNECTIVITY_AGENT_CLIENT_KEY_PATH}"
-    write-pki-data "${KONNECTIVITY_AGENT_CLIENT_CERT}" "${KONNECTIVITY_AGENT_CLIENT_CERT_PATH}"
-  fi
 }
 
 function create-master-pki {
@@ -598,42 +629,6 @@ function create-master-pki {
 
     PROXY_CLIENT_CERT_PATH="${pki_dir}/proxy_client.crt"
     write-pki-data "${PROXY_CLIENT_CERT}" "${PROXY_CLIENT_CERT_PATH}"
-  fi
-
-  if [[ ! -z "${KONNECTIVITY_SERVER_CA_CERT:-}" ]]; then
-    mkdir -p "${pki_dir}"/konnectivity-server
-    #KONNECTIVITY_SERVER_CA_KEY_PATH="${pki_dir}/konnectivity-server/ca.key"
-    #write-pki-data "${KONNECTIVITY_SERVER_CA_KEY}" "${KONNECTIVITY_SERVER_CA_KEY_PATH}"
-
-    KONNECTIVITY_SERVER_CA_CERT_PATH="${pki_dir}/konnectivity-server/ca.crt"
-    write-pki-data "${KONNECTIVITY_SERVER_CA_CERT}" "${KONNECTIVITY_SERVER_CA_CERT_PATH}"
-
-    KONNECTIVITY_SERVER_KEY_PATH="${pki_dir}/konnectivity-server/server.key"
-    write-pki-data "${KONNECTIVITY_SERVER_KEY}" "${KONNECTIVITY_SERVER_KEY_PATH}"
-
-    KONNECTIVITY_SERVER_CERT_PATH="${pki_dir}/konnectivity-server/server.crt"
-    write-pki-data "${KONNECTIVITY_SERVER_CERT}" "${KONNECTIVITY_SERVER_CERT_PATH}"
-
-    KONNECTIVITY_SERVER_CLIENT_KEY_PATH="${pki_dir}/konnectivity-server/client.key"
-    write-pki-data "${KONNECTIVITY_SERVER_CLIENT_KEY}" "${KONNECTIVITY_SERVER_CLIENT_KEY_PATH}"
-
-    KONNECTIVITY_SERVER_CLIENT_CERT_PATH="${pki_dir}/konnectivity-server/client.crt"
-    write-pki-data "${KONNECTIVITY_SERVER_CLIENT_CERT}" "${KONNECTIVITY_SERVER_CLIENT_CERT_PATH}"
-  fi
-
-  if [[ ! -z "${KONNECTIVITY_AGENT_CA_CERT:-}" ]]; then
-    mkdir -p "${pki_dir}"/konnectivity-agent
-    KONNECTIVITY_AGENT_CA_KEY_PATH="${pki_dir}/konnectivity-agent/ca.key"
-    write-pki-data "${KONNECTIVITY_AGENT_CA_KEY}" "${KONNECTIVITY_AGENT_CA_KEY_PATH}"
-
-    KONNECTIVITY_AGENT_CA_CERT_PATH="${pki_dir}/konnectivity-agent/ca.crt"
-    write-pki-data "${KONNECTIVITY_AGENT_CA_CERT}" "${KONNECTIVITY_AGENT_CA_CERT_PATH}"
-
-    KONNECTIVITY_AGENT_KEY_PATH="${pki_dir}/konnectivity-agent/server.key"
-    write-pki-data "${KONNECTIVITY_AGENT_KEY}" "${KONNECTIVITY_AGENT_KEY_PATH}"
-
-    KONNECTIVITY_AGENT_CERT_PATH="${pki_dir}/konnectivity-agent/server.crt"
-    write-pki-data "${KONNECTIVITY_AGENT_CERT}" "${KONNECTIVITY_AGENT_CERT_PATH}"
   fi
 }
 
@@ -965,7 +960,7 @@ EOF
     # If GKE exec auth for webhooks has been requested, then
     # ValidatingAdmissionWebhook should use it.  Otherwise, run with the default
     # config.
-    if [[ "${ADMISSION_CONTROL:-}" == *"ValidatingAdmissionWebhook"* && -n "${WEBHOOK_GKE_EXEC_AUTH:-}" ]]; then
+    if [[ -n "${WEBHOOK_GKE_EXEC_AUTH:-}" ]]; then
       1>&2 echo "ValidatingAdmissionWebhook requested, and WEBHOOK_GKE_EXEC_AUTH specified.  Configuring ValidatingAdmissionWebhook to use gke-exec-auth-plugin."
 
       # Append config for ValidatingAdmissionWebhook to the shared admission
@@ -1268,6 +1263,15 @@ current-context: service-account-context
 EOF
 }
 
+function create-kube-scheduler-config {
+  echo "Creating kube-scheduler config file"
+  mkdir -p /etc/srv/kubernetes/kube-scheduler
+  cat <<EOF >/etc/srv/kubernetes/kube-scheduler/config
+${KUBE_SCHEDULER_CONFIG}
+EOF
+}
+
+# TODO(#92143): Remove legacy policy config creation once kube-scheduler config is GA.
 function create-kubescheduler-policy-config {
   echo "Creating kube-scheduler policy config file"
   mkdir -p /etc/srv/kubernetes/kube-scheduler
@@ -1345,10 +1349,6 @@ function create-master-etcd-apiserver-auth {
      ETCD_APISERVER_CLIENT_CERT_PATH="${auth_dir}/etcd-apiserver-client.crt"
      echo "${ETCD_APISERVER_CLIENT_CERT}" | base64 --decode | gunzip > "${ETCD_APISERVER_CLIENT_CERT_PATH}"
    fi
-}
-
-function create-master-konnectivity-server-apiserver-auth {
-  echo TODO: implement create-master-konnectivity-server-apiserver-auth
 }
 
 function assemble-docker-flags {
@@ -1682,11 +1682,6 @@ function prepare-etcd-manifest {
   mv "${temp_file}" /etc/kubernetes/manifests
 }
 
-function start-etcd-empty-dir-cleanup-pod {
-  local -r src_file="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/etcd-empty-dir-cleanup.yaml"
-  cp "${src_file}" "/etc/kubernetes/manifests"
-}
-
 # Starts etcd server pod (and etcd-events pod if needed).
 # More specifically, it prepares dirs and files, sets the variable value
 # in the manifests, and copies them to /etc/kubernetes/manifests.
@@ -1714,7 +1709,8 @@ function start-etcd-servers {
 # Replaces the variables in the konnectivity-server manifest file with the real values, and then
 # copy the file to the manifest dir
 # $1: value for variable "agent_port"
-# $2: value for bariable "admin_port"
+# $2: value for variable "health_port"
+# $3: value for variable "admin_port"
 function prepare-konnectivity-server-manifest {
   local -r temp_file="/tmp/konnectivity-server.yaml"
   params=()
@@ -1736,7 +1732,8 @@ function prepare-konnectivity-server-manifest {
 
   params+=("--server-port=0")
   params+=("--agent-port=$1")
-  params+=("--admin-port=$2")
+  params+=("--health-port=$2")
+  params+=("--admin-port=$3")
   params+=("--agent-namespace=kube-system")
   params+=("--agent-service-account=konnectivity-agent")
   params+=("--kubeconfig=/etc/srv/kubernetes/konnectivity-server/kubeconfig")
@@ -1747,7 +1744,8 @@ function prepare-konnectivity-server-manifest {
   done
   sed -i -e "s@{{ *konnectivity_args *}}@${konnectivity_args}@g" "${temp_file}"
   sed -i -e "s@{{ *agent_port *}}@$1@g" "${temp_file}"
-  sed -i -e "s@{{ *admin_port *}}@$2@g" "${temp_file}"
+  sed -i -e "s@{{ *health_port *}}@$2@g" "${temp_file}"
+  sed -i -e "s@{{ *admin_port *}}@$3@g" "${temp_file}"
   sed -i -e "s@{{ *liveness_probe_initial_delay *}}@30@g" "${temp_file}"
   mv "${temp_file}" /etc/kubernetes/manifests
 }
@@ -1758,7 +1756,7 @@ function prepare-konnectivity-server-manifest {
 function start-konnectivity-server {
   echo "Start konnectivity server pods"
   prepare-log-file /var/log/konnectivity-server.log
-  prepare-konnectivity-server-manifest "8132" "8133"
+  prepare-konnectivity-server-manifest "8132" "8133" "8134"
 }
 
 # Calculates the following variables based on env variables, which will be used
@@ -1840,6 +1838,16 @@ function update-node-label() {
   done
 }
 
+# A helper function that sets file permissions for kube-controller-manager to
+# run as non root.
+function run-kube-controller-manager-as-non-root {
+  prepare-log-file /var/log/kube-controller-manager.log ${KUBE_CONTROLLER_MANAGER_RUNASUSER} ${KUBE_CONTROLLER_MANAGER_RUNASGROUP}
+  setfacl -m u:${KUBE_CONTROLLER_MANAGER_RUNASUSER}:r "${CA_CERT_BUNDLE_PATH}"
+  setfacl -m u:${KUBE_CONTROLLER_MANAGER_RUNASUSER}:r "${SERVICEACCOUNT_CERT_PATH}"
+  setfacl -m u:${KUBE_CONTROLLER_MANAGER_RUNASUSER}:r "${SERVICEACCOUNT_KEY_PATH}"
+}
+
+
 # Starts kubernetes controller manager.
 # It prepares the log file, loads the docker image, calculates variables, sets them
 # in the manifest file, and then copies the manifest file to /etc/kubernetes/manifests.
@@ -1898,7 +1906,7 @@ function start-kube-controller-manager {
     params+=" --flex-volume-plugin-dir=${VOLUME_PLUGIN_DIR}"
   fi
   if [[ -n "${CLUSTER_SIGNING_DURATION:-}" ]]; then
-    params+=" --experimental-cluster-signing-duration=$CLUSTER_SIGNING_DURATION"
+    params+=" --cluster-signing-duration=$CLUSTER_SIGNING_DURATION"
   fi
   # Disable using HPA metrics REST clients if metrics-server isn't enabled,
   # or if we want to explicitly disable it by setting HPA_USE_REST_CLIENT.
@@ -1937,6 +1945,15 @@ function start-kube-controller-manager {
   sed -i -e "s@{{flexvolume_hostpath}}@${FLEXVOLUME_HOSTPATH_VOLUME}@g" "${src_file}"
   sed -i -e "s@{{cpurequest}}@${KUBE_CONTROLLER_MANAGER_CPU_REQUEST}@g" "${src_file}"
 
+  if [[ -n "${KUBE_CONTROLLER_MANAGER_RUNASUSER:-}" && -n "${KUBE_CONTROLLER_MANAGER_RUNASGROUP:-}" ]]; then
+    run-kube-controller-manager-as-non-root
+    sed -i -e "s@{{runAsUser}}@${KUBE_CONTROLLER_MANAGER_RUNASUSER}@g" "${src_file}"
+    sed -i -e "s@{{runAsGroup}}@${KUBE_CONTROLLER_MANAGER_RUNASGROUP}@g" "${src_file}"
+  else
+    sed -i -e "s@{{runAsUser}}@0@g" "${src_file}"
+    sed -i -e "s@{{runAsGroup}}@0@g" "${src_file}"
+  fi
+
   cp "${src_file}" /etc/kubernetes/manifests
 }
 
@@ -1953,17 +1970,24 @@ function start-kube-scheduler {
 
   # Calculate variables and set them in the manifest.
   params="${SCHEDULER_TEST_LOG_LEVEL:-"--v=2"} ${SCHEDULER_TEST_ARGS:-}"
-  params+=" --kubeconfig=/etc/srv/kubernetes/kube-scheduler/kubeconfig"
   if [[ -n "${FEATURE_GATES:-}" ]]; then
     params+=" --feature-gates=${FEATURE_GATES}"
   fi
-  if [[ -n "${SCHEDULING_ALGORITHM_PROVIDER:-}"  ]]; then
-    params+=" --algorithm-provider=${SCHEDULING_ALGORITHM_PROVIDER}"
-  fi
-  if [[ -n "${SCHEDULER_POLICY_CONFIG:-}" ]]; then
-    create-kubescheduler-policy-config
-    params+=" --use-legacy-policy-config"
-    params+=" --policy-config-file=/etc/srv/kubernetes/kube-scheduler/policy-config"
+
+  # Scheduler Component Config takes precedence over some flags.
+  if [[ -n "${KUBE_SCHEDULER_CONFIG:-}" ]]; then
+    create-kube-scheduler-config
+    params+=" --config=/etc/srv/kubernetes/kube-scheduler/config"
+  else
+    params+=" --kubeconfig=/etc/srv/kubernetes/kube-scheduler/kubeconfig"
+    if [[ -n "${SCHEDULING_ALGORITHM_PROVIDER:-}"  ]]; then
+      params+=" --algorithm-provider=${SCHEDULING_ALGORITHM_PROVIDER}"
+    fi
+    if [[ -n "${SCHEDULER_POLICY_CONFIG:-}" ]]; then
+      create-kubescheduler-policy-config
+      params+=" --use-legacy-policy-config"
+      params+=" --policy-config-file=/etc/srv/kubernetes/kube-scheduler/policy-config"
+    fi
   fi
 
   params="$(convert-manifest-params "${params}")"
@@ -2889,9 +2913,6 @@ function main() {
     create-master-pki
     create-master-auth
     ensure-master-bootstrap-kubectl-auth
-    if [[ "${ENABLE_EGRESS_VIA_KONNECTIVITY_SERVICE:-false}" == "true" ]]; then
-      create-master-konnectivity-server-apiserver-auth
-    fi
     create-master-kubelet-auth
     create-master-etcd-auth
     create-master-etcd-apiserver-auth
@@ -2921,6 +2942,8 @@ function main() {
   if [[ "${container_runtime}" == "docker" ]]; then
     assemble-docker-flags
   elif [[ "${container_runtime}" == "containerd" ]]; then
+    # stop docker if it is present as we want to use just containerd
+    systemctl stop docker || echo "unable to stop docker"
     setup-containerd
   fi
   start-kubelet
@@ -2929,7 +2952,6 @@ function main() {
     compute-master-manifest-variables
     if [[ -z "${ETCD_SERVERS:-}" ]]; then
       start-etcd-servers
-      start-etcd-empty-dir-cleanup-pod
     fi
     source ${KUBE_BIN}/configure-kubeapiserver.sh
     start-kube-apiserver

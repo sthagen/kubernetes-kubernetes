@@ -19,6 +19,7 @@ package v1beta1
 import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 )
 
 // HairpinMode denotes how the kubelet should configure networking to handle
@@ -177,8 +178,7 @@ type KubeletConfiguration struct {
 	TLSMinVersion string `json:"tlsMinVersion,omitempty"`
 	// rotateCertificates enables client certificate rotation. The Kubelet will request a
 	// new certificate from the certificates.k8s.io API. This requires an approver to approve the
-	// certificate signing requests. The RotateKubeletClientCertificate feature
-	// must be enabled.
+	// certificate signing requests.
 	// Dynamic Kubelet Config (beta): If dynamically updating this field, consider that
 	// disabling it may disrupt the Kubelet's ability to authenticate with the API server
 	// after the current certificate expires.
@@ -515,6 +515,13 @@ type KubeletConfiguration struct {
 	// Default: "100ms"
 	// +optional
 	CPUCFSQuotaPeriod *metav1.Duration `json:"cpuCFSQuotaPeriod,omitempty"`
+	// nodeStatusMaxImages caps the number of images reported in Node.Status.Images.
+	// Note: If -1 is specified, no cap will be applied. If 0 is specified, no image is returned.
+	// Dynamic Kubelet Config (beta): If dynamically updating this field, consider that
+	// different values can be reported on node status.
+	// Default: 50
+	// +optional
+	NodeStatusMaxImages *int32 `json:"nodeStatusMaxImages,omitempty"`
 	// maxOpenFiles is Number of files that can be opened by Kubelet process.
 	// Dynamic Kubelet Config (beta): If dynamically updating this field, consider that
 	// it may impact the ability of the Kubelet to interact with the node's filesystem.
@@ -780,6 +787,23 @@ type KubeletConfiguration struct {
 	// Default: ""
 	// +optional
 	ProviderID string `json:"providerID,omitempty"`
+	// kernelMemcgNotification, if set, the kubelet will integrate with the kernel memcg notification
+	// to determine if memory eviction thresholds are crossed rather than polling.
+	// Dynamic Kubelet Config (beta): If dynamically updating this field, consider that
+	// it may impact the way Kubelet interacts with the kernel.
+	// Default: false
+	// +optional
+	KernelMemcgNotification bool `json:"kernelMemcgNotification,omitempty"`
+	// Logging specifies the options of logging.
+	// Refer [Logs Options](https://github.com/kubernetes/component-base/blob/master/logs/options.go) for more information.
+	// Defaults:
+	//   Format: text
+	// + optional
+	Logging componentbaseconfigv1alpha1.LoggingConfiguration `json:"logging,omitempty"`
+	// enableSystemLogHandler enables system logs via web interface host:port/logs/
+	// Default: true
+	// +optional
+	EnableSystemLogHandler *bool `json:"enableSystemLogHandler,omitempty"`
 }
 
 type KubeletAuthorizationMode string

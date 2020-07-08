@@ -439,10 +439,11 @@ func dropDisabledFields(
 		podSpec.PreemptionPolicy = nil
 	}
 
-	if !utilfeature.DefaultFeatureGate.Enabled(features.EvenPodsSpread) && !topologySpreadConstraintsInUse(oldPodSpec) {
-		// Set TopologySpreadConstraints to nil only if feature is disabled and it is not used
-		podSpec.TopologySpreadConstraints = nil
+	if !utilfeature.DefaultFeatureGate.Enabled(features.SetHostnameAsFQDN) && !setHostnameAsFQDNInUse(oldPodSpec) {
+		// Set SetHostnameAsFQDN to nil only if feature is disabled and it is not used
+		podSpec.SetHostnameAsFQDN = nil
 	}
+
 }
 
 // dropDisabledRunAsGroupField removes disabled fields from PodSpec related
@@ -556,14 +557,6 @@ func overheadInUse(podSpec *api.PodSpec) bool {
 		return true
 	}
 	return false
-}
-
-// topologySpreadConstraintsInUse returns true if the pod spec is non-nil and has a TopologySpreadConstraints slice
-func topologySpreadConstraintsInUse(podSpec *api.PodSpec) bool {
-	if podSpec == nil {
-		return false
-	}
-	return len(podSpec.TopologySpreadConstraints) > 0
 }
 
 // procMountInUse returns true if the pod spec is non-nil and has a SecurityContext's ProcMount field set to a non-default value
@@ -732,4 +725,12 @@ func multiplePodIPsInUse(podStatus *api.PodStatus) bool {
 		return true
 	}
 	return false
+}
+
+// setHostnameAsFQDNInUse returns true if any pod's spec defines setHostnameAsFQDN field.
+func setHostnameAsFQDNInUse(podSpec *api.PodSpec) bool {
+	if podSpec == nil || podSpec.SetHostnameAsFQDN == nil {
+		return false
+	}
+	return *podSpec.SetHostnameAsFQDN
 }
