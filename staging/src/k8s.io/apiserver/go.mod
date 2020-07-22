@@ -2,7 +2,7 @@
 
 module k8s.io/apiserver
 
-go 1.14
+go 1.13
 
 require (
 	github.com/coreos/go-oidc v2.1.0+incompatible
@@ -31,7 +31,7 @@ require (
 	github.com/stretchr/testify v1.4.0
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
 	go.etcd.io/bbolt v1.3.5 // indirect
-	go.etcd.io/etcd v0.5.0-alpha.5.0.20200520232829-54ba9589114f
+	go.etcd.io/etcd v0.5.0-alpha.5.0.20200716221620-18dfb9cca345
 	go.uber.org/zap v1.10.0
 	golang.org/x/crypto v0.0.0-20200220183623-bac4c82f6975
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
@@ -47,9 +47,9 @@ require (
 	k8s.io/component-base v0.0.0
 	k8s.io/klog/v2 v2.2.0
 	k8s.io/kube-openapi v0.0.0-20200427153329-656914f816f9
-	k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
+	k8s.io/utils v0.0.0-20200720150651-0bdb4ca86cbc
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.9
-	sigs.k8s.io/structured-merge-diff/v3 v3.0.0
+	sigs.k8s.io/structured-merge-diff/v3 v3.0.1-0.20200706213357-43c19bbb7fba
 	sigs.k8s.io/yaml v1.2.0
 )
 

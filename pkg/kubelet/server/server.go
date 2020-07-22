@@ -35,6 +35,7 @@ import (
 	"github.com/emicklei/go-restful"
 	cadvisormetrics "github.com/google/cadvisor/container"
 	cadvisorapi "github.com/google/cadvisor/info/v1"
+	cadvisorv2 "github.com/google/cadvisor/info/v2"
 	"github.com/google/cadvisor/metrics"
 	"google.golang.org/grpc"
 	"k8s.io/klog/v2"
@@ -54,6 +55,7 @@ import (
 	"k8s.io/apiserver/pkg/server/healthz"
 	"k8s.io/apiserver/pkg/server/httplog"
 	"k8s.io/apiserver/pkg/server/routes"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/apiserver/pkg/util/flushwriter"
 	"k8s.io/component-base/configz"
 	"k8s.io/component-base/logs"
@@ -62,6 +64,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/core/v1/validation"
+	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/apis/podresources"
 	podresourcesapi "k8s.io/kubernetes/pkg/kubelet/apis/podresources/v1alpha1"
 	"k8s.io/kubernetes/pkg/kubelet/apis/resourcemetrics/v1alpha1"
@@ -349,17 +352,28 @@ func (s *Server) InstallDefaultHandlers(enableCAdvisorJSONEndpoints bool) {
 	r := compbasemetrics.NewKubeRegistry()
 
 	includedMetrics := cadvisormetrics.MetricSet{
-		cadvisormetrics.CpuUsageMetrics:         struct{}{},
-		cadvisormetrics.MemoryUsageMetrics:      struct{}{},
-		cadvisormetrics.CpuLoadMetrics:          struct{}{},
-		cadvisormetrics.DiskIOMetrics:           struct{}{},
-		cadvisormetrics.DiskUsageMetrics:        struct{}{},
-		cadvisormetrics.NetworkUsageMetrics:     struct{}{},
-		cadvisormetrics.AcceleratorUsageMetrics: struct{}{},
-		cadvisormetrics.AppMetrics:              struct{}{},
-		cadvisormetrics.ProcessMetrics:          struct{}{},
+		cadvisormetrics.CpuUsageMetrics:     struct{}{},
+		cadvisormetrics.MemoryUsageMetrics:  struct{}{},
+		cadvisormetrics.CpuLoadMetrics:      struct{}{},
+		cadvisormetrics.DiskIOMetrics:       struct{}{},
+		cadvisormetrics.DiskUsageMetrics:    struct{}{},
+		cadvisormetrics.NetworkUsageMetrics: struct{}{},
+		cadvisormetrics.AppMetrics:          struct{}{},
+		cadvisormetrics.ProcessMetrics:      struct{}{},
 	}
-	r.RawMustRegister(metrics.NewPrometheusCollector(prometheusHostAdapter{s.host}, containerPrometheusLabelsFunc(s.host), includedMetrics, clock.RealClock{}))
+
+	// Only add the Accelerator metrics if the feature is inactive
+	// Note: Accelerator metrics will be removed in the future, hence the feature gate.
+	if !utilfeature.DefaultFeatureGate.Enabled(features.DisableAcceleratorUsageMetrics) {
+		includedMetrics.Add(cadvisormetrics.MetricKind(cadvisormetrics.AcceleratorUsageMetrics))
+	}
+
+	cadvisorOpts := cadvisorv2.RequestOptions{
+		IdType:    cadvisorv2.TypeName,
+		Count:     1,
+		Recursive: true,
+	}
+	r.RawMustRegister(metrics.NewPrometheusCollector(prometheusHostAdapter{s.host}, containerPrometheusLabelsFunc(s.host), includedMetrics, clock.RealClock{}, cadvisorOpts))
 	s.restfulCont.Handle(cadvisorMetricsPath,
 		compbasemetrics.HandlerFor(r, compbasemetrics.HandlerOpts{ErrorHandling: compbasemetrics.ContinueOnError}),
 	)
@@ -955,13 +969,8 @@ type prometheusHostAdapter struct {
 	host HostInterface
 }
 
-func (a prometheusHostAdapter) SubcontainersInfo(containerName string, query *cadvisorapi.ContainerInfoRequest) ([]*cadvisorapi.ContainerInfo, error) {
-	all, err := a.host.GetRawContainerInfo(containerName, query, true)
-	items := make([]*cadvisorapi.ContainerInfo, 0, len(all))
-	for _, v := range all {
-		items = append(items, v)
-	}
-	return items, err
+func (a prometheusHostAdapter) GetRequestedContainersInfo(containerName string, options cadvisorv2.RequestOptions) (map[string]*cadvisorapi.ContainerInfo, error) {
+	return a.host.GetRequestedContainersInfo(containerName, options)
 }
 func (a prometheusHostAdapter) GetVersionInfo() (*cadvisorapi.VersionInfo, error) {
 	return a.host.GetVersionInfo()

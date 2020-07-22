@@ -2,7 +2,7 @@
 
 module k8s.io/apiextensions-apiserver
 
-go 1.14
+go 1.13
 
 require (
 	github.com/emicklei/go-restful v2.9.5+incompatible
@@ -18,7 +18,7 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.4.0
-	go.etcd.io/etcd v0.5.0-alpha.5.0.20200520232829-54ba9589114f
+	go.etcd.io/etcd v0.5.0-alpha.5.0.20200716221620-18dfb9cca345
 	google.golang.org/grpc v1.27.0
 	gopkg.in/yaml.v2 v2.2.8
 	k8s.io/api v0.0.0
@@ -29,7 +29,7 @@ require (
 	k8s.io/component-base v0.0.0
 	k8s.io/klog/v2 v2.2.0
 	k8s.io/kube-openapi v0.0.0-20200427153329-656914f816f9
-	k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
+	k8s.io/utils v0.0.0-20200720150651-0bdb4ca86cbc
 	sigs.k8s.io/yaml v1.2.0
 )
 

@@ -113,15 +113,16 @@ aliases:
 
   # SIG Release
   sig-release-approvers:
-    - calebamiles # SIG Chair
+    - alejandrox1 # SIG Technical Lead
     - justaugustus # SIG Chair
+    - saschagrunert # SIG Technical Lead
     - tpepper # SIG Chair
   release-engineering-approvers:
-    - calebamiles # SIG Chair
+    - alejandrox1 # SIG Technical Lead
     - justaugustus # SIG Chair
-    - tpepper # SIG Chair / Patch Release Team
+    - saschagrunert # SIG Technical Lead
+    - tpepper # SIG Chair
   release-engineering-reviewers:
-    - calebamiles # SIG Chair
     - cpanato # Branch Manager
     - feiskyer # Patch Release Team
     - hasheddan # Branch Manager
@@ -142,8 +143,25 @@ aliases:
     - justaugustus
     - listx
 
+  sig-storage-approvers:
+    - saad-ali
+    - thockin
+    - jsafrane
+    - gnufied
+    - msau42
+  # emeritus:
+  # - rootfs
   sig-storage-reviewers:
     - saad-ali
+    - jsafrane
+    - rootfs
+    - jingxu97
+    - msau42
+    - gnufied
+    - verult
+    - humblec
+  # emeritus:
+  # - davidz627
 
   sig-scheduling-maintainers:
     - alculquicondor
@@ -289,8 +307,11 @@ aliases:
     - MaciekPytel
     - mwielgus
   sig-instrumentation-approvers:
-    - piosz
     - brancz
+    - logicalhan
+    - dashpole
+    - ehashman
+    - RainbowMango
     - serathius
   sig-instrumentation-reviewers:
     - kawych
@@ -452,6 +473,7 @@ aliases:
   #   -
 
   sig-storage-api-reviewers:
+    - deads2k
     - saad-ali
     - msau42
     - jsafrane
@@ -509,3 +531,4 @@ aliases:
     - bgrant0607
     - smarterclayton
     - johnbelamaric
+    - spiffxp

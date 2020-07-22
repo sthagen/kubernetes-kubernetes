@@ -1665,6 +1665,9 @@ func TestCSIDriverValidation(t *testing.T) {
 	attachNotRequired := false
 	podInfoOnMount := true
 	notPodInfoOnMount := false
+	supportedFSGroupPolicy := storage.FileFSGroupPolicy
+	invalidFSGroupPolicy := storage.ReadWriteOnceWithFSTypeFSGroupPolicy
+	invalidFSGroupPolicy = "invalid-mode"
 	successCases := []storage.CSIDriver{
 		{
 			ObjectMeta: metav1.ObjectMeta{Name: driverName},
@@ -1769,6 +1772,14 @@ func TestCSIDriverValidation(t *testing.T) {
 				},
 			},
 		},
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: driverName},
+			Spec: storage.CSIDriverSpec{
+				AttachRequired: &attachNotRequired,
+				PodInfoOnMount: &notPodInfoOnMount,
+				FSGroupPolicy:  &supportedFSGroupPolicy,
+			},
+		},
 	}
 
 	for _, csiDriver := range successCases {
@@ -1816,6 +1827,15 @@ func TestCSIDriverValidation(t *testing.T) {
 				VolumeLifecycleModes: []storage.VolumeLifecycleMode{
 					"no-such-mode",
 				},
+			},
+		},
+		{
+			// invalid fsGroupPolicy
+			ObjectMeta: metav1.ObjectMeta{Name: driverName},
+			Spec: storage.CSIDriverSpec{
+				AttachRequired: &attachNotRequired,
+				PodInfoOnMount: &notPodInfoOnMount,
+				FSGroupPolicy:  &invalidFSGroupPolicy,
 			},
 		},
 	}
@@ -1938,4 +1958,105 @@ func TestCSIDriverValidationUpdate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateCSIStorageCapacity(t *testing.T) {
+	storageClassName := "test-sc"
+	invalidName := "-invalid-@#$%^&*()-"
+
+	goodCapacity := storage.CSIStorageCapacity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "csc-329803da-fdd2-42e4-af6f-7b07e7ccc305",
+			Namespace: metav1.NamespaceDefault,
+		},
+		StorageClassName: storageClassName,
+	}
+	goodTopology := metav1.LabelSelector{
+		MatchLabels: map[string]string{"foo": "bar"},
+	}
+
+	scenarios := map[string]struct {
+		isExpectedFailure bool
+		capacity          *storage.CSIStorageCapacity
+	}{
+		"good-capacity": {
+			capacity: &goodCapacity,
+		},
+		"missing-storage-class-name": {
+			isExpectedFailure: true,
+			capacity: func() *storage.CSIStorageCapacity {
+				capacity := goodCapacity
+				capacity.StorageClassName = ""
+				return &capacity
+			}(),
+		},
+		"bad-storage-class-name": {
+			isExpectedFailure: true,
+			capacity: func() *storage.CSIStorageCapacity {
+				capacity := goodCapacity
+				capacity.StorageClassName = invalidName
+				return &capacity
+			}(),
+		},
+		"good-capacity-value": {
+			capacity: func() *storage.CSIStorageCapacity {
+				capacity := goodCapacity
+				capacity.Capacity = resource.NewQuantity(1, resource.BinarySI)
+				return &capacity
+			}(),
+		},
+		"bad-capacity-value": {
+			isExpectedFailure: true,
+			capacity: func() *storage.CSIStorageCapacity {
+				capacity := goodCapacity
+				capacity.Capacity = resource.NewQuantity(-11, resource.BinarySI)
+				return &capacity
+			}(),
+		},
+		"good-topology": {
+			capacity: func() *storage.CSIStorageCapacity {
+				capacity := goodCapacity
+				capacity.NodeTopology = &goodTopology
+				return &capacity
+			}(),
+		},
+		"empty-topology": {
+			capacity: func() *storage.CSIStorageCapacity {
+				capacity := goodCapacity
+				capacity.NodeTopology = &metav1.LabelSelector{}
+				return &capacity
+			}(),
+		},
+		"bad-topology-fields": {
+			isExpectedFailure: true,
+			capacity: func() *storage.CSIStorageCapacity {
+				capacity := goodCapacity
+				capacity.NodeTopology = &metav1.LabelSelector{
+					MatchExpressions: []metav1.LabelSelectorRequirement{
+						{
+							Key:      "foo",
+							Operator: metav1.LabelSelectorOperator("no-such-operator"),
+							Values: []string{
+								"bar",
+							},
+						},
+					},
+				}
+				return &capacity
+			}(),
+		},
+	}
+
+	for name, scenario := range scenarios {
+		t.Run(name, func(t *testing.T) {
+			errs := ValidateCSIStorageCapacity(scenario.capacity)
+			if len(errs) == 0 && scenario.isExpectedFailure {
+				t.Errorf("Unexpected success")
+			}
+			if len(errs) > 0 && !scenario.isExpectedFailure {
+				t.Errorf("Unexpected failure: %+v", errs)
+			}
+		})
+	}
+
 }

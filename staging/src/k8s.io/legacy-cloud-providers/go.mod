@@ -2,7 +2,7 @@
 
 module k8s.io/legacy-cloud-providers
 
-go 1.14
+go 1.13
 
 require (
 	cloud.google.com/go v0.51.0
@@ -19,7 +19,7 @@ require (
 	github.com/google/go-cmp v0.4.0
 	github.com/gophercloud/gophercloud v0.1.0
 	github.com/mitchellh/mapstructure v1.1.2
-	github.com/rubiojr/go-vhd v0.0.0-20160810183302-0bfd3b39853c
+	github.com/rubiojr/go-vhd v0.0.0-20200706105327-02e210299021
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/vmware/govmomi v0.20.3
@@ -36,7 +36,7 @@ require (
 	k8s.io/component-base v0.0.0
 	k8s.io/csi-translation-lib v0.0.0
 	k8s.io/klog/v2 v2.2.0
-	k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
+	k8s.io/utils v0.0.0-20200720150651-0bdb4ca86cbc
 	sigs.k8s.io/yaml v1.2.0
 )
 

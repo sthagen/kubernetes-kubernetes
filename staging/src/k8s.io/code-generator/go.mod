@@ -2,14 +2,14 @@
 
 module k8s.io/code-generator
 
-go 1.14
+go 1.13
 
 require (
 	github.com/emicklei/go-restful v2.9.5+incompatible // indirect
 	github.com/go-openapi/jsonreference v0.19.3 // indirect
 	github.com/go-openapi/spec v0.19.3 // indirect
 	github.com/gogo/protobuf v1.3.1
-	github.com/json-iterator/go v1.1.9 // indirect
+	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/mailru/easyjson v0.7.0 // indirect
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.4.0 // indirect

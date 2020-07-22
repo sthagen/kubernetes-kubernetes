@@ -307,6 +307,7 @@ func (c *Controller) syncService(key string) error {
 		if apierrors.IsNotFound(err) {
 			c.triggerTimeTracker.DeleteService(namespace, name)
 			c.reconciler.deleteService(namespace, name)
+			c.endpointSliceTracker.DeleteService(namespace, name)
 			// The service has been deleted, return nil so that it won't be retried.
 			return nil
 		}
@@ -456,7 +457,7 @@ func (c *Controller) addPod(obj interface{}) {
 }
 
 func (c *Controller) updatePod(old, cur interface{}) {
-	services := endpointutil.GetServicesToUpdateOnPodChange(c.serviceLister, c.serviceSelectorCache, old, cur, podEndpointChanged)
+	services := endpointutil.GetServicesToUpdateOnPodChange(c.serviceLister, c.serviceSelectorCache, old, cur)
 	for key := range services {
 		c.queue.AddAfter(key, c.endpointUpdatesBatchPeriod)
 	}
