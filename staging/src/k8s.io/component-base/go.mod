@@ -2,7 +2,7 @@
 
 module k8s.io/component-base
 
-go 1.13
+go 1.15
 
 require (
 	github.com/blang/semver v3.5.0+incompatible
@@ -23,7 +23,7 @@ require (
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v0.0.0
 	k8s.io/klog/v2 v2.2.0
-	k8s.io/utils v0.0.0-20200720150651-0bdb4ca86cbc
+	k8s.io/utils v0.0.0-20200729134348-d5654de09c73
 )
 
 replace (
