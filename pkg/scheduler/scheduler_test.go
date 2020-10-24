@@ -49,13 +49,13 @@ import (
 	"k8s.io/kubernetes/pkg/controller/volume/scheduling"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/core"
+	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/defaultbinder"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodeports"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/noderesources"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/queuesort"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/volumebinding"
 	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
-	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	internalcache "k8s.io/kubernetes/pkg/scheduler/internal/cache"
 	fakecache "k8s.io/kubernetes/pkg/scheduler/internal/cache/fake"
 	internalqueue "k8s.io/kubernetes/pkg/scheduler/internal/queue"
@@ -178,7 +178,6 @@ func TestSchedulerCreation(t *testing.T) {
 			defer close(stopCh)
 			s, err := New(client,
 				informerFactory,
-				NewPodInformer(client, 0),
 				profile.NewRecorderFactory(eventBroadcaster),
 				stopCh,
 				tc.opts...,
@@ -211,6 +210,7 @@ func TestSchedulerScheduleOne(t *testing.T) {
 	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{Interface: client.EventsV1()})
 	errS := errors.New("scheduler")
 	errB := errors.New("binder")
+	preBindErr := errors.New("on PreBind")
 
 	table := []struct {
 		name                string
@@ -235,7 +235,7 @@ func TestSchedulerScheduleOne(t *testing.T) {
 			expectErrorPod:   podWithID("foo", testNode.Name),
 			expectForgetPod:  podWithID("foo", testNode.Name),
 			expectAssumedPod: podWithID("foo", testNode.Name),
-			expectError:      errors.New(`error while running Reserve in "FakeReserve" reserve plugin for pod "foo": reserve error`),
+			expectError:      fmt.Errorf(`running Reserve plugin "FakeReserve": %w`, errors.New("reserve error")),
 			eventReason:      "FailedScheduling",
 		},
 		{
@@ -248,7 +248,7 @@ func TestSchedulerScheduleOne(t *testing.T) {
 			expectErrorPod:   podWithID("foo", testNode.Name),
 			expectForgetPod:  podWithID("foo", testNode.Name),
 			expectAssumedPod: podWithID("foo", testNode.Name),
-			expectError:      errors.New(`error while running "FakePermit" permit plugin for pod "foo": permit error`),
+			expectError:      fmt.Errorf(`running Permit plugin "FakePermit": %w`, errors.New("permit error")),
 			eventReason:      "FailedScheduling",
 		},
 		{
@@ -256,12 +256,12 @@ func TestSchedulerScheduleOne(t *testing.T) {
 			sendPod: podWithID("foo", ""),
 			algo:    mockScheduler{core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 1, FeasibleNodes: 1}, nil},
 			registerPluginFuncs: []st.RegisterPluginFunc{
-				st.RegisterPreBindPlugin("FakePreBind", st.NewFakePreBindPlugin(framework.NewStatus(framework.Error, "prebind error"))),
+				st.RegisterPreBindPlugin("FakePreBind", st.NewFakePreBindPlugin(framework.AsStatus(preBindErr))),
 			},
 			expectErrorPod:   podWithID("foo", testNode.Name),
 			expectForgetPod:  podWithID("foo", testNode.Name),
 			expectAssumedPod: podWithID("foo", testNode.Name),
-			expectError:      errors.New(`error while running "FakePreBind" prebind plugin for pod "foo": prebind error`),
+			expectError:      fmt.Errorf(`running PreBind plugin "FakePreBind": %w`, preBindErr),
 			eventReason:      "FailedScheduling",
 		},
 		{
@@ -287,7 +287,7 @@ func TestSchedulerScheduleOne(t *testing.T) {
 			expectBind:       &v1.Binding{ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: types.UID("foo")}, Target: v1.ObjectReference{Kind: "Node", Name: testNode.Name}},
 			expectAssumedPod: podWithID("foo", testNode.Name),
 			injectBindError:  errB,
-			expectError:      errors.New("Binding rejected: plugin \"DefaultBinder\" failed to bind pod \"/foo\": binder"),
+			expectError:      errors.New(`Binding rejected: running Bind plugin "DefaultBinder": binder`),
 			expectErrorPod:   podWithID("foo", testNode.Name),
 			expectForgetPod:  podWithID("foo", testNode.Name),
 			eventReason:      "FailedScheduling",
@@ -402,7 +402,7 @@ type fakeNodeSelector struct {
 	fakeNodeSelectorArgs
 }
 
-func newFakeNodeSelector(args runtime.Object, _ framework.FrameworkHandle) (framework.Plugin, error) {
+func newFakeNodeSelector(args runtime.Object, _ framework.Handle) (framework.Plugin, error) {
 	pl := &fakeNodeSelector{}
 	if err := frameworkruntime.DecodeInto(args, &pl.fakeNodeSelectorArgs); err != nil {
 		return nil, err
@@ -457,7 +457,6 @@ func TestSchedulerMultipleProfilesScheduling(t *testing.T) {
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
 	sched, err := New(client,
 		informerFactory,
-		informerFactory.Core().V1().Pods(),
 		profile.NewRecorderFactory(broadcaster),
 		ctx.Done(),
 		WithProfiles(
@@ -809,7 +808,12 @@ func setupTestScheduler(queuedPodStore *clientcache.FIFO, scache internalcache.C
 		return true, b, nil
 	})
 
-	fwk, _ := st.NewFramework(fns, frameworkruntime.WithClientSet(client), frameworkruntime.WithPodNominator(internalqueue.NewPodNominator()))
+	fwk, _ := st.NewFramework(
+		fns,
+		frameworkruntime.WithClientSet(client),
+		frameworkruntime.WithInformerFactory(informerFactory),
+		frameworkruntime.WithPodNominator(internalqueue.NewPodNominator()),
+	)
 	prof := &profile.Profile{
 		Framework: fwk,
 		Recorder:  &events.FakeRecorder{},
@@ -826,8 +830,6 @@ func setupTestScheduler(queuedPodStore *clientcache.FIFO, scache internalcache.C
 		scache,
 		internalcache.NewEmptySnapshot(),
 		[]framework.Extender{},
-		informerFactory.Core().V1().PersistentVolumeClaims().Lister(),
-		false,
 		schedulerapi.DefaultPercentageOfNodesToScore,
 	)
 
@@ -861,12 +863,14 @@ func setupTestSchedulerWithVolumeBinding(volumeBinder scheduling.SchedulerVolume
 	testPVC := v1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "testPVC", Namespace: pod.Namespace, UID: types.UID("testPVC")}}
 	client := clientsetfake.NewSimpleClientset(&testNode, &testPVC)
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
+	pvcInformer := informerFactory.Core().V1().PersistentVolumeClaims()
+	pvcInformer.Informer().GetStore().Add(&testPVC)
 
 	fns := []st.RegisterPluginFunc{
 		st.RegisterQueueSortPlugin(queuesort.Name, queuesort.New),
 		st.RegisterBindPlugin(defaultbinder.Name, defaultbinder.New),
-		st.RegisterPluginAsExtensions(volumebinding.Name, func(plArgs runtime.Object, handle framework.FrameworkHandle) (framework.Plugin, error) {
-			return &volumebinding.VolumeBinding{Binder: volumeBinder}, nil
+		st.RegisterPluginAsExtensions(volumebinding.Name, func(plArgs runtime.Object, handle framework.Handle) (framework.Plugin, error) {
+			return &volumebinding.VolumeBinding{Binder: volumeBinder, PVCLister: pvcInformer.Lister()}, nil
 		}, "PreFilter", "Filter", "Reserve", "PreBind"),
 	}
 	s, bindingChan, errChan := setupTestScheduler(queuedPodStore, scache, informerFactory, broadcaster, fns...)
@@ -960,7 +964,7 @@ func TestSchedulerWithVolumeBinding(t *testing.T) {
 			},
 			expectAssumeCalled: true,
 			eventReason:        "FailedScheduling",
-			expectError:        fmt.Errorf("error while running Reserve in %q reserve plugin for pod %q: %v", volumebinding.Name, "foo", assumeErr),
+			expectError:        fmt.Errorf("running Reserve plugin %q: %w", volumebinding.Name, assumeErr),
 		},
 		{
 			name: "bind error",
@@ -970,7 +974,7 @@ func TestSchedulerWithVolumeBinding(t *testing.T) {
 			expectAssumeCalled: true,
 			expectBindCalled:   true,
 			eventReason:        "FailedScheduling",
-			expectError:        fmt.Errorf("error while running %q prebind plugin for pod %q: %v", volumebinding.Name, "foo", bindErr),
+			expectError:        fmt.Errorf("running PreBind plugin %q: %w", volumebinding.Name, bindErr),
 		},
 	}
 
@@ -995,28 +999,26 @@ func TestSchedulerWithVolumeBinding(t *testing.T) {
 				t.Fatalf("scheduling timeout after %v", wait.ForeverTestTimeout)
 			}
 			stopFunc()
-			// Wait for scheduling to return an error
+			// Wait for scheduling to return an error or succeed binding.
+			var (
+				gotErr  error
+				gotBind *v1.Binding
+			)
 			select {
-			case err := <-errChan:
-				if item.expectError == nil || !reflect.DeepEqual(item.expectError.Error(), err.Error()) {
-					t.Errorf("err \nWANT=%+v,\nGOT=%+v", item.expectError, err)
-				}
+			case gotErr = <-errChan:
+			case gotBind = <-bindingChan:
 			case <-time.After(chanTimeout):
-				if item.expectError != nil {
-					t.Errorf("did not receive error after %v", chanTimeout)
-				}
+				t.Fatalf("did not receive pod binding or error after %v", chanTimeout)
 			}
-
-			// Wait for pod to succeed binding
-			select {
-			case b := <-bindingChan:
-				if !reflect.DeepEqual(item.expectPodBind, b) {
-					t.Errorf("err \nWANT=%+v,\nGOT=%+v", item.expectPodBind, b)
+			if item.expectError != nil {
+				if gotErr == nil || item.expectError.Error() != gotErr.Error() {
+					t.Errorf("err \nWANT=%+v,\nGOT=%+v", item.expectError, gotErr)
 				}
-			case <-time.After(chanTimeout):
-				if item.expectPodBind != nil {
-					t.Errorf("did not receive pod binding after %v", chanTimeout)
-				}
+			} else if gotErr != nil {
+				t.Errorf("err \nWANT=%+v,\nGOT=%+v", item.expectError, gotErr)
+			}
+			if !cmp.Equal(item.expectPodBind, gotBind) {
+				t.Errorf("err \nWANT=%+v,\nGOT=%+v", item.expectPodBind, gotBind)
 			}
 
 			if item.expectAssumeCalled != fakeVolumeBinder.AssumeCalled {
@@ -1177,8 +1179,6 @@ func TestSchedulerBinding(t *testing.T) {
 				scache,
 				nil,
 				test.extenders,
-				nil,
-				false,
 				0,
 			)
 			sched := Scheduler{

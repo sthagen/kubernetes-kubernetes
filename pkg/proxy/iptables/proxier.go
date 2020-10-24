@@ -390,16 +390,26 @@ type iptablesJumpChain struct {
 
 var iptablesJumpChains = []iptablesJumpChain{
 	{utiliptables.TableFilter, kubeExternalServicesChain, utiliptables.ChainInput, "kubernetes externally-visible service portals", []string{"-m", "conntrack", "--ctstate", "NEW"}},
+	{utiliptables.TableFilter, kubeExternalServicesChain, utiliptables.ChainForward, "kubernetes externally-visible service portals", []string{"-m", "conntrack", "--ctstate", "NEW"}},
 	{utiliptables.TableFilter, kubeServicesChain, utiliptables.ChainForward, "kubernetes service portals", []string{"-m", "conntrack", "--ctstate", "NEW"}},
 	{utiliptables.TableFilter, kubeServicesChain, utiliptables.ChainOutput, "kubernetes service portals", []string{"-m", "conntrack", "--ctstate", "NEW"}},
-	{utiliptables.TableFilter, kubeServicesChain, utiliptables.ChainInput, "kubernetes service portals", []string{"-m", "conntrack", "--ctstate", "NEW"}},
 	{utiliptables.TableFilter, kubeForwardChain, utiliptables.ChainForward, "kubernetes forwarding rules", nil},
 	{utiliptables.TableNAT, kubeServicesChain, utiliptables.ChainOutput, "kubernetes service portals", nil},
 	{utiliptables.TableNAT, kubeServicesChain, utiliptables.ChainPrerouting, "kubernetes service portals", nil},
 	{utiliptables.TableNAT, kubePostroutingChain, utiliptables.ChainPostrouting, "kubernetes postrouting rules", nil},
 }
 
-var iptablesCleanupOnlyChains = []iptablesJumpChain{}
+var iptablesEnsureChains = []struct {
+	table utiliptables.Table
+	chain utiliptables.Chain
+}{
+	{utiliptables.TableNAT, KubeMarkDropChain},
+}
+
+var iptablesCleanupOnlyChains = []iptablesJumpChain{
+	// Present in kube 1.13 - 1.19. Removed by #95252 in favor of adding reject rules for incoming/forwarding packets to kubeExternalServicesChain
+	{utiliptables.TableFilter, kubeServicesChain, utiliptables.ChainInput, "kubernetes service portals", []string{"-m", "conntrack", "--ctstate", "NEW"}},
+}
 
 // CleanupLeftovers removes all iptables rules and chains created by the Proxier
 // It returns true if an error was encountered. Errors are logged.
@@ -868,6 +878,14 @@ func (proxier *Proxier) syncProxyRules() {
 		}
 	}
 
+	// ensure KUBE-MARK-DROP chain exist but do not change any rules
+	for _, ch := range iptablesEnsureChains {
+		if _, err := proxier.iptables.EnsureChain(ch.table, ch.chain); err != nil {
+			klog.Errorf("Failed to ensure that %s chain %s exists: %v", ch.table, ch.chain, err)
+			return
+		}
+	}
+
 	//
 	// Below this point we will not return until we try to write the iptables rules.
 	//
@@ -1105,7 +1123,7 @@ func (proxier *Proxier) syncProxyRules() {
 
 				destChain := svcXlbChain
 				// We have to SNAT packets to external IPs if externalTrafficPolicy is cluster.
-				if !(utilfeature.DefaultFeatureGate.Enabled(features.ExternalPolicyForExternalIP) && svcInfo.OnlyNodeLocalEndpoints()) {
+				if !svcInfo.OnlyNodeLocalEndpoints() {
 					destChain = svcChain
 					writeLine(proxier.natRules, append(args, "-j", string(KubeMarkMasqChain))...)
 				}
@@ -1183,9 +1201,10 @@ func (proxier *Proxier) syncProxyRules() {
 						allowFromNode := false
 						for _, src := range svcInfo.LoadBalancerSourceRanges() {
 							writeLine(proxier.natRules, append(args, "-s", src, "-j", string(chosenChain))...)
-							// ignore error because it has been validated
-							_, cidr, _ := net.ParseCIDR(src)
-							if cidr.Contains(proxier.nodeIP) {
+							_, cidr, err := net.ParseCIDR(src)
+							if err != nil {
+								klog.Errorf("Error parsing %s CIDR in LoadBalancerSourceRanges, dropping: %v", cidr, err)
+							} else if cidr.Contains(proxier.nodeIP) {
 								allowFromNode = true
 							}
 						}
@@ -1203,7 +1222,7 @@ func (proxier *Proxier) syncProxyRules() {
 				} else {
 					// No endpoints.
 					writeLine(proxier.filterRules,
-						"-A", string(kubeServicesChain),
+						"-A", string(kubeExternalServicesChain),
 						"-m", "comment", "--comment", fmt.Sprintf(`"%s has no endpoints"`, svcNameString),
 						"-m", protocol, "-p", protocol,
 						"-d", utilproxy.ToCIDR(net.ParseIP(ingress)),
@@ -1609,11 +1628,13 @@ func (proxier *Proxier) syncProxyRules() {
 
 	// Finish housekeeping.
 	// TODO: these could be made more consistent.
+	klog.V(4).Infof("Deleting stale services IPs: %v", staleServices.UnsortedList())
 	for _, svcIP := range staleServices.UnsortedList() {
 		if err := conntrack.ClearEntriesForIP(proxier.exec, svcIP, v1.ProtocolUDP); err != nil {
 			klog.Errorf("Failed to delete stale service IP %s connections, error: %v", svcIP, err)
 		}
 	}
+	klog.V(4).Infof("Deleting stale endpoint connections: %v", endpointUpdateResult.StaleEndpoints)
 	proxier.deleteEndpointConnections(endpointUpdateResult.StaleEndpoints)
 }
 

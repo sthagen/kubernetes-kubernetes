@@ -38,9 +38,9 @@ import (
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config/scheme"
 	"k8s.io/kubernetes/pkg/scheduler/core"
+	"k8s.io/kubernetes/pkg/scheduler/framework"
 	frameworkplugins "k8s.io/kubernetes/pkg/scheduler/framework/plugins"
 	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
-	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	internalcache "k8s.io/kubernetes/pkg/scheduler/internal/cache"
 	internalqueue "k8s.io/kubernetes/pkg/scheduler/internal/queue"
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
@@ -83,14 +83,7 @@ type Scheduler struct {
 	// Profiles are the scheduling profiles.
 	Profiles profile.Map
 
-	scheduledPodsHasSynced func() bool
-
 	client clientset.Interface
-}
-
-// Cache returns the cache in scheduler for test to check the data in scheduler.
-func (sched *Scheduler) Cache() internalcache.Cache {
-	return sched.SchedulerCache
 }
 
 type schedulerOptions struct {
@@ -185,7 +178,6 @@ var defaultSchedulerOptions = schedulerOptions{
 // New returns a Scheduler
 func New(client clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
-	podInformer coreinformers.PodInformer,
 	recorderFactory profile.RecorderFactory,
 	stopCh <-chan struct{},
 	opts ...Option) (*Scheduler, error) {
@@ -213,7 +205,6 @@ func New(client clientset.Interface,
 		client:                   client,
 		recorderFactory:          recorderFactory,
 		informerFactory:          informerFactory,
-		podInformer:              podInformer,
 		schedulerCache:           schedulerCache,
 		StopEverything:           stopEverything,
 		percentageOfNodesToScore: options.percentageOfNodesToScore,
@@ -266,9 +257,8 @@ func New(client clientset.Interface,
 	// Additional tweaks to the config produced by the configurator.
 	sched.StopEverything = stopEverything
 	sched.client = client
-	sched.scheduledPodsHasSynced = podInformer.Informer().HasSynced
 
-	addAllEventHandlers(sched, informerFactory, podInformer)
+	addAllEventHandlers(sched, informerFactory)
 	return sched, nil
 }
 
@@ -310,9 +300,6 @@ func initPolicyFromConfigMap(client clientset.Interface, policyRef *schedulerapi
 
 // Run begins watching and scheduling. It waits for cache to be synced, then starts scheduling and blocked until the context is done.
 func (sched *Scheduler) Run(ctx context.Context) {
-	if !cache.WaitForCacheSync(ctx.Done(), sched.scheduledPodsHasSynced) {
-		return
-	}
 	sched.SchedulingQueue.Run()
 	wait.UntilWithContext(ctx, sched.scheduleOne, 0)
 	sched.SchedulingQueue.Close()
@@ -425,8 +412,7 @@ func (sched *Scheduler) finishBinding(prof *profile.Profile, assumed *v1.Pod, ta
 		return
 	}
 
-	metrics.BindingLatency.Observe(metrics.SinceInSeconds(start))
-	metrics.DeprecatedSchedulingDuration.WithLabelValues(metrics.Binding).Observe(metrics.SinceInSeconds(start))
+	metrics.DeprecatedBindingLatency.Observe(metrics.SinceInSeconds(start))
 	prof.Recorder.Eventf(assumed, nil, v1.EventTypeNormal, "Scheduled", "Binding", "Successfully assigned %v/%v to %v", assumed.Namespace, assumed.Name, targetNode)
 }
 
@@ -516,7 +502,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 		metrics.PodScheduleError(prof.Name, metrics.SinceInSeconds(start))
 		// trigger un-reserve to clean up state associated with the reserved Pod
 		prof.RunReservePluginsUnreserve(schedulingCycleCtx, state, assumedPod, scheduleResult.SuggestedHost)
-		if forgetErr := sched.Cache().ForgetPod(assumedPod); forgetErr != nil {
+		if forgetErr := sched.SchedulerCache.ForgetPod(assumedPod); forgetErr != nil {
 			klog.Errorf("scheduler cache ForgetPod failed: %v", forgetErr)
 		}
 		sched.recordSchedulingFailure(prof, assumedPodInfo, sts.AsError(), SchedulerError, "")
@@ -536,7 +522,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 		}
 		// One of the plugins returned status different than success or wait.
 		prof.RunReservePluginsUnreserve(schedulingCycleCtx, state, assumedPod, scheduleResult.SuggestedHost)
-		if forgetErr := sched.Cache().ForgetPod(assumedPod); forgetErr != nil {
+		if forgetErr := sched.SchedulerCache.ForgetPod(assumedPod); forgetErr != nil {
 			klog.Errorf("scheduler cache ForgetPod failed: %v", forgetErr)
 		}
 		sched.recordSchedulingFailure(prof, assumedPodInfo, runPermitStatus.AsError(), reason, "")
@@ -562,7 +548,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 			}
 			// trigger un-reserve plugins to clean up state associated with the reserved Pod
 			prof.RunReservePluginsUnreserve(bindingCycleCtx, state, assumedPod, scheduleResult.SuggestedHost)
-			if forgetErr := sched.Cache().ForgetPod(assumedPod); forgetErr != nil {
+			if forgetErr := sched.SchedulerCache.ForgetPod(assumedPod); forgetErr != nil {
 				klog.Errorf("scheduler cache ForgetPod failed: %v", forgetErr)
 			}
 			sched.recordSchedulingFailure(prof, assumedPodInfo, waitOnPermitStatus.AsError(), reason, "")
@@ -575,7 +561,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 			metrics.PodScheduleError(prof.Name, metrics.SinceInSeconds(start))
 			// trigger un-reserve plugins to clean up state associated with the reserved Pod
 			prof.RunReservePluginsUnreserve(bindingCycleCtx, state, assumedPod, scheduleResult.SuggestedHost)
-			if forgetErr := sched.Cache().ForgetPod(assumedPod); forgetErr != nil {
+			if forgetErr := sched.SchedulerCache.ForgetPod(assumedPod); forgetErr != nil {
 				klog.Errorf("scheduler cache ForgetPod failed: %v", forgetErr)
 			}
 			sched.recordSchedulingFailure(prof, assumedPodInfo, preBindStatus.AsError(), SchedulerError, "")
@@ -645,4 +631,21 @@ func (sched *Scheduler) skipPodSchedule(prof *profile.Profile, pod *v1.Pod) bool
 func defaultAlgorithmSourceProviderName() *string {
 	provider := schedulerapi.SchedulerDefaultProviderName
 	return &provider
+}
+
+// NewInformerFactory creates a SharedInformerFactory and initializes a scheduler specific
+// in-place podInformer.
+func NewInformerFactory(cs clientset.Interface, resyncPeriod time.Duration) informers.SharedInformerFactory {
+	informerFactory := informers.NewSharedInformerFactory(cs, resyncPeriod)
+	informerFactory.InformerFor(&v1.Pod{}, newPodInformer)
+	return informerFactory
+}
+
+// newPodInformer creates a shared index informer that returns only non-terminal pods.
+func newPodInformer(cs clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	selector := fmt.Sprintf("status.phase!=%v,status.phase!=%v", v1.PodSucceeded, v1.PodFailed)
+	tweakListOptions := func(options *metav1.ListOptions) {
+		options.FieldSelector = selector
+	}
+	return coreinformers.NewFilteredPodInformer(cs, metav1.NamespaceAll, resyncPeriod, nil, tweakListOptions)
 }

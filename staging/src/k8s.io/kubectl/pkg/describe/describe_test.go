@@ -180,6 +180,7 @@ func TestDescribePodTolerations(t *testing.T) {
 		Spec: corev1.PodSpec{
 			Tolerations: []corev1.Toleration{
 				{Operator: corev1.TolerationOpExists},
+				{Effect: corev1.TaintEffectNoSchedule, Operator: corev1.TolerationOpExists},
 				{Key: "key0", Operator: corev1.TolerationOpExists},
 				{Key: "key1", Value: "value1"},
 				{Key: "key2", Operator: corev1.TolerationOpEqual, Value: "value2", Effect: corev1.TaintEffectNoSchedule},
@@ -195,6 +196,7 @@ func TestDescribePodTolerations(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if !strings.Contains(out, "  op=Exists\n") ||
+		!strings.Contains(out, ":NoSchedule op=Exists\n") ||
 		!strings.Contains(out, "key0 op=Exists\n") ||
 		!strings.Contains(out, "key1=value1\n") ||
 		!strings.Contains(out, "key2=value2:NoSchedule\n") ||
@@ -1924,6 +1926,28 @@ Rules:
 Annotations:   <none>
 Events:        <none>` + "\n",
 		},
+		"DefaultBackend": {
+			input: fake.NewSimpleClientset(&networkingv1.Ingress{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bar",
+					Namespace: "foo",
+				},
+				Spec: networkingv1.IngressSpec{
+					DefaultBackend: &backendV1,
+				},
+			}),
+			output: `Name:             bar
+Namespace:        foo
+Address:          
+Default backend:  default-backend:80 (<error: endpoints "default-backend" not found>)
+Rules:
+  Host        Path  Backends
+  ----        ----  --------
+  *           *     default-backend:80 (<error: endpoints "default-backend" not found>)
+Annotations:  <none>
+Events:       <none>
+`,
+		},
 	}
 
 	for name, test := range tests {
@@ -2687,6 +2711,152 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 				},
 			},
 		},
+		{
+			"container resource source type, target average value (no current)",
+			autoscalingv2beta2.HorizontalPodAutoscaler{
+				Spec: autoscalingv2beta2.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv2beta2.CrossVersionObjectReference{
+						Name: "some-rc",
+						Kind: "ReplicationController",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+					Metrics: []autoscalingv2beta2.MetricSpec{
+						{
+							Type: autoscalingv2beta2.ContainerResourceMetricSourceType,
+							ContainerResource: &autoscalingv2beta2.ContainerResourceMetricSource{
+								Name:      corev1.ResourceCPU,
+								Container: "application",
+								Target: autoscalingv2beta2.MetricTarget{
+									Type:         autoscalingv2beta2.AverageValueMetricType,
+									AverageValue: resource.NewMilliQuantity(100, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+				Status: autoscalingv2beta2.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
+		},
+		{
+			"container resource source type, target average value (with current)",
+			autoscalingv2beta2.HorizontalPodAutoscaler{
+				Spec: autoscalingv2beta2.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv2beta2.CrossVersionObjectReference{
+						Name: "some-rc",
+						Kind: "ReplicationController",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+					Metrics: []autoscalingv2beta2.MetricSpec{
+						{
+							Type: autoscalingv2beta2.ContainerResourceMetricSourceType,
+							ContainerResource: &autoscalingv2beta2.ContainerResourceMetricSource{
+								Name:      corev1.ResourceCPU,
+								Container: "application",
+								Target: autoscalingv2beta2.MetricTarget{
+									Type:         autoscalingv2beta2.AverageValueMetricType,
+									AverageValue: resource.NewMilliQuantity(100, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+				Status: autoscalingv2beta2.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+					CurrentMetrics: []autoscalingv2beta2.MetricStatus{
+						{
+							Type: autoscalingv2beta2.ContainerResourceMetricSourceType,
+							ContainerResource: &autoscalingv2beta2.ContainerResourceMetricStatus{
+								Name:      corev1.ResourceCPU,
+								Container: "application",
+								Current: autoscalingv2beta2.MetricValueStatus{
+									AverageValue: resource.NewMilliQuantity(50, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			"container resource source type, target utilization (no current)",
+			autoscalingv2beta2.HorizontalPodAutoscaler{
+				Spec: autoscalingv2beta2.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv2beta2.CrossVersionObjectReference{
+						Name: "some-rc",
+						Kind: "ReplicationController",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+					Metrics: []autoscalingv2beta2.MetricSpec{
+						{
+							Type: autoscalingv2beta2.ContainerResourceMetricSourceType,
+							ContainerResource: &autoscalingv2beta2.ContainerResourceMetricSource{
+								Name:      corev1.ResourceCPU,
+								Container: "application",
+								Target: autoscalingv2beta2.MetricTarget{
+									Type:               autoscalingv2beta2.UtilizationMetricType,
+									AverageUtilization: &targetUtilizationVal,
+								},
+							},
+						},
+					},
+				},
+				Status: autoscalingv2beta2.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
+		},
+		{
+			"container resource source type, target utilization (with current)",
+			autoscalingv2beta2.HorizontalPodAutoscaler{
+				Spec: autoscalingv2beta2.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv2beta2.CrossVersionObjectReference{
+						Name: "some-rc",
+						Kind: "ReplicationController",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+					Metrics: []autoscalingv2beta2.MetricSpec{
+						{
+							Type: autoscalingv2beta2.ContainerResourceMetricSourceType,
+							ContainerResource: &autoscalingv2beta2.ContainerResourceMetricSource{
+								Name:      corev1.ResourceCPU,
+								Container: "application",
+								Target: autoscalingv2beta2.MetricTarget{
+									Type:               autoscalingv2beta2.UtilizationMetricType,
+									AverageUtilization: &targetUtilizationVal,
+								},
+							},
+						},
+					},
+				},
+				Status: autoscalingv2beta2.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+					CurrentMetrics: []autoscalingv2beta2.MetricStatus{
+						{
+							Type: autoscalingv2beta2.ContainerResourceMetricSourceType,
+							ContainerResource: &autoscalingv2beta2.ContainerResourceMetricStatus{
+								Name:      corev1.ResourceCPU,
+								Container: "application",
+								Current: autoscalingv2beta2.MetricValueStatus{
+									AverageUtilization: &currentUtilizationVal,
+									AverageValue:       resource.NewMilliQuantity(40, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+
 		{
 			"multiple metrics",
 			autoscalingv2beta2.HorizontalPodAutoscaler{
@@ -3480,7 +3650,7 @@ Spec:
         Except: 192.168.3.0/24, 192.168.4.0/24
     ----------
     To Port: <any> (traffic allowed to all ports)
-    To: <any> (traffic not restricted by source)
+    To: <any> (traffic not restricted by destination)
   Policy Types: Ingress, Egress
 `
 

@@ -2465,7 +2465,7 @@ func (i *IngressDescriber) describeBackendV1(ns string, backend *networkingv1.In
 			}
 		}
 		ep := formatEndpoints(endpoints, sets.NewString(spName))
-		return fmt.Sprintf("%s\t %s)", sb, ep)
+		return fmt.Sprintf("%s (%s)", sb, ep)
 	}
 	if backend.Resource != nil {
 		ic := backend.Resource
@@ -2518,7 +2518,7 @@ func (i *IngressDescriber) describeIngressV1(ing *networkingv1.Ingress, events *
 			}
 		}
 		if count == 0 {
-			w.Write(LEVEL_1, "\t%s %s\n", "*", "*", i.describeBackendV1(ns, def))
+			w.Write(LEVEL_1, "%s\t%s\t%s\n", "*", "*", i.describeBackendV1(ns, def))
 		}
 		printAnnotationsMultiline(w, "Annotations", ing.Annotations)
 
@@ -3653,8 +3653,28 @@ func describeHorizontalPodAutoscalerV2beta2(hpa *autoscalingv2beta2.HorizontalPo
 					}
 					w.Write(LEVEL_1, "(as a percentage of request):\t%s / %s\n", current, target)
 				}
+			case autoscalingv2beta2.ContainerResourceMetricSourceType:
+				w.Write(LEVEL_1, "resource %s of container \"%s\" on pods", string(metric.ContainerResource.Name), metric.ContainerResource.Container)
+				if metric.ContainerResource.Target.AverageValue != nil {
+					current := "<unknown>"
+					if len(hpa.Status.CurrentMetrics) > i && hpa.Status.CurrentMetrics[i].ContainerResource != nil {
+						current = hpa.Status.CurrentMetrics[i].ContainerResource.Current.AverageValue.String()
+					}
+					w.Write(LEVEL_0, ":\t%s / %s\n", current, metric.ContainerResource.Target.AverageValue.String())
+				} else {
+					current := "<unknown>"
+					if len(hpa.Status.CurrentMetrics) > i && hpa.Status.CurrentMetrics[i].ContainerResource != nil && hpa.Status.CurrentMetrics[i].ContainerResource.Current.AverageUtilization != nil {
+						current = fmt.Sprintf("%d%% (%s)", *hpa.Status.CurrentMetrics[i].ContainerResource.Current.AverageUtilization, hpa.Status.CurrentMetrics[i].ContainerResource.Current.AverageValue.String())
+					}
+
+					target := "<auto>"
+					if metric.ContainerResource.Target.AverageUtilization != nil {
+						target = fmt.Sprintf("%d%%", *metric.ContainerResource.Target.AverageUtilization)
+					}
+					w.Write(LEVEL_1, "(as a percentage of request):\t%s / %s\n", current, target)
+				}
 			default:
-				w.Write(LEVEL_1, "<unknown metric type %q>", string(metric.Type))
+				w.Write(LEVEL_1, "<unknown metric type %q>\n", string(metric.Type))
 			}
 		}
 		minReplicas := "<unset>"
@@ -3873,11 +3893,15 @@ func DescribeEvents(el *corev1.EventList, w PrefixWriter) {
 				interval = translateMicroTimestampSince(e.EventTime)
 			}
 		}
+		source := e.Source.Component
+		if source == "" {
+			source = e.ReportingController
+		}
 		w.Write(LEVEL_1, "%v\t%v\t%s\t%v\t%v\n",
 			e.Type,
 			e.Reason,
 			interval,
-			formatEventSource(e.Source),
+			source,
 			strings.TrimSpace(e.Message),
 		)
 	}
@@ -4157,7 +4181,7 @@ func printNetworkPolicySpecEgressTo(npers []networkingv1.NetworkPolicyEgressRule
 			}
 		}
 		if len(nper.To) == 0 {
-			w.Write(LEVEL_0, "%s%s\n", initialIndent, "To: <any> (traffic not restricted by source)")
+			w.Write(LEVEL_0, "%s%s\n", initialIndent, "To: <any> (traffic not restricted by destination)")
 		} else {
 			for _, to := range nper.To {
 				w.Write(LEVEL_0, "%s%s\n", initialIndent, "To:")
@@ -4837,7 +4861,7 @@ func printTolerationsMultilineWithIndent(w PrefixWriter, initialIndent, title, i
 		// - operator: "Exists"
 		// is a special case which tolerates everything
 		if toleration.Operator == corev1.TolerationOpExists && len(toleration.Value) == 0 {
-			if len(toleration.Key) != 0 {
+			if len(toleration.Key) != 0 || len(toleration.Effect) != 0 {
 				w.Write(LEVEL_0, " op=Exists")
 			} else {
 				w.Write(LEVEL_0, "op=Exists")
@@ -4999,15 +5023,6 @@ func translateTimestampSince(timestamp metav1.Time) string {
 	}
 
 	return duration.HumanDuration(time.Since(timestamp.Time))
-}
-
-// formatEventSource formats EventSource as a comma separated string excluding Host when empty
-func formatEventSource(es corev1.EventSource) string {
-	EventSourceString := []string{es.Component}
-	if len(es.Host) > 0 {
-		EventSourceString = append(EventSourceString, es.Host)
-	}
-	return strings.Join(EventSourceString, ", ")
 }
 
 // Pass ports=nil for all ports.

@@ -117,8 +117,14 @@ var iptablesChains = []struct {
 	{utiliptables.TableNAT, KubeNodePortChain},
 	{utiliptables.TableNAT, KubeLoadBalancerChain},
 	{utiliptables.TableNAT, KubeMarkMasqChain},
-	{utiliptables.TableNAT, KubeMarkDropChain},
 	{utiliptables.TableFilter, KubeForwardChain},
+}
+
+var iptablesEnsureChains = []struct {
+	table utiliptables.Table
+	chain utiliptables.Chain
+}{
+	{utiliptables.TableNAT, KubeMarkDropChain},
 }
 
 var iptablesCleanupChains = []struct {
@@ -1263,7 +1269,7 @@ func (proxier *Proxier) syncProxyRules() {
 				SetType:  utilipset.HashIPPort,
 			}
 
-			if utilfeature.DefaultFeatureGate.Enabled(features.ExternalPolicyForExternalIP) && svcInfo.OnlyNodeLocalEndpoints() {
+			if svcInfo.OnlyNodeLocalEndpoints() {
 				if valid := proxier.ipsetList[kubeExternalIPLocalSet].validateEntry(entry); !valid {
 					klog.Errorf("%s", fmt.Sprintf(EntryInvalidErr, entry, proxier.ipsetList[kubeExternalIPLocalSet].Name))
 					continue
@@ -1293,10 +1299,7 @@ func (proxier *Proxier) syncProxyRules() {
 				activeIPVSServices[serv.String()] = true
 				activeBindAddrs[serv.Address.String()] = true
 
-				onlyNodeLocalEndpoints := false
-				if utilfeature.DefaultFeatureGate.Enabled(features.ExternalPolicyForExternalIP) {
-					onlyNodeLocalEndpoints = svcInfo.OnlyNodeLocalEndpoints()
-				}
+				onlyNodeLocalEndpoints := svcInfo.OnlyNodeLocalEndpoints()
 				if err := proxier.syncEndpoint(svcName, onlyNodeLocalEndpoints, serv); err != nil {
 					klog.Errorf("Failed to sync endpoint for service: %v, err: %v", serv, err)
 				}
@@ -1860,6 +1863,14 @@ func (proxier *Proxier) acceptIPVSTraffic() {
 func (proxier *Proxier) createAndLinkeKubeChain() {
 	existingFilterChains := proxier.getExistingChains(proxier.filterChainsData, utiliptables.TableFilter)
 	existingNATChains := proxier.getExistingChains(proxier.iptablesData, utiliptables.TableNAT)
+
+	// ensure KUBE-MARK-DROP chain exist but do not change any rules
+	for _, ch := range iptablesEnsureChains {
+		if _, err := proxier.iptables.EnsureChain(ch.table, ch.chain); err != nil {
+			klog.Errorf("Failed to ensure that %s chain %s exists: %v", ch.table, ch.chain, err)
+			return
+		}
+	}
 
 	// Make sure we keep stats for the top-level chains
 	for _, ch := range iptablesChains {

@@ -26,8 +26,8 @@ import (
 	"path/filepath"
 
 	"k8s.io/klog/v2"
+	"k8s.io/mount-utils"
 	"k8s.io/utils/keymutex"
-	"k8s.io/utils/mount"
 	utilstrings "k8s.io/utils/strings"
 
 	v1 "k8s.io/api/core/v1"
@@ -418,7 +418,7 @@ func (b *cinderVolumeMounter) SetUpAt(dir string, mounterArgs volume.MounterArgs
 	mountOptions := util.JoinMountOptions(options, b.mountOptions)
 	// Perform a bind mount to the full path to allow duplicate mounts of the same PD.
 	klog.V(4).Infof("Attempting to mount cinder volume %s to %s with options %v", b.pdName, dir, mountOptions)
-	err = b.mounter.Mount(globalPDPath, dir, "", options)
+	err = b.mounter.MountSensitiveWithoutSystemd(globalPDPath, dir, "", options, nil)
 	if err != nil {
 		klog.V(4).Infof("Mount failed: %v", err)
 		notmnt, mntErr := b.mounter.IsLikelyNotMountPoint(dir)

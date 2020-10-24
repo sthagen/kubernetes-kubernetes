@@ -24,7 +24,7 @@ import (
 
 	flockerapi "github.com/clusterhq/flocker-go"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/mount"
+	"k8s.io/mount-utils"
 	utilstrings "k8s.io/utils/strings"
 
 	v1 "k8s.io/api/core/v1"
@@ -332,7 +332,7 @@ func (b *flockerVolumeMounter) SetUpAt(dir string, mounterArgs volume.MounterArg
 	globalFlockerPath := makeGlobalFlockerPath(datasetUUID)
 	klog.V(4).Infof("attempting to mount %s", dir)
 
-	err = b.mounter.Mount(globalFlockerPath, dir, "", options)
+	err = b.mounter.MountSensitiveWithoutSystemd(globalFlockerPath, dir, "", options, nil)
 	if err != nil {
 		notMnt, mntErr := b.mounter.IsLikelyNotMountPoint(dir)
 		if mntErr != nil {

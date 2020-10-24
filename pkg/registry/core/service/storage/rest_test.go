@@ -31,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/watch"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic"
@@ -171,10 +170,6 @@ func (s *serviceStorage) Export(ctx context.Context, name string, opts metav1.Ex
 
 func (s *serviceStorage) StorageVersion() runtime.GroupVersioner {
 	panic("not implemented")
-}
-
-func generateRandomNodePort() int32 {
-	return int32(rand.IntnRange(30001, 30999))
 }
 
 func NewTestREST(t *testing.T, endpoints *api.EndpointsList, ipFamilies []api.IPFamily) (*REST, *serviceStorage, *etcd3testing.EtcdTestServer) {
@@ -1182,10 +1177,10 @@ func TestServiceRegistryUpdateDryRun(t *testing.T) {
 			}},
 		},
 	}, rest.ValidateAllObjectFunc, &metav1.CreateOptions{})
-	svc := obj.(*api.Service)
 	if err != nil {
 		t.Fatalf("Expected no error: %v", err)
 	}
+	svc := obj.(*api.Service)
 
 	// Test dry run update request external name to node port
 	updatedSvc, created, err := storage.Update(ctx, svc.Name, rest.DefaultUpdatedObjectInfo(&api.Service{
@@ -1251,6 +1246,7 @@ func TestServiceRegistryUpdateDryRun(t *testing.T) {
 			Selector:        map[string]string{"bar": "baz"},
 			SessionAffinity: api.ServiceAffinityNone,
 			Type:            api.ServiceTypeNodePort,
+			ClusterIP:       "1.2.3.5",
 			Ports: []api.ServicePort{{
 				NodePort:   30020,
 				Port:       6502,
@@ -1259,10 +1255,11 @@ func TestServiceRegistryUpdateDryRun(t *testing.T) {
 			}},
 		},
 	}, rest.ValidateAllObjectFunc, &metav1.CreateOptions{})
-	svc = obj.(*api.Service)
 	if err != nil {
 		t.Fatalf("Expected no error: %v", err)
 	}
+	svc = obj.(*api.Service)
+
 	_, _, err = storage.Update(ctx, svc.Name, rest.DefaultUpdatedObjectInfo(&api.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            svc.Name,
@@ -1301,10 +1298,10 @@ func TestServiceRegistryUpdateDryRun(t *testing.T) {
 			}},
 		},
 	}, rest.ValidateAllObjectFunc, &metav1.CreateOptions{})
-	svc = obj.(*api.Service)
 	if err != nil {
 		t.Fatalf("Expected no error: %v", err)
 	}
+	svc = obj.(*api.Service)
 	_, _, err = storage.Update(ctx, svc.Name, rest.DefaultUpdatedObjectInfo(&api.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            svc.Name,
@@ -2190,7 +2187,6 @@ func TestServiceRegistryExternalTrafficHealthCheckNodePortAllocation(t *testing.
 // Validate using the user specified nodePort when ExternalTrafficPolicy is set to Local
 // and type is LoadBalancer.
 func TestServiceRegistryExternalTrafficHealthCheckNodePortUserAllocation(t *testing.T) {
-	randomNodePort := generateRandomNodePort()
 	ctx := genericapirequest.NewDefaultContext()
 	storage, registry, server := NewTestREST(t, nil, singleStackIPv4)
 	defer server.Terminate(t)
@@ -2204,9 +2200,12 @@ func TestServiceRegistryExternalTrafficHealthCheckNodePortUserAllocation(t *test
 				Port:       6502,
 				Protocol:   api.ProtocolTCP,
 				TargetPort: intstr.FromInt(6502),
+				// hard-code NodePort to make sure it doesn't conflict with the healthport.
+				// TODO: remove this once http://issue.k8s.io/93922 fixes auto-allocation conflicting with user-specified health check ports
+				NodePort: 30500,
 			}},
 			ExternalTrafficPolicy: api.ServiceExternalTrafficPolicyTypeLocal,
-			HealthCheckNodePort:   randomNodePort,
+			HealthCheckNodePort:   30501,
 		},
 	}
 	createdSvc, err := storage.Create(ctx, svc, rest.ValidateAllObjectFunc, &metav1.CreateOptions{})
@@ -2223,8 +2222,8 @@ func TestServiceRegistryExternalTrafficHealthCheckNodePortUserAllocation(t *test
 	if port == 0 {
 		t.Errorf("Failed to allocate health check node port and set the HealthCheckNodePort")
 	}
-	if port != randomNodePort {
-		t.Errorf("Failed to allocate requested nodePort expected %d, got %d", randomNodePort, port)
+	if port != 30501 {
+		t.Errorf("Failed to allocate requested nodePort expected %d, got %d", 30501, port)
 	}
 	if port != 0 {
 		// Release the health check node port at the end of the test case.

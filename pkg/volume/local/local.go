@@ -34,8 +34,8 @@ import (
 	"k8s.io/kubernetes/pkg/volume/util"
 	"k8s.io/kubernetes/pkg/volume/util/hostutil"
 	"k8s.io/kubernetes/pkg/volume/validation"
+	"k8s.io/mount-utils"
 	"k8s.io/utils/keymutex"
-	"k8s.io/utils/mount"
 	utilstrings "k8s.io/utils/strings"
 )
 
@@ -534,7 +534,7 @@ func (m *localVolumeMounter) SetUpAt(dir string, mounterArgs volume.MounterArgs)
 
 	klog.V(4).Infof("attempting to mount %s", dir)
 	globalPath := util.MakeAbsolutePath(runtime.GOOS, m.globalPath)
-	err = m.mounter.Mount(globalPath, dir, "", mountOptions)
+	err = m.mounter.MountSensitiveWithoutSystemd(globalPath, dir, "", mountOptions, nil)
 	if err != nil {
 		klog.Errorf("Mount of volume %s failed: %v", dir, err)
 		notMnt, mntErr := mount.IsNotMountPoint(m.mounter, dir)
