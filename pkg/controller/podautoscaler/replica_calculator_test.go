@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -90,10 +89,9 @@ type replicaCalcTestCase struct {
 
 	timestamp time.Time
 
-	resource            *resourceInfo
-	metric              *metricInfo
-	metricLabelSelector labels.Selector
-	container           string
+	resource  *resourceInfo
+	metric    *metricInfo
+	container string
 
 	podReadiness         []v1.ConditionStatus
 	podStartTime         []metav1.Time
@@ -1478,6 +1476,22 @@ func TestReplicaCalcDuringRollingUpdateWithMaxSurge(t *testing.T) {
 			targetUtilization:   50,
 			expectedUtilization: 10,
 			expectedValue:       numContainersPerPod * 100,
+		},
+	}
+	tc.runTest(t)
+}
+
+func TestReplicaCalcDuringRollingUpdateWithMaxSurgeCM(t *testing.T) {
+	tc := replicaCalcTestCase{
+		currentReplicas:  2,
+		expectedReplicas: 2,
+		podPhase:         []v1.PodPhase{v1.PodRunning, v1.PodRunning, v1.PodRunning},
+		metric: &metricInfo{
+			name:                "qps",
+			levels:              []int64{10000, 10000},
+			targetUtilization:   17000,
+			expectedUtilization: 10000,
+			metricType:          podMetric,
 		},
 	}
 	tc.runTest(t)

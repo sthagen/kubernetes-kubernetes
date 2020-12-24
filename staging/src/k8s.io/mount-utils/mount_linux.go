@@ -19,6 +19,7 @@ limitations under the License.
 package mount
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"k8s.io/klog/v2"
 	utilexec "k8s.io/utils/exec"
@@ -52,6 +54,8 @@ type Mounter struct {
 	mounterPath string
 	withSystemd bool
 }
+
+var _ MounterForceUnmounter = &Mounter{}
 
 // New returns a mount.Interface for the current system.
 // It provides options to override the default mounter behavior.
@@ -196,8 +200,7 @@ func detectSystemd() bool {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		klog.V(2).Infof("Cannot run systemd-run, assuming non-systemd OS")
-		klog.V(4).Infof("systemd-run failed with: %v", err)
-		klog.V(4).Infof("systemd-run output: %s", string(output))
+		klog.V(4).Infof("systemd-run output: %s, failed with: %v", string(output), err)
 		return false
 	}
 	klog.V(2).Infof("Detected OS with systemd")
@@ -265,6 +268,20 @@ func (mounter *Mounter) Unmount(target string) error {
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("unmount failed: %v\nUnmounting arguments: %s\nOutput: %s", err, target, string(output))
+	}
+	return nil
+}
+
+// UnmountWithForce unmounts given target but will retry unmounting with force option
+// after given timeout.
+func (mounter *Mounter) UnmountWithForce(target string, umountTimeout time.Duration) error {
+	err := tryUnmount(target, umountTimeout)
+	if err != nil {
+		if err == context.DeadlineExceeded {
+			klog.V(2).Infof("Timed out waiting for unmount of %s, trying with -f", target)
+			err = forceUmount(target)
+		}
+		return err
 	}
 	return nil
 }
@@ -430,7 +447,7 @@ func (mounter *SafeFormatAndMount) GetDiskFormat(disk string) (string, error) {
 	klog.V(4).Infof("Attempting to determine if disk %q is formatted using blkid with args: (%v)", disk, args)
 	dataOut, err := mounter.Exec.Command("blkid", args...).CombinedOutput()
 	output := string(dataOut)
-	klog.V(4).Infof("Output: %q, err: %v", output, err)
+	klog.V(4).Infof("Output: %q", output)
 
 	if err != nil {
 		if exit, ok := err.(utilexec.ExitError); ok {
@@ -573,4 +590,35 @@ func SearchMountPoints(hostSource, mountInfoPath string) ([]string, error) {
 	}
 
 	return refs, nil
+}
+
+// tryUnmount calls plain "umount" and waits for unmountTimeout for it to finish.
+func tryUnmount(path string, unmountTimeout time.Duration) error {
+	klog.V(4).Infof("Unmounting %s", path)
+	ctx, cancel := context.WithTimeout(context.Background(), unmountTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "umount", path)
+	out, cmderr := cmd.CombinedOutput()
+
+	// CombinedOutput() does not return DeadlineExceeded, make sure it's
+	// propagated on timeout.
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	if cmderr != nil {
+		return fmt.Errorf("unmount failed: %v\nUnmounting arguments: %s\nOutput: %s", cmderr, path, string(out))
+	}
+	return nil
+}
+
+func forceUmount(path string) error {
+	cmd := exec.Command("umount", "-f", path)
+	out, cmderr := cmd.CombinedOutput()
+
+	if cmderr != nil {
+		return fmt.Errorf("unmount failed: %v\nUnmounting arguments: %s\nOutput: %s", cmderr, path, string(out))
+	}
+	return nil
 }
