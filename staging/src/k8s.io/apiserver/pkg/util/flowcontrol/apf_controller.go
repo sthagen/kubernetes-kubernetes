@@ -30,10 +30,11 @@ import (
 	"github.com/pkg/errors"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	apitypes "k8s.io/apimachinery/pkg/types"
-	apierrors "k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	fcboot "k8s.io/apiserver/pkg/apis/flowcontrol/bootstrap"
@@ -233,13 +234,6 @@ func (cfgCtlr *configController) updateObservations() {
 	}
 }
 
-// used from the unit tests only.
-func (cfgCtlr *configController) getPriorityLevelState(plName string) *priorityLevelState {
-	cfgCtlr.lock.Lock()
-	defer cfgCtlr.lock.Unlock()
-	return cfgCtlr.priorityLevelStates[plName]
-}
-
 func (cfgCtlr *configController) Run(stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
 
@@ -352,15 +346,25 @@ func (cfgCtlr *configController) digestConfigObjects(newPLs []*flowcontrol.Prior
 			panic(fmt.Sprintf("Failed to json.Marshall(%#+v): %s", fsu.condition, err.Error()))
 		}
 		klog.V(4).Infof("Writing Condition %s to FlowSchema %s because its previous value was %s", string(enc), fsu.flowSchema.Name, fcfmt.Fmt(fsu.oldValue))
-		_, err = cfgCtlr.flowcontrolClient.FlowSchemas().Patch(context.TODO(), fsu.flowSchema.Name, apitypes.StrategicMergePatchType, []byte(fmt.Sprintf(`{"status": {"conditions": [ %s ] } }`, string(enc))), metav1.PatchOptions{FieldManager: ConfigConsumerAsFieldManager}, "status")
-		if err != nil {
+		fsIfc := cfgCtlr.flowcontrolClient.FlowSchemas()
+		patchBytes := []byte(fmt.Sprintf(`{"status": {"conditions": [ %s ] } }`, string(enc)))
+		patchOptions := metav1.PatchOptions{FieldManager: ConfigConsumerAsFieldManager}
+		_, err = fsIfc.Patch(context.TODO(), fsu.flowSchema.Name, apitypes.StrategicMergePatchType, patchBytes, patchOptions, "status")
+		if err == nil {
+			continue
+		}
+		if apierrors.IsNotFound(err) {
+			// This object has been deleted.  A notification is coming
+			// and nothing more needs to be done here.
+			klog.V(5).Infof("Attempted update of concurrently deleted FlowSchema %s; nothing more needs to be done", fsu.flowSchema.Name)
+		} else {
 			errs = append(errs, errors.Wrap(err, fmt.Sprintf("failed to set a status.condition for FlowSchema %s", fsu.flowSchema.Name)))
 		}
 	}
 	if len(errs) == 0 {
 		return nil
 	}
-	return apierrors.NewAggregate(errs)
+	return utilerrors.NewAggregate(errs)
 }
 
 func (cfgCtlr *configController) lockAndDigestConfigObjects(newPLs []*flowcontrol.PriorityLevelConfiguration, newFSs []*flowcontrol.FlowSchema) []fsStatusUpdate {

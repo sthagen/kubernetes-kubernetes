@@ -116,37 +116,43 @@ aliases:
     - WanLinghao
 
   # SIG Release
-  sig-release-approvers:
-    - alejandrox1 # SIG Technical Lead
-    - justaugustus # SIG Chair
-    - saschagrunert # SIG Technical Lead
-    - tpepper # SIG Chair
   release-engineering-approvers:
-    - alejandrox1 # SIG Technical Lead
-    - justaugustus # SIG Chair
-    - saschagrunert # SIG Technical Lead
-    - tpepper # SIG Chair
+    - cpanato # Release Manager
+    - feiskyer # Release Manager
+    - hasheddan # Release Manager / SIG Technical Lead
+    - idealhack # Release Manager
+    - justaugustus # Release Manager / SIG Chair
+    - puerco # Release Manager
+    - saschagrunert # Release Manager / SIG Chair
+    - xmudrii # Release Manager
   release-engineering-reviewers:
     - cpanato # Release Manager
     - feiskyer # Release Manager
-    - hasheddan # Release Manager
-    - hoegaarden # Release Manager
-    - justaugustus # SIG Chair / Release Manager
-    - saschagrunert # SIG Technical Lead / Release Manager
-    - tpepper # SIG Chair / Release Manager
+    - hasheddan # Release Manager / SIG Technical Lead
+    - idealhack # Release Manager
+    - justaugustus # Release Manager / SIG Chair
+    - puerco # Release Manager
+    - saschagrunert # Release Manager / SIG Chair
     - xmudrii # Release Manager
   build-image-approvers:
     - BenTheElder
     - cblecker
     - dims
-    - justaugustus
+    - justaugustus # Release Manager / SIG Chair
     - listx
   build-image-reviewers:
     - BenTheElder
     - cblecker
+    - cpanato # Release Manager
     - dims
-    - justaugustus
+    - feiskyer # Release Manager
+    - hasheddan # Release Manager / SIG Technical Lead
+    - idealhack # Release Manager
+    - justaugustus # Release Manager / SIG Chair
     - listx
+    - puerco # Release Manager
+    - saschagrunert # Release Manager / SIG Chair
+    - xmudrii # Release Manager
 
   sig-storage-approvers:
     - saad-ali
@@ -154,6 +160,7 @@ aliases:
     - jsafrane
     - gnufied
     - msau42
+    - xing-yang
   # emeritus:
   # - rootfs
   sig-storage-reviewers:
@@ -165,6 +172,7 @@ aliases:
     - gnufied
     - verult
     - humblec
+    - xing-yang
   # emeritus:
   # - davidz627
 
@@ -196,7 +204,6 @@ aliases:
     - brendandburns
     - deads2k
     - janetkuo
-    - liggitt
     - seans3
     - monopole
     - droot
@@ -254,6 +261,7 @@ aliases:
     - dchen1107
     - derekwaynecarr
     - dims
+    - ehashman
     - feiskyer
     - mtaufen
     - pmorie
@@ -471,7 +479,7 @@ aliases:
   #   -
 
   sig-contribex-approvers:
-    - castrojo
+    - alisondy
     - mrbobbytables
     - cblecker
     - nikhita
@@ -507,6 +515,7 @@ aliases:
     - saad-ali
     - msau42
     - jsafrane
+    - xing-yang
 
   sig-security-approvers:
     - IanColdwater
@@ -541,6 +550,7 @@ aliases:
     - deads2k         # API Machinery
     - derekwaynecarr  # Node
     - dims            # Architecture
+    - ehashman        # Instrumentation
     - jdumars         # Architecture, Release
     - jsafrane        # Storage
     - kow3ns          # Apps
@@ -551,7 +561,6 @@ aliases:
     - michmike        # Windows
     - msau42          # Storage
     - mwielgus        # Autoscaling
-    - piosz           # Instrumentation
     - prydonius       # Apps
     - pwittrock       # CLI
     - quinton-hoole   # Multicluster

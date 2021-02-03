@@ -1515,9 +1515,6 @@ EOF
 function start-kubelet {
   echo "Start kubelet"
 
-  # TODO(#60123): The kubelet should create the cert-dir directory if it doesn't exist
-  mkdir -p /var/lib/kubelet/pki/
-
   local kubelet_bin="${KUBE_HOME}/bin/kubelet"
   local -r version="$("${kubelet_bin}" --version=true | cut -f2 -d " ")"
   local -r builtin_kubelet="/usr/bin/kubelet"
@@ -1985,16 +1982,24 @@ function run-kube-controller-manager-as-non-root {
 #   CLOUD_CONFIG_MOUNT
 #   DOCKER_REGISTRY
 function start-kube-controller-manager {
+  if [[ -e "${KUBE_HOME}/bin/gke-internal-configure-helper.sh" ]]; then
+    if ! deploy-kube-controller-manager-via-kube-up; then
+      echo "kube-controller-manager is configured to not be deployed through kube-up."
+      return
+    fi
+  fi
   echo "Start kubernetes controller-manager"
   create-kubeconfig "kube-controller-manager" "${KUBE_CONTROLLER_MANAGER_TOKEN}"
   prepare-log-file /var/log/kube-controller-manager.log
   # Calculate variables and assemble the command line.
   local params=("${CONTROLLER_MANAGER_TEST_LOG_LEVEL:-"--v=2"}" "${CONTROLLER_MANAGER_TEST_ARGS:-}" "${CLOUD_CONFIG_OPT}")
+  local config_path='/etc/srv/kubernetes/kube-controller-manager/kubeconfig'
   params+=("--use-service-account-credentials")
   params+=("--cloud-provider=gce")
-  params+=("--kubeconfig=/etc/srv/kubernetes/kube-controller-manager/kubeconfig")
+  params+=("--kubeconfig=${config_path}" "--authentication-kubeconfig=${config_path}" "--authorization-kubeconfig=${config_path}")
   params+=("--root-ca-file=${CA_CERT_BUNDLE_PATH}")
   params+=("--service-account-private-key-file=${SERVICEACCOUNT_KEY_PATH}")
+  params+=("--volume-host-allow-local-loopback=false")
   if [[ -n "${ENABLE_GARBAGE_COLLECTOR:-}" ]]; then
     params+=("--enable-garbage-collector=${ENABLE_GARBAGE_COLLECTOR}")
   fi
@@ -2092,9 +2097,11 @@ function start-kube-controller-manager {
 # Assumed vars (which are calculated in compute-master-manifest-variables)
 #   DOCKER_REGISTRY
 function start-kube-scheduler {
-  if [[ "${KUBE_SCHEDULER_CRP:-}" == "true" ]]; then
-    echo "kube-scheduler is configured to be deployed through CRP."
-    return
+  if [[ -e "${KUBE_HOME}/bin/gke-internal-configure-helper.sh" ]]; then
+    if ! deploy-kube-scheduler-via-kube-up; then
+      echo "kube-scheduler is configured to not be deployed through kube-up."
+      return
+    fi
   fi
   echo "Start kubernetes scheduler"
   create-kubeconfig "kube-scheduler" "${KUBE_SCHEDULER_TOKEN}"
@@ -2123,6 +2130,10 @@ function start-kube-scheduler {
       params+=("--policy-config-file=/etc/srv/kubernetes/kube-scheduler/policy-config")
     fi
   fi
+
+  local config_path
+  config_path='/etc/srv/kubernetes/kube-scheduler/kubeconfig'
+  params+=("--authentication-kubeconfig=${config_path}" "--authorization-kubeconfig=${config_path}")
 
   local paramstring
   paramstring="$(convert-manifest-params "${params[*]}")"
@@ -2760,6 +2771,16 @@ function setup-kubelet-dir {
     echo "Making /var/lib/kubelet executable for kubelet"
     mount -B /var/lib/kubelet /var/lib/kubelet/
     mount -B -o remount,exec,suid,dev /var/lib/kubelet
+
+    # TODO(#60123): The kubelet should create the cert-dir directory if it doesn't exist
+    mkdir -p /var/lib/kubelet/pki/
+
+    # Mount /var/lib/kubelet/pki on a tmpfs so it doesn't persist across
+    # reboots. This can help avoid some rare instances of corrupt cert files
+    # (e.g. created but not written during a shutdown). Kubelet crash-loops
+    # in these cases. Do this after above mount calls so it isn't overwritten.
+    echo "Mounting /var/lib/kubelet/pki on tmpfs"
+    mount -t tmpfs tmpfs /var/lib/kubelet/pki
 }
 
 # Override for GKE custom master setup scripts (no-op outside of GKE).

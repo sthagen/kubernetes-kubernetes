@@ -525,26 +525,26 @@ func DescribeResourceQuotas(quotas *corev1.ResourceQuotaList, w PrefixWriter) {
 	}
 	sort.Sort(SortableResourceQuotas(quotas.Items))
 
-	w.Write(LEVEL_0, "Resource Quotas")
+	w.Write(LEVEL_0, "Resource Quotas\n")
 	for _, q := range quotas.Items {
-		w.Write(LEVEL_0, "\n Name:\t%s\n", q.Name)
+		w.Write(LEVEL_1, "Name:\t%s\n", q.Name)
 		if len(q.Spec.Scopes) > 0 {
 			scopes := make([]string, 0, len(q.Spec.Scopes))
 			for _, scope := range q.Spec.Scopes {
 				scopes = append(scopes, string(scope))
 			}
 			sort.Strings(scopes)
-			w.Write(LEVEL_0, " Scopes:\t%s\n", strings.Join(scopes, ", "))
+			w.Write(LEVEL_1, "Scopes:\t%s\n", strings.Join(scopes, ", "))
 			for _, scope := range scopes {
 				helpText := helpTextForResourceQuotaScope(corev1.ResourceQuotaScope(scope))
 				if len(helpText) > 0 {
-					w.Write(LEVEL_0, "  * %s\n", helpText)
+					w.Write(LEVEL_1, "* %s\n", helpText)
 				}
 			}
 		}
 
-		w.Write(LEVEL_0, " Resource\tUsed\tHard\n")
-		w.Write(LEVEL_0, " --------\t---\t---\n")
+		w.Write(LEVEL_1, "Resource\tUsed\tHard\n")
+		w.Write(LEVEL_1, "--------\t---\t---\n")
 
 		resources := make([]corev1.ResourceName, 0, len(q.Status.Hard))
 		for resource := range q.Status.Hard {
@@ -555,7 +555,7 @@ func DescribeResourceQuotas(quotas *corev1.ResourceQuotaList, w PrefixWriter) {
 		for _, resource := range resources {
 			hardQuantity := q.Status.Hard[resource]
 			usedQuantity := q.Status.Used[resource]
-			w.Write(LEVEL_0, " %s\t%s\t%s\n", string(resource), usedQuantity.String(), hardQuantity.String())
+			w.Write(LEVEL_1, "%s\t%s\t%s\n", string(resource), usedQuantity.String(), hardQuantity.String())
 		}
 	}
 }
@@ -3929,7 +3929,7 @@ func (dd *DeploymentDescriber) Describe(namespace, name string, describerSetting
 		events, _ = dd.client.CoreV1().Events(namespace).Search(scheme.Scheme, d)
 	}
 
-	return describeDeployment(d, selector, d, events, dd)
+	return describeDeployment(d, selector, d.DeepCopy(), events, dd)
 }
 
 func describeDeployment(d *appsv1.Deployment, selector labels.Selector, internalDeployment *appsv1.Deployment, events *corev1.EventList, dd *DeploymentDescriber) (string, error) {

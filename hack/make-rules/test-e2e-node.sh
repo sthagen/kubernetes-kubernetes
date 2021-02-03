@@ -41,6 +41,7 @@ container_runtime_endpoint=${CONTAINER_RUNTIME_ENDPOINT:-""}
 image_service_endpoint=${IMAGE_SERVICE_ENDPOINT:-""}
 run_until_failure=${RUN_UNTIL_FAILURE:-"false"}
 test_args=${TEST_ARGS:-""}
+timeout_arg=""
 system_spec_name=${SYSTEM_SPEC_NAME:-}
 extra_envs=${EXTRA_ENVS:-}
 
@@ -104,6 +105,9 @@ if [ "${remote}" = true ] ; then
   delete_instances=${DELETE_INSTANCES:-"false"}
   preemptible_instances=${PREEMPTIBLE_INSTANCES:-"false"}
   test_suite=${TEST_SUITE:-"default"}
+  if [[ -n "${TIMEOUT:-}" ]] ; then
+    timeout_arg="--test-timeout=${TIMEOUT}"
+  fi
 
   # Get the compute zone
   zone=${ZONE:-"$(gcloud info --format='value(config.properties.compute.zone)')"}
@@ -140,6 +144,10 @@ if [ "${remote}" = true ] ; then
        done
   fi
 
+  # Use cluster.local as default dns-domain
+  test_args='--dns-domain="'${KUBE_DNS_DOMAIN:-cluster.local}'" '${test_args}
+  test_args='--kubelet-flags="--cluster-domain='${KUBE_DNS_DOMAIN:-cluster.local}'" '${test_args}
+
   # Output the configuration we will try to run
   echo "Running tests remotely using"
   echo "Project: ${project}"
@@ -159,6 +167,7 @@ if [ "${remote}" = true ] ; then
     --delete-instances="${delete_instances}" --test_args="${test_args}" --instance-metadata="${metadata}" \
     --image-config-file="${image_config_file}" --system-spec-name="${system_spec_name}" \
     --preemptible-instances="${preemptible_instances}" --extra-envs="${extra_envs}" --test-suite="${test_suite}" \
+    "${timeout_arg}" \
     2>&1 | tee -i "${artifacts}/build-log.txt"
   exit $?
 
@@ -183,6 +192,9 @@ else
   # Runtime flags
   test_args='--kubelet-flags="--container-runtime='${runtime}'" '${test_args}
 
+  # Use cluster.local as default dns-domain
+  test_args='--dns-domain="'${KUBE_DNS_DOMAIN:-cluster.local}'" '${test_args}
+  test_args='--kubelet-flags="--cluster-domain='${KUBE_DNS_DOMAIN:-cluster.local}'" '${test_args}
   # Test using the host the script was run on
   # Provided for backwards compatibility
   go run test/e2e_node/runner/local/run_local.go \

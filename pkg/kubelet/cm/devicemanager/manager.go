@@ -211,7 +211,10 @@ func (m *ManagerImpl) removeContents(dir string) error {
 		if filePath == m.checkpointFile() {
 			continue
 		}
-		stat, err := os.Stat(filePath)
+		// TODO: Until the bug - https://github.com/golang/go/issues/33357 is fixed, os.stat wouldn't return the
+		// right mode(socket) on windows. Hence deleting the file, without checking whether
+		// its a socket, on windows.
+		stat, err := os.Lstat(filePath)
 		if err != nil {
 			klog.Errorf("Failed to stat file %s: %v", filePath, err)
 			continue
@@ -937,9 +940,9 @@ func (m *ManagerImpl) GetDeviceRunContainerOptions(pod *v1.Pod, container *v1.Co
 	podUID := string(pod.UID)
 	contName := container.Name
 	needsReAllocate := false
-	for k := range container.Resources.Limits {
+	for k, v := range container.Resources.Limits {
 		resource := string(k)
-		if !m.isDevicePluginResource(resource) {
+		if !m.isDevicePluginResource(resource) || v.Value() == 0 {
 			continue
 		}
 		err := m.callPreStartContainerIfNeeded(podUID, contName, resource)

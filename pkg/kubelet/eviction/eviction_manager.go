@@ -29,9 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/clock"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/tools/record"
+	v1helper "k8s.io/component-helpers/scheduling/corev1"
 	statsapi "k8s.io/kubelet/pkg/apis/stats/v1alpha1"
 	apiv1resource "k8s.io/kubernetes/pkg/api/v1/resource"
-	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 	"k8s.io/kubernetes/pkg/features"
 	evictionapi "k8s.io/kubernetes/pkg/kubelet/eviction/api"
@@ -509,7 +509,7 @@ func (m *managerImpl) podEphemeralStorageLimitEviction(podStats statsapi.PodStat
 
 	// pod stats api summarizes ephemeral storage usage (container, emptyDir, host[etc-hosts, logs])
 	podEphemeralStorageTotalUsage := &resource.Quantity{}
-	if podStats.EphemeralStorage != nil {
+	if podStats.EphemeralStorage != nil && podStats.EphemeralStorage.UsedBytes != nil {
 		podEphemeralStorageTotalUsage = resource.NewQuantity(int64(*podStats.EphemeralStorage.UsedBytes), resource.BinarySI)
 	}
 	podEphemeralStorageLimit := podLimits[v1.ResourceEphemeralStorage]

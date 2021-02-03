@@ -42,6 +42,7 @@ import (
 	cliflag "k8s.io/component-base/cli/flag"
 	cmoptions "k8s.io/controller-manager/options"
 	"k8s.io/controller-manager/pkg/clientbuilder"
+
 	// add the related feature gates
 	_ "k8s.io/controller-manager/pkg/features/register"
 )
@@ -98,7 +99,6 @@ func NewCloudControllerManagerOptions() (*CloudControllerManagerOptions, error) 
 
 	s.Authentication.RemoteKubeConfigFileOptional = true
 	s.Authorization.RemoteKubeConfigFileOptional = true
-	s.Authorization.AlwaysAllowPaths = []string{"/healthz"}
 
 	// Set the PairName but leave certificate directory blank to generate in-memory by default
 	s.SecureServing.ServerCert.CertDirectory = ""
@@ -187,8 +187,6 @@ func (o *CloudControllerManagerOptions) ApplyTo(c *config.Config, userAgent stri
 	if err != nil {
 		return err
 	}
-
-	c.LeaderElectionClient = clientset.NewForConfigOrDie(restclient.AddUserAgent(c.Kubeconfig, "leader-election"))
 
 	c.EventRecorder = createRecorder(c.Client, userAgent)
 

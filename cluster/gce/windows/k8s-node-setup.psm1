@@ -57,8 +57,8 @@ $GCE_METADATA_SERVER = "169.254.169.254"
 # exist until an initial HNS network has been created on the Windows node - see
 # Add_InitialHnsNetwork().
 $MGMT_ADAPTER_NAME = "vEthernet (Ethernet*"
-$CRICTL_VERSION = 'v1.19.0'
-$CRICTL_SHA256 = 'df60ff65ab71c5cf1d8c38f51db6f05e3d60a45d3a3293c3248c925c25375921'
+$CRICTL_VERSION = 'v1.20.0'
+$CRICTL_SHA256 = 'cc909108ee84d39b2e9d7ac0cb9599b6fa7fc51f5a7da7014052684cd3e3f65e'
 
 Import-Module -Force C:\common.psm1
 
@@ -1321,6 +1321,46 @@ function Setup-ContainerRuntime {
   }
 }
 
+function Test-ContainersFeatureInstalled {
+  return (Get-WindowsFeature Containers).Installed
+}
+
+# After this function returns, the computer must be restarted to complete
+# the installation!
+function Install-ContainersFeature {
+  Log-Output "Installing Windows 'Containers' feature"
+  Install-WindowsFeature Containers
+}
+
+function Test-DockerIsInstalled {
+  return ((Get-Package `
+               -ProviderName DockerMsftProvider `
+               -ErrorAction SilentlyContinue |
+           Where-Object Name -eq 'docker') -ne $null)
+}
+
+function Test-DockerIsRunning {
+  return ((Get-Service docker).Status -eq 'Running')
+}
+
+# Installs Docker EE via the DockerMsftProvider. Ensure that the Windows
+# Containers feature is installed before calling this function; otherwise,
+# a restart may be needed after this function returns.
+function Install-Docker {
+  Log-Output 'Installing NuGet module'
+  Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+
+  Log-Output 'Installing DockerMsftProvider module'
+  Install-Module -Name DockerMsftProvider -Repository PSGallery -Force
+
+  Log-Output "Installing latest Docker EE version"
+  Install-Package `
+      -Name docker `
+      -ProviderName DockerMsftProvider `
+      -Force `
+      -Verbose
+}
+
 # Add a registry key for docker in EventLog so that log messages are mapped
 # correctly. This is a workaround since the key is missing in the base image.
 # https://github.com/MicrosoftDocs/Virtualization-Documentation/pull/503
@@ -1535,7 +1575,7 @@ function Start_Containerd {
 # Pigz Resources
 $PIGZ_ROOT = 'C:\pigz'
 $PIGZ_VERSION = '2.3.1'
-$PIGZ_TAR_URL = 'https://storage.googleapis.com/gke-release/winnode/pigz/prod/gke_windows/pigz/release/5/20201104-134221/pigz-$PIGZ_VERSION.zip'
+$PIGZ_TAR_URL = "https://storage.googleapis.com/gke-release/winnode/pigz/prod/gke_windows/pigz/release/5/20201104-134221/pigz-$PIGZ_VERSION.zip"
 $PIGZ_TAR_HASH = '5a6f8f5530acc85ea51797f58c1409e5af6b69e55da243ffc608784cf14fec0cd16f74cc61c564d69e1a267750aecfc1e4c53b5219ff5f893b42a7576306f34c'
 
 # Install Pigz (https://github.com/madler/pigz) into Windows for improved image

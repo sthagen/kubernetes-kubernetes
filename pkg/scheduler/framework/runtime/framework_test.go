@@ -26,14 +26,14 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/prometheus/client_golang/prometheus"
-	dto "github.com/prometheus/client_model/go"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/component-base/metrics/testutil"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
+	internalqueue "k8s.io/kubernetes/pkg/scheduler/internal/queue"
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
 )
 
@@ -51,6 +51,7 @@ const (
 	bindPlugin                        = "bind-plugin"
 
 	testProfileName = "test-profile"
+	nodeName        = "testNode"
 )
 
 // TestScoreWithNormalizePlugin implements ScoreWithNormalizePlugin interface.
@@ -138,10 +139,10 @@ type TestPlugin struct {
 	inj  injectedResult
 }
 
-func (pl *TestPlugin) AddPod(ctx context.Context, state *framework.CycleState, podToSchedule *v1.Pod, podToAdd *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
+func (pl *TestPlugin) AddPod(ctx context.Context, state *framework.CycleState, podToSchedule *v1.Pod, podInfoToAdd *framework.PodInfo, nodeInfo *framework.NodeInfo) *framework.Status {
 	return framework.NewStatus(framework.Code(pl.inj.PreFilterAddPodStatus), "injected status")
 }
-func (pl *TestPlugin) RemovePod(ctx context.Context, state *framework.CycleState, podToSchedule *v1.Pod, podToRemove *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
+func (pl *TestPlugin) RemovePod(ctx context.Context, state *framework.CycleState, podToSchedule *v1.Pod, podInfoToRemove *framework.PodInfo, nodeInfo *framework.NodeInfo) *framework.Status {
 	return framework.NewStatus(framework.Code(pl.inj.PreFilterRemovePodStatus), "injected status")
 }
 
@@ -238,13 +239,13 @@ func (pl *TestPreFilterWithExtensionsPlugin) PreFilter(ctx context.Context, stat
 }
 
 func (pl *TestPreFilterWithExtensionsPlugin) AddPod(ctx context.Context, state *framework.CycleState, podToSchedule *v1.Pod,
-	podToAdd *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
+	podInfoToAdd *framework.PodInfo, nodeInfo *framework.NodeInfo) *framework.Status {
 	pl.AddCalled++
 	return nil
 }
 
 func (pl *TestPreFilterWithExtensionsPlugin) RemovePod(ctx context.Context, state *framework.CycleState, podToSchedule *v1.Pod,
-	podToRemove *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
+	podInfoToRemove *framework.PodInfo, nodeInfo *framework.NodeInfo) *framework.Status {
 	pl.RemoveCalled++
 	return nil
 }
@@ -283,7 +284,7 @@ func (pp *TestPermitPlugin) Name() string {
 	return permitPlugin
 }
 func (pp *TestPermitPlugin) Permit(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) (*framework.Status, time.Duration) {
-	return framework.NewStatus(framework.Wait, ""), time.Duration(10 * time.Second)
+	return framework.NewStatus(framework.Wait), 10 * time.Second
 }
 
 var _ framework.QueueSortPlugin = &TestQueueSortPlugin{}
@@ -341,12 +342,29 @@ var state = &framework.CycleState{}
 
 // Pod is only used for logging errors.
 var pod = &v1.Pod{}
+var node = &v1.Node{
+	ObjectMeta: metav1.ObjectMeta{
+		Name: nodeName,
+	},
+}
+var lowPriority, highPriority = int32(0), int32(1000)
+var lowPriorityPod = &v1.Pod{
+	ObjectMeta: metav1.ObjectMeta{UID: "low"},
+	Spec:       v1.PodSpec{Priority: &lowPriority},
+}
+var highPriorityPod = &v1.Pod{
+	ObjectMeta: metav1.ObjectMeta{UID: "high"},
+	Spec:       v1.PodSpec{Priority: &highPriority},
+}
 var nodes = []*v1.Node{
 	{ObjectMeta: metav1.ObjectMeta{Name: "node1"}},
 	{ObjectMeta: metav1.ObjectMeta{Name: "node2"}},
 }
 
-var errInjectedStatus = errors.New("injected status")
+var (
+	errInjectedStatus       = errors.New("injected status")
+	errInjectedFilterStatus = errors.New("injected filter status")
+)
 
 func newFrameworkWithQueueSortAndBind(r Registry, pl *config.Plugins, plc []config.PluginConfig, opts ...Option) (framework.Framework, error) {
 	if _, ok := r[queueSortPlugin]; !ok {
@@ -874,8 +892,10 @@ func TestFilterPlugins(t *testing.T) {
 					inj:  injectedResult{FilterStatus: int(framework.Error)},
 				},
 			},
-			wantStatus:    framework.NewStatus(framework.Error, `running "TestPlugin" filter plugin for pod "": injected filter status`),
-			wantStatusMap: framework.PluginToStatus{"TestPlugin": framework.NewStatus(framework.Error, `running "TestPlugin" filter plugin for pod "": injected filter status`)},
+			wantStatus: framework.AsStatus(fmt.Errorf(`running "TestPlugin" filter plugin: %w`, errInjectedFilterStatus)).WithFailedPlugin("TestPlugin"),
+			wantStatusMap: framework.PluginToStatus{
+				"TestPlugin": framework.AsStatus(fmt.Errorf(`running "TestPlugin" filter plugin: %w`, errInjectedFilterStatus)).WithFailedPlugin("TestPlugin"),
+			},
 		},
 		{
 			name: "UnschedulableFilter",
@@ -885,8 +905,10 @@ func TestFilterPlugins(t *testing.T) {
 					inj:  injectedResult{FilterStatus: int(framework.Unschedulable)},
 				},
 			},
-			wantStatus:    framework.NewStatus(framework.Unschedulable, "injected filter status"),
-			wantStatusMap: framework.PluginToStatus{"TestPlugin": framework.NewStatus(framework.Unschedulable, "injected filter status")},
+			wantStatus: framework.NewStatus(framework.Unschedulable, "injected filter status").WithFailedPlugin("TestPlugin"),
+			wantStatusMap: framework.PluginToStatus{
+				"TestPlugin": framework.NewStatus(framework.Unschedulable, "injected filter status").WithFailedPlugin("TestPlugin"),
+			},
 		},
 		{
 			name: "UnschedulableAndUnresolvableFilter",
@@ -897,8 +919,10 @@ func TestFilterPlugins(t *testing.T) {
 						FilterStatus: int(framework.UnschedulableAndUnresolvable)},
 				},
 			},
-			wantStatus:    framework.NewStatus(framework.UnschedulableAndUnresolvable, "injected filter status"),
-			wantStatusMap: framework.PluginToStatus{"TestPlugin": framework.NewStatus(framework.UnschedulableAndUnresolvable, "injected filter status")},
+			wantStatus: framework.NewStatus(framework.UnschedulableAndUnresolvable, "injected filter status").WithFailedPlugin("TestPlugin"),
+			wantStatusMap: framework.PluginToStatus{
+				"TestPlugin": framework.NewStatus(framework.UnschedulableAndUnresolvable, "injected filter status").WithFailedPlugin("TestPlugin"),
+			},
 		},
 		// followings tests cover multiple-plugins scenarios
 		{
@@ -914,8 +938,10 @@ func TestFilterPlugins(t *testing.T) {
 					inj:  injectedResult{FilterStatus: int(framework.Error)},
 				},
 			},
-			wantStatus:    framework.NewStatus(framework.Error, `running "TestPlugin1" filter plugin for pod "": injected filter status`),
-			wantStatusMap: framework.PluginToStatus{"TestPlugin1": framework.NewStatus(framework.Error, `running "TestPlugin1" filter plugin for pod "": injected filter status`)},
+			wantStatus: framework.AsStatus(fmt.Errorf(`running "TestPlugin1" filter plugin: %w`, errInjectedFilterStatus)).WithFailedPlugin("TestPlugin1"),
+			wantStatusMap: framework.PluginToStatus{
+				"TestPlugin1": framework.AsStatus(fmt.Errorf(`running "TestPlugin1" filter plugin: %w`, errInjectedFilterStatus)).WithFailedPlugin("TestPlugin1"),
+			},
 		},
 		{
 			name: "SuccessAndSuccessFilters",
@@ -945,8 +971,10 @@ func TestFilterPlugins(t *testing.T) {
 					inj:  injectedResult{FilterStatus: int(framework.Success)},
 				},
 			},
-			wantStatus:    framework.NewStatus(framework.Error, `running "TestPlugin1" filter plugin for pod "": injected filter status`),
-			wantStatusMap: framework.PluginToStatus{"TestPlugin1": framework.NewStatus(framework.Error, `running "TestPlugin1" filter plugin for pod "": injected filter status`)},
+			wantStatus: framework.AsStatus(fmt.Errorf(`running "TestPlugin1" filter plugin: %w`, errInjectedFilterStatus)).WithFailedPlugin("TestPlugin1"),
+			wantStatusMap: framework.PluginToStatus{
+				"TestPlugin1": framework.AsStatus(fmt.Errorf(`running "TestPlugin1" filter plugin: %w`, errInjectedFilterStatus)).WithFailedPlugin("TestPlugin1"),
+			},
 		},
 		{
 			name: "SuccessAndErrorFilters",
@@ -961,8 +989,10 @@ func TestFilterPlugins(t *testing.T) {
 					inj:  injectedResult{FilterStatus: int(framework.Error)},
 				},
 			},
-			wantStatus:    framework.NewStatus(framework.Error, `running "TestPlugin2" filter plugin for pod "": injected filter status`),
-			wantStatusMap: framework.PluginToStatus{"TestPlugin2": framework.NewStatus(framework.Error, `running "TestPlugin2" filter plugin for pod "": injected filter status`)},
+			wantStatus: framework.AsStatus(fmt.Errorf(`running "TestPlugin2" filter plugin: %w`, errInjectedFilterStatus)).WithFailedPlugin("TestPlugin2"),
+			wantStatusMap: framework.PluginToStatus{
+				"TestPlugin2": framework.AsStatus(fmt.Errorf(`running "TestPlugin2" filter plugin: %w`, errInjectedFilterStatus)).WithFailedPlugin("TestPlugin2"),
+			},
 		},
 		{
 			name: "SuccessAndUnschedulableFilters",
@@ -977,8 +1007,10 @@ func TestFilterPlugins(t *testing.T) {
 					inj:  injectedResult{FilterStatus: int(framework.Unschedulable)},
 				},
 			},
-			wantStatus:    framework.NewStatus(framework.Unschedulable, "injected filter status"),
-			wantStatusMap: framework.PluginToStatus{"TestPlugin2": framework.NewStatus(framework.Unschedulable, "injected filter status")},
+			wantStatus: framework.NewStatus(framework.Unschedulable, "injected filter status").WithFailedPlugin("TestPlugin2"),
+			wantStatusMap: framework.PluginToStatus{
+				"TestPlugin2": framework.NewStatus(framework.Unschedulable, "injected filter status").WithFailedPlugin("TestPlugin2"),
+			},
 		},
 		{
 			name: "SuccessFilterWithRunAllFilters",
@@ -1006,8 +1038,10 @@ func TestFilterPlugins(t *testing.T) {
 				},
 			},
 			runAllFilters: true,
-			wantStatus:    framework.NewStatus(framework.Error, `running "TestPlugin1" filter plugin for pod "": injected filter status`),
-			wantStatusMap: framework.PluginToStatus{"TestPlugin1": framework.NewStatus(framework.Error, `running "TestPlugin1" filter plugin for pod "": injected filter status`)},
+			wantStatus:    framework.AsStatus(fmt.Errorf(`running "TestPlugin1" filter plugin: %w`, errInjectedFilterStatus)).WithFailedPlugin("TestPlugin1"),
+			wantStatusMap: framework.PluginToStatus{
+				"TestPlugin1": framework.AsStatus(fmt.Errorf(`running "TestPlugin1" filter plugin: %w`, errInjectedFilterStatus)).WithFailedPlugin("TestPlugin1"),
+			},
 		},
 		{
 			name: "ErrorAndErrorFilters",
@@ -1022,10 +1056,10 @@ func TestFilterPlugins(t *testing.T) {
 				},
 			},
 			runAllFilters: true,
-			wantStatus:    framework.NewStatus(framework.UnschedulableAndUnresolvable, "injected filter status", "injected filter status"),
+			wantStatus:    framework.NewStatus(framework.UnschedulableAndUnresolvable, "injected filter status", "injected filter status").WithFailedPlugin("TestPlugin1"),
 			wantStatusMap: framework.PluginToStatus{
-				"TestPlugin1": framework.NewStatus(framework.UnschedulableAndUnresolvable, "injected filter status"),
-				"TestPlugin2": framework.NewStatus(framework.Unschedulable, "injected filter status"),
+				"TestPlugin1": framework.NewStatus(framework.UnschedulableAndUnresolvable, "injected filter status").WithFailedPlugin("TestPlugin1"),
+				"TestPlugin2": framework.NewStatus(framework.Unschedulable, "injected filter status").WithFailedPlugin("TestPlugin2"),
 			},
 		},
 	}
@@ -1061,7 +1095,6 @@ func TestFilterPlugins(t *testing.T) {
 			if !reflect.DeepEqual(gotStatusMap, tt.wantStatusMap) {
 				t.Errorf("wrong status map. got: %+v, want: %+v", gotStatusMap, tt.wantStatusMap)
 			}
-
 		})
 	}
 }
@@ -1137,6 +1170,154 @@ func TestPostFilterPlugins(t *testing.T) {
 				t.Fatalf("fail to create framework: %s", err)
 			}
 			_, gotStatus := f.RunPostFilterPlugins(context.TODO(), nil, pod, nil)
+			if !reflect.DeepEqual(gotStatus, tt.wantStatus) {
+				t.Errorf("Unexpected status. got: %v, want: %v", gotStatus, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestFilterPluginsWithNominatedPods(t *testing.T) {
+	tests := []struct {
+		name            string
+		preFilterPlugin *TestPlugin
+		filterPlugin    *TestPlugin
+		pod             *v1.Pod
+		nominatedPod    *v1.Pod
+		node            *v1.Node
+		nodeInfo        *framework.NodeInfo
+		wantStatus      *framework.Status
+	}{
+		{
+			name:            "node has no nominated pod",
+			preFilterPlugin: nil,
+			filterPlugin:    nil,
+			pod:             lowPriorityPod,
+			nominatedPod:    nil,
+			node:            node,
+			nodeInfo:        framework.NewNodeInfo(pod),
+			wantStatus:      nil,
+		},
+		{
+			name: "node has a high-priority nominated pod and all filters succeed",
+			preFilterPlugin: &TestPlugin{
+				name: "TestPlugin1",
+				inj: injectedResult{
+					PreFilterAddPodStatus: int(framework.Success),
+				},
+			},
+			filterPlugin: &TestPlugin{
+				name: "TestPlugin2",
+				inj: injectedResult{
+					FilterStatus: int(framework.Success),
+				},
+			},
+			pod:          lowPriorityPod,
+			nominatedPod: highPriorityPod,
+			node:         node,
+			nodeInfo:     framework.NewNodeInfo(pod),
+			wantStatus:   nil,
+		},
+		{
+			name: "node has a high-priority nominated pod and pre filters fail",
+			preFilterPlugin: &TestPlugin{
+				name: "TestPlugin1",
+				inj: injectedResult{
+					PreFilterAddPodStatus: int(framework.Error),
+				},
+			},
+			filterPlugin: nil,
+			pod:          lowPriorityPod,
+			nominatedPod: highPriorityPod,
+			node:         node,
+			nodeInfo:     framework.NewNodeInfo(pod),
+			wantStatus:   framework.AsStatus(fmt.Errorf(`running AddPod on PreFilter plugin "TestPlugin1": %w`, errInjectedStatus)),
+		},
+		{
+			name: "node has a high-priority nominated pod and filters fail",
+			preFilterPlugin: &TestPlugin{
+				name: "TestPlugin1",
+				inj: injectedResult{
+					PreFilterAddPodStatus: int(framework.Success),
+				},
+			},
+			filterPlugin: &TestPlugin{
+				name: "TestPlugin2",
+				inj: injectedResult{
+					FilterStatus: int(framework.Error),
+				},
+			},
+			pod:          lowPriorityPod,
+			nominatedPod: highPriorityPod,
+			node:         node,
+			nodeInfo:     framework.NewNodeInfo(pod),
+			wantStatus:   framework.AsStatus(fmt.Errorf(`running "TestPlugin2" filter plugin: %w`, errInjectedFilterStatus)).WithFailedPlugin("TestPlugin2"),
+		},
+		{
+			name: "node has a low-priority nominated pod and pre filters return unschedulable",
+			preFilterPlugin: &TestPlugin{
+				name: "TestPlugin1",
+				inj: injectedResult{
+					PreFilterAddPodStatus: int(framework.Unschedulable),
+				},
+			},
+			filterPlugin: &TestPlugin{
+				name: "TestPlugin2",
+				inj: injectedResult{
+					FilterStatus: int(framework.Success),
+				},
+			},
+			pod:          highPriorityPod,
+			nominatedPod: lowPriorityPod,
+			node:         node,
+			nodeInfo:     framework.NewNodeInfo(pod),
+			wantStatus:   nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := Registry{}
+			cfgPls := &config.Plugins{
+				PreFilter: &config.PluginSet{},
+				Filter:    &config.PluginSet{},
+			}
+
+			if tt.preFilterPlugin != nil {
+				if err := registry.Register(tt.preFilterPlugin.name,
+					func(_ runtime.Object, _ framework.Handle) (framework.Plugin, error) {
+						return tt.preFilterPlugin, nil
+					}); err != nil {
+					t.Fatalf("fail to register preFilter plugin (%s)", tt.preFilterPlugin.name)
+				}
+				cfgPls.PreFilter.Enabled = append(
+					cfgPls.PreFilter.Enabled,
+					config.Plugin{Name: tt.preFilterPlugin.name},
+				)
+			}
+			if tt.filterPlugin != nil {
+				if err := registry.Register(tt.filterPlugin.name,
+					func(_ runtime.Object, _ framework.Handle) (framework.Plugin, error) {
+						return tt.filterPlugin, nil
+					}); err != nil {
+					t.Fatalf("fail to register filter plugin (%s)", tt.filterPlugin.name)
+				}
+				cfgPls.Filter.Enabled = append(
+					cfgPls.Filter.Enabled,
+					config.Plugin{Name: tt.filterPlugin.name},
+				)
+			}
+
+			podNominator := internalqueue.NewPodNominator()
+			if tt.nominatedPod != nil {
+				podNominator.AddNominatedPod(tt.nominatedPod, nodeName)
+			}
+			f, err := newFrameworkWithQueueSortAndBind(registry, cfgPls, emptyArgs, WithPodNominator(podNominator))
+			if err != nil {
+				t.Fatalf("fail to create framework: %s", err)
+			}
+			tt.nodeInfo.SetNode(tt.node)
+			gotStatus := f.RunFilterPluginsWithNominatedPods(context.TODO(), nil, tt.pod, tt.nodeInfo)
 			if !reflect.DeepEqual(gotStatus, tt.wantStatus) {
 				t.Errorf("Unexpected status. got: %v, want: %v", gotStatus, tt.wantStatus)
 			}
@@ -1485,7 +1666,7 @@ func TestPermitPlugins(t *testing.T) {
 					inj:  injectedResult{PermitStatus: int(framework.Unschedulable)},
 				},
 			},
-			want: framework.NewStatus(framework.Unschedulable, `rejected pod "" by permit plugin "TestPlugin": injected status`),
+			want: framework.NewStatus(framework.Unschedulable, "injected status").WithFailedPlugin("TestPlugin"),
 		},
 		{
 			name: "ErrorPermitPlugin",
@@ -1495,7 +1676,7 @@ func TestPermitPlugins(t *testing.T) {
 					inj:  injectedResult{PermitStatus: int(framework.Error)},
 				},
 			},
-			want: framework.AsStatus(fmt.Errorf(`running Permit plugin "TestPlugin": %w`, errInjectedStatus)),
+			want: framework.AsStatus(fmt.Errorf(`running Permit plugin "TestPlugin": %w`, errInjectedStatus)).WithFailedPlugin("TestPlugin"),
 		},
 		{
 			name: "UnschedulableAndUnresolvablePermitPlugin",
@@ -1505,7 +1686,7 @@ func TestPermitPlugins(t *testing.T) {
 					inj:  injectedResult{PermitStatus: int(framework.UnschedulableAndUnresolvable)},
 				},
 			},
-			want: framework.NewStatus(framework.UnschedulableAndUnresolvable, `rejected pod "" by permit plugin "TestPlugin": injected status`),
+			want: framework.NewStatus(framework.UnschedulableAndUnresolvable, "injected status").WithFailedPlugin("TestPlugin"),
 		},
 		{
 			name: "WaitPermitPlugin",
@@ -1543,38 +1724,40 @@ func TestPermitPlugins(t *testing.T) {
 					inj:  injectedResult{PermitStatus: int(framework.Error)},
 				},
 			},
-			want: framework.AsStatus(fmt.Errorf(`running Permit plugin "TestPlugin": %w`, errInjectedStatus)),
+			want: framework.AsStatus(fmt.Errorf(`running Permit plugin "TestPlugin": %w`, errInjectedStatus)).WithFailedPlugin("TestPlugin"),
 		},
 	}
 
 	for _, tt := range tests {
-		registry := Registry{}
-		configPlugins := &config.Plugins{Permit: &config.PluginSet{}}
+		t.Run(tt.name, func(t *testing.T) {
+			registry := Registry{}
+			configPlugins := &config.Plugins{Permit: &config.PluginSet{}}
 
-		for _, pl := range tt.plugins {
-			tmpPl := pl
-			if err := registry.Register(pl.name, func(_ runtime.Object, _ framework.Handle) (framework.Plugin, error) {
-				return tmpPl, nil
-			}); err != nil {
-				t.Fatalf("Unable to register Permit plugin: %s", pl.name)
+			for _, pl := range tt.plugins {
+				tmpPl := pl
+				if err := registry.Register(pl.name, func(_ runtime.Object, _ framework.Handle) (framework.Plugin, error) {
+					return tmpPl, nil
+				}); err != nil {
+					t.Fatalf("Unable to register Permit plugin: %s", pl.name)
+				}
+
+				configPlugins.Permit.Enabled = append(
+					configPlugins.Permit.Enabled,
+					config.Plugin{Name: pl.name},
+				)
 			}
 
-			configPlugins.Permit.Enabled = append(
-				configPlugins.Permit.Enabled,
-				config.Plugin{Name: pl.name},
-			)
-		}
+			f, err := newFrameworkWithQueueSortAndBind(registry, configPlugins, emptyArgs)
+			if err != nil {
+				t.Fatalf("fail to create framework: %s", err)
+			}
 
-		f, err := newFrameworkWithQueueSortAndBind(registry, configPlugins, emptyArgs)
-		if err != nil {
-			t.Fatalf("fail to create framework: %s", err)
-		}
+			status := f.RunPermitPlugins(context.TODO(), nil, pod, "")
 
-		status := f.RunPermitPlugins(context.TODO(), nil, pod, "")
-
-		if !reflect.DeepEqual(status, tt.want) {
-			t.Errorf("wrong status code. got %v, want %v", status, tt.want)
-		}
+			if !reflect.DeepEqual(status, tt.want) {
+				t.Errorf("wrong status code. got %v, want %v", status, tt.want)
+			}
+		})
 	}
 }
 
@@ -1907,26 +2090,23 @@ func TestWaitOnPermit(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		action      func(f framework.Framework)
-		wantStatus  framework.Code
-		wantMessage string
+		name   string
+		action func(f framework.Framework)
+		want   *framework.Status
 	}{
 		{
 			name: "Reject Waiting Pod",
 			action: func(f framework.Framework) {
-				f.GetWaitingPod(pod.UID).Reject("reject message")
+				f.GetWaitingPod(pod.UID).Reject(permitPlugin, "reject message")
 			},
-			wantStatus:  framework.Unschedulable,
-			wantMessage: "pod \"pod\" rejected while waiting on permit: reject message",
+			want: framework.NewStatus(framework.Unschedulable, "reject message").WithFailedPlugin(permitPlugin),
 		},
 		{
 			name: "Allow Waiting Pod",
 			action: func(f framework.Framework) {
 				f.GetWaitingPod(pod.UID).Allow(permitPlugin)
 			},
-			wantStatus:  framework.Success,
-			wantMessage: "",
+			want: nil,
 		},
 	}
 
@@ -1955,14 +2135,9 @@ func TestWaitOnPermit(t *testing.T) {
 
 			go tt.action(f)
 
-			waitOnPermitStatus := f.WaitOnPermit(context.Background(), pod)
-			if waitOnPermitStatus.Code() != tt.wantStatus {
-				t.Fatalf("Expected WaitOnPermit to return status %v, but got %v",
-					tt.wantStatus, waitOnPermitStatus.Code())
-			}
-			if waitOnPermitStatus.Message() != tt.wantMessage {
-				t.Fatalf("Expected WaitOnPermit to return status with message %q, but got %q",
-					tt.wantMessage, waitOnPermitStatus.Message())
+			got := f.WaitOnPermit(context.Background(), pod)
+			if !reflect.DeepEqual(tt.want, got) {
+				t.Errorf("Unexpected status: want %v, but got %v", tt.want, got)
 			}
 		})
 	}
@@ -2051,94 +2226,64 @@ func injectNormalizeRes(inj injectedResult, scores framework.NodeScoreList) *fra
 
 func collectAndComparePluginMetrics(t *testing.T, wantExtensionPoint, wantPlugin string, wantStatus framework.Code) {
 	t.Helper()
-	m := collectHistogramMetric(metrics.PluginExecutionDuration)
-	if len(m.Label) != 3 {
-		t.Fatalf("Unexpected number of label pairs, got: %v, want: 2", len(m.Label))
-	}
+	m := metrics.PluginExecutionDuration.WithLabelValues(wantPlugin, wantExtensionPoint, wantStatus.String())
 
-	if *m.Label[0].Value != wantExtensionPoint {
-		t.Errorf("Unexpected extension point label, got: %q, want %q", *m.Label[0].Value, wantExtensionPoint)
+	count, err := testutil.GetHistogramMetricCount(m)
+	if err != nil {
+		t.Errorf("Failed to get %s sampleCount, err: %v", metrics.PluginExecutionDuration.Name, err)
 	}
-
-	if *m.Label[1].Value != wantPlugin {
-		t.Errorf("Unexpected plugin label, got: %q, want %q", *m.Label[1].Value, wantPlugin)
-	}
-
-	if *m.Label[2].Value != wantStatus.String() {
-		t.Errorf("Unexpected status code label, got: %q, want %q", *m.Label[2].Value, wantStatus)
-	}
-
-	if *m.Histogram.SampleCount == 0 {
+	if count == 0 {
 		t.Error("Expect at least 1 sample")
 	}
-
-	if *m.Histogram.SampleSum <= 0 {
-		t.Errorf("Expect latency to be greater than 0, got: %v", *m.Histogram.SampleSum)
+	value, err := testutil.GetHistogramMetricValue(m)
+	if err != nil {
+		t.Errorf("Failed to get %s value, err: %v", metrics.PluginExecutionDuration.Name, err)
+	}
+	if value <= 0 {
+		t.Errorf("Expect latency to be greater than 0, got: %v", value)
 	}
 }
 
 func collectAndCompareFrameworkMetrics(t *testing.T, wantExtensionPoint string, wantStatus framework.Code) {
 	t.Helper()
-	m := collectHistogramMetric(metrics.FrameworkExtensionPointDuration)
+	m := metrics.FrameworkExtensionPointDuration.WithLabelValues(wantExtensionPoint, wantStatus.String(), testProfileName)
 
-	gotLabels := make(map[string]string, len(m.Label))
-	for _, p := range m.Label {
-		gotLabels[p.GetName()] = p.GetValue()
+	count, err := testutil.GetHistogramMetricCount(m)
+	if err != nil {
+		t.Errorf("Failed to get %s sampleCount, err: %v", metrics.FrameworkExtensionPointDuration.Name, err)
 	}
-	wantLabels := map[string]string{
-		"extension_point": wantExtensionPoint,
-		"status":          wantStatus.String(),
-		"profile":         testProfileName,
+	if count != 1 {
+		t.Errorf("Expect 1 sample, got: %v", count)
 	}
-	if diff := cmp.Diff(wantLabels, gotLabels); diff != "" {
-		t.Errorf("unexpected labels (-want,+got):\n%s", diff)
+	value, err := testutil.GetHistogramMetricValue(m)
+	if err != nil {
+		t.Errorf("Failed to get %s value, err: %v", metrics.FrameworkExtensionPointDuration.Name, err)
 	}
-
-	if *m.Histogram.SampleCount != 1 {
-		t.Errorf("Expect 1 sample, got: %v", *m.Histogram.SampleCount)
-	}
-
-	if *m.Histogram.SampleSum <= 0 {
-		t.Errorf("Expect latency to be greater than 0, got: %v", *m.Histogram.SampleSum)
+	if value <= 0 {
+		t.Errorf("Expect latency to be greater than 0, got: %v", value)
 	}
 }
 
 func collectAndComparePermitWaitDuration(t *testing.T, wantRes string) {
-	m := collectHistogramMetric(metrics.PermitWaitDuration)
+	m := metrics.PermitWaitDuration.WithLabelValues(wantRes)
+	count, err := testutil.GetHistogramMetricCount(m)
+	if err != nil {
+		t.Errorf("Failed to get %s sampleCount, err: %v", metrics.PermitWaitDuration.Name, err)
+	}
 	if wantRes == "" {
-		if m != nil {
-			t.Errorf("PermitWaitDuration shouldn't be recorded but got %+v", m)
+		if count != 0 {
+			t.Errorf("Expect 0 sample, got: %v", count)
 		}
-		return
-	}
-	if wantRes != "" {
-		if len(m.Label) != 1 {
-			t.Fatalf("Unexpected number of label pairs, got: %v, want: 1", len(m.Label))
+	} else {
+		if count != 1 {
+			t.Errorf("Expect 1 sample, got: %v", count)
 		}
-
-		if *m.Label[0].Value != wantRes {
-			t.Errorf("Unexpected result label, got: %q, want %q", *m.Label[0].Value, wantRes)
+		value, err := testutil.GetHistogramMetricValue(m)
+		if err != nil {
+			t.Errorf("Failed to get %s value, err: %v", metrics.PermitWaitDuration.Name, err)
 		}
-
-		if *m.Histogram.SampleCount != 1 {
-			t.Errorf("Expect 1 sample, got: %v", *m.Histogram.SampleCount)
+		if value <= 0 {
+			t.Errorf("Expect latency to be greater than 0, got: %v", value)
 		}
-
-		if *m.Histogram.SampleSum <= 0 {
-			t.Errorf("Expect latency to be greater than 0, got: %v", *m.Histogram.SampleSum)
-		}
-	}
-}
-
-func collectHistogramMetric(metric prometheus.Collector) *dto.Metric {
-	ch := make(chan prometheus.Metric, 100)
-	metric.Collect(ch)
-	select {
-	case got := <-ch:
-		m := &dto.Metric{}
-		got.Write(m)
-		return m
-	default:
-		return nil
 	}
 }

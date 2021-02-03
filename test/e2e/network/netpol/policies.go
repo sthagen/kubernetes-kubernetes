@@ -26,7 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// GetDenyIngress returns a default deny policy named 'name'.
+// GetDenyIngress returns a default deny ingress policy.
 func GetDenyIngress(name string) *networkingv1.NetworkPolicy {
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -34,7 +34,22 @@ func GetDenyIngress(name string) *networkingv1.NetworkPolicy {
 		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			Ingress:     []networkingv1.NetworkPolicyIngressRule{},
+		},
+	}
+}
+
+// GetDenyEgressForTarget returns a default deny egress policy.
+func GetDenyEgressForTarget(name string, targetSelector metav1.LabelSelector) *networkingv1.NetworkPolicy {
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: targetSelector,
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+			Egress:      []networkingv1.NetworkPolicyEgressRule{},
 		},
 	}
 }
@@ -142,6 +157,31 @@ func GetDenyAll(name string) *networkingv1.NetworkPolicy {
 	return policy
 }
 
+// GetDenyAllWithEgressDNS deny all egress traffic, besides DNS/UDP port
+func GetDenyAllWithEgressDNS() *networkingv1.NetworkPolicy {
+	protocolUDP := v1.ProtocolUDP
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "deny-all-tcp-allow-dns",
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress, networkingv1.PolicyTypeIngress},
+			PodSelector: metav1.LabelSelector{},
+			Ingress:     []networkingv1.NetworkPolicyIngressRule{},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				{
+					Ports: []networkingv1.NetworkPolicyPort{
+						{
+							Protocol: &protocolUDP,
+							Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 // GetAllowIngressByPod allows ingress by pod labels
 func GetAllowIngressByPod(name string, targetLabels map[string]string, peerPodSelector *metav1.LabelSelector) *networkingv1.NetworkPolicy {
 	policy := &networkingv1.NetworkPolicy{
@@ -196,8 +236,8 @@ func GetAllowIngressByNamespace(name string, targetLabels map[string]string, pee
 	return policy
 }
 
-// GetAllowIngressByNamespaceAndPort allows ingress for namespace AND port
-func GetAllowIngressByNamespaceAndPort(name string, targetLabels map[string]string, peerNamespaceSelector *metav1.LabelSelector, port *intstr.IntOrString) *networkingv1.NetworkPolicy {
+// GetAllowIngressByNamespaceAndPort allows ingress for namespace AND port AND protocol
+func GetAllowIngressByNamespaceAndPort(name string, targetLabels map[string]string, peerNamespaceSelector *metav1.LabelSelector, port *intstr.IntOrString, protocol *v1.Protocol) *networkingv1.NetworkPolicy {
 	policy := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -211,7 +251,10 @@ func GetAllowIngressByNamespaceAndPort(name string, targetLabels map[string]stri
 					NamespaceSelector: peerNamespaceSelector,
 				}},
 				Ports: []networkingv1.NetworkPolicyPort{
-					{Port: port},
+					{
+						Port:     port,
+						Protocol: protocol,
+					},
 				},
 			}},
 		},
