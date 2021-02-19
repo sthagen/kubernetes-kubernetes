@@ -78,6 +78,12 @@ const (
 	podKillingChannelCapacity = 50
 )
 
+// Container state reason list
+const (
+	PodInitializing   = "PodInitializing"
+	ContainerCreating = "ContainerCreating"
+)
+
 // Get a list of pods that have data directories.
 func (kl *Kubelet) listPodsFromDisk() ([]types.UID, error) {
 	podInfos, err := ioutil.ReadDir(kl.getPodsDir())
@@ -1137,7 +1143,7 @@ func (kl *Kubelet) HandlePodCleanups() error {
 // PodKiller handles requests for killing pods
 type PodKiller interface {
 	// KillPod receives pod speficier representing the pod to kill
-	KillPod(pair *kubecontainer.PodPair)
+	KillPod(podPair *kubecontainer.PodPair)
 	// PerformPodKillingWork performs the actual pod killing work via calling CRI
 	// It returns after its Close() func is called and all outstanding pod killing requests are served
 	PerformPodKillingWork()
@@ -1215,10 +1221,9 @@ func (pk *podKillerWithChannel) markPodTerminated(uid string) {
 	delete(pk.podTerminationMap, uid)
 }
 
-// checkAndMarkPodPendingTerminationByPod checks to see if the pod is being
-// killed and returns true if it is, otherwise the pod is added to the map and
-// returns false
-func (pk *podKillerWithChannel) checkAndMarkPodPendingTerminationByPod(podPair *kubecontainer.PodPair) bool {
+// KillPod sends pod killing request to the killer after marks the pod
+// unless the given pod has been marked to be killed
+func (pk *podKillerWithChannel) KillPod(podPair *kubecontainer.PodPair) {
 	pk.podKillingLock.Lock()
 	defer pk.podKillingLock.Unlock()
 	var apiPodExists bool
@@ -1249,9 +1254,10 @@ func (pk *podKillerWithChannel) checkAndMarkPodPendingTerminationByPod(podPair *
 		} else {
 			klog.V(4).Infof("running pod %q is pending termination", podPair.RunningPod.ID)
 		}
-		return true
+		return
 	}
-	return false
+	// Limit to one request per pod
+	pk.podKillingCh <- podPair
 }
 
 // Close closes the channel through which requests are delivered
@@ -1259,20 +1265,10 @@ func (pk *podKillerWithChannel) Close() {
 	close(pk.podKillingCh)
 }
 
-// KillPod sends pod killing request to the killer
-func (pk *podKillerWithChannel) KillPod(pair *kubecontainer.PodPair) {
-	pk.podKillingCh <- pair
-}
-
 // PerformPodKillingWork launches a goroutine to kill a pod received from the channel if
 // another goroutine isn't already in action.
 func (pk *podKillerWithChannel) PerformPodKillingWork() {
 	for podPair := range pk.podKillingCh {
-		if pk.checkAndMarkPodPendingTerminationByPod(podPair) {
-			// Pod is already being killed
-			continue
-		}
-
 		runningPod := podPair.RunningPod
 		apiPod := podPair.APIPod
 
@@ -1703,9 +1699,9 @@ func (kl *Kubelet) convertToAPIContainerStatuses(pod *v1.Pod, podStatus *kubecon
 
 	// Set all container statuses to default waiting state
 	statuses := make(map[string]*v1.ContainerStatus, len(containers))
-	defaultWaitingState := v1.ContainerState{Waiting: &v1.ContainerStateWaiting{Reason: "ContainerCreating"}}
+	defaultWaitingState := v1.ContainerState{Waiting: &v1.ContainerStateWaiting{Reason: ContainerCreating}}
 	if hasInitContainers {
-		defaultWaitingState = v1.ContainerState{Waiting: &v1.ContainerStateWaiting{Reason: "PodInitializing"}}
+		defaultWaitingState = v1.ContainerState{Waiting: &v1.ContainerStateWaiting{Reason: PodInitializing}}
 	}
 
 	for _, container := range containers {
@@ -1769,9 +1765,9 @@ func (kl *Kubelet) convertToAPIContainerStatuses(pod *v1.Pod, podStatus *kubecon
 		status := statuses[container.Name]
 		// if the status we're about to write indicates the default, the Waiting status will force this pod back into Pending.
 		// That isn't true, we know the pod is going away.
-		isDefaultWaitingStatus := status.State.Waiting != nil && status.State.Waiting.Reason == "ContainerCreating"
+		isDefaultWaitingStatus := status.State.Waiting != nil && status.State.Waiting.Reason == ContainerCreating
 		if hasInitContainers {
-			isDefaultWaitingStatus = status.State.Waiting != nil && status.State.Waiting.Reason == "PodInitializing"
+			isDefaultWaitingStatus = status.State.Waiting != nil && status.State.Waiting.Reason == PodInitializing
 		}
 		if !isDefaultWaitingStatus {
 			// we the status was written, don't override

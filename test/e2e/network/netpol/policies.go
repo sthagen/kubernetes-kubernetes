@@ -40,6 +40,41 @@ func GetDenyIngress(name string) *networkingv1.NetworkPolicy {
 	}
 }
 
+// GetDenyIngressEmptyPeerSelector returns a default ingress deny policy using empty Peer selector.
+func GetDenyIngressEmptyPeerSelector(name string) *networkingv1.NetworkPolicy {
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{}},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// GetDenyEgress returns a default deny egress policy.
+func GetDenyEgress(name string) *networkingv1.NetworkPolicy {
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+			Egress:      []networkingv1.NetworkPolicyEgressRule{},
+		},
+	}
+}
+
 // GetDenyEgressForTarget returns a default deny egress policy.
 func GetDenyEgressForTarget(name string, targetSelector metav1.LabelSelector) *networkingv1.NetworkPolicy {
 	return &networkingv1.NetworkPolicy{
@@ -202,6 +237,31 @@ func GetAllowIngressByPod(name string, targetLabels map[string]string, peerPodSe
 	return policy
 }
 
+// GetAllowIngressForTarget allows ingress for target
+func GetAllowIngressForTarget(name string, targetLabels map[string]string) *networkingv1.NetworkPolicy {
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: targetLabels,
+			},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector:       &metav1.LabelSelector{},
+							NamespaceSelector: &metav1.LabelSelector{},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 // GetDenyIngressForTarget denies all ingress for target
 func GetDenyIngressForTarget(targetSelector metav1.LabelSelector) *networkingv1.NetworkPolicy {
 	return &networkingv1.NetworkPolicy{
@@ -282,6 +342,33 @@ func GetAllowIngressByNamespaceOrPod(name string, targetLabels map[string]string
 					},
 				},
 			}},
+		},
+	}
+	return policy
+}
+
+// GetAllowIngressByAnyPod allows ingress for pods with matching multiple pod labels
+func GetAllowIngressByAnyPod(name string, targetLabels map[string]string, peersLabel []map[string]string) *networkingv1.NetworkPolicy {
+	policyPeers := []networkingv1.NetworkPolicyPeer{}
+	for _, label := range peersLabel {
+		policyPeers = append(policyPeers, networkingv1.NetworkPolicyPeer{
+			PodSelector: &metav1.LabelSelector{MatchLabels: label},
+		})
+	}
+
+	policy := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: targetLabels,
+			},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: policyPeers,
+				},
+			},
 		},
 	}
 	return policy

@@ -33,7 +33,7 @@ import (
 	imageutils "k8s.io/kubernetes/test/utils/image"
 )
 
-var _ = ginkgo.Describe("[sig-storage] ConfigMap", func() {
+var _ = SIGStorageDescribe("ConfigMap", func() {
 	f := framework.NewDefaultFramework("configmap")
 
 	/*
@@ -213,7 +213,8 @@ var _ = ginkgo.Describe("[sig-storage] ConfigMap", func() {
 		})
 
 		ginkgo.By("Creating the pod")
-		f.PodClient().CreateSync(pod)
+		f.PodClient().Create(pod)
+		e2epod.WaitForPodNameRunningInNamespace(f.ClientSet, pod.Name, f.Namespace.Name)
 
 		pollLogs1 := func() (string, error) {
 			return e2epod.GetPodLogs(f.ClientSet, f.Namespace.Name, pod.Name, pod.Spec.Containers[0].Name)
