@@ -645,6 +645,24 @@
     patch, delete, and deletecollection.'
   release: v1.20
   file: test/e2e/common/runtimeclass.go
+- testname: Security Context, test RunAsGroup at container level
+  codename: '[k8s.io] [sig-node] Security Context should support container.SecurityContext.RunAsUser
+    And container.SecurityContext.RunAsGroup [LinuxOnly] [Conformance]'
+  description: 'Container is created with runAsUser and runAsGroup option by passing
+    uid 1001 and gid 2002 at containr level. Pod MUST be in Succeeded phase. [LinuxOnly]:
+    This test is marked as LinuxOnly since Windows does not support running as UID
+    / GID.'
+  release: v1.21
+  file: test/e2e/node/security_context.go
+- testname: Security Context, test RunAsGroup at pod level
+  codename: '[k8s.io] [sig-node] Security Context should support pod.Spec.SecurityContext.RunAsUser
+    And pod.Spec.SecurityContext.RunAsGroup [LinuxOnly] [Conformance]'
+  description: 'Container is created with runAsUser and runAsGroup option by passing
+    uid 1001 and gid 2002 at pod level. Pod MUST be in Succeeded phase. [LinuxOnly]:
+    This test is marked as LinuxOnly since Windows does not support running as UID
+    / GID.'
+  release: v1.21
+  file: test/e2e/node/security_context.go
 - testname: ConfigMap Volume, text data, binary data
   codename: '[k8s.io] [sig-storage] ConfigMap binary data should be reflected in volume
     [NodeConformance] [Conformance]'
@@ -2018,6 +2036,15 @@
   description: A conformant Kubernetes distribution MUST support DaemonSet RollingUpdates.
   release: v1.10
   file: test/e2e/apps/daemon_set.go
+- testname: Deployment, completes the scaling of a Deployment subresource
+  codename: '[sig-apps] Deployment Deployment should have a working scale subresource
+    [Conformance]'
+  description: Create a Deployment with a single Pod. The Pod MUST be verified that
+    it is running. The Deployment MUST get and verify the scale subresource count.
+    The Deployment MUST update and verify the scale subresource. The Deployment MUST
+    patch and verify a scale subresource.
+  release: v1.21
+  file: test/e2e/apps/deployment.go
 - testname: Deployment Recreate
   codename: '[sig-apps] Deployment RecreateDeployment should delete old pods and create
     new ones [Conformance]'
@@ -2082,6 +2109,15 @@
     the Job MUST execute to completion.
   release: v1.16
   file: test/e2e/apps/job.go
+- testname: ReplicaSet, completes the scaling of a ReplicaSet subresource
+  codename: '[sig-apps] ReplicaSet Replicaset should have a working scale subresource
+    [Conformance]'
+  description: Create a ReplicaSet (RS) with a single Pod. The Pod MUST be verified
+    that it is running. The RS MUST get and verify the scale subresource count. The
+    RS MUST update and verify the scale subresource. The RS MUST patch and verify
+    a scale subresource.
+  release: v1.21
+  file: test/e2e/apps/replica_set.go
 - testname: Replica Set, adopt matching pods and release non matching pods
   codename: '[sig-apps] ReplicaSet should adopt matching pods on creation and release
     no longer matching pods [Conformance]'
@@ -2231,6 +2267,13 @@
     false, this include test cases 1a,1b,2a,2b and 2c. In the test cases 1c,3a,3b
     and 3c the ServiceTokenVolume MUST not be auto mounted.
   release: v1.9
+  file: test/e2e/auth/service_accounts.go
+- testname: RootCA ConfigMap test
+  codename: '[sig-auth] ServiceAccounts should guarantee kube-root-ca.crt exist in
+    any namespace [Conformance]'
+  description: Ensure every namespace exist a ConfigMap for root ca cert. 1. Created
+    automatically 2. Recreated if deleted 3. Reconciled if modified
+  release: v1.21
   file: test/e2e/auth/service_accounts.go
 - testname: Service Account Tokens Must AutoMount
   codename: '[sig-auth] ServiceAccounts should mount an API token into pods  [Conformance]'
