@@ -775,16 +775,14 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	klet.evictionManager = evictionManager
 	klet.admitHandlers.AddPodAdmitHandler(evictionAdmitHandler)
 
-	if utilfeature.DefaultFeatureGate.Enabled(features.Sysctls) {
-		// Safe, whitelisted sysctls can always be used as unsafe sysctls in the spec.
-		// Hence, we concatenate those two lists.
-		safeAndUnsafeSysctls := append(sysctlwhitelist.SafeSysctlWhitelist(), allowedUnsafeSysctls...)
-		sysctlsWhitelist, err := sysctl.NewWhitelist(safeAndUnsafeSysctls)
-		if err != nil {
-			return nil, err
-		}
-		klet.admitHandlers.AddPodAdmitHandler(sysctlsWhitelist)
+	// Safe, whitelisted sysctls can always be used as unsafe sysctls in the spec.
+	// Hence, we concatenate those two lists.
+	safeAndUnsafeSysctls := append(sysctlwhitelist.SafeSysctlWhitelist(), allowedUnsafeSysctls...)
+	sysctlsWhitelist, err := sysctl.NewWhitelist(safeAndUnsafeSysctls)
+	if err != nil {
+		return nil, err
 	}
+	klet.admitHandlers.AddPodAdmitHandler(sysctlsWhitelist)
 
 	// enable active deadline handler
 	activeDeadlineHandler, err := newActiveDeadlineHandler(klet.statusManager, kubeDeps.Recorder, klet.clock)
@@ -2021,8 +2019,9 @@ func (kl *Kubelet) dispatchWork(pod *v1.Pod, syncType kubetypes.SyncPodType, mir
 	}
 
 	// optimization: avoid invoking the pod worker if no further changes are possible to the pod definition
-	if podWorkerTerminal {
-		klog.V(4).Infof("Pod %q has completed, ignoring remaining sync work: %s", format.Pod(pod), syncType)
+	// (i.e. the pod has completed and its containers have been terminated)
+	if podWorkerTerminal && containersTerminal {
+		klog.V(4).InfoS("Pod has completed and its containers have been terminated, ignoring remaining sync work", "pod", klog.KObj(pod), "syncType", syncType)
 		return
 	}
 
