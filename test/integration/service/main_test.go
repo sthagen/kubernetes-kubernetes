@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Kubernetes Authors.
+Copyright 2020 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,11 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package storage
+package service
 
-import "github.com/onsi/ginkgo"
+import (
+	"testing"
 
-// SIGDescribe annotates the test with the SIG label.
-func SIGDescribe(text string, body func()) bool {
-	return ginkgo.Describe("[sig-storage] "+text, body)
+	"k8s.io/kubernetes/test/integration/framework"
+)
+
+func TestMain(m *testing.M) {
+	framework.EtcdMain(m.Run)
 }
