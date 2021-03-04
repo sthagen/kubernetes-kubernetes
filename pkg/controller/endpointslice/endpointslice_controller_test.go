@@ -452,6 +452,7 @@ func TestSyncService(t *testing.T) {
 					Addresses: []string{"10.0.0.1"},
 					TargetRef: &v1.ObjectReference{Kind: "Pod", Namespace: "default", Name: "pod0"},
 					Topology:  map[string]string{"kubernetes.io/hostname": "node-1"},
+					NodeName:  utilpointer.StringPtr("node-1"),
 				},
 				{
 					Conditions: discovery.EndpointConditions{
@@ -460,6 +461,7 @@ func TestSyncService(t *testing.T) {
 					Addresses: []string{"10.0.0.2"},
 					TargetRef: &v1.ObjectReference{Kind: "Pod", Namespace: "default", Name: "pod1"},
 					Topology:  map[string]string{"kubernetes.io/hostname": "node-1"},
+					NodeName:  utilpointer.StringPtr("node-1"),
 				},
 			},
 		},
@@ -565,6 +567,7 @@ func TestSyncService(t *testing.T) {
 					Addresses: []string{"fd08::5678:0000:0000:9abc:def0"},
 					TargetRef: &v1.ObjectReference{Kind: "Pod", Namespace: "default", Name: "pod1"},
 					Topology:  map[string]string{"kubernetes.io/hostname": "node-1"},
+					NodeName:  utilpointer.StringPtr("node-1"),
 				},
 			},
 		},
@@ -670,6 +673,7 @@ func TestSyncService(t *testing.T) {
 					Addresses: []string{"10.0.0.1"},
 					TargetRef: &v1.ObjectReference{Kind: "Pod", Namespace: "default", Name: "pod0"},
 					Topology:  map[string]string{"kubernetes.io/hostname": "node-1"},
+					NodeName:  utilpointer.StringPtr("node-1"),
 				},
 				{
 					Conditions: discovery.EndpointConditions{
@@ -680,6 +684,7 @@ func TestSyncService(t *testing.T) {
 					Addresses: []string{"10.0.0.2"},
 					TargetRef: &v1.ObjectReference{Kind: "Pod", Namespace: "default", Name: "pod1"},
 					Topology:  map[string]string{"kubernetes.io/hostname": "node-1"},
+					NodeName:  utilpointer.StringPtr("node-1"),
 				},
 			},
 			terminatingGateEnabled: true,
@@ -784,6 +789,7 @@ func TestSyncService(t *testing.T) {
 					Addresses: []string{"10.0.0.1"},
 					TargetRef: &v1.ObjectReference{Kind: "Pod", Namespace: "default", Name: "pod0"},
 					Topology:  map[string]string{"kubernetes.io/hostname": "node-1"},
+					NodeName:  utilpointer.StringPtr("node-1"),
 				},
 			},
 			terminatingGateEnabled: false,
@@ -890,6 +896,7 @@ func TestSyncService(t *testing.T) {
 					Addresses: []string{"10.0.0.1"},
 					TargetRef: &v1.ObjectReference{Kind: "Pod", Namespace: "default", Name: "pod0"},
 					Topology:  map[string]string{"kubernetes.io/hostname": "node-1"},
+					NodeName:  utilpointer.StringPtr("node-1"),
 				},
 				{
 					Conditions: discovery.EndpointConditions{
@@ -900,6 +907,7 @@ func TestSyncService(t *testing.T) {
 					Addresses: []string{"10.0.0.2"},
 					TargetRef: &v1.ObjectReference{Kind: "Pod", Namespace: "default", Name: "pod1"},
 					Topology:  map[string]string{"kubernetes.io/hostname": "node-1"},
+					NodeName:  utilpointer.StringPtr("node-1"),
 				},
 			},
 			terminatingGateEnabled: true,
@@ -1004,6 +1012,7 @@ func TestSyncService(t *testing.T) {
 					Addresses: []string{"10.0.0.1"},
 					TargetRef: &v1.ObjectReference{Kind: "Pod", Namespace: "default", Name: "pod0"},
 					Topology:  map[string]string{"kubernetes.io/hostname": "node-1"},
+					NodeName:  utilpointer.StringPtr("node-1"),
 				},
 			},
 			terminatingGateEnabled: false,
@@ -1422,6 +1431,81 @@ func TestPodDeleteBatching(t *testing.T) {
 			for _, action := range client.Actions() {
 				t.Logf("action: %v %v", action.GetVerb(), action.GetResource())
 			}
+		})
+	}
+}
+
+func TestSyncServiceStaleInformer(t *testing.T) {
+	testcases := []struct {
+		name                     string
+		informerGenerationNumber int64
+		trackerGenerationNumber  int64
+		expectError              bool
+	}{
+		{
+			name:                     "informer cache outdated",
+			informerGenerationNumber: 10,
+			trackerGenerationNumber:  12,
+			expectError:              true,
+		},
+		{
+			name:                     "cache and tracker synced",
+			informerGenerationNumber: 10,
+			trackerGenerationNumber:  10,
+			expectError:              false,
+		},
+		{
+			name:                     "tracker outdated",
+			informerGenerationNumber: 10,
+			trackerGenerationNumber:  1,
+			expectError:              false,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			_, esController := newController([]string{"node-1"}, time.Duration(0))
+			ns := metav1.NamespaceDefault
+			serviceName := "testing-1"
+
+			// Store Service in the cache
+			esController.serviceStore.Add(&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: serviceName, Namespace: ns},
+				Spec: v1.ServiceSpec{
+					Selector: map[string]string{"foo": "bar"},
+					Ports:    []v1.ServicePort{{TargetPort: intstr.FromInt(80)}},
+				},
+			})
+
+			// Create EndpointSlice in the informer cache with informerGenerationNumber
+			epSlice1 := &discovery.EndpointSlice{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "matching-1",
+					Namespace:  ns,
+					Generation: testcase.informerGenerationNumber,
+					Labels: map[string]string{
+						discovery.LabelServiceName: serviceName,
+						discovery.LabelManagedBy:   controllerName,
+					},
+				},
+				AddressType: discovery.AddressTypeIPv4,
+			}
+			err := esController.endpointSliceStore.Add(epSlice1)
+			if err != nil {
+				t.Fatalf("Expected no error adding EndpointSlice: %v", err)
+			}
+
+			// Create EndpointSlice in the tracker with trackerGenerationNumber
+			epSlice2 := epSlice1.DeepCopy()
+			epSlice2.Generation = testcase.trackerGenerationNumber
+			esController.endpointSliceTracker.Update(epSlice2)
+
+			err = esController.syncService(fmt.Sprintf("%s/%s", ns, serviceName))
+			// Check if we got a StaleInformerCache error
+			if isStaleInformerCacheErr(err) != testcase.expectError {
+				t.Fatalf("Expected error because informer cache is outdated")
+			}
+
 		})
 	}
 }

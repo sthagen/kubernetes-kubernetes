@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	bootstrapapi "k8s.io/cluster-bootstrap/token/api"
 	bootstraputil "k8s.io/cluster-bootstrap/token/util"
+	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 	kubeadmapiv1beta2 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta2"
 	kubeadmcmdoptions "k8s.io/kubernetes/cmd/kubeadm/app/cmd/options"
@@ -399,6 +400,12 @@ func ValidateIPNetFromString(subnetStr string, minAddrs int64, isDualStack bool,
 		if numAddresses < minAddrs {
 			allErrs = append(allErrs, field.Invalid(fldPath, s.String(), fmt.Sprintf("subnet with %d address(es) is too small, the minimum is %d", numAddresses, minAddrs)))
 		}
+
+		// Warn when the subnet is in site-local range - i.e. contains addresses that belong to fec0::/10
+		_, siteLocalNet, _ := net.ParseCIDR("fec0::/10")
+		if siteLocalNet.Contains(s.IP) || s.Contains(siteLocalNet.IP) {
+			klog.Warningf("the subnet %v contains IPv6 site-local addresses that belong to fec0::/10 which has been deprecated by rfc3879", s)
+		}
 	}
 	return allErrs
 }
@@ -501,8 +508,10 @@ func ValidateNetworking(c *kubeadm.ClusterConfiguration, fldPath *field.Path) fi
 	}
 	if len(c.Networking.PodSubnet) != 0 {
 		allErrs = append(allErrs, ValidateIPNetFromString(c.Networking.PodSubnet, constants.MinimumAddressesInPodSubnet, isDualStack, field.NewPath("podSubnet"))...)
-		// Pod subnet was already validated, we need to validate now against the node-mask
-		allErrs = append(allErrs, ValidatePodSubnetNodeMask(c.Networking.PodSubnet, c, field.NewPath("podSubnet"))...)
+		if c.ControllerManager.ExtraArgs["allocate-node-cidrs"] != "false" {
+			// Pod subnet was already validated, we need to validate now against the node-mask
+			allErrs = append(allErrs, ValidatePodSubnetNodeMask(c.Networking.PodSubnet, c, field.NewPath("podSubnet"))...)
+		}
 	}
 	return allErrs
 }

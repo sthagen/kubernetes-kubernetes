@@ -279,6 +279,16 @@ type QueueSortPlugin interface {
 	Less(*QueuedPodInfo, *QueuedPodInfo) bool
 }
 
+// EnqueueExtensions is an optional interface that plugins can implement to efficiently
+// move unschedulable Pods in internal scheduling queues.
+type EnqueueExtensions interface {
+	// EventsToRegister returns a series of interested events that
+	// will be registered when instantiating the internal scheduling queue.
+	// Note: the returned list needs to be static (not depend on configuration parameters);
+	// otherwise it would lead to undefined behavior.
+	EventsToRegister() []ClusterEvent
+}
+
 // PreFilterExtensions is an interface that is included in plugins that allow specifying
 // callbacks to make incremental updates to its supposedly pre-calculated
 // state.
@@ -552,6 +562,10 @@ type Framework interface {
 // passed to the plugin factories at the time of plugin initialization. Plugins
 // must store and use this handle to call framework functions.
 type Handle interface {
+	// PodNominator abstracts operations to maintain nominated Pods.
+	PodNominator
+	// PluginsRunner abstracts operations to run some plugins.
+	PluginsRunner
 	// SnapshotSharedLister returns listers from the latest NodeInfo Snapshot. The snapshot
 	// is taken at the beginning of a scheduling cycle and remains unchanged until
 	// a pod finishes "Permit" point. There is no guarantee that the information
@@ -581,23 +595,13 @@ type Handle interface {
 	// RunFilterPluginsWithNominatedPods runs the set of configured filter plugins for nominated pod on the given node.
 	RunFilterPluginsWithNominatedPods(ctx context.Context, state *CycleState, pod *v1.Pod, info *NodeInfo) *Status
 
-	// TODO: unroll the wrapped interfaces to Handle.
-	PreemptHandle() PreemptHandle
+	// Extenders returns registered scheduler extenders.
+	Extenders() []Extender
 }
 
 // PostFilterResult wraps needed info for scheduler framework to act upon PostFilter phase.
 type PostFilterResult struct {
 	NominatedNodeName string
-}
-
-// PreemptHandle incorporates all needed logic to run preemption logic.
-type PreemptHandle interface {
-	// PodNominator abstracts operations to maintain nominated Pods.
-	PodNominator
-	// PluginsRunner abstracts operations to run some plugins.
-	PluginsRunner
-	// Extenders returns registered scheduler extenders.
-	Extenders() []Extender
 }
 
 // PodNominator abstracts operations to maintain nominated Pods.
