@@ -122,6 +122,15 @@ func ValidateDNS1123Label(value string, fldPath *field.Path) field.ErrorList {
 	return allErrs
 }
 
+// ValidateQualifiedName validates if name is what Kubernetes calls a "qualified name".
+func ValidateQualifiedName(value string, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	for _, msg := range validation.IsQualifiedName(value) {
+		allErrs = append(allErrs, field.Invalid(fldPath, value, msg))
+	}
+	return allErrs
+}
+
 // ValidateDNS1123Subdomain validates that a name is a proper DNS subdomain.
 func ValidateDNS1123Subdomain(value string, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
@@ -292,9 +301,9 @@ func ValidateRuntimeClassName(name string, fldPath *field.Path) field.ErrorList 
 }
 
 // validateOverhead can be used to check whether the given Overhead is valid.
-func validateOverhead(overhead core.ResourceList, fldPath *field.Path) field.ErrorList {
+func validateOverhead(overhead core.ResourceList, fldPath *field.Path, opts PodValidationOptions) field.ErrorList {
 	// reuse the ResourceRequirements validation logic
-	return ValidateResourceRequirements(&core.ResourceRequirements{Limits: overhead}, fldPath)
+	return ValidateResourceRequirements(&core.ResourceRequirements{Limits: overhead}, fldPath, opts)
 }
 
 // Validates that given value is not negative.
@@ -2880,7 +2889,7 @@ func validateContainers(containers []core.Container, isInitContainers bool, volu
 		allErrs = append(allErrs, ValidateVolumeMounts(ctr.VolumeMounts, volDevices, volumes, &ctr, idxPath.Child("volumeMounts"))...)
 		allErrs = append(allErrs, ValidateVolumeDevices(ctr.VolumeDevices, volMounts, volumes, idxPath.Child("volumeDevices"))...)
 		allErrs = append(allErrs, validatePullPolicy(ctr.ImagePullPolicy, idxPath.Child("imagePullPolicy"))...)
-		allErrs = append(allErrs, ValidateResourceRequirements(&ctr.Resources, idxPath.Child("resources"))...)
+		allErrs = append(allErrs, ValidateResourceRequirements(&ctr.Resources, idxPath.Child("resources"), opts)...)
 		allErrs = append(allErrs, ValidateSecurityContext(ctr.SecurityContext, idxPath.Child("securityContext"))...)
 	}
 
@@ -3193,6 +3202,8 @@ type PodValidationOptions struct {
 	AllowDownwardAPIHugePages bool
 	// Allow invalid pod-deletion-cost annotation value for backward compatibility.
 	AllowInvalidPodDeletionCost bool
+	// Allow pod spec to use non-integer multiple of huge page unit size
+	AllowIndivisibleHugePagesValues bool
 }
 
 // ValidatePodSingleHugePageResources checks if there are multiple huge
@@ -3366,7 +3377,7 @@ func ValidatePodSpec(spec *core.PodSpec, podMeta *metav1.ObjectMeta, fldPath *fi
 	}
 
 	if spec.Overhead != nil {
-		allErrs = append(allErrs, validateOverhead(spec.Overhead, fldPath.Child("overhead"))...)
+		allErrs = append(allErrs, validateOverhead(spec.Overhead, fldPath.Child("overhead"), opts)...)
 	}
 
 	return allErrs
@@ -4362,6 +4373,9 @@ func ValidateService(service *core.Service) field.ErrorList {
 		}
 	}
 
+	// validate LoadBalancerClass field
+	allErrs = append(allErrs, validateLoadBalancerClassField(nil, service)...)
+
 	// external traffic fields
 	allErrs = append(allErrs, validateServiceExternalTrafficFieldsValue(service)...)
 	return allErrs
@@ -4474,6 +4488,9 @@ func ValidateServiceUpdate(service, oldService *core.Service) field.ErrorList {
 
 	upgradeDowngradeIPFamiliesErrs := validateUpgradeDowngradeIPFamilies(oldService, service)
 	allErrs = append(allErrs, upgradeDowngradeIPFamiliesErrs...)
+
+	upgradeDowngradeLoadBalancerClassErrs := validateLoadBalancerClassField(oldService, service)
+	allErrs = append(allErrs, upgradeDowngradeLoadBalancerClassErrs...)
 
 	return append(allErrs, ValidateService(service)...)
 }
@@ -5321,7 +5338,7 @@ func validateBasicResource(quantity resource.Quantity, fldPath *field.Path) fiel
 }
 
 // Validates resource requirement spec.
-func ValidateResourceRequirements(requirements *core.ResourceRequirements, fldPath *field.Path) field.ErrorList {
+func ValidateResourceRequirements(requirements *core.ResourceRequirements, fldPath *field.Path, opts PodValidationOptions) field.ErrorList {
 	allErrs := field.ErrorList{}
 	limPath := fldPath.Child("limits")
 	reqPath := fldPath.Child("requests")
@@ -5341,6 +5358,9 @@ func ValidateResourceRequirements(requirements *core.ResourceRequirements, fldPa
 
 		if helper.IsHugePageResourceName(resourceName) {
 			limContainsHugePages = true
+			if err := validateResourceQuantityHugePageValue(resourceName, quantity, opts); err != nil {
+				allErrs = append(allErrs, field.Invalid(fldPath, quantity.String(), err.Error()))
+			}
 		}
 
 		if supportedQoSComputeResources.Has(string(resourceName)) {
@@ -5368,6 +5388,9 @@ func ValidateResourceRequirements(requirements *core.ResourceRequirements, fldPa
 		}
 		if helper.IsHugePageResourceName(resourceName) {
 			reqContainsHugePages = true
+			if err := validateResourceQuantityHugePageValue(resourceName, quantity, opts); err != nil {
+				allErrs = append(allErrs, field.Invalid(fldPath, quantity.String(), err.Error()))
+			}
 		}
 		if supportedQoSComputeResources.Has(string(resourceName)) {
 			reqContainsCPUOrMemory = true
@@ -5379,6 +5402,18 @@ func ValidateResourceRequirements(requirements *core.ResourceRequirements, fldPa
 	}
 
 	return allErrs
+}
+
+func validateResourceQuantityHugePageValue(name core.ResourceName, quantity resource.Quantity, opts PodValidationOptions) error {
+	if !helper.IsHugePageResourceName(name) {
+		return nil
+	}
+
+	if !opts.AllowIndivisibleHugePagesValues && !helper.IsHugePageResourceValueDivisible(name, quantity) {
+		return fmt.Errorf("%s is not positive integer multiple of %s", quantity.String(), name)
+	}
+
+	return nil
 }
 
 // validateResourceQuotaScopes ensures that each enumerated hard resource constraint is valid for set of scopes
@@ -6345,4 +6380,48 @@ func isHeadlessService(service *core.Service) bool {
 	return service != nil &&
 		len(service.Spec.ClusterIPs) == 1 &&
 		service.Spec.ClusterIPs[0] == core.ClusterIPNone
+}
+
+// validateLoadBalancerClassField validation for loadBalancerClass
+func validateLoadBalancerClassField(oldService, service *core.Service) field.ErrorList {
+	allErrs := make(field.ErrorList, 0)
+	if oldService != nil {
+		// validate update op
+		if isTypeLoadBalancer(oldService) && isTypeLoadBalancer(service) {
+			// old and new are both LoadBalancer
+			if !sameLoadBalancerClass(oldService, service) {
+				// can't change loadBalancerClass
+				allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "loadBalancerClass"), service.Spec.LoadBalancerClass, "may not change once set"))
+			}
+		}
+	}
+
+	if isTypeLoadBalancer(service) {
+		// check LoadBalancerClass format
+		if service.Spec.LoadBalancerClass != nil {
+			allErrs = append(allErrs, ValidateQualifiedName(*service.Spec.LoadBalancerClass, field.NewPath("spec", "loadBalancerClass"))...)
+		}
+	} else {
+		// check if LoadBalancerClass set for non LoadBalancer type of service
+		if service.Spec.LoadBalancerClass != nil {
+			allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "loadBalancerClass"), "may only be used when `type` is 'LoadBalancer'"))
+		}
+	}
+	return allErrs
+}
+
+// isTypeLoadBalancer tests service type is loadBalancer or not
+func isTypeLoadBalancer(service *core.Service) bool {
+	return service.Spec.Type == core.ServiceTypeLoadBalancer
+}
+
+// sameLoadBalancerClass check two services have the same loadBalancerClass or not
+func sameLoadBalancerClass(oldService, service *core.Service) bool {
+	if oldService.Spec.LoadBalancerClass == nil && service.Spec.LoadBalancerClass == nil {
+		return true
+	}
+	if oldService.Spec.LoadBalancerClass == nil || service.Spec.LoadBalancerClass == nil {
+		return false
+	}
+	return *oldService.Spec.LoadBalancerClass == *service.Spec.LoadBalancerClass
 }
