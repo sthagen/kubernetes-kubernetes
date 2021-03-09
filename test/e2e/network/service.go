@@ -36,7 +36,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
-	discoveryv1beta1 "k8s.io/api/discovery/v1beta1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -919,6 +919,7 @@ var _ = common.SIGDescribe("Services", func() {
 
 		ginkgo.By("creating a TCP service " + serviceName + " with type=ClusterIP in namespace " + ns)
 		jig := e2eservice.NewTestJig(cs, ns, serviceName)
+		jig.ExternalIPs = true
 		servicePort := 8080
 		tcpService, err := jig.CreateTCPServiceWithPort(nil, int32(servicePort))
 		framework.ExpectNoError(err)
@@ -988,6 +989,7 @@ var _ = common.SIGDescribe("Services", func() {
 
 		ginkgo.By("creating a TCP service " + serviceName + " with type=ClusterIP in namespace " + ns)
 		jig := e2eservice.NewTestJig(cs, ns, serviceName)
+		jig.ExternalIPs = true
 		servicePort := 8080
 		svc, err := jig.CreateTCPServiceWithPort(nil, int32(servicePort))
 		framework.ExpectNoError(err)
@@ -1181,6 +1183,7 @@ var _ = common.SIGDescribe("Services", func() {
 		}
 
 		jig := e2eservice.NewTestJig(cs, ns, serviceName)
+		jig.ExternalIPs = true
 
 		ginkgo.By("creating service " + serviceName + " with type=clusterIP in namespace " + ns)
 		clusterIPService, err := jig.CreateTCPService(func(svc *v1.Service) {
@@ -1209,6 +1212,7 @@ var _ = common.SIGDescribe("Services", func() {
 		serviceName := "nodeport-update-service"
 		ns := f.Namespace.Name
 		jig := e2eservice.NewTestJig(cs, ns, serviceName)
+		jig.ExternalIPs = true
 
 		ginkgo.By("creating a TCP service " + serviceName + " with type=ClusterIP in namespace " + ns)
 		tcpService, err := jig.CreateTCPService(nil)
@@ -2781,11 +2785,11 @@ func validateEndpointsPortsOrFail(c clientset.Interface, namespace, serviceName 
 
 		// If EndpointSlice API is enabled, then validate if appropriate EndpointSlice objects
 		// were also create/updated/deleted.
-		if _, err := c.Discovery().ServerResourcesForGroupVersion(discoveryv1beta1.SchemeGroupVersion.String()); err == nil {
+		if _, err := c.Discovery().ServerResourcesForGroupVersion(discoveryv1.SchemeGroupVersion.String()); err == nil {
 			opts := metav1.ListOptions{
 				LabelSelector: "kubernetes.io/service-name=" + serviceName,
 			}
-			es, err := c.DiscoveryV1beta1().EndpointSlices(namespace).List(context.TODO(), opts)
+			es, err := c.DiscoveryV1().EndpointSlices(namespace).List(context.TODO(), opts)
 			if err != nil {
 				framework.Logf("Failed go list EndpointSlice objects: %v", err)
 				// Retry the error

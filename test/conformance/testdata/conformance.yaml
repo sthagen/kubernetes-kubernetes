@@ -317,21 +317,6 @@
     return a valid PreferredVersion unless the group suffix is example.com.
   release: v1.19
   file: test/e2e/apimachinery/discovery.go
-- testname: Event, delete a collection
-  codename: '[sig-api-machinery] Events should delete a collection of events [Conformance]'
-  description: A set of events is created with a label selector which MUST be found
-    when listed. The set of events is deleted and MUST NOT show up when listed by
-    its label selector.
-  release: v1.20
-  file: test/e2e/apimachinery/events.go
-- testname: Event resource lifecycle
-  codename: '[sig-api-machinery] Events should ensure that an event can be fetched,
-    patched, deleted, and listed [Conformance]'
-  description: Create an event, the event MUST exist. The event is patched with a
-    new message, the check MUST have the update message. The event is deleted and
-    MUST NOT show up when listing all events.
-  release: v1.20
-  file: test/e2e/apimachinery/events.go
 - testname: Garbage Collector, delete deployment,  propagation policy background
   codename: '[sig-api-machinery] Garbage collector should delete RS created by deployment
     when not orphaning [Conformance]'
@@ -598,6 +583,36 @@
     and minor versions MUST only be an integer.
   release: v1.19
   file: test/e2e/apimachinery/server_version.go
+- testname: CronJob Suspend
+  codename: '[sig-apps] CronJob should not schedule jobs when suspended [Slow] [Conformance]'
+  description: CronJob MUST support suspension, which suppresses creation of new jobs.
+  release: v1.21
+  file: test/e2e/apps/cronjob.go
+- testname: CronJob FrobidConcurrent
+  codename: '[sig-apps] CronJob should not schedule new jobs when ForbidConcurrent
+    [Slow] [Conformance]'
+  description: CronJob MUST support ForbidConcurrent policy, allowing to run single,
+    previous job at the time.
+  release: v1.21
+  file: test/e2e/apps/cronjob.go
+- testname: CronJob ReplaceConcurrent
+  codename: '[sig-apps] CronJob should replace jobs when ReplaceConcurrent [Conformance]'
+  description: CronJob MUST support ReplaceConcurrent policy, allowing to run single,
+    newer job at the time.
+  release: v1.21
+  file: test/e2e/apps/cronjob.go
+- testname: CronJob AllowConcurrent
+  codename: '[sig-apps] CronJob should schedule multiple jobs concurrently [Conformance]'
+  description: CronJob MUST support AllowConcurrent policy, allowing to run multiple
+    jobs at the same time.
+  release: v1.21
+  file: test/e2e/apps/cronjob.go
+- testname: CronJob API Operations
+  codename: '[sig-apps] CronJob should support CronJob API operations [Conformance]'
+  description: ' CronJob MUST support create, get, list, watch, update, patch, delete,
+    and deletecollection. CronJob/status MUST support get, update and patch.'
+  release: v1.21
+  file: test/e2e/apps/cronjob.go
 - testname: DaemonSet-FailedPodCreation
   codename: '[sig-apps] Daemon set [Serial] should retry creating failed daemon pods
     [Conformance]'
@@ -704,6 +719,13 @@
     the Job MUST execute to completion.
   release: v1.16
   file: test/e2e/apps/job.go
+- testname: ReplicaSet, is created, Replaced and Patched
+  codename: '[sig-apps] ReplicaSet Replace and Patch tests [Conformance]'
+  description: Create a ReplicaSet (RS) with a single Pod. The Pod MUST be verified
+    that it is running. The RS MUST scale to two replicas and verify the scale count
+    The RS MUST be patched and verify that patch succeeded.
+  release: v1.21
+  file: test/e2e/apps/replica_set.go
 - testname: ReplicaSet, completes the scaling of a ReplicaSet subresource
   codename: '[sig-apps] ReplicaSet Replicaset should have a working scale subresource
     [Conformance]'
@@ -1058,6 +1080,21 @@
     show up when listing all events.
   release: v1.19
   file: test/e2e/instrumentation/events.go
+- testname: Event, delete a collection
+  codename: '[sig-instrumentation] Events should delete a collection of events [Conformance]'
+  description: A set of events is created with a label selector which MUST be found
+    when listed. The set of events is deleted and MUST NOT show up when listed by
+    its label selector.
+  release: v1.20
+  file: test/e2e/instrumentation/core_events.go
+- testname: Event resource lifecycle
+  codename: '[sig-instrumentation] Events should ensure that an event can be fetched,
+    patched, deleted, and listed [Conformance]'
+  description: Create an event, the event MUST exist. The event is patched with a
+    new message, the check MUST have the update message. The event is deleted and
+    MUST NOT show up when listing all events.
+  release: v1.20
+  file: test/e2e/instrumentation/core_events.go
 - testname: DNS, cluster
   codename: '[sig-network] DNS should provide /etc/hosts entries for the cluster [LinuxOnly]
     [Conformance]'
@@ -1120,6 +1157,46 @@
     DNS configuration MUST be configured in the Pod.
   release: v1.17
   file: test/e2e/network/dns.go
+- testname: EndpointSlice API
+  codename: '[sig-network] EndpointSlice should create Endpoints and EndpointSlices
+    for Pods matching a Service [Conformance]'
+  description: The discovery.k8s.io API group MUST exist in the /apis discovery document.
+    The discovery.k8s.io/v1 API group/version MUST exist in the /apis/discovery.k8s.io
+    discovery document. The endpointslices resource MUST exist in the /apis/discovery.k8s.io/v1
+    discovery document. The endpointslice controller must create EndpointSlices for
+    Pods mataching a Service.
+  release: v1.21
+  file: test/e2e/network/endpointslice.go
+- testname: EndpointSlice API
+  codename: '[sig-network] EndpointSlice should create and delete Endpoints and EndpointSlices
+    for a Service with a selector specified [Conformance]'
+  description: The discovery.k8s.io API group MUST exist in the /apis discovery document.
+    The discovery.k8s.io/v1 API group/version MUST exist in the /apis/discovery.k8s.io
+    discovery document. The endpointslices resource MUST exist in the /apis/discovery.k8s.io/v1
+    discovery document. The endpointslice controller should create and delete EndpointSlices
+    for Pods matching a Service.
+  release: v1.21
+  file: test/e2e/network/endpointslice.go
+- testname: EndpointSlice API
+  codename: '[sig-network] EndpointSlice should have Endpoints and EndpointSlices
+    pointing to API Server [Conformance]'
+  description: The discovery.k8s.io API group MUST exist in the /apis discovery document.
+    The discovery.k8s.io/v1 API group/version MUST exist in the /apis/discovery.k8s.io
+    discovery document. The endpointslices resource MUST exist in the /apis/discovery.k8s.io/v1
+    discovery document. API Server should create self referential Endpoints and EndpointSlices
+    named "kubernetes" in the default namespace.
+  release: v1.21
+  file: test/e2e/network/endpointslice.go
+- testname: EndpointSlice Mirroring
+  codename: '[sig-network] EndpointSliceMirroring should mirror a custom Endpoints
+    resource through create update and delete [Conformance]'
+  description: The discovery.k8s.io API group MUST exist in the /apis discovery document.
+    The discovery.k8s.io/v1 API group/version MUST exist in the /apis/discovery.k8s.io
+    discovery document. The endpointslices resource MUST exist in the /apis/discovery.k8s.io/v1
+    discovery document. The endpointslices mirrorowing must mirror endpoint create,
+    update, and delete actions.
+  release: v1.21
+  file: test/e2e/network/endpointslicemirroring.go
 - testname: Scheduling, HostPort matching and HostIP and Protocol not-matching
   codename: '[sig-network] HostPort validates that there is no conflict between pods
     with same hostPort but different hostIP and protocol [LinuxOnly] [Conformance]'
@@ -2038,28 +2115,28 @@
   file: test/e2e/common/node/expansion.go
 - testname: VolumeSubpathEnvExpansion, subpath expansion
   codename: '[sig-node] Variable Expansion should allow substituting values in a volume
-    subpath [sig-storage] [Conformance]'
+    subpath [Conformance]'
   description: Make sure a container's subpath can be set using an expansion of environment
     variables.
   release: v1.19
   file: test/e2e/common/node/expansion.go
 - testname: VolumeSubpathEnvExpansion, subpath with absolute path
   codename: '[sig-node] Variable Expansion should fail substituting values in a volume
-    subpath with absolute path [sig-storage][Slow] [Conformance]'
+    subpath with absolute path [Slow] [Conformance]'
   description: Make sure a container's subpath can not be set using an expansion of
     environment variables when absolute path is supplied.
   release: v1.19
   file: test/e2e/common/node/expansion.go
 - testname: VolumeSubpathEnvExpansion, subpath with backticks
   codename: '[sig-node] Variable Expansion should fail substituting values in a volume
-    subpath with backticks [sig-storage][Slow] [Conformance]'
+    subpath with backticks [Slow] [Conformance]'
   description: Make sure a container's subpath can not be set using an expansion of
     environment variables when backticks are supplied.
   release: v1.19
   file: test/e2e/common/node/expansion.go
 - testname: VolumeSubpathEnvExpansion, subpath test writes
   codename: '[sig-node] Variable Expansion should succeed in writing subpaths in container
-    [sig-storage][Slow] [Conformance]'
+    [Slow] [Conformance]'
   description: "Verify that a subpath expansion can be used to write files into subpaths.
     1.\tvalid subpathexpr starts a container running 2.\ttest for valid subpath writes
     3.\tsuccessful expansion of the subpathexpr isn't required for volume cleanup"
@@ -2067,7 +2144,7 @@
   file: test/e2e/common/node/expansion.go
 - testname: VolumeSubpathEnvExpansion, subpath ready from failed state
   codename: '[sig-node] Variable Expansion should verify that a failing subpath expansion
-    can be modified during the lifecycle of a container [sig-storage][Slow] [Conformance]'
+    can be modified during the lifecycle of a container [Slow] [Conformance]'
   description: Verify that a failing subpath expansion can be modified during the
     lifecycle of a container.
   release: v1.19

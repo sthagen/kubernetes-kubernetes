@@ -83,6 +83,7 @@ type Configurator struct {
 	nodeInfoSnapshot  *internalcache.Snapshot
 	extenders         []schedulerapi.Extender
 	frameworkCapturer FrameworkCapturer
+	parallellism      int32
 }
 
 // create a scheduler from a set of registered plugins.
@@ -142,6 +143,7 @@ func (c *Configurator) create() (*Scheduler, error) {
 		frameworkruntime.WithPodNominator(nominator),
 		frameworkruntime.WithCaptureProfile(frameworkruntime.CaptureProfile(c.frameworkCapturer)),
 		frameworkruntime.WithClusterEventMap(clusterEventMap),
+		frameworkruntime.WithParallelism(int(c.parallellism)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("initializing profiles: %v", err)
@@ -226,7 +228,11 @@ func (c *Configurator) createFromConfig(policy schedulerapi.Policy) (*Scheduler,
 	} else {
 		for _, predicate := range policy.Predicates {
 			klog.V(2).InfoS("Registering predicate", "predicate", predicate.Name)
-			predicateKeys.Insert(lr.ProcessPredicatePolicy(predicate, args))
+			predicateName, err := lr.ProcessPredicatePolicy(predicate, args)
+			if err != nil {
+				return nil, err
+			}
+			predicateKeys.Insert(predicateName)
 		}
 	}
 
@@ -241,7 +247,11 @@ func (c *Configurator) createFromConfig(policy schedulerapi.Policy) (*Scheduler,
 				continue
 			}
 			klog.V(2).InfoS("Registering priority", "priority", priority.Name)
-			priorityKeys[lr.ProcessPriorityPolicy(priority, args)] = priority.Weight
+			priorityName, err := lr.ProcessPriorityPolicy(priority, args)
+			if err != nil {
+				return nil, err
+			}
+			priorityKeys[priorityName] = priority.Weight
 		}
 	}
 

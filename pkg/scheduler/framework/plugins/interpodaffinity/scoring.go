@@ -25,7 +25,6 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
-	"k8s.io/kubernetes/pkg/scheduler/internal/parallelize"
 )
 
 // preScoreStateKey is the key in CycleState to InterPodAffinity pre-computed data for Scoring.
@@ -206,7 +205,7 @@ func (pl *InterPodAffinity) PreScore(
 			topoScores[atomic.AddInt32(&index, 1)] = topoScore
 		}
 	}
-	parallelize.Until(context.Background(), len(allNodes), processNode)
+	pl.parallelizer.Until(context.Background(), len(allNodes), processNode)
 
 	for i := 0; i <= int(index); i++ {
 		state.topologyScore.append(topoScores[i])
@@ -219,7 +218,7 @@ func (pl *InterPodAffinity) PreScore(
 func getPreScoreState(cycleState *framework.CycleState) (*preScoreState, error) {
 	c, err := cycleState.Read(preScoreStateKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read %q from cycleState: %v", preScoreStateKey, err)
+		return nil, fmt.Errorf("failed to read %q from cycleState: %w", preScoreStateKey, err)
 	}
 
 	s, ok := c.(*preScoreState)

@@ -29,13 +29,13 @@ import (
 	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
 )
 
-// SetupPlugin creates a plugin using a framework handle that includes
+// SetupPluginWithInformers creates a plugin using a framework handle that includes
 // the provided sharedLister and a SharedInformerFactory with the provided objects.
 // The function also creates an empty namespace (since most tests creates pods with
 // empty namespace), and start informer factory.
-func SetupPlugin(
+func SetupPluginWithInformers(
 	ctx context.Context,
-	t *testing.T,
+	tb testing.TB,
 	pf frameworkruntime.PluginFactory,
 	config runtime.Object,
 	sharedLister framework.SharedLister,
@@ -43,17 +43,37 @@ func SetupPlugin(
 ) framework.Plugin {
 	objs = append([]runtime.Object{&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ""}}}, objs...)
 	informerFactory := informers.NewSharedInformerFactory(fake.NewSimpleClientset(objs...), 0)
-	fh, err := frameworkruntime.NewFramework(nil, nil, nil,
+	fh, err := frameworkruntime.NewFramework(nil, nil,
 		frameworkruntime.WithSnapshotSharedLister(sharedLister),
 		frameworkruntime.WithInformerFactory(informerFactory))
 	if err != nil {
-		t.Fatalf("Failed creating framework runtime: %v", err)
+		tb.Fatalf("Failed creating framework runtime: %v", err)
 	}
 	p, err := pf(config, fh)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	informerFactory.Start(ctx.Done())
 	informerFactory.WaitForCacheSync(ctx.Done())
+	return p
+}
+
+// SetupPlugin creates a plugin using a framework handle that includes
+// the provided sharedLister.
+func SetupPlugin(
+	tb testing.TB,
+	pf frameworkruntime.PluginFactory,
+	config runtime.Object,
+	sharedLister framework.SharedLister,
+) framework.Plugin {
+	fh, err := frameworkruntime.NewFramework(nil, nil,
+		frameworkruntime.WithSnapshotSharedLister(sharedLister))
+	if err != nil {
+		tb.Fatalf("Failed creating framework runtime: %v", err)
+	}
+	p, err := pf(config, fh)
+	if err != nil {
+		tb.Fatal(err)
+	}
 	return p
 }
