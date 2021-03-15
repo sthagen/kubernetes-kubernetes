@@ -47,11 +47,13 @@ import (
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	networkingv1 "k8s.io/api/networking/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -224,6 +226,7 @@ func describerMap(clientConfig *rest.Config) (map[schema.GroupKind]ResourceDescr
 		{Group: storagev1.GroupName, Kind: "StorageClass"}:                        &StorageClassDescriber{c},
 		{Group: storagev1.GroupName, Kind: "CSINode"}:                             &CSINodeDescriber{c},
 		{Group: policyv1beta1.GroupName, Kind: "PodDisruptionBudget"}:             &PodDisruptionBudgetDescriber{c},
+		{Group: policyv1.GroupName, Kind: "PodDisruptionBudget"}:                  &PodDisruptionBudgetDescriber{c},
 		{Group: rbacv1.GroupName, Kind: "Role"}:                                   &RoleDescriber{c},
 		{Group: rbacv1.GroupName, Kind: "ClusterRole"}:                            &ClusterRoleDescriber{c},
 		{Group: rbacv1.GroupName, Kind: "RoleBinding"}:                            &RoleBindingDescriber{c},
@@ -1073,7 +1076,6 @@ func printEphemeralVolumeSource(ephemeral *corev1.EphemeralVolumeSource, w Prefi
 				Spec:       ephemeral.VolumeClaimTemplate.Spec,
 			}, false /* not a full PVC */)
 	}
-	w.Write(LEVEL_2, "ReadOnly:\t%v\n", ephemeral.ReadOnly)
 }
 
 func printRBDVolumeSource(rbd *corev1.RBDVolumeSource, w PrefixWriter) {
@@ -2163,7 +2165,7 @@ func describeJob(job *batchv1.Job, events *corev1.EventList) (string, error) {
 		} else {
 			w.Write(LEVEL_0, "Completions:\t<unset>\n")
 		}
-		if job.Spec.CompletionMode != "" {
+		if job.Spec.CompletionMode != nil {
 			w.Write(LEVEL_0, "Completion Mode:\t%s\n", job.Spec.CompletionMode)
 		}
 		if job.Status.StartTime != nil {
@@ -2179,7 +2181,7 @@ func describeJob(job *batchv1.Job, events *corev1.EventList) (string, error) {
 			w.Write(LEVEL_0, "Active Deadline Seconds:\t%ds\n", *job.Spec.ActiveDeadlineSeconds)
 		}
 		w.Write(LEVEL_0, "Pods Statuses:\t%d Running / %d Succeeded / %d Failed\n", job.Status.Active, job.Status.Succeeded, job.Status.Failed)
-		if job.Spec.CompletionMode == batchv1.IndexedCompletion {
+		if job.Spec.CompletionMode != nil && *job.Spec.CompletionMode == batchv1.IndexedCompletion {
 			w.Write(LEVEL_0, "Completed Indexes:\t%s\n", capIndexesListOrNone(job.Status.CompletedIndexes, 50))
 		}
 		DescribePodTemplate(&job.Spec.Template, w)
@@ -4533,20 +4535,67 @@ type PodDisruptionBudgetDescriber struct {
 }
 
 func (p *PodDisruptionBudgetDescriber) Describe(namespace, name string, describerSettings DescriberSettings) (string, error) {
-	pdb, err := p.PolicyV1beta1().PodDisruptionBudgets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		return "", err
+	var (
+		pdbv1      *policyv1.PodDisruptionBudget
+		pdbv1beta1 *policyv1beta1.PodDisruptionBudget
+		err        error
+	)
+
+	pdbv1, err = p.PolicyV1().PodDisruptionBudgets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if err == nil {
+		var events *corev1.EventList
+		if describerSettings.ShowEvents {
+			events, _ = p.CoreV1().Events(namespace).Search(scheme.Scheme, pdbv1)
+		}
+		return describePodDisruptionBudgetV1(pdbv1, events)
 	}
 
-	var events *corev1.EventList
-	if describerSettings.ShowEvents {
-		events, _ = p.CoreV1().Events(namespace).Search(scheme.Scheme, pdb)
+	// try falling back to v1beta1 in NotFound error cases
+	if apierrors.IsNotFound(err) {
+		pdbv1beta1, err = p.PolicyV1beta1().PodDisruptionBudgets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	}
+	if err == nil {
+		var events *corev1.EventList
+		if describerSettings.ShowEvents {
+			events, _ = p.CoreV1().Events(namespace).Search(scheme.Scheme, pdbv1beta1)
+		}
+		return describePodDisruptionBudgetV1beta1(pdbv1beta1, events)
 	}
 
-	return describePodDisruptionBudget(pdb, events)
+	return "", err
 }
 
-func describePodDisruptionBudget(pdb *policyv1beta1.PodDisruptionBudget, events *corev1.EventList) (string, error) {
+func describePodDisruptionBudgetV1(pdb *policyv1.PodDisruptionBudget, events *corev1.EventList) (string, error) {
+	return tabbedString(func(out io.Writer) error {
+		w := NewPrefixWriter(out)
+		w.Write(LEVEL_0, "Name:\t%s\n", pdb.Name)
+		w.Write(LEVEL_0, "Namespace:\t%s\n", pdb.Namespace)
+
+		if pdb.Spec.MinAvailable != nil {
+			w.Write(LEVEL_0, "Min available:\t%s\n", pdb.Spec.MinAvailable.String())
+		} else if pdb.Spec.MaxUnavailable != nil {
+			w.Write(LEVEL_0, "Max unavailable:\t%s\n", pdb.Spec.MaxUnavailable.String())
+		}
+
+		if pdb.Spec.Selector != nil {
+			w.Write(LEVEL_0, "Selector:\t%s\n", metav1.FormatLabelSelector(pdb.Spec.Selector))
+		} else {
+			w.Write(LEVEL_0, "Selector:\t<unset>\n")
+		}
+		w.Write(LEVEL_0, "Status:\n")
+		w.Write(LEVEL_2, "Allowed disruptions:\t%d\n", pdb.Status.DisruptionsAllowed)
+		w.Write(LEVEL_2, "Current:\t%d\n", pdb.Status.CurrentHealthy)
+		w.Write(LEVEL_2, "Desired:\t%d\n", pdb.Status.DesiredHealthy)
+		w.Write(LEVEL_2, "Total:\t%d\n", pdb.Status.ExpectedPods)
+		if events != nil {
+			DescribeEvents(events, w)
+		}
+
+		return nil
+	})
+}
+
+func describePodDisruptionBudgetV1beta1(pdb *policyv1beta1.PodDisruptionBudget, events *corev1.EventList) (string, error) {
 	return tabbedString(func(out io.Writer) error {
 		w := NewPrefixWriter(out)
 		w.Write(LEVEL_0, "Name:\t%s\n", pdb.Name)

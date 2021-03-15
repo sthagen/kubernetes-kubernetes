@@ -439,9 +439,10 @@ func benchmarkScheduling(numExistingPods, minPods int,
 	testPodStrategy testutils.TestPodCreateStrategy,
 	b *testing.B) {
 	if b.N < minPods {
+		//lint:ignore SA3001 Set a minimum for b.N to get more meaningful results
 		b.N = minPods
 	}
-	finalFunc, podInformer, clientset := mustSetupScheduler()
+	finalFunc, podInformer, clientset, _ := mustSetupScheduler()
 	defer finalFunc()
 
 	nodePreparer := framework.NewIntegrationTestNodePreparer(
@@ -498,7 +499,7 @@ func benchmarkScheduling(numExistingPods, minPods int,
 	b.StopTimer()
 }
 
-// makeBasePodWithSecrets creates a Pod object to be used as a template.
+// makeBasePodWithSecret creates a Pod object to be used as a template.
 // The pod uses a single Secrets volume.
 func makeBasePodWithSecret() *v1.Pod {
 	basePod := &v1.Pod{

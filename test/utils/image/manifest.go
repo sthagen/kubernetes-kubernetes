@@ -32,7 +32,6 @@ import (
 type RegistryList struct {
 	GcAuthenticatedRegistry string `yaml:"gcAuthenticatedRegistry"`
 	E2eRegistry             string `yaml:"e2eRegistry"`
-	E2eVolumeRegistry       string `yaml:"e2eVolumeRegistry"`
 	PromoterE2eRegistry     string `yaml:"promoterE2eRegistry"`
 	BuildImageRegistry      string `yaml:"buildImageRegistry"`
 	InvalidRegistry         string `yaml:"invalidRegistry"`
@@ -71,14 +70,12 @@ func initReg() RegistryList {
 	registry := RegistryList{
 		GcAuthenticatedRegistry: "gcr.io/authenticated-image-pulling",
 		E2eRegistry:             "gcr.io/kubernetes-e2e-test-images",
-		E2eVolumeRegistry:       "gcr.io/kubernetes-e2e-test-images/volume",
 		PromoterE2eRegistry:     "k8s.gcr.io/e2e-test-images",
 		BuildImageRegistry:      "k8s.gcr.io/build-image",
 		InvalidRegistry:         "invalid.com/invalid",
 		GcEtcdRegistry:          "k8s.gcr.io",
 		GcRegistry:              "k8s.gcr.io",
 		SigStorageRegistry:      "k8s.gcr.io/sig-storage",
-		GcrReleaseRegistry:      "gcr.io/gke-release",
 		PrivateRegistry:         "gcr.io/k8s-authenticated-test",
 		SampleRegistry:          "gcr.io/google-samples",
 		MicrosoftRegistry:       "mcr.microsoft.com",
@@ -109,14 +106,12 @@ var (
 	// Preconfigured image configs
 	dockerLibraryRegistry   = "docker.io/library"
 	e2eRegistry             = registry.E2eRegistry
-	e2eVolumeRegistry       = registry.E2eVolumeRegistry
 	promoterE2eRegistry     = registry.PromoterE2eRegistry
 	buildImageRegistry      = registry.BuildImageRegistry
 	gcAuthenticatedRegistry = registry.GcAuthenticatedRegistry
 	gcEtcdRegistry          = registry.GcEtcdRegistry
 	gcRegistry              = registry.GcRegistry
 	sigStorageRegistry      = registry.SigStorageRegistry
-	gcrReleaseRegistry      = registry.GcrReleaseRegistry
 	invalidRegistry         = registry.InvalidRegistry
 	sampleRegistry          = registry.SampleRegistry
 	microsoftRegistry       = registry.MicrosoftRegistry
@@ -216,7 +211,7 @@ const (
 
 func initImageConfigs() (map[int]Config, map[int]Config) {
 	configs := map[int]Config{}
-	configs[Agnhost] = Config{promoterE2eRegistry, "agnhost", "2.28"}
+	configs[Agnhost] = Config{promoterE2eRegistry, "agnhost", "2.29"}
 	configs[AgnhostPrivate] = Config{PrivateRegistry, "agnhost", "2.6"}
 	configs[AuthenticatedAlpine] = Config{gcAuthenticatedRegistry, "alpine", "3.7"}
 	configs[AuthenticatedWindowsNanoServer] = Config{gcAuthenticatedRegistry, "windows-nanoserver", "v1"}
@@ -387,8 +382,6 @@ func ReplaceRegistryInImageURL(imageURL string) (string, error) {
 	switch registryAndUser {
 	case "gcr.io/kubernetes-e2e-test-images":
 		registryAndUser = e2eRegistry
-	case "gcr.io/kubernetes-e2e-test-images/volume":
-		registryAndUser = e2eVolumeRegistry
 	case "k8s.gcr.io":
 		registryAndUser = gcRegistry
 	case "k8s.gcr.io/sig-storage":
@@ -397,8 +390,6 @@ func ReplaceRegistryInImageURL(imageURL string) (string, error) {
 		registryAndUser = PrivateRegistry
 	case "gcr.io/google-samples":
 		registryAndUser = sampleRegistry
-	case "gcr.io/gke-release":
-		registryAndUser = gcrReleaseRegistry
 	case "docker.io/library":
 		registryAndUser = dockerLibraryRegistry
 	default:

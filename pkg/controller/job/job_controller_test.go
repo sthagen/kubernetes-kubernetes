@@ -64,7 +64,6 @@ func newJob(parallelism, completions, backoffLimit int32, completionMode batch.C
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"foo": "bar"},
 			},
-			CompletionMode: completionMode,
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -78,6 +77,9 @@ func newJob(parallelism, completions, backoffLimit int32, completionMode batch.C
 				},
 			},
 		},
+	}
+	if completionMode != "" {
+		j.Spec.CompletionMode = &completionMode
 	}
 	// Special case: -1 for either completions or parallelism means leave nil (negative is not allowed
 	// in practice by validation.
@@ -323,12 +325,14 @@ func TestControllerSyncJob(t *testing.T) {
 			expectedFailed:     1,
 		},
 		"job finish": {
-			parallelism:       2,
-			completions:       5,
-			backoffLimit:      6,
-			jobKeyForget:      true,
-			succeededPods:     5,
-			expectedSucceeded: 5,
+			parallelism:             2,
+			completions:             5,
+			backoffLimit:            6,
+			jobKeyForget:            true,
+			succeededPods:           5,
+			expectedSucceeded:       5,
+			expectedCondition:       &jobConditionComplete,
+			expectedConditionStatus: v1.ConditionTrue,
 		},
 		"WQ job finishing": {
 			parallelism:       2,
@@ -422,6 +426,43 @@ func TestControllerSyncJob(t *testing.T) {
 			expectedCreations:      2,
 			expectedActive:         2,
 			expectedCreatedIndexes: sets.NewInt(0, 1),
+			indexedJobEnabled:      true,
+		},
+		"indexed job completed": {
+			parallelism:    2,
+			completions:    3,
+			backoffLimit:   6,
+			completionMode: batch.IndexedCompletion,
+			jobKeyForget:   true,
+			podsWithIndexes: []indexPhase{
+				{"0", v1.PodSucceeded},
+				{"1", v1.PodFailed},
+				{"1", v1.PodSucceeded},
+				{"2", v1.PodSucceeded},
+			},
+			expectedSucceeded:       3,
+			expectedFailed:          1,
+			expectedCompletedIdxs:   "0-2",
+			expectedCondition:       &jobConditionComplete,
+			expectedConditionStatus: v1.ConditionTrue,
+			indexedJobEnabled:       true,
+		},
+		"indexed job repeated completed index": {
+			parallelism:    2,
+			completions:    3,
+			backoffLimit:   6,
+			completionMode: batch.IndexedCompletion,
+			jobKeyForget:   true,
+			podsWithIndexes: []indexPhase{
+				{"0", v1.PodSucceeded},
+				{"1", v1.PodSucceeded},
+				{"1", v1.PodSucceeded},
+			},
+			expectedCreations:      1,
+			expectedActive:         1,
+			expectedSucceeded:      2,
+			expectedCompletedIdxs:  "0,1",
+			expectedCreatedIndexes: sets.NewInt(2),
 			indexedJobEnabled:      true,
 		},
 		"indexed job some running and completed pods": {
@@ -705,8 +746,14 @@ func TestControllerSyncJob(t *testing.T) {
 				t.Error("Missing .status.startTime")
 			}
 			// validate conditions
-			if tc.expectedCondition != nil && !getCondition(actual, *tc.expectedCondition, tc.expectedConditionStatus, tc.expectedConditionReason) {
-				t.Errorf("Expected completion condition.  Got %#v", actual.Status.Conditions)
+			if tc.expectedCondition != nil {
+				if !getCondition(actual, *tc.expectedCondition, tc.expectedConditionStatus, tc.expectedConditionReason) {
+					t.Errorf("Expected completion condition.  Got %#v", actual.Status.Conditions)
+				}
+			} else {
+				if cond := hasTrueCondition(actual); cond != nil {
+					t.Errorf("Got condition %s, want none", *cond)
+				}
 			}
 			if tc.expectedCondition == nil && tc.suspend && len(actual.Status.Conditions) != 0 {
 				t.Errorf("Unexpected conditions %v", actual.Status.Conditions)
@@ -900,6 +947,15 @@ func getCondition(job *batch.Job, condition batch.JobConditionType, status v1.Co
 		}
 	}
 	return false
+}
+
+func hasTrueCondition(job *batch.Job) *batch.JobConditionType {
+	for _, v := range job.Status.Conditions {
+		if v.Status == v1.ConditionTrue {
+			return &v.Type
+		}
+	}
+	return nil
 }
 
 func TestSyncPastDeadlineJobFinished(t *testing.T) {
