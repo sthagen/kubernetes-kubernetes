@@ -18,7 +18,7 @@ dependencies:
 
   # agnhost: bump this one first
   - name: "agnhost"
-    version: "2.29"
+    version: "2.30"
     refPaths:
     - path: test/images/agnhost/VERSION
       match: \d.\d
@@ -160,7 +160,7 @@ dependencies:
       match: __default_go_runner_version=
 
   - name: "k8s.gcr.io/pause"
-    version: 3.4
+    version: 3.5
     refPaths:
     - path: build/pause/Makefile
       match: TAG =
