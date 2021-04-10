@@ -18,6 +18,7 @@ package validation
 
 import (
 	"fmt"
+	"strings"
 
 	v1 "k8s.io/api/core/v1"
 	metav1validation "k8s.io/apimachinery/pkg/apis/meta/v1/validation"
@@ -240,7 +241,7 @@ func validateFunctionShape(shape []config.UtilizationShapePoint, path *field.Pat
 	return allErrs
 }
 
-// TODO potentially replace with validateResources
+// weight of resource is allowed to exceed 100, this is only applicable to `RequestedToCapacityRatio` plugin for backwards compatibility reason.
 func validateResourcesNoMax(resources []config.ResourceSpec, p *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 	for i, r := range resources {
@@ -309,4 +310,31 @@ func ValidateVolumeBindingArgs(args *config.VolumeBindingArgs) error {
 	}
 
 	return err
+}
+
+func ValidateNodeResourcesFitArgs(args *config.NodeResourcesFitArgs) error {
+	var allErrs field.ErrorList
+	resPath := field.NewPath("ignoredResources")
+	for i, res := range args.IgnoredResources {
+		path := resPath.Index(i)
+		if errs := metav1validation.ValidateLabelName(res, path); len(errs) != 0 {
+			allErrs = append(allErrs, errs...)
+		}
+	}
+
+	groupPath := field.NewPath("ignoredResourceGroups")
+	for i, group := range args.IgnoredResourceGroups {
+		path := groupPath.Index(i)
+		if strings.Contains(group, "/") {
+			allErrs = append(allErrs, field.Invalid(path, group, "resource group name can't contain '/'"))
+		}
+		if errs := metav1validation.ValidateLabelName(group, path); len(errs) != 0 {
+			allErrs = append(allErrs, errs...)
+		}
+	}
+
+	if len(allErrs) == 0 {
+		return nil
+	}
+	return allErrs.ToAggregate()
 }

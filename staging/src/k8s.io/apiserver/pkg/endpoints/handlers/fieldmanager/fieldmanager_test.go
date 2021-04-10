@@ -79,6 +79,7 @@ func (d *fakeObjectDefaulter) Default(in runtime.Object) {}
 
 type TestFieldManager struct {
 	fieldManager *FieldManager
+	apiVersion   string
 	emptyObj     runtime.Object
 	liveObj      runtime.Object
 }
@@ -122,6 +123,7 @@ func NewTestFieldManager(gvk schema.GroupVersionKind, ignoreManagedFieldsFromReq
 	}
 	return TestFieldManager{
 		fieldManager: NewFieldManager(f, ignoreManagedFieldsFromRequestObject),
+		apiVersion:   gvk.GroupVersion().String(),
 		emptyObj:     live,
 		liveObj:      live.DeepCopyObject(),
 	}
@@ -147,8 +149,16 @@ func NewFakeOpenAPIModels() proto.Models {
 	return m
 }
 
+func (f *TestFieldManager) APIVersion() string {
+	return f.apiVersion
+}
+
 func (f *TestFieldManager) Reset() {
 	f.liveObj = f.emptyObj.DeepCopyObject()
+}
+
+func (f *TestFieldManager) Get() runtime.Object {
+	return f.liveObj.DeepCopyObject()
 }
 
 func (f *TestFieldManager) Apply(obj runtime.Object, manager string, force bool) error {
@@ -760,6 +770,7 @@ func TestNoOpChanges(t *testing.T) {
 			"labels": {
 				"a": "b"
 			},
+			"creationTimestamp": null,
 		}
 	}`), &obj.Object); err != nil {
 		t.Fatalf("error decoding YAML: %v", err)

@@ -861,6 +861,7 @@ type CephFSVolumeSource struct {
 
 // SecretReference represents a Secret Reference. It has enough information to retrieve secret
 // in any namespace
+// +structType=atomic
 type SecretReference struct {
 	// Name is unique within a namespace to reference a secret resource.
 	// +optional
@@ -1948,6 +1949,7 @@ type EnvVarSource struct {
 }
 
 // ObjectFieldSelector selects an APIVersioned field of an object.
+// +structType=atomic
 type ObjectFieldSelector struct {
 	// Version of the schema the FieldPath is written in terms of, defaults to "v1".
 	// +optional
@@ -1957,6 +1959,7 @@ type ObjectFieldSelector struct {
 }
 
 // ResourceFieldSelector represents container resources (cpu, memory) and their output format
+// +structType=atomic
 type ResourceFieldSelector struct {
 	// Container name: required for volumes, optional for env vars
 	// +optional
@@ -1969,6 +1972,7 @@ type ResourceFieldSelector struct {
 }
 
 // Selects a key from a ConfigMap.
+// +structType=atomic
 type ConfigMapKeySelector struct {
 	// The ConfigMap to select from.
 	LocalObjectReference `json:",inline" protobuf:"bytes,1,opt,name=localObjectReference"`
@@ -1980,6 +1984,7 @@ type ConfigMapKeySelector struct {
 }
 
 // SecretKeySelector selects a key of a Secret.
+// +structType=atomic
 type SecretKeySelector struct {
 	// The name of the secret in the pod's namespace to select from.
 	LocalObjectReference `json:",inline" protobuf:"bytes,1,opt,name=localObjectReference"`
@@ -2616,6 +2621,7 @@ const (
 // A node selector represents the union of the results of one or more label queries
 // over a set of nodes; that is, it represents the OR of the selectors represented
 // by the node selector terms.
+// +structType=atomic
 type NodeSelector struct {
 	//Required. A list of node selector terms. The terms are ORed.
 	NodeSelectorTerms []NodeSelectorTerm `json:"nodeSelectorTerms" protobuf:"bytes,1,rep,name=nodeSelectorTerms"`
@@ -2624,6 +2630,7 @@ type NodeSelector struct {
 // A null or empty node selector term matches no objects. The requirements of
 // them are ANDed.
 // The TopologySelectorTerm type implements a subset of the NodeSelectorTerm.
+// +structType=atomic
 type NodeSelectorTerm struct {
 	// A list of node selector requirements by node's labels.
 	// +optional
@@ -2668,7 +2675,10 @@ const (
 // The requirements of them are ANDed.
 // It provides a subset of functionality as NodeSelectorTerm.
 // This is an alpha feature and may change in the future.
+// +structType=atomic
 type TopologySelectorTerm struct {
+	// Usage: Fields of type []TopologySelectorTerm must be listType=atomic.
+
 	// A list of topology selector requirements by labels.
 	// +optional
 	MatchLabelExpressions []TopologySelectorLabelRequirement `json:"matchLabelExpressions,omitempty" protobuf:"bytes,1,rep,name=matchLabelExpressions"`
@@ -3005,6 +3015,7 @@ type PodSpec struct {
 	// Selector which must match a node's labels for the pod to be scheduled on that node.
 	// More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
 	// +optional
+	// +mapType=atomic
 	NodeSelector map[string]string `json:"nodeSelector,omitempty" protobuf:"bytes,7,rep,name=nodeSelector"`
 
 	// ServiceAccountName is the name of the ServiceAccount to use to run this pod.
@@ -3136,8 +3147,8 @@ type PodSpec struct {
 	// The RuntimeClass admission controller will reject Pod create requests which have the overhead already
 	// set. If RuntimeClass is configured and selected in the PodSpec, Overhead will be set to the value
 	// defined in the corresponding RuntimeClass, otherwise it will remain unset and treated as zero.
-	// More info: https://git.k8s.io/enhancements/keps/sig-node/20190226-pod-overhead.md
-	// This field is alpha-level as of Kubernetes v1.16, and is only honored by servers that enable the PodOverhead feature.
+	// More info: https://git.k8s.io/enhancements/keps/sig-node/688-pod-overhead/README.md
+	// This field is beta-level as of Kubernetes v1.18, and is only honored by servers that enable the PodOverhead feature.
 	// +optional
 	Overhead ResourceList `json:"overhead,omitempty" protobuf:"bytes,32,opt,name=overhead"`
 	// TopologySpreadConstraints describes how a group of pods ought to spread across topology
@@ -3785,6 +3796,7 @@ type ReplicationControllerSpec struct {
 	// controller, if empty defaulted to labels on Pod template.
 	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors
 	// +optional
+	// +mapType=atomic
 	Selector map[string]string `json:"selector,omitempty" protobuf:"bytes,2,rep,name=selector"`
 
 	// TemplateRef is a reference to an object that describes the pod that will be created if
@@ -4083,6 +4095,7 @@ type ServiceSpec struct {
 	// Ignored if type is ExternalName.
 	// More info: https://kubernetes.io/docs/concepts/services-networking/service/
 	// +optional
+	// +mapType=atomic
 	Selector map[string]string `json:"selector,omitempty" protobuf:"bytes,2,rep,name=selector"`
 
 	// clusterIP is the IP address of the service and is usually assigned
@@ -4523,6 +4536,7 @@ type EndpointSubset struct {
 }
 
 // EndpointAddress is a tuple that describes single IP address.
+// +structType=atomic
 type EndpointAddress struct {
 	// The IP of this endpoint.
 	// May not be loopback (127.0.0.0/8), link-local (169.254.0.0/16),
@@ -4543,6 +4557,7 @@ type EndpointAddress struct {
 }
 
 // EndpointPort is a tuple that describes a single port.
+// +structType=atomic
 type EndpointPort struct {
 	// The name of this port.  This must match the 'name' field in the
 	// corresponding ServicePort.
@@ -5362,6 +5377,7 @@ type ServiceProxyOptions struct {
 // Instead of using this type, create a locally provided and used type that is well-focused on your reference.
 // For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +structType=atomic
 type ObjectReference struct {
 	// Kind of the referent.
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
@@ -5401,6 +5417,7 @@ type ObjectReference struct {
 
 // LocalObjectReference contains enough information to let you locate the
 // referenced object inside the same namespace.
+// +structType=atomic
 type LocalObjectReference struct {
 	// Name of the referent.
 	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
@@ -5411,6 +5428,7 @@ type LocalObjectReference struct {
 
 // TypedLocalObjectReference contains enough information to let you locate the
 // typed referenced object inside the same namespace.
+// +structType=atomic
 type TypedLocalObjectReference struct {
 	// APIGroup is the group for the resource being referenced.
 	// If APIGroup is not specified, the specified Kind must be in the core API group.
@@ -5709,6 +5727,7 @@ type ResourceQuotaSpec struct {
 
 // A scope selector represents the AND of the selectors represented
 // by the scoped-resource selector requirements.
+// +structType=atomic
 type ScopeSelector struct {
 	// A list of scope selector requirements by scope of the resources.
 	// +optional
