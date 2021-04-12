@@ -57,8 +57,8 @@ $GCE_METADATA_SERVER = "169.254.169.254"
 # exist until an initial HNS network has been created on the Windows node - see
 # Add_InitialHnsNetwork().
 $MGMT_ADAPTER_NAME = "vEthernet (Ethernet*"
-$CRICTL_VERSION = 'v1.20.0'
-$CRICTL_SHA256 = 'cc909108ee84d39b2e9d7ac0cb9599b6fa7fc51f5a7da7014052684cd3e3f65e'
+$CRICTL_VERSION = 'v1.21.0'
+$CRICTL_SHA256 = '437d5301f6f5b9848ef057cee98474ce11a6679c91b4d4e83677a8c1f2415143'
 
 Import-Module -Force C:\common.psm1
 
@@ -1541,21 +1541,16 @@ function Install_Containerd {
     return
   }
 
-  # TODO(random-liu): Change this to official release path after testing.
-  $CONTAINERD_GCS_BUCKET = "cri-containerd-staging/windows"
-
   $tmp_dir = 'C:\containerd_tmp'
   New-Item $tmp_dir -ItemType 'directory' -Force | Out-Null
 
-  $version_url = "https://storage.googleapis.com/$CONTAINERD_GCS_BUCKET/latest"
-  MustDownload-File -URLs $version_url -OutFile $tmp_dir\version
-  $version = $(Get-Content $tmp_dir\version)
-
-  $tar_url = ("https://storage.googleapis.com/$CONTAINERD_GCS_BUCKET/" +
-              "cri-containerd-cni-$version.windows-amd64.tar.gz")
-  $sha_url = $tar_url + ".sha256"
-  MustDownload-File -URLs $sha_url -OutFile $tmp_dir\sha256
-  $sha = $(Get-Content $tmp_dir\sha256)
+  # TODO(ibrahimab) Change this to a gcs bucket with CI maintained and accessible by community.
+  $version = '1.4.4'
+  $tar_url = ("https://github.com/containerd/containerd/releases/download/v${version}/" +
+              "cri-containerd-cni-${version}-windows-amd64.tar.gz")
+  $sha_url = $tar_url + ".sha256sum"
+  MustDownload-File -URLs $sha_url -OutFile $tmp_dir\sha256sum
+  $sha = $(Get-Content $tmp_dir\sha256sum).Split(" ")[0].ToUpper()
 
   MustDownload-File `
       -URLs $tar_url `
@@ -1564,9 +1559,12 @@ function Install_Containerd {
       -Algorithm SHA256
 
   tar xzvf $tmp_dir\containerd.tar.gz -C $tmp_dir
-  Move-Item -Force $tmp_dir\cni\*.exe ${env:CNI_DIR}\
-  Move-Item -Force $tmp_dir\*.exe ${env:NODE_DIR}\
+  Move-Item -Force $tmp_dir\cni\*.exe "${env:CNI_DIR}\"
+  Move-Item -Force $tmp_dir\*.exe "${env:NODE_DIR}\"
   Remove-Item -Force -Recurse $tmp_dir
+
+  # Exclusion for Defender.
+  Add-MpPreference -ExclusionProcess "${env:NODE_DIR}\containerd.exe"
 }
 
 # Lookup the path of containerd config if exists, else returns a default.
@@ -1574,7 +1572,7 @@ function Get_Containerd_ConfigPath {
   $service = Get-WMIObject -Class Win32_Service -Filter  "Name='containerd'"
   if (!($service -eq $null) -and
       $service.PathName -match ".*\s--config\s*(\S+).*" -and
-      $matches.Length -eq 2) {
+      $matches.Count -eq 2) {
     return $matches[1]
   } else {
     return 'C:\Program Files\containerd\config.toml'
@@ -1601,8 +1599,8 @@ function Configure_Containerd {
   bin_dir = 'CNI_BIN_DIR'
   conf_dir = 'CNI_CONF_DIR'
 "@.replace('INFRA_CONTAINER_IMAGE', ${env:INFRA_CONTAINER}).`
-    replace('CNI_BIN_DIR', ${env:CNI_DIR}).`
-    replace('CNI_CONF_DIR', ${env:CNI_CONFIG_DIR})
+    replace('CNI_BIN_DIR', "${env:CNI_DIR}").`
+    replace('CNI_CONF_DIR', "${env:CNI_CONFIG_DIR}")
 }
 
 # Register if needed and start containerd service.
