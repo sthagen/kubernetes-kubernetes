@@ -71,8 +71,10 @@ const (
 
 var (
 	deprecatedVolumeProviders = map[string]string{
-		"kubernetes.io/cinder":  "The Cinder volume provider is deprecated and will be removed in a future release",
-		"kubernetes.io/scaleio": "The ScaleIO volume provider is deprecated and will be removed in a future release",
+		"kubernetes.io/cinder":    "The Cinder volume provider is deprecated and will be removed in a future release",
+		"kubernetes.io/storageos": "The StorageOS volume provider is deprecated and will be removed in a future release",
+		"kubernetes.io/quobyte":   "The Quobyte volume provider is deprecated and will be removed in a future release",
+		"kubernetes.io/flocker":   "The Flocker volume provider is deprecated and will be removed in a future release",
 	}
 )
 
@@ -649,7 +651,7 @@ func (pm *VolumePluginMgr) initProbedPlugin(probedPlugin VolumePlugin) error {
 
 	err := probedPlugin.Init(pm.Host)
 	if err != nil {
-		return fmt.Errorf("Failed to load volume plugin %s, error: %s", name, err.Error())
+		return fmt.Errorf("failed to load volume plugin %s, error: %s", name, err.Error())
 	}
 
 	klog.V(1).Infof("Loaded volume plugin %q", name)
@@ -664,7 +666,7 @@ func (pm *VolumePluginMgr) FindPluginBySpec(spec *Spec) (VolumePlugin, error) {
 	defer pm.mutex.RUnlock()
 
 	if spec == nil {
-		return nil, fmt.Errorf("Could not find plugin because volume spec is nil")
+		return nil, fmt.Errorf("could not find plugin because volume spec is nil")
 	}
 
 	matches := []VolumePlugin{}
@@ -787,7 +789,7 @@ func (pm *VolumePluginMgr) ListVolumePluginWithLimits() []VolumePluginWithAttach
 func (pm *VolumePluginMgr) FindPersistentPluginBySpec(spec *Spec) (PersistentVolumePlugin, error) {
 	volumePlugin, err := pm.FindPluginBySpec(spec)
 	if err != nil {
-		return nil, fmt.Errorf("Could not find volume plugin for spec: %#v", spec)
+		return nil, fmt.Errorf("could not find volume plugin for spec: %#v", spec)
 	}
 	if persistentVolumePlugin, ok := volumePlugin.(PersistentVolumePlugin); ok {
 		return persistentVolumePlugin, nil
@@ -800,7 +802,7 @@ func (pm *VolumePluginMgr) FindPersistentPluginBySpec(spec *Spec) (PersistentVol
 func (pm *VolumePluginMgr) FindVolumePluginWithLimitsBySpec(spec *Spec) (VolumePluginWithAttachLimits, error) {
 	volumePlugin, err := pm.FindPluginBySpec(spec)
 	if err != nil {
-		return nil, fmt.Errorf("Could not find volume plugin for spec : %#v", spec)
+		return nil, fmt.Errorf("could not find volume plugin for spec : %#v", spec)
 	}
 
 	if limitedPlugin, ok := volumePlugin.(VolumePluginWithAttachLimits); ok {

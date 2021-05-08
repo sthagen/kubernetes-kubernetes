@@ -196,13 +196,6 @@ const (
 	// intended to be used for service account token verification.
 	ServiceAccountIssuerDiscovery featuregate.Feature = "ServiceAccountIssuerDiscovery"
 
-	// owner: @Random-Liu
-	// beta: v1.11
-	// ga:   v1.21
-	//
-	// Enable container log rotation for cri container runtime
-	CRIContainerLogRotation featuregate.Feature = "CRIContainerLogRotation"
-
 	// owner: @krmayankk
 	// beta:  v1.14
 	// ga:    v1.21
@@ -300,6 +293,7 @@ const (
 
 	// owner: @alculquicondor
 	// alpha: v1.21
+	// beta: v1.22
 	//
 	// Allows Job controller to manage Pod completions per completion index.
 	IndexedJob featuregate.Feature = "IndexedJob"
@@ -759,7 +753,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	SupportNodePidsLimit:                           {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.23
 	BoundServiceAccountTokenVolume:                 {Default: true, PreRelease: featuregate.Beta},
 	ServiceAccountIssuerDiscovery:                  {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.22
-	CRIContainerLogRotation:                        {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.22
 	CSIMigration:                                   {Default: true, PreRelease: featuregate.Beta},
 	CSIMigrationGCE:                                {Default: false, PreRelease: featuregate.Beta}, // Off by default (requires GCE PD CSI Driver)
 	InTreePluginGCEUnregister:                      {Default: false, PreRelease: featuregate.Alpha},
@@ -787,7 +780,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	NetworkPolicyEndPort:                           {Default: false, PreRelease: featuregate.Alpha},
 	ProcMountType:                                  {Default: false, PreRelease: featuregate.Alpha},
 	TTLAfterFinished:                               {Default: true, PreRelease: featuregate.Beta},
-	IndexedJob:                                     {Default: false, PreRelease: featuregate.Alpha},
+	IndexedJob:                                     {Default: true, PreRelease: featuregate.Beta},
 	KubeletPodResources:                            {Default: true, PreRelease: featuregate.Beta},
 	LocalStorageCapacityIsolationFSQuotaMonitoring: {Default: false, PreRelease: featuregate.Alpha},
 	NonPreemptingPriority:                          {Default: true, PreRelease: featuregate.Beta},
