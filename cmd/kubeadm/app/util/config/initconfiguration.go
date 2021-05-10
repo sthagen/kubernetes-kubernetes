@@ -36,7 +36,6 @@ import (
 	kubeadmapiv1 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta3"
 	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/validation"
 	"k8s.io/kubernetes/cmd/kubeadm/app/componentconfigs"
-	"k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	"k8s.io/kubernetes/cmd/kubeadm/app/util/config/strict"
@@ -191,7 +190,7 @@ func DefaultedStaticInitConfiguration() (*kubeadmapi.InitConfiguration, error) {
 		},
 	}
 	versionedClusterCfg := &kubeadmapiv1.ClusterConfiguration{
-		KubernetesVersion: constants.CurrentKubernetesVersion.String(), // avoid going to the Internet for the current Kubernetes version
+		KubernetesVersion: kubeadmconstants.CurrentKubernetesVersion.String(), // avoid going to the Internet for the current Kubernetes version
 	}
 
 	internalcfg := &kubeadmapi.InitConfiguration{}
@@ -340,6 +339,13 @@ func documentMapToInitConfiguration(gvkmap kubeadmapi.DocumentMap, allowDeprecat
 	// If ClusterConfiguration was given, populate it in the InitConfiguration struct
 	if clustercfg != nil {
 		initcfg.ClusterConfiguration = *clustercfg
+	} else {
+		// Populate the internal InitConfiguration.ClusterConfiguration with defaults
+		extclustercfg := &kubeadmapiv1.ClusterConfiguration{}
+		kubeadmscheme.Scheme.Default(extclustercfg)
+		if err := kubeadmscheme.Scheme.Convert(extclustercfg, &initcfg.ClusterConfiguration, nil); err != nil {
+			return nil, err
+		}
 	}
 
 	// Load any component configs
