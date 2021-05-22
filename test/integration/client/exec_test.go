@@ -27,6 +27,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -36,13 +38,17 @@ import (
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/plugin/pkg/client/auth/exec"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/client-go/tools/metrics"
 	"k8s.io/client-go/transport"
 	"k8s.io/client-go/util/cert"
 	"k8s.io/client-go/util/connrotation"
@@ -54,6 +60,7 @@ import (
 
 // These constants are used to communicate behavior to the testdata/exec-plugin.sh test fixture.
 const (
+	exitCodeEnvVar   = "EXEC_PLUGIN_EXEC_CODE"
 	outputEnvVar     = "EXEC_PLUGIN_OUTPUT"
 	outputFileEnvVar = "EXEC_PLUGIN_OUTPUT_FILE"
 )
@@ -81,21 +88,35 @@ func (s *syncedHeaderValues) get() [][]string {
 	return s.data
 }
 
-func TestExecPluginViaClient(t *testing.T) {
-	result, clientAuthorizedToken, clientCertFileName, clientKeyFileName := startTestServer(t)
+type execPluginCall struct {
+	exitCode   int
+	callStatus string
+}
 
-	unauthorizedCert, unauthorizedKey, err := cert.GenerateSelfSignedCertKey("some-host", nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+type execPluginMetrics struct {
+	calls []execPluginCall
+}
 
-	tests := []struct {
-		name                          string
-		clientConfigFunc              func(*rest.Config)
-		wantAuthorizationHeaderValues [][]string
-		wantCertificate               *tls.Certificate
-		wantClientErrorPrefix         string
-	}{
+func (m *execPluginMetrics) Increment(exitCode int, callStatus string) {
+	m.calls = append(m.calls, execPluginCall{exitCode: exitCode, callStatus: callStatus})
+}
+
+var execPluginMetricsComparer = cmp.Comparer(func(a, b *execPluginMetrics) bool {
+	return reflect.DeepEqual(a, b)
+})
+
+type execPluginClientTestData struct {
+	name                          string
+	clientConfigFunc              func(*rest.Config)
+	wantAuthorizationHeaderValues [][]string
+	wantCertificate               *tls.Certificate
+	wantGetCertificateErrorPrefix string
+	wantClientErrorPrefix         string
+	wantMetrics                   *execPluginMetrics
+}
+
+func execPluginClientTests(t *testing.T, unauthorizedCert, unauthorizedKey []byte, clientAuthorizedToken, clientCertFileName, clientKeyFileName string) []execPluginClientTestData {
+	return []execPluginClientTestData{
 		{
 			name: "unauthorized token",
 			clientConfigFunc: func(c *rest.Config) {
@@ -115,6 +136,13 @@ func TestExecPluginViaClient(t *testing.T) {
 			wantAuthorizationHeaderValues: [][]string{{"Bearer unauthorized"}},
 			wantCertificate:               &tls.Certificate{},
 			wantClientErrorPrefix:         "Unauthorized",
+			wantMetrics: &execPluginMetrics{
+				calls: []execPluginCall{
+					// 2 calls since we preemptively refresh the creds upon a 401 HTTP response.
+					{exitCode: 0, callStatus: "no_error"},
+					{exitCode: 0, callStatus: "no_error"},
+				},
+			},
 		},
 		{
 			name: "unauthorized certificate",
@@ -136,6 +164,13 @@ func TestExecPluginViaClient(t *testing.T) {
 			wantAuthorizationHeaderValues: [][]string{nil},
 			wantCertificate:               x509KeyPair(unauthorizedCert, unauthorizedKey, true),
 			wantClientErrorPrefix:         "Unauthorized",
+			wantMetrics: &execPluginMetrics{
+				calls: []execPluginCall{
+					// 2 calls since we preemptively refresh the creds upon a 401 HTTP response.
+					{exitCode: 0, callStatus: "no_error"},
+					{exitCode: 0, callStatus: "no_error"},
+				},
+			},
 		},
 		{
 			name: "authorized token",
@@ -155,6 +190,7 @@ func TestExecPluginViaClient(t *testing.T) {
 			},
 			wantAuthorizationHeaderValues: [][]string{{"Bearer " + clientAuthorizedToken}},
 			wantCertificate:               &tls.Certificate{},
+			wantMetrics:                   &execPluginMetrics{calls: []execPluginCall{{exitCode: 0, callStatus: "no_error"}}},
 		},
 		{
 			name: "authorized certificate",
@@ -175,6 +211,7 @@ func TestExecPluginViaClient(t *testing.T) {
 			},
 			wantAuthorizationHeaderValues: [][]string{nil},
 			wantCertificate:               loadX509KeyPair(clientCertFileName, clientKeyFileName),
+			wantMetrics:                   &execPluginMetrics{calls: []execPluginCall{{exitCode: 0, callStatus: "no_error"}}},
 		},
 		{
 			name: "authorized token and certificate",
@@ -196,6 +233,7 @@ func TestExecPluginViaClient(t *testing.T) {
 			},
 			wantAuthorizationHeaderValues: [][]string{{"Bearer " + clientAuthorizedToken}},
 			wantCertificate:               loadX509KeyPair(clientCertFileName, clientKeyFileName),
+			wantMetrics:                   &execPluginMetrics{calls: []execPluginCall{{exitCode: 0, callStatus: "no_error"}}},
 		},
 		{
 			name: "unauthorized token and authorized certificate favors authorized certificate",
@@ -217,6 +255,7 @@ func TestExecPluginViaClient(t *testing.T) {
 			},
 			wantAuthorizationHeaderValues: [][]string{{"Bearer client-unauthorized-token"}},
 			wantCertificate:               loadX509KeyPair(clientCertFileName, clientKeyFileName),
+			wantMetrics:                   &execPluginMetrics{calls: []execPluginCall{{exitCode: 0, callStatus: "no_error"}}},
 		},
 		{
 			name: "authorized token and unauthorized certificate favors authorized token",
@@ -238,6 +277,7 @@ func TestExecPluginViaClient(t *testing.T) {
 			},
 			wantAuthorizationHeaderValues: [][]string{{"Bearer " + clientAuthorizedToken}},
 			wantCertificate:               x509KeyPair([]byte(unauthorizedCert), []byte(unauthorizedKey), true),
+			wantMetrics:                   &execPluginMetrics{calls: []execPluginCall{{exitCode: 0, callStatus: "no_error"}}},
 		},
 		{
 			name: "unauthorized token and unauthorized certificate",
@@ -260,6 +300,13 @@ func TestExecPluginViaClient(t *testing.T) {
 			wantAuthorizationHeaderValues: [][]string{{"Bearer client-unauthorized-token"}},
 			wantCertificate:               x509KeyPair(unauthorizedCert, unauthorizedKey, true),
 			wantClientErrorPrefix:         "Unauthorized",
+			wantMetrics: &execPluginMetrics{
+				calls: []execPluginCall{
+					// 2 calls since we preemptively refresh the creds upon a 401 HTTP response.
+					{exitCode: 0, callStatus: "no_error"},
+					{exitCode: 0, callStatus: "no_error"},
+				},
+			},
 		},
 		{
 			name: "good token with static auth basic creds favors static auth basic creds",
@@ -280,8 +327,8 @@ func TestExecPluginViaClient(t *testing.T) {
 				c.Password = "unauthorized"
 			},
 			wantAuthorizationHeaderValues: [][]string{{"Basic " + basicAuthHeaderValue("unauthorized", "unauthorized")}},
-			wantCertificate:               &tls.Certificate{},
 			wantClientErrorPrefix:         "Unauthorized",
+			wantMetrics:                   &execPluginMetrics{},
 		},
 		{
 			name: "good token with static auth bearer token favors static auth bearer token",
@@ -302,6 +349,7 @@ func TestExecPluginViaClient(t *testing.T) {
 			},
 			wantAuthorizationHeaderValues: [][]string{{"Bearer some-unauthorized-token"}},
 			wantClientErrorPrefix:         "Unauthorized",
+			wantMetrics:                   &execPluginMetrics{},
 		},
 		{
 			// This is not the behavior we would expect, see
@@ -325,16 +373,71 @@ func TestExecPluginViaClient(t *testing.T) {
 			},
 			wantAuthorizationHeaderValues: [][]string{{"Bearer " + clientAuthorizedToken}},
 			wantCertificate:               x509KeyPair(unauthorizedCert, unauthorizedKey, false),
+			wantMetrics:                   &execPluginMetrics{calls: []execPluginCall{{exitCode: 0, callStatus: "no_error"}}},
+		},
+		{
+			name: "unknown binary",
+			clientConfigFunc: func(c *rest.Config) {
+				c.ExecProvider.Command = "does not exist"
+			},
+			wantGetCertificateErrorPrefix: "exec: executable does not exist not found",
+			wantClientErrorPrefix:         `Get "https`,
+			wantMetrics:                   &execPluginMetrics{calls: []execPluginCall{{exitCode: 1, callStatus: "plugin_not_found_error"}}},
+		},
+		{
+			name: "binary not executable",
+			clientConfigFunc: func(c *rest.Config) {
+				c.ExecProvider.Command = "./testdata/exec-plugin-not-executable.sh"
+			},
+			wantGetCertificateErrorPrefix: "exec: fork/exec ./testdata/exec-plugin-not-executable.sh: permission denied",
+			wantClientErrorPrefix:         `Get "https`,
+			wantMetrics:                   &execPluginMetrics{calls: []execPluginCall{{exitCode: 1, callStatus: "client_internal_error"}}},
+		},
+		{
+			name: "binary fails",
+			clientConfigFunc: func(c *rest.Config) {
+				c.ExecProvider.Env = []clientcmdapi.ExecEnvVar{
+					{
+						Name:  exitCodeEnvVar,
+						Value: "10",
+					},
+				}
+			},
+			wantGetCertificateErrorPrefix: "exec: executable testdata/exec-plugin.sh failed with exit code 10",
+			wantClientErrorPrefix:         `Get "https`,
+			wantMetrics:                   &execPluginMetrics{calls: []execPluginCall{{exitCode: 10, callStatus: "plugin_execution_error"}}},
 		},
 	}
+}
+
+func TestExecPluginViaClient(t *testing.T) {
+	result, clientAuthorizedToken, clientCertFileName, clientKeyFileName := startTestServer(t)
+
+	unauthorizedCert, unauthorizedKey, err := cert.GenerateSelfSignedCertKey("some-host", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := execPluginClientTests(t, unauthorizedCert, unauthorizedKey, clientAuthorizedToken, clientCertFileName, clientKeyFileName)
+
 	for _, test := range tests {
+		test := test
 		t.Run(test.name, func(t *testing.T) {
+			actualMetrics := captureMetrics(t)
+
 			var authorizationHeaderValues syncedHeaderValues
 			clientConfig := rest.AnonymousClientConfig(result.ClientConfig)
 			clientConfig.ExecProvider = &clientcmdapi.ExecConfig{
 				Command: "testdata/exec-plugin.sh",
 				// TODO(ankeesler): move to v1 once exec plugins go GA.
 				APIVersion: "client.authentication.k8s.io/v1beta1",
+				Args: []string{
+					// If we didn't have this arg, then some metrics assertions might fail because
+					// the authenticator may be pulled from a globalCache and therefore it may have
+					// already fetched a valid credential.
+					"--random-arg-to-avoid-authenticator-cache-hits",
+					rand.String(10),
+				},
 			}
 			clientConfig.Wrap(func(rt http.RoundTripper) http.RoundTripper {
 				return roundTripperFunc(func(req *http.Request) (*http.Response, error) {
@@ -361,6 +464,11 @@ func TestExecPluginViaClient(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			// Validate that the proper metrics were set.
+			if diff := cmp.Diff(test.wantMetrics, actualMetrics, execPluginMetricsComparer); diff != "" {
+				t.Error("unexpected metrics; -want, +got:\n" + diff)
+			}
+
 			// Validate that the right token is used.
 			if diff := cmp.Diff(test.wantAuthorizationHeaderValues, authorizationHeaderValues.get()); diff != "" {
 				t.Error("unexpected authorization header values; -want, +got:\n" + diff)
@@ -377,7 +485,11 @@ func TestExecPluginViaClient(t *testing.T) {
 				}
 			} else {
 				cert, err := tlsConfig.GetClientCertificate(&tls.CertificateRequestInfo{})
-				if err != nil {
+				if len(test.wantGetCertificateErrorPrefix) != 0 {
+					if err == nil || !strings.HasPrefix(err.Error(), test.wantGetCertificateErrorPrefix) {
+						t.Fatalf(`got %q, wanted "%s..."`, err, test.wantGetCertificateErrorPrefix)
+					}
+				} else if err != nil {
 					t.Fatal(err)
 				}
 				if diff := cmp.Diff(test.wantCertificate, cert); diff != "" {
@@ -386,6 +498,17 @@ func TestExecPluginViaClient(t *testing.T) {
 			}
 		})
 	}
+}
+
+func captureMetrics(t *testing.T) *execPluginMetrics {
+	previousCallsMetric := metrics.ExecPluginCalls
+	t.Cleanup(func() {
+		metrics.ExecPluginCalls = previousCallsMetric
+	})
+
+	actualMetrics := &execPluginMetrics{}
+	metrics.ExecPluginCalls = actualMetrics
+	return actualMetrics
 }
 
 // objectMetaSansResourceVersionComparer compares two metav1.ObjectMeta's except for their resource
@@ -666,7 +789,7 @@ func startTestServer(t *testing.T) (result *kubeapiservertesting.TestServer, cli
 	clientAuthorizedToken = "client-authorized-token"
 	tokenFileName := writeTokenFile(t, clientAuthorizedToken)
 	clientCAFileName, clientSigningCert, clientSigningKey := writeCACertFiles(t, certDir)
-	clientCertFileName, clientKeyFileName = writeCerts(t, clientSigningCert, clientSigningKey, certDir, 30*time.Second)
+	clientCertFileName, clientKeyFileName = writeCerts(t, clientSigningCert, clientSigningKey, certDir, time.Hour)
 	result = kubeapiservertesting.StartTestServerOrDie(
 		t,
 		nil,
@@ -836,4 +959,92 @@ func assertInformerEvents(t *testing.T, informerSpy *informerSpy, created, updat
 		t.Errorf("unexpected deleted event(s), -want, +got:\n%s", diff)
 	}
 
+}
+
+func TestExecPluginGlobalCache(t *testing.T) {
+	// we do not really need the server for this test but this allows us to easily share the test data
+	result, clientAuthorizedToken, clientCertFileName, clientKeyFileName := startTestServer(t)
+
+	unauthorizedCert, unauthorizedKey, err := cert.GenerateSelfSignedCertKey("some-host", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testsFirstRun := execPluginClientTests(t, unauthorizedCert, unauthorizedKey, clientAuthorizedToken, clientCertFileName, clientKeyFileName)
+	testsSecondRun := execPluginClientTests(t, unauthorizedCert, unauthorizedKey, clientAuthorizedToken, clientCertFileName, clientKeyFileName)
+
+	randStrings := make([]string, 0, len(testsFirstRun))
+	for range testsFirstRun {
+		randStrings = append(randStrings, rand.String(10))
+	}
+
+	getTestExecClientAddresses := func(t *testing.T, tests []execPluginClientTestData, suffix string) []string {
+		var addresses []string
+		for i, test := range tests {
+			test := test
+			t.Run(test.name+" "+suffix, func(t *testing.T) {
+				clientConfig := rest.AnonymousClientConfig(result.ClientConfig)
+				clientConfig.ExecProvider = &clientcmdapi.ExecConfig{
+					Command: "testdata/exec-plugin.sh",
+					// TODO(ankeesler): move to v1 once exec plugins go GA.
+					APIVersion: "client.authentication.k8s.io/v1beta1",
+					Args: []string{
+						// carefully control what the global cache sees as the same exec plugin
+						"--random-arg-to-avoid-authenticator-cache-hits",
+						randStrings[i],
+					},
+				}
+
+				if test.clientConfigFunc != nil {
+					test.clientConfigFunc(clientConfig)
+				}
+
+				addresses = append(addresses, execPluginMemoryAddress(t, clientConfig, i))
+			})
+		}
+		return addresses
+	}
+
+	addressesFirstRun := getTestExecClientAddresses(t, testsFirstRun, "first")
+	addressesSecondRun := getTestExecClientAddresses(t, testsSecondRun, "second")
+
+	if diff := cmp.Diff(addressesFirstRun, addressesSecondRun); diff != "" {
+		t.Error("unexpected addresses; -want, +got:\n" + diff)
+	}
+
+	if want, got := len(testsFirstRun), len(addressesFirstRun); want != got {
+		t.Errorf("expected %d addresses but got %d", want, got)
+	}
+
+	if want, got := len(addressesFirstRun), sets.NewString(addressesFirstRun...).Len(); want != got {
+		t.Errorf("expected %d distinct authenticators but got %d", want, got)
+	}
+}
+
+func execPluginMemoryAddress(t *testing.T, config *rest.Config, i int) string {
+	t.Helper()
+
+	wantType := reflect.TypeOf(&exec.Authenticator{})
+
+	tc, err := config.TransportConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if tc.WrapTransport == nil {
+		return "<nil> " + strconv.Itoa(i)
+	}
+
+	rt := tc.WrapTransport(nil)
+
+	val := reflect.Indirect(reflect.ValueOf(rt))
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Field(i)
+		if field.Type() == wantType {
+			return strconv.FormatUint(uint64(field.Pointer()), 10)
+		}
+	}
+
+	t.Fatal("unable to find authenticator in rest config")
+	return ""
 }

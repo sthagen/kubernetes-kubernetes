@@ -23,4 +23,6 @@ if [[ -n "${EXEC_PLUGIN_OUTPUT_FILE-""}" ]]; then
   exit
 fi
 
-echo "$EXEC_PLUGIN_OUTPUT"
+echo "${EXEC_PLUGIN_OUTPUT-""}"
+
+exit "${EXEC_PLUGIN_EXEC_CODE-0}"

@@ -153,18 +153,6 @@ type ImageMeta struct {
 	//TODO: evaluate if we need also a ImageName based on user feedbacks
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// ClusterStatus contains the cluster status. The ClusterStatus will be stored in the kubeadm-config
-// ConfigMap in the cluster, and then updated by kubeadm when additional control plane instance joins or leaves the cluster.
-type ClusterStatus struct {
-	metav1.TypeMeta `json:",inline"`
-
-	// APIEndpoints currently available in the cluster, one for each control plane/api server instance.
-	// The key of the map is the IP of the host's default interface
-	APIEndpoints map[string]APIEndpoint `json:"apiEndpoints"`
-}
-
 // APIEndpoint struct contains elements of API server instance deployed on a node.
 type APIEndpoint struct {
 	// AdvertiseAddress sets the IP address for the API server to advertise.
@@ -214,7 +202,7 @@ type Networking struct {
 type BootstrapToken struct {
 	// Token is used for establishing bidirectional trust between nodes and control-planes.
 	// Used for joining nodes in the cluster.
-	Token *BootstrapTokenString `json:"token"`
+	Token *BootstrapTokenString `json:"token" datapolicy:"token"`
 	// Description sets a human-friendly message why this token exists and what it's used
 	// for, so other administrators can know its purpose.
 	Description string `json:"description,omitempty"`
@@ -327,7 +315,7 @@ type Discovery struct {
 	// TLSBootstrapToken is a token used for TLS bootstrapping.
 	// If .BootstrapToken is set, this field is defaulted to .BootstrapToken.Token, but can be overridden.
 	// If .File is set, this field **must be set** in case the KubeConfigFile does not contain any other authentication information
-	TLSBootstrapToken string `json:"tlsBootstrapToken,omitempty"`
+	TLSBootstrapToken string `json:"tlsBootstrapToken,omitempty" datapolicy:"token"`
 
 	// Timeout modifies the discovery timeout
 	Timeout *metav1.Duration `json:"timeout,omitempty"`
@@ -337,7 +325,7 @@ type Discovery struct {
 type BootstrapTokenDiscovery struct {
 	// Token is a token used to validate cluster information
 	// fetched from the control-plane.
-	Token string `json:"token"`
+	Token string `json:"token" datapolicy:"token"`
 
 	// APIServerEndpoint is an IP or domain name to the API server from which info will be fetched.
 	APIServerEndpoint string `json:"apiServerEndpoint,omitempty"`
@@ -349,7 +337,7 @@ type BootstrapTokenDiscovery struct {
 	// where the only currently supported type is "sha256". This is a hex-encoded
 	// SHA-256 hash of the Subject Public Key Info (SPKI) object in DER-encoded
 	// ASN.1. These hashes can be calculated using, for example, OpenSSL.
-	CACertHashes []string `json:"caCertHashes,omitempty"`
+	CACertHashes []string `json:"caCertHashes,omitempty" datapolicy:"security-key"`
 
 	// UnsafeSkipCAVerification allows token-based discovery
 	// without CA verification via CACertHashes. This can weaken
