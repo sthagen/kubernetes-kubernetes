@@ -27,6 +27,7 @@ const (
 	// Every feature gate should add method here following this template:
 	//
 	// // owner: @username
+	// // kep: http://kep.k8s.io/NNN
 	// // alpha: v1.X
 	// MyFeature featuregate.Feature = "MyFeature"
 
@@ -147,6 +148,7 @@ const (
 	LegacyNodeRoleBehavior featuregate.Feature = "LegacyNodeRoleBehavior"
 
 	// owner @brendandburns
+	// kep: http://kep.k8s.io/1143
 	// alpha: v1.9
 	// beta:  v1.19
 	// ga:  v1.21
@@ -249,6 +251,7 @@ const (
 
 	// owner: @chendave
 	// alpha: v1.21
+	// beta: v1.22
 	//
 	// PreferNominatedNode tells scheduler whether the nominated node will be checked first before looping
 	// all the rest of nodes in the cluster.
@@ -275,6 +278,7 @@ const (
 	NodeLease featuregate.Feature = "NodeLease"
 
 	// owner: @rikatz
+	// kep: http://kep.k8s.io/2079
 	// alpha: v1.21
 	//
 	// Enables the endPort field in NetworkPolicy to enable a Port Range behavior in Network Policies.
@@ -440,6 +444,7 @@ const (
 	PodOverhead featuregate.Feature = "PodOverhead"
 
 	// owner: @khenidak
+	// kep: http://kep.k8s.io/563
 	// alpha: v1.15
 	// beta: v1.21
 	//
@@ -447,6 +452,7 @@ const (
 	IPv6DualStack featuregate.Feature = "IPv6DualStack"
 
 	// owner: @robscott @freehan
+	// kep: http://kep.k8s.io/752
 	// alpha: v1.16
 	// beta: v1.18
 	// ga: v1.21
@@ -455,6 +461,7 @@ const (
 	EndpointSlice featuregate.Feature = "EndpointSlice"
 
 	// owner: @robscott @freehan
+	// kep: http://kep.k8s.io/752
 	// alpha: v1.18
 	// beta: v1.19
 	//
@@ -462,6 +469,7 @@ const (
 	EndpointSliceProxying featuregate.Feature = "EndpointSliceProxying"
 
 	// owner: @robscott @kumarvin123
+	// kep: http://kep.k8s.io/752
 	// alpha: v1.19
 	// beta: v1.21
 	//
@@ -493,11 +501,10 @@ const (
 	// owner: @alaypatel07, @soltysh
 	// alpha: v1.20
 	// beta: v1.21
+	// GA: v1.22
 	//
 	// CronJobControllerV2 controls whether the controller manager starts old cronjob
 	// controller or new one which is implemented with informers and delaying queue
-	//
-	// This feature is deprecated, and will be removed in v1.22.
 	CronJobControllerV2 featuregate.Feature = "CronJobControllerV2"
 
 	// owner: @smarterclayton
@@ -513,6 +520,7 @@ const (
 	ServiceTopology featuregate.Feature = "ServiceTopology"
 
 	// owner: @robscott
+	// kep: http://kep.k8s.io/1507
 	// alpha: v1.18
 	// beta:  v1.19
 	// ga:    v1.20
@@ -551,6 +559,7 @@ const (
 	AnyVolumeDataSource featuregate.Feature = "AnyVolumeDataSource"
 
 	// owner: @javidiaz
+	// kep: http://kep.k8s.io/1797
 	// alpha: v1.19
 	// beta: v1.20
 	//
@@ -586,12 +595,14 @@ const (
 	HPAContainerMetrics featuregate.Feature = "HPAContainerMetrics"
 
 	// owner: @andrewsykim
+	// kep: http://kep.k8s.io/1672
 	// alpha: v1.20
 	//
 	// Enable Terminating condition in Endpoint Slices.
 	EndpointSliceTerminatingCondition featuregate.Feature = "EndpointSliceTerminatingCondition"
 
 	// owner: @robscott
+	// kep: http://kep.k8s.io/752
 	// alpha: v1.20
 	//
 	// Enable NodeName field on Endpoint Slices.
@@ -639,12 +650,14 @@ const (
 	GracefulNodeShutdown featuregate.Feature = "GracefulNodeShutdown"
 
 	// owner: @andrewsykim @uablrek
+	// kep: http://kep.k8s.io/1864
 	// alpha: v1.20
 	//
 	// Allows control if NodePorts shall be created for services with "type: LoadBalancer" by defining the spec.AllocateLoadBalancerNodePorts field (bool)
 	ServiceLBNodePortControl featuregate.Feature = "ServiceLBNodePortControl"
 
 	// owner: @janosi
+	// kep: http://kep.k8s.io/1435
 	// alpha: v1.20
 	//
 	// Enables the usage of different protocols in the same Service with type=LoadBalancer
@@ -662,6 +675,7 @@ const (
 	PodDeletionCost featuregate.Feature = "PodDeletionCost"
 
 	// owner: @robscott
+	// kep: http://kep.k8s.io/2433
 	// alpha: v1.21
 	//
 	// Enables topology aware hints for EndpointSlices
@@ -681,6 +695,7 @@ const (
 	PodAffinityNamespaceSelector featuregate.Feature = "PodAffinityNamespaceSelector"
 
 	// owner: @andrewsykim @xudongliuharold
+	// kep: http://kep.k8s.io/1959
 	// alpha: v1.21
 	//
 	// Enable support multiple Service "type: LoadBalancer" implementations in a cluster by specifying LoadBalancerClass
@@ -693,12 +708,14 @@ const (
 	LogarithmicScaleDown featuregate.Feature = "LogarithmicScaleDown"
 
 	// owner: @hbagdi
+	// kep: http://kep.k8s.io/2365
 	// alpha: v1.21
 	//
 	// Enable Scope and Namespace fields on IngressClassParametersReference.
 	IngressClassNamespacedParams featuregate.Feature = "IngressClassNamespacedParams"
 
 	// owner: @maplain @andrewsykim
+	// kep: http://kep.k8s.io/2086
 	// alpha: v1.21
 	//
 	// Enables node-local routing for Service internal traffic
@@ -717,6 +734,7 @@ const (
 	KubeletPodResourcesGetAllocatable featuregate.Feature = "KubeletPodResourcesGetAllocatable"
 
 	// owner: @jayunit100 @abhiraut @rikatz
+	// kep: http://kep.k8s.io/2161
 	// beta: v1.21
 	// ga: v1.22
 	//
@@ -742,6 +760,7 @@ const (
 	StatefulSetMinReadySeconds featuregate.Feature = "StatefulSetMinReadySeconds"
 
 	// owner: @gjkim42
+	// kep: http://kep.k8s.io/2595
 	// alpha: v1.22
 	//
 	// Enables apiserver and kubelet to allow up to 32 DNSSearchPaths and up to 2048 DNSSearchListChars.
@@ -772,7 +791,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	MemoryManager:                                  {Default: false, PreRelease: featuregate.Alpha},
 	CPUCFSQuotaPeriod:                              {Default: false, PreRelease: featuregate.Alpha},
 	TopologyManager:                                {Default: true, PreRelease: featuregate.Beta},
-	ServiceNodeExclusion:                           {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.22
+	ServiceNodeExclusion:                           {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.23
 	NodeDisruptionExclusion:                        {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.22
 	StorageObjectInUseProtection:                   {Default: true, PreRelease: featuregate.GA},
 	SupportPodPidsLimit:                            {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.23
@@ -820,10 +839,10 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	StartupProbe:                                   {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.23
 	AllowInsecureBackendProxy:                      {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.23
 	PodDisruptionBudget:                            {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.25
-	CronJobControllerV2:                            {Default: true, PreRelease: featuregate.Beta},
-	DaemonSetUpdateSurge:                           {Default: true, PreRelease: featuregate.Beta}, // on by default in 1.22
+	CronJobControllerV2:                            {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.23
+	DaemonSetUpdateSurge:                           {Default: true, PreRelease: featuregate.Beta},                    // on by default in 1.22
 	ServiceTopology:                                {Default: false, PreRelease: featuregate.Alpha},
-	ServiceAppProtocol:                             {Default: true, PreRelease: featuregate.GA, LockToDefault: true},
+	ServiceAppProtocol:                             {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.22
 	ImmutableEphemeralVolumes:                      {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.24
 	HugePageStorageMediumSize:                      {Default: true, PreRelease: featuregate.Beta},
 	DownwardAPIHugePages:                           {Default: false, PreRelease: featuregate.Beta}, // on by default in 1.22
@@ -841,7 +860,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	ServiceLBNodePortControl:                       {Default: false, PreRelease: featuregate.Alpha},
 	MixedProtocolLBService:                         {Default: false, PreRelease: featuregate.Alpha},
 	VolumeCapacityPriority:                         {Default: false, PreRelease: featuregate.Alpha},
-	PreferNominatedNode:                            {Default: false, PreRelease: featuregate.Alpha},
+	PreferNominatedNode:                            {Default: true, PreRelease: featuregate.Beta},
 	ProbeTerminationGracePeriod:                    {Default: false, PreRelease: featuregate.Alpha},
 	RunAsGroup:                                     {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.22
 	PodDeletionCost:                                {Default: true, PreRelease: featuregate.Beta},

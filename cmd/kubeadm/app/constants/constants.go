@@ -322,7 +322,7 @@ const (
 	CoreDNSDeploymentName = "coredns"
 
 	// CoreDNSImageName specifies the name of the image for CoreDNS add-on
-	CoreDNSImageName = "coredns/coredns"
+	CoreDNSImageName = "coredns"
 
 	// CoreDNSVersion is the version of CoreDNS to be deployed if it is used
 	CoreDNSVersion = "v1.8.0"
@@ -398,8 +398,17 @@ const (
 
 	// CgroupDriverSystemd holds the systemd driver type
 	CgroupDriverSystemd = "systemd"
-	// CgroupDriverCgroupfs holds the cgroupfs driver type
-	CgroupDriverCgroupfs = "cgroupfs"
+
+	// The username of the user that kube-controller-manager runs as.
+	KubeControllerManagerUserName string = "kubeadm-kcm"
+	// The username of the user that kube-apiserver runs as.
+	KubeAPIServerUserName string = "kubeadm-kas"
+	// The username of the user that kube-scheduler runs as.
+	KubeSchedulerUserName string = "kubeadm-ks"
+	// The username of the user that etcd runs as.
+	EtcdUserName string = "kubeadm-etcd"
+	// The group of users that are allowed to read the service account private key.
+	ServiceAccountKeyReadersGroupName string = "kubeadm-sa-key-readers"
 )
 
 var (
