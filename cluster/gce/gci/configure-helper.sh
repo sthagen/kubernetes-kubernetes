@@ -1212,12 +1212,12 @@ rules:
     omitStages:
       - "RequestReceived"
 
-  # Secrets, ConfigMaps, and TokenReviews can contain sensitive & binary data,
+  # Secrets, ConfigMaps, TokenRequest and TokenReviews can contain sensitive & binary data,
   # so only log at the Metadata level.
   - level: Metadata
     resources:
       - group: "" # core
-        resources: ["secrets", "configmaps"]
+        resources: ["secrets", "configmaps", "serviceaccounts/token"]
       - group: authentication.k8s.io
         resources: ["tokenreviews"]
     omitStages:
@@ -2123,12 +2123,6 @@ function start-kube-controller-manager {
   fi
   if [[ -n "${CLUSTER_SIGNING_DURATION:-}" ]]; then
     params+=("--cluster-signing-duration=$CLUSTER_SIGNING_DURATION")
-  fi
-  # Disable using HPA metrics REST clients if metrics-server isn't enabled,
-  # or if we want to explicitly disable it by setting HPA_USE_REST_CLIENT.
-  if [[ "${ENABLE_METRICS_SERVER:-}" != "true" ]] ||
-     [[ "${HPA_USE_REST_CLIENTS:-}" == "false" ]]; then
-    params+=("--horizontal-pod-autoscaler-use-rest-clients=false")
   fi
   if [[ -n "${PV_RECYCLER_OVERRIDE_TEMPLATE:-}" ]]; then
     params+=("--pv-recycler-pod-template-filepath-nfs=$PV_RECYCLER_OVERRIDE_TEMPLATE")
