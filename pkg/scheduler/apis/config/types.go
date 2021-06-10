@@ -47,6 +47,14 @@ const (
 
 // KubeSchedulerConfiguration configures a scheduler
 type KubeSchedulerConfiguration struct {
+	// TypeMeta contains the API version and kind. In kube-scheduler, after
+	// conversion from the versioned KubeSchedulerConfiguration type to this
+	// internal type, we set the APIVersion field to the scheme group/version of
+	// the type we converted from. This is done in cmd/kube-scheduler in two
+	// places: (1) when loading config from a file, (2) generating the default
+	// config. Based on the versioned type set in this field, we make decisions;
+	// for example (1) during validation to check for usage of removed plugins,
+	// (2) writing config to a file, (3) initialising the scheduler.
 	metav1.TypeMeta
 
 	// Parallelism defines the amount of parallelism in algorithms for scheduling a Pods. Must be greater than 0. Defaults to 16

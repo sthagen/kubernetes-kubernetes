@@ -143,6 +143,7 @@ func InitHostPathCSIDriver() storageframework.TestDriver {
 		storageframework.CapBlock:               true,
 		storageframework.CapPVCDataSource:       true,
 		storageframework.CapControllerExpansion: true,
+		storageframework.CapOnlineExpansion:     true,
 		storageframework.CapSingleNodeVolume:    true,
 
 		// This is needed for the
@@ -243,10 +244,11 @@ func (h *hostpathCSIDriver) PrepareTest(f *framework.Framework) (*storageframewo
 
 		// Remove csi-external-health-monitor-agent and
 		// csi-external-health-monitor-controller
-		// containers. They are not needed for any of the
-		// tests and may be causing too much overhead when
+		// containers. The agent is obsolete.
+		// The controller is not needed for any of the
+		// tests and is causing too much overhead when
 		// running in a large cluster (see
-		// https://github.com/kubernetes/kubernetes/issues/102452#issuecomment-854452816).
+		// https://github.com/kubernetes/kubernetes/issues/102452#issuecomment-856991009).
 		switch item := item.(type) {
 		case *appsv1.StatefulSet:
 			var containers []v1.Container
@@ -788,6 +790,7 @@ func InitGcePDCSIDriver() storageframework.TestDriver {
 				storageframework.CapVolumeLimits:        false,
 				storageframework.CapTopology:            true,
 				storageframework.CapControllerExpansion: true,
+				storageframework.CapOnlineExpansion:     true,
 				storageframework.CapNodeExpansion:       true,
 				storageframework.CapSnapshotDataSource:  true,
 			},
