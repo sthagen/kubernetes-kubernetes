@@ -921,8 +921,9 @@ func TestImagePullCheck(t *testing.T) {
 	}
 
 	check := ImagePullCheck{
-		runtime:   containerRuntime,
-		imageList: []string{"img1", "img2", "img3"},
+		runtime:         containerRuntime,
+		imageList:       []string{"img1", "img2", "img3"},
+		imagePullPolicy: "", // should be defaulted to v1.PullIfNotPresent
 	}
 	warnings, errors := check.Check()
 	if len(warnings) != 0 {
