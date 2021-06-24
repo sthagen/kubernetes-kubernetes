@@ -173,13 +173,6 @@ const (
 	// intended to be used for service account token verification.
 	ServiceAccountIssuerDiscovery featuregate.Feature = "ServiceAccountIssuerDiscovery"
 
-	// owner: @krmayankk
-	// beta:  v1.14
-	// ga:    v1.21
-	//
-	// Enables control over the primary group ID of containers' init processes.
-	RunAsGroup featuregate.Feature = "RunAsGroup"
-
 	// owner: @saad-ali
 	// ga: 	  v1.10
 	//
@@ -721,6 +714,12 @@ const (
 	//
 	// Enables apiserver and kubelet to allow up to 32 DNSSearchPaths and up to 2048 DNSSearchListChars.
 	ExpandedDNSConfig featuregate.Feature = "ExpandedDNSConfig"
+
+	// owner: @saschagrunert
+	// alpha: v1.22
+	//
+	// Enables the use of `RuntimeDefault` as the default seccomp profile for all workloads.
+	SeccompDefault featuregate.Feature = "SeccompDefault"
 )
 
 func init() {
@@ -813,7 +812,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	VolumeCapacityPriority:                         {Default: false, PreRelease: featuregate.Alpha},
 	PreferNominatedNode:                            {Default: true, PreRelease: featuregate.Beta},
 	ProbeTerminationGracePeriod:                    {Default: false, PreRelease: featuregate.Alpha},
-	RunAsGroup:                                     {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.22
 	PodDeletionCost:                                {Default: true, PreRelease: featuregate.Beta},
 	TopologyAwareHints:                             {Default: false, PreRelease: featuregate.Alpha},
 	PodAffinityNamespaceSelector:                   {Default: true, PreRelease: featuregate.Beta},
@@ -829,6 +827,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	DisableCloudProviders:                          {Default: false, PreRelease: featuregate.Alpha},
 	StatefulSetMinReadySeconds:                     {Default: false, PreRelease: featuregate.Alpha},
 	ExpandedDNSConfig:                              {Default: false, PreRelease: featuregate.Alpha},
+	SeccompDefault:                                 {Default: false, PreRelease: featuregate.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
