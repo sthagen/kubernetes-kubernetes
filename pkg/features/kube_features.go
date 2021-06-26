@@ -466,15 +466,6 @@ const (
 	// DaemonSets allow workloads to maintain availability during update per node
 	DaemonSetUpdateSurge featuregate.Feature = "DaemonSetUpdateSurge"
 
-	// owner: @robscott
-	// kep: http://kep.k8s.io/1507
-	// alpha: v1.18
-	// beta:  v1.19
-	// ga:    v1.20
-	//
-	// Enables AppProtocol field for Services and Endpoints.
-	ServiceAppProtocol featuregate.Feature = "ServiceAppProtocol"
-
 	// owner: @wojtek-t
 	// alpha: v1.18
 	// beta:  v1.19
@@ -642,9 +633,10 @@ const (
 	// Allow specifying NamespaceSelector in PodAffinityTerm.
 	PodAffinityNamespaceSelector featuregate.Feature = "PodAffinityNamespaceSelector"
 
-	// owner: @andrewsykim @xudongliuharold
+	// owner: @andrewsykim @XudongLiuHarold
 	// kep: http://kep.k8s.io/1959
 	// alpha: v1.21
+	// beta: v1.22
 	//
 	// Enable support multiple Service "type: LoadBalancer" implementations in a cluster by specifying LoadBalancerClass
 	ServiceLoadBalancerClass featuregate.Feature = "ServiceLoadBalancerClass"
@@ -792,7 +784,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	PodDisruptionBudget:                            {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.25
 	CronJobControllerV2:                            {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.23
 	DaemonSetUpdateSurge:                           {Default: true, PreRelease: featuregate.Beta},                    // on by default in 1.22
-	ServiceAppProtocol:                             {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.22
 	ImmutableEphemeralVolumes:                      {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.24
 	HugePageStorageMediumSize:                      {Default: true, PreRelease: featuregate.Beta},
 	DownwardAPIHugePages:                           {Default: false, PreRelease: featuregate.Beta}, // on by default in 1.22
@@ -815,7 +806,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	PodDeletionCost:                                {Default: true, PreRelease: featuregate.Beta},
 	TopologyAwareHints:                             {Default: false, PreRelease: featuregate.Alpha},
 	PodAffinityNamespaceSelector:                   {Default: true, PreRelease: featuregate.Beta},
-	ServiceLoadBalancerClass:                       {Default: false, PreRelease: featuregate.Alpha},
+	ServiceLoadBalancerClass:                       {Default: true, PreRelease: featuregate.Beta},
 	LogarithmicScaleDown:                           {Default: false, PreRelease: featuregate.Alpha},
 	IngressClassNamespacedParams:                   {Default: false, PreRelease: featuregate.Alpha},
 	ServiceInternalTrafficPolicy:                   {Default: false, PreRelease: featuregate.Alpha},
