@@ -25,7 +25,12 @@ import (
 	"path"
 	"strings"
 
-	"github.com/pkg/errors"
+	bootstraptokenv1 "k8s.io/kubernetes/cmd/kubeadm/app/apis/bootstraptoken/v1"
+	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
+	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
+	nodebootstraptokenphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/bootstraptoken/node"
+	"k8s.io/kubernetes/cmd/kubeadm/app/util/apiclient"
+	cryptoutil "k8s.io/kubernetes/cmd/kubeadm/app/util/crypto"
 
 	v1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
@@ -37,11 +42,8 @@ import (
 	keyutil "k8s.io/client-go/util/keyutil"
 	bootstraputil "k8s.io/cluster-bootstrap/token/util"
 	"k8s.io/klog/v2"
-	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
-	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
-	nodebootstraptokenphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/bootstraptoken/node"
-	"k8s.io/kubernetes/cmd/kubeadm/app/util/apiclient"
-	cryptoutil "k8s.io/kubernetes/cmd/kubeadm/app/util/crypto"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -57,11 +59,11 @@ func createShortLivedBootstrapToken(client clientset.Interface) (string, error) 
 	if err != nil {
 		return "", errors.Wrap(err, "error generating token to upload certs")
 	}
-	token, err := kubeadmapi.NewBootstrapTokenString(tokenStr)
+	token, err := bootstraptokenv1.NewBootstrapTokenString(tokenStr)
 	if err != nil {
 		return "", errors.Wrap(err, "error creating upload certs token")
 	}
-	tokens := []kubeadmapi.BootstrapToken{{
+	tokens := []bootstraptokenv1.BootstrapToken{{
 		Token:       token,
 		Description: "Proxy for managing TTL for the kubeadm-certs secret",
 		TTL: &metav1.Duration{
