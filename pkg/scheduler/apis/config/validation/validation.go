@@ -189,41 +189,17 @@ func validateKubeSchedulerProfile(path *field.Path, apiVersion string, profile *
 func validatePluginConfig(path *field.Path, apiVersion string, profile *config.KubeSchedulerProfile) []error {
 	var errs []error
 	m := map[string]interface{}{
-		"DefaultPreemption":           ValidateDefaultPreemptionArgs,
-		"InterPodAffinity":            ValidateInterPodAffinityArgs,
-		"NodeAffinity":                ValidateNodeAffinityArgs,
-		"NodeLabel":                   ValidateNodeLabelArgs,
-		"NodeResourcesFitArgs":        ValidateNodeResourcesFitArgs,
-		"NodeResourcesLeastAllocated": ValidateNodeResourcesLeastAllocatedArgs,
-		"NodeResourcesMostAllocated":  ValidateNodeResourcesMostAllocatedArgs,
-		"PodTopologySpread":           ValidatePodTopologySpreadArgs,
-		"RequestedToCapacityRatio":    ValidateRequestedToCapacityRatioArgs,
-		"VolumeBinding":               ValidateVolumeBindingArgs,
-	}
-
-	seenPluginConfig := make(sets.String)
-	for i := range profile.PluginConfig {
-		pluginConfigPath := path.Child("pluginConfig").Index(i)
-		name := profile.PluginConfig[i].Name
-		args := profile.PluginConfig[i].Args
-		if seenPluginConfig.Has(name) {
-			errs = append(errs, field.Duplicate(pluginConfigPath, name))
-		} else {
-			seenPluginConfig.Insert(name)
-		}
-		if validateFunc, ok := m[name]; ok {
-			// type mismatch, no need to validate the `args`.
-			if reflect.TypeOf(args) != reflect.ValueOf(validateFunc).Type().In(1) {
-				errs = append(errs, field.Invalid(pluginConfigPath.Child("args"), args, "has to match plugin args"))
-				return errs
-			}
-			in := []reflect.Value{reflect.ValueOf(pluginConfigPath.Child("args")), reflect.ValueOf(args)}
-			res := reflect.ValueOf(validateFunc).Call(in)
-			// It's possible that validation function return a Aggregate, just append here and it will be flattened at the end of CC validation.
-			if res[0].Interface() != nil {
-				errs = append(errs, res[0].Interface().(error))
-			}
-		}
+		"DefaultPreemption":               ValidateDefaultPreemptionArgs,
+		"InterPodAffinity":                ValidateInterPodAffinityArgs,
+		"NodeAffinity":                    ValidateNodeAffinityArgs,
+		"NodeLabel":                       ValidateNodeLabelArgs,
+		"NodeResourcesBalancedAllocation": ValidateNodeResourcesBalancedAllocationArgs,
+		"NodeResourcesFitArgs":            ValidateNodeResourcesFitArgs,
+		"NodeResourcesLeastAllocated":     ValidateNodeResourcesLeastAllocatedArgs,
+		"NodeResourcesMostAllocated":      ValidateNodeResourcesMostAllocatedArgs,
+		"PodTopologySpread":               ValidatePodTopologySpreadArgs,
+		"RequestedToCapacityRatio":        ValidateRequestedToCapacityRatioArgs,
+		"VolumeBinding":                   ValidateVolumeBindingArgs,
 	}
 
 	if profile.Plugins != nil {
@@ -248,6 +224,34 @@ func validatePluginConfig(path *field.Path, apiVersion string, profile *config.K
 		}
 		errs = append(errs, validateScorePluginSetForConflictPlugins(
 			pluginsPath.Child("score"), apiVersion, profile)...)
+	}
+
+	seenPluginConfig := make(sets.String)
+
+	for i := range profile.PluginConfig {
+		pluginConfigPath := path.Child("pluginConfig").Index(i)
+		name := profile.PluginConfig[i].Name
+		args := profile.PluginConfig[i].Args
+		if seenPluginConfig.Has(name) {
+			errs = append(errs, field.Duplicate(pluginConfigPath, name))
+		} else {
+			seenPluginConfig.Insert(name)
+		}
+		if removed, removedVersion := isPluginRemoved(apiVersion, name); removed {
+			errs = append(errs, field.Invalid(pluginConfigPath, name, fmt.Sprintf("was removed in version %q (KubeSchedulerConfiguration is version %q)", removedVersion, apiVersion)))
+		} else if validateFunc, ok := m[name]; ok {
+			// type mismatch, no need to validate the `args`.
+			if reflect.TypeOf(args) != reflect.ValueOf(validateFunc).Type().In(1) {
+				errs = append(errs, field.Invalid(pluginConfigPath.Child("args"), args, "has to match plugin args"))
+			} else {
+				in := []reflect.Value{reflect.ValueOf(pluginConfigPath.Child("args")), reflect.ValueOf(args)}
+				res := reflect.ValueOf(validateFunc).Call(in)
+				// It's possible that validation function return a Aggregate, just append here and it will be flattened at the end of CC validation.
+				if res[0].Interface() != nil {
+					errs = append(errs, res[0].Interface().(error))
+				}
+			}
+		}
 	}
 	return errs
 }

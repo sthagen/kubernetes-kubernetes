@@ -1879,9 +1879,9 @@ func TestOnlyLocalNodePorts(t *testing.T) {
 	)
 
 	itf := net.Interface{Index: 0, MTU: 0, Name: "eth0", HardwareAddr: nil, Flags: 0}
-	addrs := []net.Addr{proxyutiltest.AddrStruct{Val: "100.101.102.103/24"}}
+	addrs := []net.Addr{&net.IPNet{IP: net.ParseIP("100.101.102.103"), Mask: net.CIDRMask(24, 32)}}
 	itf1 := net.Interface{Index: 1, MTU: 0, Name: "eth1", HardwareAddr: nil, Flags: 0}
-	addrs1 := []net.Addr{proxyutiltest.AddrStruct{Val: "2001:db8::0/64"}}
+	addrs1 := []net.Addr{&net.IPNet{IP: net.ParseIP("2001:db8::"), Mask: net.CIDRMask(64, 128)}}
 	fp.networkInterfacer.(*proxyutiltest.FakeNetwork).AddInterfaceAddr(&itf, addrs)
 	fp.networkInterfacer.(*proxyutiltest.FakeNetwork).AddInterfaceAddr(&itf1, addrs1)
 	fp.nodePortAddresses = []string{"100.101.102.0/24", "2001:db8::0/64"}
@@ -1959,9 +1959,9 @@ func TestHealthCheckNodePort(t *testing.T) {
 	)
 
 	itf := net.Interface{Index: 0, MTU: 0, Name: "eth0", HardwareAddr: nil, Flags: 0}
-	addrs := []net.Addr{proxyutiltest.AddrStruct{Val: "100.101.102.103/24"}}
+	addrs := []net.Addr{&net.IPNet{IP: net.ParseIP("100.101.102.103"), Mask: net.CIDRMask(24, 32)}}
 	itf1 := net.Interface{Index: 1, MTU: 0, Name: "eth1", HardwareAddr: nil, Flags: 0}
-	addrs1 := []net.Addr{proxyutiltest.AddrStruct{Val: "2001:db8::0/64"}}
+	addrs1 := []net.Addr{&net.IPNet{IP: net.ParseIP("2001:db8::"), Mask: net.CIDRMask(64, 128)}}
 	fp.networkInterfacer.(*proxyutiltest.FakeNetwork).AddInterfaceAddr(&itf, addrs)
 	fp.networkInterfacer.(*proxyutiltest.FakeNetwork).AddInterfaceAddr(&itf1, addrs1)
 	fp.nodePortAddresses = []string{"100.101.102.0/24", "2001:db8::0/64"}
@@ -4781,7 +4781,7 @@ func Test_EndpointSliceReadyAndTerminatingLocal(t *testing.T) {
 	fp.endpointsSynced = true
 	fp.endpointSlicesSynced = true
 
-	localInternalTrafficPolicy := v1.ServiceInternalTrafficPolicyLocal
+	clusterInternalTrafficPolicy := v1.ServiceInternalTrafficPolicyCluster
 
 	serviceName := "svc1"
 	// Add initial service
@@ -4793,7 +4793,7 @@ func Test_EndpointSliceReadyAndTerminatingLocal(t *testing.T) {
 			Selector:              map[string]string{"foo": "bar"},
 			Type:                  v1.ServiceTypeNodePort,
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
-			InternalTrafficPolicy: &localInternalTrafficPolicy,
+			InternalTrafficPolicy: &clusterInternalTrafficPolicy,
 			ExternalIPs: []string{
 				"1.2.3.4",
 			},
@@ -4957,7 +4957,7 @@ func Test_EndpointSliceOnlyReadyAndTerminatingLocal(t *testing.T) {
 	fp.endpointsSynced = true
 	fp.endpointSlicesSynced = true
 
-	localInternalTrafficPolicy := v1.ServiceInternalTrafficPolicyLocal
+	clusterInternalTrafficPolicy := v1.ServiceInternalTrafficPolicyCluster
 
 	// Add initial service
 	serviceName := "svc1"
@@ -4969,7 +4969,7 @@ func Test_EndpointSliceOnlyReadyAndTerminatingLocal(t *testing.T) {
 			Selector:              map[string]string{"foo": "bar"},
 			Type:                  v1.ServiceTypeNodePort,
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
-			InternalTrafficPolicy: &localInternalTrafficPolicy,
+			InternalTrafficPolicy: &clusterInternalTrafficPolicy,
 			ExternalIPs: []string{
 				"1.2.3.4",
 			},
@@ -5130,7 +5130,7 @@ func Test_EndpointSliceOnlyReadyAndTerminatingLocalWithFeatureGateDisabled(t *te
 	fp.endpointsSynced = true
 	fp.endpointSlicesSynced = true
 
-	localInternalTrafficPolicy := v1.ServiceInternalTrafficPolicyLocal
+	clusterInternalTrafficPolicy := v1.ServiceInternalTrafficPolicyCluster
 
 	// Add initial service
 	serviceName := "svc1"
@@ -5142,7 +5142,7 @@ func Test_EndpointSliceOnlyReadyAndTerminatingLocalWithFeatureGateDisabled(t *te
 			Selector:              map[string]string{"foo": "bar"},
 			Type:                  v1.ServiceTypeNodePort,
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
-			InternalTrafficPolicy: &localInternalTrafficPolicy,
+			InternalTrafficPolicy: &clusterInternalTrafficPolicy,
 			ExternalIPs: []string{
 				"1.2.3.4",
 			},
