@@ -8,11 +8,17 @@ spec:
     name: container1
     securityContext:
       allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
   initContainers:
   - image: k8s.gcr.io/pause
     name: initcontainer1
     securityContext:
       allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
   securityContext:
     runAsNonRoot: true
     seccompProfile:
@@ -21,5 +27,5 @@ spec:
   - iscsi:
       iqn: iqn.2001-04.com.example:storage.kube.sys1.xyz
       lun: 0
-      targetPortal: testing
-    name: volume-iscsi
+      targetPortal: test
+    name: volume1

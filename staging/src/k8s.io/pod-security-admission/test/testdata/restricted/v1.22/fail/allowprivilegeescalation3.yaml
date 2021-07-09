@@ -6,12 +6,14 @@ spec:
   containers:
   - image: k8s.gcr.io/pause
     name: container1
-    securityContext:
-      allowPrivilegeEscalation: false
   initContainers:
   - image: k8s.gcr.io/pause
     name: initcontainer1
-    securityContext: {}
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
   securityContext:
     runAsNonRoot: true
     seccompProfile:

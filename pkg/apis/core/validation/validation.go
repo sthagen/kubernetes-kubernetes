@@ -48,7 +48,6 @@ import (
 	"k8s.io/kubernetes/pkg/apis/core/helper"
 	podshelper "k8s.io/kubernetes/pkg/apis/core/pods"
 	corev1 "k8s.io/kubernetes/pkg/apis/core/v1"
-	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"k8s.io/kubernetes/pkg/capabilities"
 	"k8s.io/kubernetes/pkg/cluster/ports"
 	"k8s.io/kubernetes/pkg/features"
@@ -2046,6 +2045,27 @@ func ValidatePersistentVolumeClaim(pvc *core.PersistentVolumeClaim, opts Persist
 	return allErrs
 }
 
+// validateDataSource validates a DataSource/DataSourceRef in a PersistentVolumeClaimSpec
+func validateDataSource(dataSource *core.TypedLocalObjectReference, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if len(dataSource.Name) == 0 {
+		allErrs = append(allErrs, field.Required(fldPath.Child("name"), ""))
+	}
+	if len(dataSource.Kind) == 0 {
+		allErrs = append(allErrs, field.Required(fldPath.Child("kind"), ""))
+	}
+	apiGroup := ""
+	if dataSource.APIGroup != nil {
+		apiGroup = *dataSource.APIGroup
+	}
+	if len(apiGroup) == 0 && dataSource.Kind != "PersistentVolumeClaim" {
+		allErrs = append(allErrs, field.Invalid(fldPath, dataSource.Kind, ""))
+	}
+
+	return allErrs
+}
+
 // ValidatePersistentVolumeClaimSpec validates a PersistentVolumeClaimSpec
 func ValidatePersistentVolumeClaimSpec(spec *core.PersistentVolumeClaimSpec, fldPath *field.Path, opts PersistentVolumeClaimSpecValidationOptions) field.ErrorList {
 	allErrs := field.ErrorList{}
@@ -2096,18 +2116,15 @@ func ValidatePersistentVolumeClaimSpec(spec *core.PersistentVolumeClaimSpec, fld
 	}
 
 	if spec.DataSource != nil {
-		if len(spec.DataSource.Name) == 0 {
-			allErrs = append(allErrs, field.Required(fldPath.Child("dataSource", "name"), ""))
-		}
-		if len(spec.DataSource.Kind) == 0 {
-			allErrs = append(allErrs, field.Required(fldPath.Child("dataSource", "kind"), ""))
-		}
-		apiGroup := ""
-		if spec.DataSource.APIGroup != nil {
-			apiGroup = *spec.DataSource.APIGroup
-		}
-		if len(apiGroup) == 0 && spec.DataSource.Kind != "PersistentVolumeClaim" {
-			allErrs = append(allErrs, field.Invalid(fldPath.Child("dataSource"), spec.DataSource.Kind, ""))
+		allErrs = append(allErrs, validateDataSource(spec.DataSource, fldPath.Child("dataSource"))...)
+	}
+	if spec.DataSourceRef != nil {
+		allErrs = append(allErrs, validateDataSource(spec.DataSourceRef, fldPath.Child("dataSourceRef"))...)
+	}
+	if spec.DataSource != nil && spec.DataSourceRef != nil {
+		if !apiequality.Semantic.DeepEqual(spec.DataSource, spec.DataSourceRef) {
+			allErrs = append(allErrs, field.Invalid(fldPath, fldPath.Child("dataSource"),
+				"must match dataSourceRef"))
 		}
 	}
 
@@ -3295,8 +3312,6 @@ func validateContainersOnlyForPod(containers []core.Container, fldPath *field.Pa
 
 // PodValidationOptions contains the different settings for pod validation
 type PodValidationOptions struct {
-	// Allow pod spec to have more than one huge page resource (with different sizes)
-	AllowMultipleHugePageResources bool
 	// Allow pod spec to use hugepages in downward API
 	AllowDownwardAPIHugePages bool
 	// Allow invalid pod-deletion-cost annotation value for backward compatibility.
@@ -3307,23 +3322,6 @@ type PodValidationOptions struct {
 	AllowWindowsHostProcessField bool
 	// Allow more DNSSearchPaths and longer DNSSearchListChars
 	AllowExpandedDNSConfig bool
-}
-
-// ValidatePodSingleHugePageResources checks if there are multiple huge
-// pages resources in the pod object.
-func ValidatePodSingleHugePageResources(pod *core.Pod, specPath *field.Path) field.ErrorList {
-	allErrs := field.ErrorList{}
-	resourceSet := helper.ToPodResourcesSet(&pod.Spec)
-	hugePageResources := sets.NewString()
-	for resourceStr := range resourceSet {
-		if v1helper.IsHugePageResourceName(v1.ResourceName(resourceStr)) {
-			hugePageResources.Insert(resourceStr)
-		}
-	}
-	if len(hugePageResources) > 1 {
-		allErrs = append(allErrs, field.Invalid(specPath, hugePageResources.List(), "must use a single hugepage size in a pod spec"))
-	}
-	return allErrs
 }
 
 // validatePodMetadataAndSpec tests if required fields in the pod.metadata and pod.spec are set,
@@ -3354,10 +3352,6 @@ func validatePodMetadataAndSpec(pod *core.Pod, opts PodValidationOptions) field.
 
 	allErrs = append(allErrs, validateContainersOnlyForPod(pod.Spec.Containers, specPath.Child("containers"))...)
 	allErrs = append(allErrs, validateContainersOnlyForPod(pod.Spec.InitContainers, specPath.Child("initContainers"))...)
-
-	if !opts.AllowMultipleHugePageResources {
-		allErrs = append(allErrs, ValidatePodSingleHugePageResources(pod, specPath)...)
-	}
 
 	return allErrs
 }
@@ -4055,10 +4049,6 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod, opts PodValidationOptions) fiel
 	allErrs = append(allErrs, validatePodMetadataAndSpec(newPod, opts)...)
 	allErrs = append(allErrs, ValidatePodSpecificAnnotationUpdates(newPod, oldPod, fldPath.Child("annotations"), opts)...)
 	specPath := field.NewPath("spec")
-
-	if !opts.AllowMultipleHugePageResources {
-		allErrs = append(allErrs, ValidatePodSingleHugePageResources(newPod, specPath)...)
-	}
 
 	// validate updateable fields:
 	// 1.  spec.containers[*].image

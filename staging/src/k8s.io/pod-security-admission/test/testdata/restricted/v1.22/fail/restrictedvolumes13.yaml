@@ -8,16 +8,22 @@ spec:
     name: container1
     securityContext:
       allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
   initContainers:
   - image: k8s.gcr.io/pause
     name: initcontainer1
     securityContext:
       allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
   securityContext:
     runAsNonRoot: true
     seccompProfile:
       type: RuntimeDefault
   volumes:
-  - name: volume-vsphere
+  - name: volume1
     vsphereVolume:
-      volumePath: testing
+      volumePath: test

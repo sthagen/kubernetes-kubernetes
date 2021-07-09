@@ -1462,6 +1462,27 @@ func testValidatePVC(t *testing.T, ephemeral bool) {
 				VolumeMode: &invalidMode,
 			}),
 		},
+		"mismatch-data-source-and-ref": {
+			isExpectedFailure: true,
+			claim: testVolumeClaim(goodName, goodNS, core.PersistentVolumeClaimSpec{
+				AccessModes: []core.PersistentVolumeAccessMode{
+					core.ReadWriteOnce,
+				},
+				Resources: core.ResourceRequirements{
+					Requests: core.ResourceList{
+						core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+					},
+				},
+				DataSource: &core.TypedLocalObjectReference{
+					Kind: "PersistentVolumeClaim",
+					Name: "pvc1",
+				},
+				DataSourceRef: &core.TypedLocalObjectReference{
+					Kind: "PersistentVolumeClaim",
+					Name: "pvc2",
+				},
+			}),
+		},
 	}
 
 	for name, scenario := range scenarios {
@@ -4431,9 +4452,8 @@ func TestValidateVolumes(t *testing.T) {
 
 func TestHugePagesIsolation(t *testing.T) {
 	testCases := map[string]struct {
-		pod                             *core.Pod
-		enableHugePageStorageMediumSize bool
-		expectError                     bool
+		pod         *core.Pod
+		expectError bool
 	}{
 		"Valid: request hugepages-2Mi": {
 			pod: &core.Pod{
@@ -4461,7 +4481,7 @@ func TestHugePagesIsolation(t *testing.T) {
 				},
 			},
 		},
-		"Valid: HugePageStorageMediumSize enabled: request more than one hugepages size": {
+		"Valid: request more than one hugepages size": {
 			pod: &core.Pod{
 				ObjectMeta: metav1.ObjectMeta{Name: "hugepages-shared", Namespace: "ns"},
 				Spec: core.PodSpec{
@@ -4488,10 +4508,9 @@ func TestHugePagesIsolation(t *testing.T) {
 					DNSPolicy:     core.DNSClusterFirst,
 				},
 			},
-			enableHugePageStorageMediumSize: true,
-			expectError:                     false,
+			expectError: false,
 		},
-		"Invalid: HugePageStorageMediumSize disabled: request hugepages-1Gi, limit hugepages-2Mi and hugepages-1Gi": {
+		"Valid: request hugepages-1Gi, limit hugepages-2Mi and hugepages-1Gi": {
 			pod: &core.Pod{
 				ObjectMeta: metav1.ObjectMeta{Name: "hugepages-multiple", Namespace: "ns"},
 				Spec: core.PodSpec{
@@ -4502,6 +4521,7 @@ func TestHugePagesIsolation(t *testing.T) {
 								Requests: core.ResourceList{
 									core.ResourceName(core.ResourceCPU):    resource.MustParse("10"),
 									core.ResourceName(core.ResourceMemory): resource.MustParse("10G"),
+									core.ResourceName("hugepages-2Mi"):     resource.MustParse("1Gi"),
 									core.ResourceName("hugepages-1Gi"):     resource.MustParse("2Gi"),
 								},
 								Limits: core.ResourceList{
@@ -4517,7 +4537,6 @@ func TestHugePagesIsolation(t *testing.T) {
 					DNSPolicy:     core.DNSClusterFirst,
 				},
 			},
-			expectError: true,
 		},
 		"Invalid: not requesting cpu and memory": {
 			pod: &core.Pod{
@@ -4569,40 +4588,10 @@ func TestHugePagesIsolation(t *testing.T) {
 			},
 			expectError: true,
 		},
-		"Invalid: HugePageStorageMediumSize disabled: request more than one hugepages size": {
-			pod: &core.Pod{
-				ObjectMeta: metav1.ObjectMeta{Name: "hugepages-shared", Namespace: "ns"},
-				Spec: core.PodSpec{
-					Containers: []core.Container{
-						{
-							Name: "ctr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File",
-							Resources: core.ResourceRequirements{
-								Requests: core.ResourceList{
-									core.ResourceName(core.ResourceCPU):    resource.MustParse("10"),
-									core.ResourceName(core.ResourceMemory): resource.MustParse("10G"),
-									core.ResourceName("hugepages-2Mi"):     resource.MustParse("1Gi"),
-									core.ResourceName("hugepages-1Gi"):     resource.MustParse("1Gi"),
-								},
-								Limits: core.ResourceList{
-									core.ResourceName(core.ResourceCPU):    resource.MustParse("10"),
-									core.ResourceName(core.ResourceMemory): resource.MustParse("10G"),
-									core.ResourceName("hugepages-2Mi"):     resource.MustParse("1Gi"),
-									core.ResourceName("hugepages-1Gi"):     resource.MustParse("1Gi"),
-								},
-							},
-						},
-					},
-					RestartPolicy: core.RestartPolicyAlways,
-					DNSPolicy:     core.DNSClusterFirst,
-				},
-			},
-			expectError: true,
-		},
 	}
 	for tcName, tc := range testCases {
 		t.Run(tcName, func(t *testing.T) {
-			defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.HugePageStorageMediumSize, tc.enableHugePageStorageMediumSize)()
-			errs := ValidatePodCreate(tc.pod, PodValidationOptions{AllowMultipleHugePageResources: tc.enableHugePageStorageMediumSize})
+			errs := ValidatePodCreate(tc.pod, PodValidationOptions{})
 			if tc.expectError && len(errs) == 0 {
 				t.Errorf("Unexpected success")
 			}
@@ -16966,7 +16955,7 @@ func TestValidateWindowsSecurityContextOptions(t *testing.T) {
 	}
 }
 
-func testDataSourceInSpec(name string, kind string, apiGroup string) *core.PersistentVolumeClaimSpec {
+func testDataSourceInSpec(name, kind, apiGroup string) *core.PersistentVolumeClaimSpec {
 	scName := "csi-plugin"
 	dataSourceInSpec := core.PersistentVolumeClaimSpec{
 		AccessModes: []core.PersistentVolumeAccessMode{
@@ -17024,19 +17013,79 @@ func TestAlphaVolumePVCDataSource(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		opts := PersistentVolumeClaimSpecValidationOptions{}
 		if tc.expectedFail {
-			opts := PersistentVolumeClaimSpecValidationOptions{}
 			if errs := ValidatePersistentVolumeClaimSpec(&tc.claimSpec, field.NewPath("spec"), opts); len(errs) == 0 {
 				t.Errorf("expected failure: %v", errs)
 			}
 
 		} else {
-			opts := PersistentVolumeClaimSpecValidationOptions{}
 			if errs := ValidatePersistentVolumeClaimSpec(&tc.claimSpec, field.NewPath("spec"), opts); len(errs) != 0 {
 				t.Errorf("expected success: %v", errs)
 			}
 		}
 	}
+}
+
+func testAnyDataSource(t *testing.T, ds, dsRef bool) {
+	testCases := []struct {
+		testName     string
+		claimSpec    core.PersistentVolumeClaimSpec
+		expectedFail bool
+	}{
+		{
+			testName:  "test create from valid snapshot source",
+			claimSpec: *testDataSourceInSpec("test_snapshot", "VolumeSnapshot", "snapshot.storage.k8s.io"),
+		},
+		{
+			testName:  "test create from valid pvc source",
+			claimSpec: *testDataSourceInSpec("test_pvc", "PersistentVolumeClaim", ""),
+		},
+		{
+			testName:     "test missing name in snapshot datasource should fail",
+			claimSpec:    *testDataSourceInSpec("", "VolumeSnapshot", "snapshot.storage.k8s.io"),
+			expectedFail: true,
+		},
+		{
+			testName:     "test missing kind in snapshot datasource should fail",
+			claimSpec:    *testDataSourceInSpec("test_snapshot", "", "snapshot.storage.k8s.io"),
+			expectedFail: true,
+		},
+		{
+			testName:  "test create from valid generic custom resource source",
+			claimSpec: *testDataSourceInSpec("test_generic", "Generic", "generic.storage.k8s.io"),
+		},
+		{
+			testName:     "test invalid datasource should fail",
+			claimSpec:    *testDataSourceInSpec("test_pod", "Pod", ""),
+			expectedFail: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		if dsRef {
+			tc.claimSpec.DataSourceRef = tc.claimSpec.DataSource.DeepCopy()
+		}
+		if !ds {
+			tc.claimSpec.DataSource = nil
+		}
+		opts := PersistentVolumeClaimSpecValidationOptions{}
+		if tc.expectedFail {
+			if errs := ValidatePersistentVolumeClaimSpec(&tc.claimSpec, field.NewPath("spec"), opts); len(errs) == 0 {
+				t.Errorf("expected failure: %v", errs)
+			}
+		} else {
+			if errs := ValidatePersistentVolumeClaimSpec(&tc.claimSpec, field.NewPath("spec"), opts); len(errs) != 0 {
+				t.Errorf("expected success: %v", errs)
+			}
+		}
+	}
+}
+
+func TestAnyDataSource(t *testing.T) {
+	testAnyDataSource(t, true, false)
+	testAnyDataSource(t, false, true)
+	testAnyDataSource(t, true, false)
 }
 
 func TestValidateTopologySpreadConstraints(t *testing.T) {

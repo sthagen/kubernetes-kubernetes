@@ -8,17 +8,23 @@ spec:
     name: container1
     securityContext:
       allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
   initContainers:
   - image: k8s.gcr.io/pause
     name: initcontainer1
     securityContext:
       allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
   securityContext:
     runAsNonRoot: true
     seccompProfile:
       type: RuntimeDefault
   volumes:
   - azureDisk:
-      diskName: testing
+      diskName: test
       diskURI: https://test.blob.core.windows.net/test/test.vhd
-    name: volume-azuredisk
+    name: volume1
