@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"text/tabwriter"
 	"time"
 
@@ -114,8 +113,6 @@ func WaitForPodsRunningReady(c clientset.Interface, ns string, minPods, allowedN
 	start := time.Now()
 	e2elog.Logf("Waiting up to %v for all pods (need at least %d) in namespace '%s' to be running and ready",
 		timeout, minPods, ns)
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	var ignoreNotReady bool
 	badPods := []v1.Pod{}
 	desiredPods := 0
@@ -511,24 +508,6 @@ func WaitForPodsWithLabelRunningReady(c clientset.Interface, ns string, label la
 			return true, nil
 		})
 	return pods, err
-}
-
-// WaitForPodsReady waits for the pods to become ready.
-func WaitForPodsReady(c clientset.Interface, ns, name string, minReadySeconds int) error {
-	label := labels.SelectorFromSet(labels.Set(map[string]string{"name": name}))
-	options := metav1.ListOptions{LabelSelector: label.String()}
-	return wait.Poll(poll, 5*time.Minute, func() (bool, error) {
-		pods, err := c.CoreV1().Pods(ns).List(context.TODO(), options)
-		if err != nil {
-			return false, nil
-		}
-		for _, pod := range pods.Items {
-			if !podutils.IsPodAvailable(&pod, int32(minReadySeconds), metav1.Now()) {
-				return false, nil
-			}
-		}
-		return true, nil
-	})
 }
 
 // WaitForNRestartablePods tries to list restarting pods using ps until it finds expect of them,

@@ -229,6 +229,13 @@ function Fetch-KubeEnv {
   # The type of kube_env is a powershell String.
   $kube_env = Get-InstanceMetadataAttribute 'kube-env'
   $kube_env_table = ConvertFrom_Yaml_KubeEnv ${kube_env}
+
+  Log-Output "Logging kube-env key-value pairs except CERT and KEY values"
+  foreach ($entry in $kube_env_table.GetEnumerator()) {
+    if ((-not ($entry.Name.contains("CERT"))) -and (-not ($entry.Name.contains("KEY")))) {
+      Log-Output "$($entry.Name): $($entry.Value)"
+    }
+  }
   return ${kube_env_table}
 }
 
@@ -1585,7 +1592,7 @@ function Install_Containerd {
   New-Item $tmp_dir -ItemType 'directory' -Force | Out-Null
 
   # TODO(ibrahimab) Change this to a gcs bucket with CI maintained and accessible by community.
-  $version = '1.4.4'
+  $version = '1.5.4'
   $tar_url = ("https://github.com/containerd/containerd/releases/download/v${version}/" +
               "cri-containerd-cni-${version}-windows-amd64.tar.gz")
   $sha_url = $tar_url + ".sha256sum"

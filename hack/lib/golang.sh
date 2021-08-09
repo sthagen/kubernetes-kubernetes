@@ -110,7 +110,7 @@ kube::golang::conformance_image_targets() {
   local targets=(
     vendor/github.com/onsi/ginkgo/ginkgo
     test/e2e/e2e.test
-    cluster/images/conformance/go-runner
+    test/conformance/image/go-runner
     cmd/kubectl
   )
   echo "${targets[@]}"
@@ -272,7 +272,7 @@ kube::golang::test_targets() {
     cmd/linkcheck
     vendor/github.com/onsi/ginkgo/ginkgo
     test/e2e/e2e.test
-    cluster/images/conformance/go-runner
+    test/conformance/image/go-runner
   )
   echo "${targets[@]}"
 }
@@ -716,6 +716,7 @@ kube::golang::build_binaries_for_platform() {
       -ldflags "${goldflags:-}"
       -tags "${gotags:-}"
     )
+    V=1 kube::log::info "> static build CGO_ENABLED=0: ${statics[*]}"
     CGO_ENABLED=0 kube::golang::build_some_binaries "${statics[@]}"
   fi
 
@@ -728,6 +729,7 @@ kube::golang::build_binaries_for_platform() {
       -buildmode pie
       -tags "${gotags:-}"
     )
+    V=1 kube::log::info "> non-static build: ${nonstatics[*]}"
     kube::golang::build_some_binaries "${nonstatics[@]}"
   fi
 

@@ -1489,6 +1489,13 @@ EOF
 	fi
 }
 
+function disable_aufs() {
+  # disable aufs module if aufs is loaded
+  if lsmod | grep "aufs" &> /dev/null ; then 
+    sudo modprobe -r aufs
+  fi
+}
+
 function set_docker_options_non_ubuntu() {
   # set docker options mtu and storage driver for non-ubuntu
   # as it is default for ubuntu
@@ -1499,11 +1506,12 @@ function set_docker_options_non_ubuntu() {
 
    addockeropt "\"mtu\": 1460,"
    addockeropt "\"storage-driver\": \"overlay2\","
-
    echo "setting live restore"
    # Disable live-restore if the environment variable is set.
    if [[ "${DISABLE_DOCKER_LIVE_RESTORE:-false}" == "true" ]]; then
-      addockeropt "\"live-restore\": \"false\","
+      addockeropt "\"live-restore\": false,"
+   else
+      addockeropt "\"live-restore\": true,"
    fi
 }
 
@@ -1547,8 +1555,10 @@ addockeropt "\"pidfile\": \"/var/run/docker.pid\",
   if [[ -n "${DOCKER_REGISTRY_MIRROR_URL:-}" ]]; then
       docker_opts+="--registry-mirror=${DOCKER_REGISTRY_MIRROR_URL} "
   fi
-
+  
+  disable_aufs
   set_docker_options_non_ubuntu
+
 
   echo "setting docker logging options"
   # Configure docker logging
@@ -1749,7 +1759,7 @@ function prepare-kube-proxy-manifest-variables {
   sed -i -e "s@{{container_env}}@${container_env}@g" "${src_file}"
   sed -i -e "s@{{kube_cache_mutation_detector_env_name}}@${kube_cache_mutation_detector_env_name}@g" "${src_file}"
   sed -i -e "s@{{kube_cache_mutation_detector_env_value}}@${kube_cache_mutation_detector_env_value}@g" "${src_file}"
-  sed -i -e "s@{{ cpurequest }}@100m@g" "${src_file}"
+  sed -i -e "s@{{ cpurequest }}@${KUBE_PROXY_CPU_REQUEST:-100m}@g" "${src_file}"
   sed -i -e "s@{{api_servers_with_port}}@${api_servers}@g" "${src_file}"
   sed -i -e "s@{{kubernetes_service_host_env_value}}@${KUBERNETES_MASTER_NAME}@g" "${src_file}"
   if [[ -n "${CLUSTER_IP_RANGE:-}" ]]; then
@@ -1776,7 +1786,27 @@ function start-kube-proxy {
 # $5: pod name, which should be either etcd or etcd-events
 function prepare-etcd-manifest {
   local host_name=${ETCD_HOSTNAME:-$(hostname -s)}
-  local -r host_ip=$(python3 -c "import socket;print(socket.gethostbyname(\"${host_name}\"))")
+
+  local resolve_host_script_py='
+import socket
+import time
+import sys
+
+timeout_sec=300
+
+def resolve(host):
+  for attempt in range(timeout_sec):
+    try:
+      print(socket.gethostbyname(host))
+      break
+    except Exception as e:
+      sys.stderr.write("error: resolving host %s to IP failed: %s\n" % (host, e))
+      time.sleep(1)
+      continue
+
+'
+
+  local -r host_ip=$(python3 -c "${resolve_host_script_py}"$'\n'"resolve(\"${host_name}\")")
   local etcd_cluster=""
   local cluster_state="new"
   local etcd_protocol="http"
@@ -1936,6 +1966,8 @@ function prepare-konnectivity-server-manifest {
   params+=("--authentication-audience=system:konnectivity-server")
   params+=("--kubeconfig-qps=75")
   params+=("--kubeconfig-burst=150")
+  params+=("--keepalive-time=60s")
+  params+=("--frontend-keepalive-time=60s")
   konnectivity_args=""
   for param in "${params[@]}"; do
     konnectivity_args+=", \"${param}\""

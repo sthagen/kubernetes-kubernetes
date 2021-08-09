@@ -44,15 +44,18 @@ type request struct {
 	// startTime is the real time when the request began executing
 	startTime time.Time
 
-	// width of the request
-	width fcrequest.Width
+	// estimated amount of work of the request
+	workEstimate fcrequest.WorkEstimate
 
 	// decision gets set to a `requestDecision` indicating what to do
 	// with this request.  It gets set exactly once, when the request
 	// is removed from its queue.  The value will be decisionReject,
 	// decisionCancel, or decisionExecute; decisionTryAnother never
 	// appears here.
-	decision promise.LockingWriteOnce
+	//
+	// The field is NOT thread-safe and should be protected by the
+	// queueset's lock.
+	decision promise.WriteOnce
 
 	// arrivalTime is the real time when the request entered this system
 	arrivalTime time.Time

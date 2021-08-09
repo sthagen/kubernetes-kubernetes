@@ -132,14 +132,6 @@ const (
 	// Allows setting memory affinity for a container based on NUMA topology
 	MemoryManager featuregate.Feature = "MemoryManager"
 
-	// owner: @sjenning
-	// alpha: v1.4
-	// beta: v1.11
-	// ga: v1.21
-	//
-	// Enable pods to set sysctls on a pod
-	Sysctls featuregate.Feature = "Sysctls"
-
 	// owner: @pospispa
 	// GA: v1.11
 	//
@@ -449,14 +441,6 @@ const (
 	// Enable Endpoint Slice consumption by kube-proxy in Windows for improved scalability.
 	WindowsEndpointSliceProxying featuregate.Feature = "WindowsEndpointSliceProxying"
 
-	// owner: @matthyx
-	// alpha: v1.16
-	// beta: v1.18
-	// GA: v1.20
-	//
-	// Enables the startupProbe in kubelet worker.
-	StartupProbe featuregate.Feature = "StartupProbe"
-
 	// owner: @deads2k
 	// beta: v1.17
 	// GA: v1.21
@@ -602,6 +586,12 @@ const (
 	//
 	// Disable any functionality in kube-apiserver, kube-controller-manager and kubelet related to the `--cloud-provider` component flag.
 	DisableCloudProviders featuregate.Feature = "DisableCloudProviders"
+
+	// owner: @andrewsykim
+	// alpha: v1.22
+	//
+	// Disable in-tree functionality in kubelet to authenticate to cloud provider container registries for image pull credentials.
+	DisableKubeletCloudCredentialProviders featuregate.Feature = "DisableKubeletCloudCredentialProviders"
 
 	// owner: @zshihang
 	// alpha: v1.20
@@ -813,7 +803,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	DevicePlugins:                                  {Default: true, PreRelease: featuregate.Beta},
 	RotateKubeletServerCertificate:                 {Default: true, PreRelease: featuregate.Beta},
 	LocalStorageCapacityIsolation:                  {Default: true, PreRelease: featuregate.Beta},
-	Sysctls:                                        {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.23
 	EphemeralContainers:                            {Default: false, PreRelease: featuregate.Alpha},
 	QOSReserved:                                    {Default: false, PreRelease: featuregate.Alpha},
 	ExpandPersistentVolumes:                        {Default: true, PreRelease: featuregate.Beta},
@@ -866,13 +855,12 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	ProxyTerminatingEndpoints:                      {Default: false, PreRelease: featuregate.Alpha},
 	EndpointSliceNodeName:                          {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, //remove in 1.25
 	WindowsEndpointSliceProxying:                   {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.25
-	StartupProbe:                                   {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.23
 	AllowInsecureBackendProxy:                      {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.23
 	PodDisruptionBudget:                            {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.25
 	CronJobControllerV2:                            {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.23
 	DaemonSetUpdateSurge:                           {Default: true, PreRelease: featuregate.Beta},                    // on by default in 1.22
 	ImmutableEphemeralVolumes:                      {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.24
-	HugePageStorageMediumSize:                      {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.23
+	HugePageStorageMediumSize:                      {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.24
 	DownwardAPIHugePages:                           {Default: false, PreRelease: featuregate.Beta},                   // on by default in 1.22
 	AnyVolumeDataSource:                            {Default: false, PreRelease: featuregate.Alpha},
 	DefaultPodTopologySpread:                       {Default: true, PreRelease: featuregate.Beta},
@@ -904,6 +892,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	CSIVolumeHealth:                                {Default: false, PreRelease: featuregate.Alpha},
 	WindowsHostProcessContainers:                   {Default: false, PreRelease: featuregate.Alpha},
 	DisableCloudProviders:                          {Default: false, PreRelease: featuregate.Alpha},
+	DisableKubeletCloudCredentialProviders:         {Default: false, PreRelease: featuregate.Alpha},
 	StatefulSetMinReadySeconds:                     {Default: false, PreRelease: featuregate.Alpha},
 	ExpandedDNSConfig:                              {Default: false, PreRelease: featuregate.Alpha},
 	SeccompDefault:                                 {Default: false, PreRelease: featuregate.Alpha},

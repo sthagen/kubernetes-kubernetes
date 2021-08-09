@@ -27,11 +27,12 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/utils/clock"
+
 	"k8s.io/apiserver/pkg/util/flowcontrol/counter"
 	fq "k8s.io/apiserver/pkg/util/flowcontrol/fairqueuing"
 	test "k8s.io/apiserver/pkg/util/flowcontrol/fairqueuing/testing"
-	testclock "k8s.io/apiserver/pkg/util/flowcontrol/fairqueuing/testing/clock"
+	testeventclock "k8s.io/apiserver/pkg/util/flowcontrol/fairqueuing/testing/eventclock"
 	"k8s.io/apiserver/pkg/util/flowcontrol/metrics"
 	fcrequest "k8s.io/apiserver/pkg/util/flowcontrol/request"
 	"k8s.io/klog/v2"
@@ -132,7 +133,7 @@ type uniformScenario struct {
 	expectAllRequests                        bool
 	evalInqueueMetrics, evalExecutingMetrics bool
 	rejectReason                             string
-	clk                                      *testclock.FakeEventClock
+	clk                                      *testeventclock.Fake
 	counter                                  counter.GoRoutineCounter
 }
 
@@ -210,16 +211,10 @@ func (ust *uniformScenarioThread) start() {
 	ust.uss.clk.EventAfterDuration(ust.genCallK(0), initialDelay)
 }
 
-// generates an EventFunc that forks a goroutine to do call k
+// generates an EventFunc that does call k
 func (ust *uniformScenarioThread) genCallK(k int) func(time.Time) {
 	return func(time.Time) {
-		// As an EventFunc, this has to return without waiting
-		// for time to pass, and so cannot do callK(k) itself.
-		ust.uss.counter.Add(1)
-		go func() {
-			ust.callK(k)
-			ust.uss.counter.Add(-1)
-		}()
+		ust.callK(k)
 	}
 }
 
@@ -227,7 +222,7 @@ func (ust *uniformScenarioThread) callK(k int) {
 	if k >= ust.nCalls {
 		return
 	}
-	req, idle := ust.uss.qs.StartRequest(context.Background(), &fcrequest.Width{Seats: 1}, ust.uc.hash, "", ust.fsName, ust.uss.name, []int{ust.i, ust.j, k}, nil)
+	req, idle := ust.uss.qs.StartRequest(context.Background(), &fcrequest.WorkEstimate{Seats: 1}, ust.uc.hash, "", ust.fsName, ust.uss.name, []int{ust.i, ust.j, k}, nil)
 	ust.uss.t.Logf("%s: %d, %d, %d got req=%p, idle=%v", ust.uss.clk.Now().Format(nsTimeFmt), ust.i, ust.j, k, req, idle)
 	if req == nil {
 		atomic.AddUint64(&ust.uss.failedCount, 1)
@@ -245,7 +240,7 @@ func (ust *uniformScenarioThread) callK(k int) {
 		atomic.AddInt32(&ust.uss.executions[ust.i], 1)
 		ust.igr.Add(1)
 		ust.uss.clk.EventAfterDuration(ust.genCallK(k+1), ust.uc.execDuration+ust.uc.thinkDuration)
-		ClockWait(ust.uss.clk, ust.uss.counter, ust.uc.execDuration)
+		ust.uss.clk.Sleep(ust.uc.execDuration)
 		ust.igr.Add(-1)
 	})
 	ust.uss.t.Logf("%s: %d, %d, %d got executed=%v, idle2=%v", ust.uss.clk.Now().Format(nsTimeFmt), ust.i, ust.j, k, executed, idle2)
@@ -358,16 +353,6 @@ func (uss *uniformScenarioState) finalReview() {
 	}
 }
 
-func ClockWait(clk *testclock.FakeEventClock, counter counter.GoRoutineCounter, duration time.Duration) {
-	dunch := make(chan struct{})
-	clk.EventAfterDuration(func(time.Time) {
-		counter.Add(1)
-		close(dunch)
-	}, duration)
-	counter.Add(-1)
-	<-dunch
-}
-
 func init() {
 	klog.InitFlags(nil)
 }
@@ -376,7 +361,7 @@ func init() {
 func TestNoRestraint(t *testing.T) {
 	metrics.Register()
 	now := time.Now()
-	clk, counter := testclock.NewFakeEventClock(now, 0, nil)
+	clk, counter := testeventclock.NewFake(now, 0, nil)
 	nrc, err := test.NewNoRestraintFactory().BeginConstruction(fq.QueuingConfig{}, newObserverPair(clk))
 	if err != nil {
 		t.Fatal(err)
@@ -402,7 +387,7 @@ func TestUniformFlowsHandSize1(t *testing.T) {
 	metrics.Register()
 	now := time.Now()
 
-	clk, counter := testclock.NewFakeEventClock(now, 0, nil)
+	clk, counter := testeventclock.NewFake(now, 0, nil)
 	qsf := NewQueueSetFactory(clk, counter)
 	qCfg := fq.QueuingConfig{
 		Name:             "TestUniformFlowsHandSize1",
@@ -439,7 +424,7 @@ func TestUniformFlowsHandSize3(t *testing.T) {
 	metrics.Register()
 	now := time.Now()
 
-	clk, counter := testclock.NewFakeEventClock(now, 0, nil)
+	clk, counter := testeventclock.NewFake(now, 0, nil)
 	qsf := NewQueueSetFactory(clk, counter)
 	qCfg := fq.QueuingConfig{
 		Name:             "TestUniformFlowsHandSize3",
@@ -475,7 +460,7 @@ func TestDifferentFlowsExpectEqual(t *testing.T) {
 	metrics.Register()
 	now := time.Now()
 
-	clk, counter := testclock.NewFakeEventClock(now, 0, nil)
+	clk, counter := testeventclock.NewFake(now, 0, nil)
 	qsf := NewQueueSetFactory(clk, counter)
 	qCfg := fq.QueuingConfig{
 		Name:             "DiffFlowsExpectEqual",
@@ -512,7 +497,7 @@ func TestDifferentFlowsExpectUnequal(t *testing.T) {
 	metrics.Register()
 	now := time.Now()
 
-	clk, counter := testclock.NewFakeEventClock(now, 0, nil)
+	clk, counter := testeventclock.NewFake(now, 0, nil)
 	qsf := NewQueueSetFactory(clk, counter)
 	qCfg := fq.QueuingConfig{
 		Name:             "DiffFlowsExpectUnequal",
@@ -549,7 +534,7 @@ func TestWindup(t *testing.T) {
 	metrics.Register()
 	now := time.Now()
 
-	clk, counter := testclock.NewFakeEventClock(now, 0, nil)
+	clk, counter := testeventclock.NewFake(now, 0, nil)
 	qsf := NewQueueSetFactory(clk, counter)
 	qCfg := fq.QueuingConfig{
 		Name:             "TestWindup",
@@ -585,7 +570,7 @@ func TestDifferentFlowsWithoutQueuing(t *testing.T) {
 	metrics.Register()
 	now := time.Now()
 
-	clk, counter := testclock.NewFakeEventClock(now, 0, nil)
+	clk, counter := testeventclock.NewFake(now, 0, nil)
 	qsf := NewQueueSetFactory(clk, counter)
 	qCfg := fq.QueuingConfig{
 		Name:             "TestDifferentFlowsWithoutQueuing",
@@ -618,7 +603,7 @@ func TestTimeout(t *testing.T) {
 	metrics.Register()
 	now := time.Now()
 
-	clk, counter := testclock.NewFakeEventClock(now, 0, nil)
+	clk, counter := testeventclock.NewFake(now, 0, nil)
 	qsf := NewQueueSetFactory(clk, counter)
 	qCfg := fq.QueuingConfig{
 		Name:             "TestTimeout",
@@ -654,7 +639,7 @@ func TestContextCancel(t *testing.T) {
 	metrics.Register()
 	metrics.Reset()
 	now := time.Now()
-	clk, counter := testclock.NewFakeEventClock(now, 0, nil)
+	clk, counter := testeventclock.NewFake(now, 0, nil)
 	qsf := NewQueueSetFactory(clk, counter)
 	qCfg := fq.QueuingConfig{
 		Name:             "TestContextCancel",
@@ -672,7 +657,7 @@ func TestContextCancel(t *testing.T) {
 	ctx1 := context.Background()
 	b2i := map[bool]int{false: 0, true: 1}
 	var qnc [2][2]int32
-	req1, _ := qs.StartRequest(ctx1, &fcrequest.Width{Seats: 1}, 1, "", "fs1", "test", "one", func(inQueue bool) { atomic.AddInt32(&qnc[0][b2i[inQueue]], 1) })
+	req1, _ := qs.StartRequest(ctx1, &fcrequest.WorkEstimate{Seats: 1}, 1, "", "fs1", "test", "one", func(inQueue bool) { atomic.AddInt32(&qnc[0][b2i[inQueue]], 1) })
 	if req1 == nil {
 		t.Error("Request rejected")
 		return
@@ -700,7 +685,7 @@ func TestContextCancel(t *testing.T) {
 			counter.Add(1)
 			cancel2()
 		}()
-		req2, idle2a := qs.StartRequest(ctx2, &fcrequest.Width{Seats: 1}, 2, "", "fs2", "test", "two", func(inQueue bool) { atomic.AddInt32(&qnc[1][b2i[inQueue]], 1) })
+		req2, idle2a := qs.StartRequest(ctx2, &fcrequest.WorkEstimate{Seats: 1}, 2, "", "fs2", "test", "two", func(inQueue bool) { atomic.AddInt32(&qnc[1][b2i[inQueue]], 1) })
 		if idle2a {
 			t.Error("2nd StartRequest returned idle")
 		}
@@ -733,7 +718,7 @@ func TestTotalRequestsExecutingWithPanic(t *testing.T) {
 	metrics.Register()
 	metrics.Reset()
 	now := time.Now()
-	clk, counter := testclock.NewFakeEventClock(now, 0, nil)
+	clk, counter := testeventclock.NewFake(now, 0, nil)
 	qsf := NewQueueSetFactory(clk, counter)
 	qCfg := fq.QueuingConfig{
 		Name:             "TestTotalRequestsExecutingWithPanic",
@@ -759,7 +744,7 @@ func TestTotalRequestsExecutingWithPanic(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	req, _ := qs.StartRequest(ctx, &fcrequest.Width{Seats: 1}, 1, "", "fs", "test", "one", func(inQueue bool) {})
+	req, _ := qs.StartRequest(ctx, &fcrequest.WorkEstimate{Seats: 1}, 1, "", "fs", "test", "one", func(inQueue bool) {})
 	if req == nil {
 		t.Fatal("expected a Request object from StartRequest, but got nil")
 	}
@@ -812,13 +797,13 @@ func TestSelectQueueLocked(t *testing.T) {
 				{
 					virtualStart: 200,
 					requests: newFIFO(
-						&request{width: fcrequest.Width{Seats: 1}},
+						&request{workEstimate: fcrequest.WorkEstimate{Seats: 1}},
 					),
 				},
 				{
 					virtualStart: 100,
 					requests: newFIFO(
-						&request{width: fcrequest.Width{Seats: 1}},
+						&request{workEstimate: fcrequest.WorkEstimate{Seats: 1}},
 					),
 				},
 			},
@@ -835,7 +820,7 @@ func TestSelectQueueLocked(t *testing.T) {
 				{
 					virtualStart: 200,
 					requests: newFIFO(
-						&request{width: fcrequest.Width{Seats: 1}},
+						&request{workEstimate: fcrequest.WorkEstimate{Seats: 1}},
 					),
 				},
 			},
@@ -852,13 +837,13 @@ func TestSelectQueueLocked(t *testing.T) {
 				{
 					virtualStart: 200,
 					requests: newFIFO(
-						&request{width: fcrequest.Width{Seats: 50}},
+						&request{workEstimate: fcrequest.WorkEstimate{Seats: 50}},
 					),
 				},
 				{
 					virtualStart: 100,
 					requests: newFIFO(
-						&request{width: fcrequest.Width{Seats: 25}},
+						&request{workEstimate: fcrequest.WorkEstimate{Seats: 25}},
 					),
 				},
 			},
@@ -875,13 +860,13 @@ func TestSelectQueueLocked(t *testing.T) {
 				{
 					virtualStart: 200,
 					requests: newFIFO(
-						&request{width: fcrequest.Width{Seats: 10}},
+						&request{workEstimate: fcrequest.WorkEstimate{Seats: 10}},
 					),
 				},
 				{
 					virtualStart: 100,
 					requests: newFIFO(
-						&request{width: fcrequest.Width{Seats: 25}},
+						&request{workEstimate: fcrequest.WorkEstimate{Seats: 25}},
 					),
 				},
 			},
@@ -898,13 +883,13 @@ func TestSelectQueueLocked(t *testing.T) {
 				{
 					virtualStart: 200,
 					requests: newFIFO(
-						&request{width: fcrequest.Width{Seats: 10}},
+						&request{workEstimate: fcrequest.WorkEstimate{Seats: 10}},
 					),
 				},
 				{
 					virtualStart: 100,
 					requests: newFIFO(
-						&request{width: fcrequest.Width{Seats: 25}},
+						&request{workEstimate: fcrequest.WorkEstimate{Seats: 25}},
 					),
 				},
 			},

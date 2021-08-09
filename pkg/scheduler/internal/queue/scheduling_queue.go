@@ -48,8 +48,8 @@ import (
 )
 
 const (
-	// If the pod stays in unschedulableQ longer than the unschedulableQTimeInterval,
-	// the pod will be moved from unschedulableQ to activeQ.
+	// If a pod stays in unschedulableQ longer than unschedulableQTimeInterval,
+	// the pod will be moved from unschedulableQ to backoffQ or activeQ.
 	unschedulableQTimeInterval = 60 * time.Second
 
 	queueClosed = "scheduling queue is closed"
@@ -287,7 +287,7 @@ func (p *PriorityQueue) Add(pod *v1.Pod) error {
 	defer p.lock.Unlock()
 	pInfo := p.newQueuedPodInfo(pod)
 	if err := p.activeQ.Add(pInfo); err != nil {
-		klog.ErrorS(err, "Error adding pod to the scheduling queue", "pod", klog.KObj(pod))
+		klog.ErrorS(err, "Error adding pod to the active queue", "pod", klog.KObj(pod))
 		return err
 	}
 	if p.unschedulableQ.get(pod) != nil {
@@ -434,8 +434,8 @@ func (p *PriorityQueue) flushBackoffQCompleted() {
 	}
 }
 
-// flushUnschedulableQLeftover moves pod which stays in unschedulableQ longer than the unschedulableQTimeInterval
-// to activeQ.
+// flushUnschedulableQLeftover moves pods which stay in unschedulableQ longer than unschedulableQTimeInterval
+// to backoffQ or activeQ.
 func (p *PriorityQueue) flushUnschedulableQLeftover() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
@@ -585,7 +585,7 @@ func (p *PriorityQueue) AssignedPodUpdated(pod *v1.Pod) {
 
 // MoveAllToActiveOrBackoffQueue moves all pods from unschedulableQ to activeQ or backoffQ.
 // This function adds all pods and then signals the condition variable to ensure that
-// if Pop() is waiting for an item, it receives it after all the pods are in the
+// if Pop() is waiting for an item, it receives the signal after all the pods are in the
 // queue and the head is the highest priority pod.
 func (p *PriorityQueue) MoveAllToActiveOrBackoffQueue(event framework.ClusterEvent, preCheck PreEnqueueCheck) {
 	p.lock.Lock()
@@ -700,14 +700,17 @@ func (npm *nominator) AddNominatedPod(pi *framework.PodInfo, nodeName string) {
 	npm.Unlock()
 }
 
-// NominatedPodsForNode returns pods that are nominated to run on the given node,
+// NominatedPodsForNode returns a copy of pods that are nominated to run on the given node,
 // but they are waiting for other pods to be removed from the node.
 func (npm *nominator) NominatedPodsForNode(nodeName string) []*framework.PodInfo {
 	npm.RLock()
 	defer npm.RUnlock()
-	// TODO: we may need to return a copy of []*Pods to avoid modification
-	// on the caller side.
-	return npm.nominatedPods[nodeName]
+	// Make a copy of the nominated Pods so the caller can mutate safely.
+	pods := make([]*framework.PodInfo, len(npm.nominatedPods[nodeName]))
+	for i := 0; i < len(pods); i++ {
+		pods[i] = npm.nominatedPods[nodeName][i].DeepCopy()
+	}
+	return pods
 }
 
 func (p *PriorityQueue) podsCompareBackoffCompleted(podInfo1, podInfo2 interface{}) bool {
