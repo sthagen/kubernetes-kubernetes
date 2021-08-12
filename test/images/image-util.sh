@@ -111,6 +111,7 @@ build() {
   fi
 
   kube::util::ensure-gnu-sed
+  kube::util::ensure-docker-buildx
 
   for os_arch in ${os_archs}; do
     splitOsArch "${image}" "${os_arch}"
@@ -277,7 +278,7 @@ bin() {
         golang:"${GOLANG_VERSION}" \
         /bin/bash -c "\
                 cd /go/src/k8s.io/kubernetes/test/images/${SRC_DIR} && \
-                CGO_ENABLED=0 ${arch_prefix} GOOS=${OS} GOARCH=${ARCH} go build -a -installsuffix cgo --ldflags '-w' -o ${TARGET}/${SRC} ./$(dirname "${SRC}")"
+                CGO_ENABLED=0 ${arch_prefix} GOOS=${OS} GOARCH=${ARCH} go build -a -installsuffix cgo --ldflags \"-w ${LD_FLAGS}\" -o ${TARGET}/${SRC} ./$(dirname "${SRC}")"
   done
 }
 
