@@ -41,7 +41,6 @@ import (
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/audit"
-	auditpolicy "k8s.io/apiserver/pkg/audit/policy"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/authenticatorfactory"
 	authenticatorunion "k8s.io/apiserver/pkg/authentication/request/union"
@@ -135,8 +134,8 @@ type Config struct {
 	Version *version.Info
 	// AuditBackend is where audit events are sent to.
 	AuditBackend audit.Backend
-	// AuditPolicyChecker makes the decision of whether and how to audit log a request.
-	AuditPolicyChecker auditpolicy.Checker
+	// AuditPolicyRuleEvaluator makes the decision of whether and how to audit log a request.
+	AuditPolicyRuleEvaluator audit.PolicyRuleEvaluator
 	// ExternalAddress is the host name to use for external (public internet) facing URLs (e.g. Swagger)
 	// Will default to a value based on secure serving info and available ipv4 IPs.
 	ExternalAddress string
@@ -239,6 +238,15 @@ type Config struct {
 	// If enabled, after ShutdownDelayDuration elapses, any incoming request is
 	// rejected with a 429 status code and a 'Retry-After' response.
 	ShutdownSendRetryAfter bool
+
+	// StartupSendRetryAfterUntilReady once set will reject incoming requests with
+	// a 429 status code and a 'Retry-After' response header until the apiserver
+	// hasn't fully initialized.
+	// This option ensures that the system stays consistent even when requests
+	// are received before the server has been initialized.
+	// In particular, it prevents child deletion in case of GC or/and orphaned
+	// content in case of the namespaces controller.
+	StartupSendRetryAfterUntilReady bool
 
 	//===========================================================================
 	// values below here are targets for removal
@@ -470,6 +478,46 @@ func (c *Config) AddPostStartHook(name string, hook PostStartHookFunc) error {
 func (c *Config) AddPostStartHookOrDie(name string, hook PostStartHookFunc) {
 	if err := c.AddPostStartHook(name, hook); err != nil {
 		klog.Fatalf("Error registering PostStartHook %q: %v", name, err)
+	}
+}
+
+// shouldAddWithRetryAfterFilter returns an appropriate ShouldRespondWithRetryAfterFunc
+// if the apiserver should respond with a Retry-After response header based on option
+// 'shutdown-send-retry-after' or 'startup-send-retry-after-until-ready'.
+func (c *Config) shouldAddWithRetryAfterFilter() genericfilters.ShouldRespondWithRetryAfterFunc {
+	if !(c.ShutdownSendRetryAfter || c.StartupSendRetryAfterUntilReady) {
+		return nil
+	}
+
+	// follow lifecycle, avoiding go routines per request
+	const (
+		startup int32 = iota
+		running
+		terminating
+	)
+	state := startup
+	go func() {
+		<-c.lifecycleSignals.HasBeenReady.Signaled()
+		atomic.StoreInt32(&state, running)
+		<-c.lifecycleSignals.AfterShutdownDelayDuration.Signaled()
+		atomic.StoreInt32(&state, terminating)
+	}()
+
+	return func() (*genericfilters.RetryAfterParams, bool) {
+		state := atomic.LoadInt32(&state)
+		switch {
+		case c.StartupSendRetryAfterUntilReady && state == startup:
+			return &genericfilters.RetryAfterParams{
+				Message: "The apiserver hasn't been fully initialized yet, please try again later.",
+			}, true
+		case c.ShutdownSendRetryAfter && state == terminating:
+			return &genericfilters.RetryAfterParams{
+				TearDownConnection: true,
+				Message:            "The apiserver is shutting down, please try again later.",
+			}, true
+		default:
+			return nil, false
+		}
 	}
 }
 
@@ -772,11 +820,11 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *Config) http.Handler {
 	handler = filterlatency.TrackStarted(handler, "impersonation")
 
 	handler = filterlatency.TrackCompleted(handler)
-	handler = genericapifilters.WithAudit(handler, c.AuditBackend, c.AuditPolicyChecker, c.LongRunningFunc)
+	handler = genericapifilters.WithAudit(handler, c.AuditBackend, c.AuditPolicyRuleEvaluator, c.LongRunningFunc)
 	handler = filterlatency.TrackStarted(handler, "audit")
 
 	failedHandler := genericapifilters.Unauthorized(c.Serializer)
-	failedHandler = genericapifilters.WithFailedAuthenticationAudit(failedHandler, c.AuditBackend, c.AuditPolicyChecker)
+	failedHandler = genericapifilters.WithFailedAuthenticationAudit(failedHandler, c.AuditBackend, c.AuditPolicyRuleEvaluator)
 
 	failedHandler = filterlatency.TrackCompleted(failedHandler)
 	handler = filterlatency.TrackCompleted(handler)
@@ -789,18 +837,18 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *Config) http.Handler {
 	// context with deadline. The go-routine can keep running, while the timeout logic will return a timeout to the client.
 	handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.LongRunningFunc)
 
-	handler = genericapifilters.WithRequestDeadline(handler, c.AuditBackend, c.AuditPolicyChecker,
+	handler = genericapifilters.WithRequestDeadline(handler, c.AuditBackend, c.AuditPolicyRuleEvaluator,
 		c.LongRunningFunc, c.Serializer, c.RequestTimeout)
 	handler = genericfilters.WithWaitGroup(handler, c.LongRunningFunc, c.HandlerChainWaitGroup)
 	if c.SecureServing != nil && !c.SecureServing.DisableHTTP2 && c.GoawayChance > 0 {
 		handler = genericfilters.WithProbabilisticGoaway(handler, c.GoawayChance)
 	}
-	handler = genericapifilters.WithAuditAnnotations(handler, c.AuditBackend, c.AuditPolicyChecker)
+	handler = genericapifilters.WithAuditAnnotations(handler, c.AuditBackend, c.AuditPolicyRuleEvaluator)
 	handler = genericapifilters.WithWarningRecorder(handler)
 	handler = genericapifilters.WithCacheControl(handler)
 	handler = genericfilters.WithHSTS(handler, c.HSTSDirectives)
-	if c.ShutdownSendRetryAfter {
-		handler = genericfilters.WithRetryAfter(handler, c.lifecycleSignals.AfterShutdownDelayDuration.Signaled())
+	if shouldRespondWithRetryAfterFn := c.shouldAddWithRetryAfterFilter(); shouldRespondWithRetryAfterFn != nil {
+		handler = genericfilters.WithRetryAfter(handler, shouldRespondWithRetryAfterFn)
 	}
 	handler = genericfilters.WithHTTPLogging(handler)
 	if utilfeature.DefaultFeatureGate.Enabled(genericfeatures.APIServerTracing) {

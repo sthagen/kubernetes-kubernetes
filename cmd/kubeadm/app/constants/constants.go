@@ -26,15 +26,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
 	bootstrapapi "k8s.io/cluster-bootstrap/token/api"
 	componentversion "k8s.io/component-base/version"
-	utilnet "k8s.io/utils/net"
-
-	"github.com/pkg/errors"
+	netutils "k8s.io/utils/net"
 )
 
 const (
@@ -489,15 +489,10 @@ var (
 		Jitter:   0.1,
 	}
 
-	// defaultKubernetesVersionForTests is the default version used for unit tests.
-	// The MINOR should be at least 3 as some tests subtract 3 from the MINOR version.
-	defaultKubernetesVersionForTests = version.MustParseSemantic("v1.3.0")
+	// defaultKubernetesPlaceholderVersion is a placeholder version in case the component-base
+	// version was not populated during build.
+	defaultKubernetesPlaceholderVersion = version.MustParseSemantic("v1.0.0-placeholder-version")
 )
-
-// isRunningInTest can be used to determine if the code in this file is being run in a test.
-func isRunningInTest() bool {
-	return strings.HasSuffix(os.Args[0], ".test")
-}
 
 // getSkewedKubernetesVersion returns the current MAJOR.(MINOR+n).0 Kubernetes version with a skew of 'n'
 // It uses the kubeadm version provided by the 'component-base/version' package. This version must be populated
@@ -505,28 +500,18 @@ func isRunningInTest() bool {
 // was either build incorrectly or this code is running in unit tests.
 func getSkewedKubernetesVersion(n int) *version.Version {
 	versionInfo := componentversion.Get()
-	ver := getSkewedKubernetesVersionImpl(&versionInfo, n, isRunningInTest)
-	if ver == nil {
-		panic("kubeadm is not build properly using 'make ...': missing component version information")
-	}
-	return ver
+	return getSkewedKubernetesVersionImpl(&versionInfo, n)
 }
 
-func getSkewedKubernetesVersionImpl(versionInfo *apimachineryversion.Info, n int, isRunningInTestFunc func() bool) *version.Version {
+func getSkewedKubernetesVersionImpl(versionInfo *apimachineryversion.Info, n int) *version.Version {
 	// TODO: update if the kubeadm version gets decoupled from the Kubernetes version.
 	// This would require keeping track of the supported skew in a table.
 	// More changes would be required if the kubelet version one day decouples from that of Kubernetes.
 	var ver *version.Version
 	if len(versionInfo.Major) == 0 {
-		if isRunningInTestFunc() {
-			ver = defaultKubernetesVersionForTests // An arbitrary version for testing purposes
-		} else {
-			// If this is not running in tests assume that the kubeadm binary is not build properly
-			return nil
-		}
-	} else {
-		ver = version.MustParseSemantic(versionInfo.GitVersion)
+		return defaultKubernetesPlaceholderVersion
 	}
+	ver = version.MustParseSemantic(versionInfo.GitVersion)
 	// Append the MINOR version skew.
 	// TODO: handle the case of Kubernetes moving to v2.0 or having MAJOR version updates in the future.
 	// This would require keeping track (in a table) of the last MINOR for a particular MAJOR.
@@ -650,7 +635,7 @@ func GetDNSIP(svcSubnetList string, isDualStack bool) (net.IP, error) {
 	}
 
 	// Selects the 10th IP in service subnet CIDR range as dnsIP
-	dnsIP, err := utilnet.GetIndexedIP(svcSubnetCIDR, 10)
+	dnsIP, err := netutils.GetIndexedIP(svcSubnetCIDR, 10)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to get internal Kubernetes Service IP from the given service CIDR")
 	}
@@ -664,7 +649,7 @@ func GetKubernetesServiceCIDR(svcSubnetList string, isDualStack bool) (*net.IPNe
 		// The default service address family for the cluster is the address family of the first
 		// service cluster IP range configured via the `--service-cluster-ip-range` flag
 		// of the kube-controller-manager and kube-apiserver.
-		svcSubnets, err := utilnet.ParseCIDRs(strings.Split(svcSubnetList, ","))
+		svcSubnets, err := netutils.ParseCIDRs(strings.Split(svcSubnetList, ","))
 		if err != nil {
 			return nil, errors.Wrapf(err, "unable to parse ServiceSubnet %v", svcSubnetList)
 		}
@@ -674,7 +659,7 @@ func GetKubernetesServiceCIDR(svcSubnetList string, isDualStack bool) (*net.IPNe
 		return svcSubnets[0], nil
 	}
 	// internal IP address for the API server
-	_, svcSubnet, err := net.ParseCIDR(svcSubnetList)
+	_, svcSubnet, err := netutils.ParseCIDRSloppy(svcSubnetList)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to parse ServiceSubnet %v", svcSubnetList)
 	}
@@ -687,7 +672,7 @@ func GetAPIServerVirtualIP(svcSubnetList string, isDualStack bool) (net.IP, erro
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to get internal Kubernetes Service IP from the given service CIDR")
 	}
-	internalAPIServerVirtualIP, err := utilnet.GetIndexedIP(svcSubnet, 1)
+	internalAPIServerVirtualIP, err := netutils.GetIndexedIP(svcSubnet, 1)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to get the first IP address from the given CIDR: %s", svcSubnet.String())
 	}
