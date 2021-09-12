@@ -21,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
-	"net/http"
 	"os"
 	"time"
 
@@ -50,7 +49,9 @@ import (
 	"k8s.io/component-base/version"
 	"k8s.io/component-base/version/verflag"
 	genericcontrollermanager "k8s.io/controller-manager/app"
+	"k8s.io/controller-manager/controller"
 	"k8s.io/controller-manager/pkg/clientbuilder"
+	controllerhealthz "k8s.io/controller-manager/pkg/healthz"
 	"k8s.io/controller-manager/pkg/informerfactory"
 	"k8s.io/controller-manager/pkg/leadermigration"
 	"k8s.io/klog/v2"
@@ -156,9 +157,10 @@ func Run(c *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface
 		checks = append(checks, electionChecker)
 	}
 
+	healthzHandler := controllerhealthz.NewMutableHealthzHandler(checks...)
 	// Start the controller manager HTTP server
 	if c.SecureServing != nil {
-		unsecuredMux := genericcontrollermanager.NewBaseHandler(&c.ComponentConfig.Generic.Debugging, checks...)
+		unsecuredMux := genericcontrollermanager.NewBaseHandler(&c.ComponentConfig.Generic.Debugging, healthzHandler)
 		handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, &c.Authorization, &c.Authentication)
 		// TODO: handle stoppedCh returned by c.SecureServing.Serve
 		if _, err := c.SecureServing.Serve(handler, 0, stopCh); err != nil {
@@ -166,7 +168,7 @@ func Run(c *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface
 		}
 	}
 	if c.InsecureServing != nil {
-		unsecuredMux := genericcontrollermanager.NewBaseHandler(&c.ComponentConfig.Generic.Debugging, checks...)
+		unsecuredMux := genericcontrollermanager.NewBaseHandler(&c.ComponentConfig.Generic.Debugging, healthzHandler)
 		insecureSuperuserAuthn := server.AuthenticationInfo{Authenticator: &server.InsecureSuperuser{}}
 		handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, nil, &insecureSuperuserAuthn)
 		if err := c.InsecureServing.Serve(handler, 0, stopCh); err != nil {
@@ -182,7 +184,7 @@ func Run(c *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface
 		if err != nil {
 			klog.Fatalf("error building controller context: %v", err)
 		}
-		if err := startControllers(cloud, controllerContext, c, ctx.Done(), controllerInitializers); err != nil {
+		if err := startControllers(cloud, controllerContext, c, ctx.Done(), controllerInitializers, healthzHandler); err != nil {
 			klog.Fatalf("error running controllers: %v", err)
 		}
 	}
@@ -259,13 +261,14 @@ func Run(c *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface
 }
 
 // startControllers starts the cloud specific controller loops.
-func startControllers(cloud cloudprovider.Interface, ctx genericcontrollermanager.ControllerContext, c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{}, controllers map[string]InitFunc) error {
+func startControllers(cloud cloudprovider.Interface, ctx genericcontrollermanager.ControllerContext, c *cloudcontrollerconfig.CompletedConfig, stopCh <-chan struct{}, controllers map[string]InitFunc, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
 	// Initialize the cloud provider with a reference to the clientBuilder
 	cloud.Initialize(c.ClientBuilder, stopCh)
 	// Set the informer on the user cloud object
 	if informerUserCloud, ok := cloud.(cloudprovider.InformerUser); ok {
 		informerUserCloud.SetInformers(c.SharedInformers)
 	}
+	var controllerChecks []healthz.HealthChecker
 	for controllerName, initFn := range controllers {
 		if !genericcontrollermanager.IsControllerEnabled(controllerName, ControllersDisabledByDefault, c.ComponentConfig.Generic.Controllers) {
 			klog.Warningf("%q is disabled", controllerName)
@@ -273,7 +276,7 @@ func startControllers(cloud cloudprovider.Interface, ctx genericcontrollermanage
 		}
 
 		klog.V(1).Infof("Starting %q", controllerName)
-		_, started, err := initFn(ctx)
+		ctrl, started, err := initFn(ctx)
 		if err != nil {
 			klog.Errorf("Error starting %q", controllerName)
 			return err
@@ -282,10 +285,21 @@ func startControllers(cloud cloudprovider.Interface, ctx genericcontrollermanage
 			klog.Warningf("Skipping %q", controllerName)
 			continue
 		}
+		check := controllerhealthz.NamedPingChecker(controllerName)
+		if ctrl != nil {
+			if healthCheckable, ok := ctrl.(controller.HealthCheckable); ok {
+				if realCheck := healthCheckable.HealthChecker(); realCheck != nil {
+					check = controllerhealthz.NamedHealthChecker(controllerName, realCheck)
+				}
+			}
+		}
+		controllerChecks = append(controllerChecks, check)
 		klog.Infof("Started %q", controllerName)
 
 		time.Sleep(wait.Jitter(c.ComponentConfig.Generic.ControllerStartInterval.Duration, ControllerStartJitter))
 	}
+
+	healthzHandler.AddHealthChecker(controllerChecks...)
 
 	// If apiserver is not running we should wait for some time and fail only then. This is particularly
 	// important when we start apiserver and controller manager at the same time.
@@ -302,10 +316,14 @@ func startControllers(cloud cloudprovider.Interface, ctx genericcontrollermanage
 // InitCloudFunc is used to initialize cloud
 type InitCloudFunc func(config *cloudcontrollerconfig.CompletedConfig) cloudprovider.Interface
 
-// InitFunc is used to launch a particular controller.  It may run additional "should I activate checks".
+// InitFunc is used to launch a particular controller. It returns a controller
+// that can optionally implement other interfaces so that the controller manager
+// can support the requested features.
+// The returned controller may be nil, which will be considered an anonymous controller
+// that requests no additional features from the controller manager.
 // Any error returned will cause the controller process to `Fatal`
 // The bool indicates whether the controller was enabled.
-type InitFunc func(ctx genericcontrollermanager.ControllerContext) (debuggingHandler http.Handler, enabled bool, err error)
+type InitFunc func(ctx genericcontrollermanager.ControllerContext) (controller controller.Interface, enabled bool, err error)
 
 // InitFuncConstructor is used to construct InitFunc
 type InitFuncConstructor func(initcontext ControllerInitContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) InitFunc
@@ -340,28 +358,28 @@ type ControllerInitContext struct {
 
 // StartCloudNodeControllerWrapper is used to take cloud cofig as input and start cloud node controller
 func StartCloudNodeControllerWrapper(initContext ControllerInitContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) InitFunc {
-	return func(ctx genericcontrollermanager.ControllerContext) (http.Handler, bool, error) {
+	return func(ctx genericcontrollermanager.ControllerContext) (controller.Interface, bool, error) {
 		return startCloudNodeController(initContext, completedConfig, cloud, ctx.Stop)
 	}
 }
 
 // StartCloudNodeLifecycleControllerWrapper is used to take cloud cofig as input and start cloud node lifecycle controller
 func StartCloudNodeLifecycleControllerWrapper(initContext ControllerInitContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) InitFunc {
-	return func(ctx genericcontrollermanager.ControllerContext) (http.Handler, bool, error) {
+	return func(ctx genericcontrollermanager.ControllerContext) (controller.Interface, bool, error) {
 		return startCloudNodeLifecycleController(initContext, completedConfig, cloud, ctx.Stop)
 	}
 }
 
 // StartServiceControllerWrapper is used to take cloud cofig as input and start service controller
 func StartServiceControllerWrapper(initContext ControllerInitContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) InitFunc {
-	return func(ctx genericcontrollermanager.ControllerContext) (http.Handler, bool, error) {
+	return func(ctx genericcontrollermanager.ControllerContext) (controller.Interface, bool, error) {
 		return startServiceController(initContext, completedConfig, cloud, ctx.Stop)
 	}
 }
 
 // StartRouteControllerWrapper is used to take cloud cofig as input and start route controller
 func StartRouteControllerWrapper(initContext ControllerInitContext, completedConfig *cloudcontrollerconfig.CompletedConfig, cloud cloudprovider.Interface) InitFunc {
-	return func(ctx genericcontrollermanager.ControllerContext) (http.Handler, bool, error) {
+	return func(ctx genericcontrollermanager.ControllerContext) (controller.Interface, bool, error) {
 		return startRouteController(initContext, completedConfig, cloud, ctx.Stop)
 	}
 }

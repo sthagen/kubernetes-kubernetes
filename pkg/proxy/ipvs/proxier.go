@@ -191,8 +191,8 @@ var ipsetWithIptablesChain = []struct {
 	{kubeNodePortSetTCP, string(KubeNodePortChain), string(KubeMarkMasqChain), "dst", utilipset.ProtocolTCP},
 	{kubeNodePortLocalSetUDP, string(KubeNodePortChain), "RETURN", "dst", utilipset.ProtocolUDP},
 	{kubeNodePortSetUDP, string(KubeNodePortChain), string(KubeMarkMasqChain), "dst", utilipset.ProtocolUDP},
-	{kubeNodePortSetSCTP, string(KubeNodePortChain), string(KubeMarkMasqChain), "dst,dst", utilipset.ProtocolSCTP},
 	{kubeNodePortLocalSetSCTP, string(KubeNodePortChain), "RETURN", "dst,dst", utilipset.ProtocolSCTP},
+	{kubeNodePortSetSCTP, string(KubeNodePortChain), string(KubeMarkMasqChain), "dst,dst", utilipset.ProtocolSCTP},
 }
 
 // In IPVS proxy mode, the following flags need to be set
@@ -624,7 +624,7 @@ func (handle *LinuxKernelHandler) GetModules() ([]string, error) {
 		kernelConfigFile := fmt.Sprintf("/boot/config-%s", kernelVersionStr)
 		kConfig, err := ioutil.ReadFile(kernelConfigFile)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to read Kernel Config file %s with error %v", kernelConfigFile, err)
+			return nil, fmt.Errorf("failed to read Kernel Config file %s with error %w", kernelConfigFile, err)
 		}
 		for _, module := range ipvsModules {
 			if match, _ := regexp.Match("CONFIG_"+strings.ToUpper(module)+"=y", kConfig); match {
@@ -634,7 +634,7 @@ func (handle *LinuxKernelHandler) GetModules() ([]string, error) {
 		return bmods, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read file /proc/modules with error %v", err)
+		return nil, fmt.Errorf("failed to read file /proc/modules with error %w", err)
 	}
 	defer modulesFile.Close()
 
@@ -1008,7 +1008,6 @@ func (proxier *Proxier) OnNodeSynced() {
 }
 
 // This is where all of the ipvs calls happen.
-// assumes proxier.mu is held
 func (proxier *Proxier) syncProxyRules() {
 	proxier.mu.Lock()
 	defer proxier.mu.Unlock()
