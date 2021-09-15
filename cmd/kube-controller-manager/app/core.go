@@ -538,6 +538,9 @@ func startGarbageCollectorController(ctx ControllerContext) (controller.Interfac
 	discoveryClient := ctx.ClientBuilder.DiscoveryClientOrDie("generic-garbage-collector")
 
 	config := ctx.ClientBuilder.ConfigOrDie("generic-garbage-collector")
+	// Increase garbage collector controller's throughput: each object deletion takes two API calls,
+	// so to get |config.QPS| deletion rate we need to allow 2x more requests for this controller.
+	config.QPS *= 2
 	metadataClient, err := metadata.NewForConfig(config)
 	if err != nil {
 		return nil, true, err
@@ -576,7 +579,7 @@ func startPVCProtectionController(ctx ControllerContext) (controller.Interface, 
 		ctx.InformerFactory.Core().V1().Pods(),
 		ctx.ClientBuilder.ClientOrDie("pvc-protection-controller"),
 		utilfeature.DefaultFeatureGate.Enabled(features.StorageObjectInUseProtection),
-		utilfeature.DefaultFeatureGate.Enabled(features.StorageObjectInUseProtection),
+		utilfeature.DefaultFeatureGate.Enabled(features.GenericEphemeralVolume),
 	)
 	if err != nil {
 		return nil, true, fmt.Errorf("failed to start the pvc protection controller: %v", err)
