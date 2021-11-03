@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
+	kubefeatures "k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/events"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2eevents "k8s.io/kubernetes/test/e2e/framework/events"
@@ -122,7 +123,7 @@ var _ = SIGDescribe("Probing container", func() {
 	framework.ConformanceIt("should be restarted with a exec \"cat /tmp/health\" liveness probe [NodeConformance]", func() {
 		cmd := []string{"/bin/sh", "-c", "echo ok >/tmp/health; sleep 10; rm -rf /tmp/health; sleep 600"}
 		livenessProbe := &v1.Probe{
-			Handler:             execHandler([]string{"cat", "/tmp/health"}),
+			ProbeHandler:        execHandler([]string{"cat", "/tmp/health"}),
 			InitialDelaySeconds: 15,
 			TimeoutSeconds:      5, // default 1s can be pretty aggressive in CI environments with low resources
 			FailureThreshold:    1,
@@ -139,7 +140,7 @@ var _ = SIGDescribe("Probing container", func() {
 	framework.ConformanceIt("should *not* be restarted with a exec \"cat /tmp/health\" liveness probe [NodeConformance]", func() {
 		cmd := []string{"/bin/sh", "-c", "echo ok >/tmp/health; sleep 600"}
 		livenessProbe := &v1.Probe{
-			Handler:             execHandler([]string{"cat", "/tmp/health"}),
+			ProbeHandler:        execHandler([]string{"cat", "/tmp/health"}),
 			InitialDelaySeconds: 15,
 			TimeoutSeconds:      5, // default 1s can be pretty aggressive in CI environments with low resources
 			FailureThreshold:    1,
@@ -155,7 +156,7 @@ var _ = SIGDescribe("Probing container", func() {
 	*/
 	framework.ConformanceIt("should be restarted with a /healthz http liveness probe [NodeConformance]", func() {
 		livenessProbe := &v1.Probe{
-			Handler:             httpGetHandler("/healthz", 8080),
+			ProbeHandler:        httpGetHandler("/healthz", 8080),
 			InitialDelaySeconds: 15,
 			FailureThreshold:    1,
 		}
@@ -170,7 +171,7 @@ var _ = SIGDescribe("Probing container", func() {
 	*/
 	framework.ConformanceIt("should *not* be restarted with a tcp:8080 liveness probe [NodeConformance]", func() {
 		livenessProbe := &v1.Probe{
-			Handler:             tcpSocketHandler(8080),
+			ProbeHandler:        tcpSocketHandler(8080),
 			InitialDelaySeconds: 15,
 			FailureThreshold:    1,
 		}
@@ -185,7 +186,7 @@ var _ = SIGDescribe("Probing container", func() {
 	*/
 	framework.ConformanceIt("should have monotonically increasing restart count [NodeConformance]", func() {
 		livenessProbe := &v1.Probe{
-			Handler:             httpGetHandler("/healthz", 8080),
+			ProbeHandler:        httpGetHandler("/healthz", 8080),
 			InitialDelaySeconds: 5,
 			FailureThreshold:    1,
 		}
@@ -200,7 +201,7 @@ var _ = SIGDescribe("Probing container", func() {
 	*/
 	framework.ConformanceIt("should *not* be restarted with a /healthz http liveness probe [NodeConformance]", func() {
 		livenessProbe := &v1.Probe{
-			Handler:             httpGetHandler("/", 80),
+			ProbeHandler:        httpGetHandler("/", 80),
 			InitialDelaySeconds: 15,
 			TimeoutSeconds:      5,
 			FailureThreshold:    5, // to accommodate nodes which are slow in bringing up containers.
@@ -217,10 +218,10 @@ var _ = SIGDescribe("Probing container", func() {
 	ginkgo.It("should be restarted with an exec liveness probe with timeout [MinimumKubeletVersion:1.20] [NodeConformance]", func() {
 		// The ExecProbeTimeout feature gate exists to allow backwards-compatibility with pre-1.20 cluster behaviors, where livenessProbe timeouts were ignored
 		// If ExecProbeTimeout feature gate is disabled, timeout enforcement for exec livenessProbes is disabled, so we should skip this test
-		e2eskipper.SkipUnlessExecProbeTimeoutEnabled()
+		e2eskipper.SkipUnlessFeatureGateEnabled(kubefeatures.ExecProbeTimeout)
 		cmd := []string{"/bin/sh", "-c", "sleep 600"}
 		livenessProbe := &v1.Probe{
-			Handler:             execHandler([]string{"/bin/sh", "-c", "sleep 10"}),
+			ProbeHandler:        execHandler([]string{"/bin/sh", "-c", "sleep 10"}),
 			InitialDelaySeconds: 15,
 			TimeoutSeconds:      1,
 			FailureThreshold:    1,
@@ -237,11 +238,11 @@ var _ = SIGDescribe("Probing container", func() {
 	ginkgo.It("should not be ready with an exec readiness probe timeout [MinimumKubeletVersion:1.20] [NodeConformance]", func() {
 		// The ExecProbeTimeout feature gate exists to allow backwards-compatibility with pre-1.20 cluster behaviors, where readiness probe timeouts were ignored
 		// If ExecProbeTimeout feature gate is disabled, timeout enforcement for exec readiness probe is disabled, so we should skip this test
-		e2eskipper.SkipUnlessExecProbeTimeoutEnabled()
+		e2eskipper.SkipUnlessFeatureGateEnabled(kubefeatures.ExecProbeTimeout)
 
 		cmd := []string{"/bin/sh", "-c", "sleep 600"}
 		readinessProbe := &v1.Probe{
-			Handler:             execHandler([]string{"/bin/sh", "-c", "sleep 10"}),
+			ProbeHandler:        execHandler([]string{"/bin/sh", "-c", "sleep 10"}),
 			InitialDelaySeconds: 15,
 			TimeoutSeconds:      1,
 			FailureThreshold:    1,
@@ -259,11 +260,11 @@ var _ = SIGDescribe("Probing container", func() {
 		// The ExecProbeTimeout feature gate exists to allow backwards-compatibility with pre-1.20 cluster behaviors using dockershim, where livenessProbe timeouts were ignored
 		// If ExecProbeTimeout feature gate is disabled on a dockershim cluster, timeout enforcement for exec livenessProbes is disabled, but a failing liveness probe MUST still trigger a restart
 		// Note ExecProbeTimeout=false is not recommended for non-dockershim clusters (e.g., containerd), and this test will fail if run against such a configuration
-		e2eskipper.SkipUnlessExecProbeTimeoutEnabled()
+		e2eskipper.SkipUnlessFeatureGateEnabled(kubefeatures.ExecProbeTimeout)
 
 		cmd := []string{"/bin/sh", "-c", "sleep 600"}
 		livenessProbe := &v1.Probe{
-			Handler:             execHandler([]string{"/bin/sh", "-c", "sleep 10 & exit 1"}),
+			ProbeHandler:        execHandler([]string{"/bin/sh", "-c", "sleep 10 & exit 1"}),
 			InitialDelaySeconds: 15,
 			TimeoutSeconds:      1,
 			FailureThreshold:    1,
@@ -279,7 +280,7 @@ var _ = SIGDescribe("Probing container", func() {
 	*/
 	ginkgo.It("should be restarted with a local redirect http liveness probe", func() {
 		livenessProbe := &v1.Probe{
-			Handler:             httpGetHandler("/redirect?loc="+url.QueryEscape("/healthz"), 8080),
+			ProbeHandler:        httpGetHandler("/redirect?loc="+url.QueryEscape("/healthz"), 8080),
 			InitialDelaySeconds: 15,
 			FailureThreshold:    1,
 		}
@@ -294,7 +295,7 @@ var _ = SIGDescribe("Probing container", func() {
 	*/
 	ginkgo.It("should *not* be restarted with a non-local redirect http liveness probe", func() {
 		livenessProbe := &v1.Probe{
-			Handler:             httpGetHandler("/redirect?loc="+url.QueryEscape("http://0.0.0.0/"), 8080),
+			ProbeHandler:        httpGetHandler("/redirect?loc="+url.QueryEscape("http://0.0.0.0/"), 8080),
 			InitialDelaySeconds: 15,
 			FailureThreshold:    1,
 		}
@@ -319,7 +320,7 @@ var _ = SIGDescribe("Probing container", func() {
 	ginkgo.It("should be restarted startup probe fails", func() {
 		cmd := []string{"/bin/sh", "-c", "sleep 600"}
 		livenessProbe := &v1.Probe{
-			Handler: v1.Handler{
+			ProbeHandler: v1.ProbeHandler{
 				Exec: &v1.ExecAction{
 					Command: []string{"/bin/true"},
 				},
@@ -328,7 +329,7 @@ var _ = SIGDescribe("Probing container", func() {
 			FailureThreshold:    1,
 		}
 		startupProbe := &v1.Probe{
-			Handler: v1.Handler{
+			ProbeHandler: v1.ProbeHandler{
 				Exec: &v1.ExecAction{
 					Command: []string{"/bin/false"},
 				},
@@ -348,7 +349,7 @@ var _ = SIGDescribe("Probing container", func() {
 	ginkgo.It("should *not* be restarted by liveness probe because startup probe delays it", func() {
 		cmd := []string{"/bin/sh", "-c", "sleep 600"}
 		livenessProbe := &v1.Probe{
-			Handler: v1.Handler{
+			ProbeHandler: v1.ProbeHandler{
 				Exec: &v1.ExecAction{
 					Command: []string{"/bin/false"},
 				},
@@ -357,7 +358,7 @@ var _ = SIGDescribe("Probing container", func() {
 			FailureThreshold:    1,
 		}
 		startupProbe := &v1.Probe{
-			Handler: v1.Handler{
+			ProbeHandler: v1.ProbeHandler{
 				Exec: &v1.ExecAction{
 					Command: []string{"/bin/false"},
 				},
@@ -377,7 +378,7 @@ var _ = SIGDescribe("Probing container", func() {
 	ginkgo.It("should be restarted by liveness probe after startup probe enables it", func() {
 		cmd := []string{"/bin/sh", "-c", "sleep 10; echo ok >/tmp/startup; sleep 600"}
 		livenessProbe := &v1.Probe{
-			Handler: v1.Handler{
+			ProbeHandler: v1.ProbeHandler{
 				Exec: &v1.ExecAction{
 					Command: []string{"/bin/false"},
 				},
@@ -386,7 +387,7 @@ var _ = SIGDescribe("Probing container", func() {
 			FailureThreshold:    1,
 		}
 		startupProbe := &v1.Probe{
-			Handler: v1.Handler{
+			ProbeHandler: v1.ProbeHandler{
 				Exec: &v1.ExecAction{
 					Command: []string{"cat", "/tmp/startup"},
 				},
@@ -409,12 +410,12 @@ var _ = SIGDescribe("Probing container", func() {
 		// to avoid flakes, ensure sleep before startup (32s) > readinessProbe.PeriodSeconds
 		cmd := []string{"/bin/sh", "-c", "echo ok >/tmp/health; sleep 32; echo ok >/tmp/startup; sleep 600"}
 		readinessProbe := &v1.Probe{
-			Handler:             execHandler([]string{"/bin/cat", "/tmp/health"}),
+			ProbeHandler:        execHandler([]string{"/bin/cat", "/tmp/health"}),
 			InitialDelaySeconds: 0,
 			PeriodSeconds:       30,
 		}
 		startupProbe := &v1.Probe{
-			Handler:             execHandler([]string{"/bin/cat", "/tmp/startup"}),
+			ProbeHandler:        execHandler([]string{"/bin/cat", "/tmp/startup"}),
 			InitialDelaySeconds: 0,
 			FailureThreshold:    120,
 			PeriodSeconds:       5,
@@ -464,7 +465,7 @@ var _ = SIGDescribe("Probing container", func() {
 		// probe will fail since pod has no http endpoints
 		shortGracePeriod := int64(5)
 		pod.Spec.Containers[0].LivenessProbe = &v1.Probe{
-			Handler: v1.Handler{
+			ProbeHandler: v1.ProbeHandler{
 				HTTPGet: &v1.HTTPGetAction{
 					Path: "/healthz",
 					Port: intstr.FromInt(8080),
@@ -492,14 +493,14 @@ var _ = SIGDescribe("Probing container", func() {
 		// startup probe will fail since pod will sleep for 1000s before becoming ready
 		shortGracePeriod := int64(5)
 		pod.Spec.Containers[0].StartupProbe = &v1.Probe{
-			Handler:                       execHandler([]string{"/bin/cat", "/tmp/startup"}),
+			ProbeHandler:                  execHandler([]string{"/bin/cat", "/tmp/startup"}),
 			InitialDelaySeconds:           10,
 			FailureThreshold:              1,
 			TerminationGracePeriodSeconds: &shortGracePeriod,
 		}
 		// liveness probe always succeeds
 		pod.Spec.Containers[0].LivenessProbe = &v1.Probe{
-			Handler: v1.Handler{
+			ProbeHandler: v1.ProbeHandler{
 				Exec: &v1.ExecAction{
 					Command: []string{"/bin/true"},
 				},
@@ -612,16 +613,16 @@ func startupPodSpec(startupProbe, readinessProbe, livenessProbe *v1.Probe, cmd [
 	}
 }
 
-func execHandler(cmd []string) v1.Handler {
-	return v1.Handler{
+func execHandler(cmd []string) v1.ProbeHandler {
+	return v1.ProbeHandler{
 		Exec: &v1.ExecAction{
 			Command: cmd,
 		},
 	}
 }
 
-func httpGetHandler(path string, port int) v1.Handler {
-	return v1.Handler{
+func httpGetHandler(path string, port int) v1.ProbeHandler {
+	return v1.ProbeHandler{
 		HTTPGet: &v1.HTTPGetAction{
 			Path: path,
 			Port: intstr.FromInt(port),
@@ -629,8 +630,8 @@ func httpGetHandler(path string, port int) v1.Handler {
 	}
 }
 
-func tcpSocketHandler(port int) v1.Handler {
-	return v1.Handler{
+func tcpSocketHandler(port int) v1.ProbeHandler {
+	return v1.ProbeHandler{
 		TCPSocket: &v1.TCPSocketAction{
 			Port: intstr.FromInt(port),
 		},
@@ -654,7 +655,7 @@ func (b webserverProbeBuilder) withInitialDelay() webserverProbeBuilder {
 
 func (b webserverProbeBuilder) build() *v1.Probe {
 	probe := &v1.Probe{
-		Handler: httpGetHandler("/", 80),
+		ProbeHandler: httpGetHandler("/", 80),
 	}
 	if b.initialDelay {
 		probe.InitialDelaySeconds = probeTestInitialDelaySeconds

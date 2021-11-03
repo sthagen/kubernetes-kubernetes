@@ -39,6 +39,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/component-helpers/storage/ephemeral"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 	"k8s.io/klog/v2"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
@@ -1447,6 +1448,20 @@ func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.Po
 	allStatus := append(append([]v1.ContainerStatus{}, s.ContainerStatuses...), s.InitContainerStatuses...)
 	s.Phase = getPhase(&pod.Spec, allStatus)
 	klog.V(4).InfoS("Got phase for pod", "pod", klog.KObj(pod), "oldPhase", oldPodStatus.Phase, "phase", s.Phase)
+
+	// Perform a three-way merge between the statuses from the status manager,
+	// runtime, and generated status to ensure terminal status is correctly set.
+	if s.Phase != v1.PodFailed && s.Phase != v1.PodSucceeded {
+		switch {
+		case oldPodStatus.Phase == v1.PodFailed || oldPodStatus.Phase == v1.PodSucceeded:
+			klog.V(4).InfoS("Status manager phase was terminal, updating phase to match", "pod", klog.KObj(pod), "phase", oldPodStatus.Phase)
+			s.Phase = oldPodStatus.Phase
+		case pod.Status.Phase == v1.PodFailed || pod.Status.Phase == v1.PodSucceeded:
+			klog.V(4).InfoS("API phase was terminal, updating phase to match", "pod", klog.KObj(pod), "phase", pod.Status.Phase)
+			s.Phase = pod.Status.Phase
+		}
+	}
+
 	if s.Phase == oldPodStatus.Phase {
 		// preserve the reason and message which is associated with the phase
 		s.Reason = oldPodStatus.Reason
@@ -2018,21 +2033,28 @@ func hasHostNamespace(pod *v1.Pod) bool {
 // hasHostMountPVC returns true if a PVC is referencing a HostPath volume.
 func (kl *Kubelet) hasHostMountPVC(pod *v1.Pod) bool {
 	for _, volume := range pod.Spec.Volumes {
-		if volume.PersistentVolumeClaim != nil {
-			pvc, err := kl.kubeClient.CoreV1().PersistentVolumeClaims(pod.Namespace).Get(context.TODO(), volume.PersistentVolumeClaim.ClaimName, metav1.GetOptions{})
+		pvcName := ""
+		switch {
+		case volume.PersistentVolumeClaim != nil:
+			pvcName = volume.PersistentVolumeClaim.ClaimName
+		case volume.Ephemeral != nil:
+			pvcName = ephemeral.VolumeClaimName(pod, &volume)
+		default:
+			continue
+		}
+		pvc, err := kl.kubeClient.CoreV1().PersistentVolumeClaims(pod.Namespace).Get(context.TODO(), pvcName, metav1.GetOptions{})
+		if err != nil {
+			klog.InfoS("Unable to retrieve pvc", "pvc", klog.KRef(pod.Namespace, pvcName), "err", err)
+			continue
+		}
+		if pvc != nil {
+			referencedVolume, err := kl.kubeClient.CoreV1().PersistentVolumes().Get(context.TODO(), pvc.Spec.VolumeName, metav1.GetOptions{})
 			if err != nil {
-				klog.InfoS("Unable to retrieve pvc", "pvc", klog.KRef(pod.Namespace, volume.PersistentVolumeClaim.ClaimName), "err", err)
+				klog.InfoS("Unable to retrieve pv", "pvName", pvc.Spec.VolumeName, "err", err)
 				continue
 			}
-			if pvc != nil {
-				referencedVolume, err := kl.kubeClient.CoreV1().PersistentVolumes().Get(context.TODO(), pvc.Spec.VolumeName, metav1.GetOptions{})
-				if err != nil {
-					klog.InfoS("Unable to retrieve pv", "pvName", pvc.Spec.VolumeName, "err", err)
-					continue
-				}
-				if referencedVolume != nil && referencedVolume.Spec.HostPath != nil {
-					return true
-				}
+			if referencedVolume != nil && referencedVolume.Spec.HostPath != nil {
+				return true
 			}
 		}
 	}

@@ -79,9 +79,16 @@ var allowedEphemeralContainerFields = map[string]bool{
 	"Command":                  true,
 	"Args":                     true,
 	"WorkingDir":               true,
+	"Ports":                    false,
 	"EnvFrom":                  true,
 	"Env":                      true,
+	"Resources":                false,
 	"VolumeMounts":             true,
+	"VolumeDevices":            true,
+	"LivenessProbe":            false,
+	"ReadinessProbe":           false,
+	"StartupProbe":             false,
+	"Lifecycle":                false,
 	"TerminationMessagePath":   true,
 	"TerminationMessagePolicy": true,
 	"ImagePullPolicy":          true,
@@ -90,6 +97,12 @@ var allowedEphemeralContainerFields = map[string]bool{
 	"StdinOnce":                true,
 	"TTY":                      true,
 }
+
+// validOS stores the set of valid OSes within pod spec.
+// The valid values currently are linux, windows.
+// In future, they can be expanded to values from
+// https://github.com/opencontainers/runtime-spec/blob/master/config.md#platform-specific-configuration
+var validOS = sets.NewString(string(core.Linux), string(core.Windows))
 
 // ValidateHasLabel requires that metav1.ObjectMeta has a Label with key and expectedValue
 func ValidateHasLabel(meta metav1.ObjectMeta, fldPath *field.Path, key, expectedValue string) field.ErrorList {
@@ -416,9 +429,12 @@ func IsMatchedVolume(name string, volumes map[string]core.VolumeSource) bool {
 	return false
 }
 
-func isMatchedDevice(name string, volumes map[string]core.VolumeSource) (bool, bool) {
+// isMatched checks whether the volume with the given name is used by a
+// container and if so, if it involves a PVC.
+func isMatchedDevice(name string, volumes map[string]core.VolumeSource) (isMatched bool, isPVC bool) {
 	if source, ok := volumes[name]; ok {
-		if source.PersistentVolumeClaim != nil {
+		if source.PersistentVolumeClaim != nil ||
+			source.Ephemeral != nil {
 			return true, true
 		}
 		return true, false
@@ -2609,9 +2625,9 @@ func ValidateVolumeDevices(devices []core.VolumeDevice, volmounts map[string]str
 		if devicename.Has(devName) {
 			allErrs = append(allErrs, field.Invalid(idxPath.Child("name"), devName, "must be unique"))
 		}
-		// Must be PersistentVolumeClaim volume source
+		// Must be based on PersistentVolumeClaim (PVC reference or generic ephemeral inline volume)
 		if didMatch && !isPVC {
-			allErrs = append(allErrs, field.Invalid(idxPath.Child("name"), devName, "can only use volume source type of PersistentVolumeClaim for block mode"))
+			allErrs = append(allErrs, field.Invalid(idxPath.Child("name"), devName, "can only use volume source type of PersistentVolumeClaim or Ephemeral for block mode"))
 		}
 		if !didMatch {
 			allErrs = append(allErrs, field.NotFound(idxPath.Child("name"), devName))
@@ -2647,7 +2663,7 @@ func validateProbe(probe *core.Probe, fldPath *field.Path) field.ErrorList {
 	if probe == nil {
 		return allErrs
 	}
-	allErrs = append(allErrs, validateHandler(&probe.Handler, fldPath)...)
+	allErrs = append(allErrs, validateHandler(handlerFromProbe(&probe.ProbeHandler), fldPath)...)
 
 	allErrs = append(allErrs, ValidateNonnegativeField(int64(probe.InitialDelaySeconds), fldPath.Child("initialDelaySeconds"))...)
 	allErrs = append(allErrs, ValidateNonnegativeField(int64(probe.TimeoutSeconds), fldPath.Child("timeoutSeconds"))...)
@@ -2658,6 +2674,28 @@ func validateProbe(probe *core.Probe, fldPath *field.Path) field.ErrorList {
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("terminationGracePeriodSeconds"), *probe.TerminationGracePeriodSeconds, "must be greater than 0"))
 	}
 	return allErrs
+}
+
+type commonHandler struct {
+	Exec      *core.ExecAction
+	HTTPGet   *core.HTTPGetAction
+	TCPSocket *core.TCPSocketAction
+}
+
+func handlerFromProbe(ph *core.ProbeHandler) commonHandler {
+	return commonHandler{
+		Exec:      ph.Exec,
+		HTTPGet:   ph.HTTPGet,
+		TCPSocket: ph.TCPSocket,
+	}
+}
+
+func handlerFromLifecycle(lh *core.LifecycleHandler) commonHandler {
+	return commonHandler{
+		Exec:      lh.Exec,
+		HTTPGet:   lh.HTTPGet,
+		TCPSocket: lh.TCPSocket,
+	}
 }
 
 func validateClientIPAffinityConfig(config *core.SessionAffinityConfig, fldPath *field.Path) field.ErrorList {
@@ -2766,7 +2804,7 @@ func validateTCPSocketAction(tcp *core.TCPSocketAction, fldPath *field.Path) fie
 	return ValidatePortNumOrName(tcp.Port, fldPath.Child("port"))
 }
 
-func validateHandler(handler *core.Handler, fldPath *field.Path) field.ErrorList {
+func validateHandler(handler commonHandler, fldPath *field.Path) field.ErrorList {
 	numHandlers := 0
 	allErrors := field.ErrorList{}
 	if handler.Exec != nil {
@@ -2802,10 +2840,10 @@ func validateHandler(handler *core.Handler, fldPath *field.Path) field.ErrorList
 func validateLifecycle(lifecycle *core.Lifecycle, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if lifecycle.PostStart != nil {
-		allErrs = append(allErrs, validateHandler(lifecycle.PostStart, fldPath.Child("postStart"))...)
+		allErrs = append(allErrs, validateHandler(handlerFromLifecycle(lifecycle.PostStart), fldPath.Child("postStart"))...)
 	}
 	if lifecycle.PreStop != nil {
-		allErrs = append(allErrs, validateHandler(lifecycle.PreStop, fldPath.Child("preStop"))...)
+		allErrs = append(allErrs, validateHandler(handlerFromLifecycle(lifecycle.PreStop), fldPath.Child("preStop"))...)
 	}
 	return allErrs
 }
@@ -2873,6 +2911,18 @@ func validateEphemeralContainers(ephemeralContainers []core.EphemeralContainer, 
 		// Lifecycle, probes, resources and ports should be disallowed. This is implemented as a list
 		// of allowed fields so that new fields will be given consideration prior to inclusion in Ephemeral Containers.
 		allErrs = append(allErrs, validateFieldAllowList(ec.EphemeralContainerCommon, allowedEphemeralContainerFields, "cannot be set for an Ephemeral Container", idxPath)...)
+
+		// VolumeMount subpaths have the potential to leak resources since they're implemented with bind mounts
+		// that aren't cleaned up until the pod exits. Since they also imply that the container is being used
+		// as part of the workload, they're disallowed entirely.
+		for i, vm := range ec.VolumeMounts {
+			if vm.SubPath != "" {
+				allErrs = append(allErrs, field.Forbidden(idxPath.Child("volumeMounts").Index(i).Child("subPath"), "cannot be set for an Ephemeral Container"))
+			}
+			if vm.SubPathExpr != "" {
+				allErrs = append(allErrs, field.Forbidden(idxPath.Child("volumeMounts").Index(i).Child("subPathExpr"), "cannot be set for an Ephemeral Container"))
+			}
+		}
 	}
 
 	return allErrs
@@ -2901,7 +2951,7 @@ func validateFieldAllowList(value interface{}, allowedFields map[string]bool, er
 	return allErrs
 }
 
-func validateInitContainers(containers, otherContainers []core.Container, deviceVolumes map[string]core.VolumeSource, fldPath *field.Path, opts PodValidationOptions) field.ErrorList {
+func validateInitContainers(containers []core.Container, otherContainers []core.Container, deviceVolumes map[string]core.VolumeSource, fldPath *field.Path, opts PodValidationOptions) field.ErrorList {
 	var allErrs field.ErrorList
 	if len(containers) > 0 {
 		allErrs = append(allErrs, validateContainers(containers, true, deviceVolumes, fldPath, opts)...)
@@ -3325,6 +3375,8 @@ type PodValidationOptions struct {
 	AllowWindowsHostProcessField bool
 	// Allow more DNSSearchPaths and longer DNSSearchListChars
 	AllowExpandedDNSConfig bool
+	// Allow OSField to be set in the pod spec
+	AllowOSField bool
 }
 
 // validatePodMetadataAndSpec tests if required fields in the pod.metadata and pod.spec are set,
@@ -3481,6 +3533,115 @@ func ValidatePodSpec(spec *core.PodSpec, podMeta *metav1.ObjectMeta, fldPath *fi
 		allErrs = append(allErrs, validateOverhead(spec.Overhead, fldPath.Child("overhead"), opts)...)
 	}
 
+	if spec.OS != nil {
+		osErrs := validateOS(spec, fldPath.Child("os"), opts)
+		switch {
+		case len(osErrs) > 0:
+			allErrs = append(allErrs, osErrs...)
+		case spec.OS.Name == core.Linux:
+			allErrs = append(allErrs, validateLinux(spec, fldPath)...)
+		case spec.OS.Name == core.Windows:
+			allErrs = append(allErrs, validateWindows(spec, fldPath)...)
+		}
+	}
+	return allErrs
+}
+
+func validateLinux(spec *core.PodSpec, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	securityContext := spec.SecurityContext
+	if securityContext != nil && securityContext.WindowsOptions != nil {
+		allErrs = append(allErrs, field.Forbidden(fldPath.Child("securityContext").Child("windowsOptions"), "windows options cannot be set for a linux pod"))
+	}
+	podshelper.VisitContainersWithPath(spec, fldPath, func(c *core.Container, cFldPath *field.Path) bool {
+		sc := c.SecurityContext
+		if sc != nil && sc.WindowsOptions != nil {
+			fldPath := cFldPath.Child("securityContext")
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("windowsOptions"), "windows options cannot be set for a linux pod"))
+		}
+		return true
+	})
+	return allErrs
+}
+
+func validateWindows(spec *core.PodSpec, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	securityContext := spec.SecurityContext
+	// validate Pod SecurityContext
+	if securityContext != nil {
+		if securityContext.SELinuxOptions != nil {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("securityContext").Child("seLinuxOptions"), "cannot be set for a windows pod"))
+		}
+		if securityContext.HostPID {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("hostPID"), "cannot be set for a windows pod"))
+		}
+		if securityContext.HostIPC {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("hostIPC"), "cannot be set for a windows pod"))
+		}
+		if securityContext.SeccompProfile != nil {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("securityContext").Child("seccompProfile"), "cannot be set for a windows pod"))
+		}
+		if securityContext.FSGroup != nil {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("securityContext").Child("fsGroup"), "cannot be set for a windows pod"))
+		}
+		if securityContext.FSGroupChangePolicy != nil {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("securityContext").Child("fsGroupChangePolicy"), "cannot be set for a windows pod"))
+		}
+		if len(securityContext.Sysctls) > 0 {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("securityContext").Child("sysctls"), "cannot be set for a windows pod"))
+		}
+		if securityContext.ShareProcessNamespace != nil {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("shareProcessNamespace"), "cannot be set for a windows pod"))
+		}
+		if securityContext.RunAsUser != nil {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("securityContext").Child("runAsUser"), "cannot be set for a windows pod"))
+		}
+		if securityContext.RunAsGroup != nil {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("securityContext").Child("runAsGroup"), "cannot be set for a windows pod"))
+		}
+		if securityContext.SupplementalGroups != nil {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("securityContext").Child("supplementalGroups"), "cannot be set for a windows pod"))
+		}
+	}
+	podshelper.VisitContainersWithPath(spec, fldPath, func(c *core.Container, cFldPath *field.Path) bool {
+		// validate container security context
+		sc := c.SecurityContext
+		// OS based podSecurityContext validation
+		// There is some naming overlap between Windows and Linux Security Contexts but all the Windows Specific options
+		// are set via securityContext.WindowsOptions which we validate below
+		// TODO: Think if we need to relax this restriction or some of the restrictions
+		if sc != nil {
+			fldPath := cFldPath.Child("securityContext")
+			if sc.SELinuxOptions != nil {
+				allErrs = append(allErrs, field.Forbidden(fldPath.Child("seLinuxOptions"), "cannot be set for a windows pod"))
+			}
+			if sc.SeccompProfile != nil {
+				allErrs = append(allErrs, field.Forbidden(fldPath.Child("seccompProfile"), "cannot be set for a windows pod"))
+			}
+			if sc.Capabilities != nil {
+				allErrs = append(allErrs, field.Forbidden(fldPath.Child("capabilities"), "cannot be set for a windows pod"))
+			}
+			if sc.ReadOnlyRootFilesystem != nil {
+				allErrs = append(allErrs, field.Forbidden(fldPath.Child("readOnlyRootFilesystem"), "cannot be set for a windows pod"))
+			}
+			if sc.Privileged != nil {
+				allErrs = append(allErrs, field.Forbidden(fldPath.Child("privileged"), "cannot be set for a windows pod"))
+			}
+			if sc.AllowPrivilegeEscalation != nil {
+				allErrs = append(allErrs, field.Forbidden(fldPath.Child("allowPrivilegeEscalation"), "cannot be set for a windows pod"))
+			}
+			if sc.ProcMount != nil {
+				allErrs = append(allErrs, field.Forbidden(fldPath.Child("procMount"), "cannot be set for a windows pod"))
+			}
+			if sc.RunAsUser != nil {
+				allErrs = append(allErrs, field.Forbidden(fldPath.Child("runAsUser"), "cannot be set for a windows pod"))
+			}
+			if sc.RunAsGroup != nil {
+				allErrs = append(allErrs, field.Forbidden(fldPath.Child("runAsGroup"), "cannot be set for a windows pod"))
+			}
+		}
+		return true
+	})
 	return allErrs
 }
 
@@ -4165,7 +4326,7 @@ func ValidateContainerStateTransition(newStatuses, oldStatuses []core.ContainerS
 	return allErrs
 }
 
-// ValidatePodStatusUpdate tests to see if the update is legal for an end user to make.
+// ValidatePodStatusUpdate checks for changes to status that shouldn't occur in normal operation.
 func ValidatePodStatusUpdate(newPod, oldPod *core.Pod, opts PodValidationOptions) field.ErrorList {
 	fldPath := field.NewPath("metadata")
 	allErrs := ValidateObjectMetaUpdate(&newPod.ObjectMeta, &oldPod.ObjectMeta, fldPath)
@@ -4187,6 +4348,8 @@ func ValidatePodStatusUpdate(newPod, oldPod *core.Pod, opts PodValidationOptions
 	// any terminated containers to a non-terminated state.
 	allErrs = append(allErrs, ValidateContainerStateTransition(newPod.Status.ContainerStatuses, oldPod.Status.ContainerStatuses, fldPath.Child("containerStatuses"), oldPod.Spec.RestartPolicy)...)
 	allErrs = append(allErrs, ValidateContainerStateTransition(newPod.Status.InitContainerStatuses, oldPod.Status.InitContainerStatuses, fldPath.Child("initContainerStatuses"), oldPod.Spec.RestartPolicy)...)
+	// The kubelet will never restart ephemeral containers, so treat them like they have an implicit RestartPolicyNever.
+	allErrs = append(allErrs, ValidateContainerStateTransition(newPod.Status.EphemeralContainerStatuses, oldPod.Status.EphemeralContainerStatuses, fldPath.Child("ephemeralContainerStatuses"), core.RestartPolicyNever)...)
 
 	if newIPErrs := validatePodIPs(newPod); len(newIPErrs) > 0 {
 		allErrs = append(allErrs, newIPErrs...)
@@ -4213,17 +4376,18 @@ func validatePodConditions(conditions []core.PodCondition, fldPath *field.Path) 
 // ValidatePodEphemeralContainersUpdate tests that a user update to EphemeralContainers is valid.
 // newPod and oldPod must only differ in their EphemeralContainers.
 func ValidatePodEphemeralContainersUpdate(newPod, oldPod *core.Pod, opts PodValidationOptions) field.ErrorList {
-	spec := newPod.Spec
-	specPath := field.NewPath("spec").Child("ephemeralContainers")
+	// Part 1: Validate newPod's spec and updates to metadata
+	fldPath := field.NewPath("metadata")
+	allErrs := ValidateObjectMetaUpdate(&newPod.ObjectMeta, &oldPod.ObjectMeta, fldPath)
+	allErrs = append(allErrs, validatePodMetadataAndSpec(newPod, opts)...)
+	allErrs = append(allErrs, ValidatePodSpecificAnnotationUpdates(newPod, oldPod, fldPath.Child("annotations"), opts)...)
 
-	vols := make(map[string]core.VolumeSource)
-	for _, vol := range spec.Volumes {
-		vols[vol.Name] = vol.VolumeSource
-	}
-	allErrs := validateEphemeralContainers(spec.EphemeralContainers, spec.Containers, spec.InitContainers, vols, specPath, opts)
-
+	// Part 2: Validate that the changes between oldPod.Spec.EphemeralContainers and
+	// newPod.Spec.EphemeralContainers are allowed.
+	//
 	// Existing EphemeralContainers may not be changed. Order isn't preserved by patch, so check each individually.
 	newContainerIndex := make(map[string]*core.EphemeralContainer)
+	specPath := field.NewPath("spec").Child("ephemeralContainers")
 	for i := range newPod.Spec.EphemeralContainers {
 		newContainerIndex[newPod.Spec.EphemeralContainers[i].Name] = &newPod.Spec.EphemeralContainers[i]
 	}
@@ -6146,6 +6310,26 @@ func validateWindowsHostProcessPod(podSpec *core.PodSpec, fieldPath *field.Path,
 		}
 	}
 
+	return allErrs
+}
+
+// validateOS validates the OS field within pod spec
+func validateOS(podSpec *core.PodSpec, fldPath *field.Path, opts PodValidationOptions) field.ErrorList {
+	allErrs := field.ErrorList{}
+	os := podSpec.OS
+	if os == nil {
+		return allErrs
+	}
+	if !opts.AllowOSField {
+		return append(allErrs, field.Forbidden(fldPath, "cannot be set when IdentifyPodOS feature is not enabled"))
+	}
+	if len(os.Name) == 0 {
+		return append(allErrs, field.Required(fldPath.Child("name"), "cannot be empty"))
+	}
+	osName := string(os.Name)
+	if !validOS.Has(osName) {
+		allErrs = append(allErrs, field.NotSupported(fldPath, osName, validOS.List()))
+	}
 	return allErrs
 }
 

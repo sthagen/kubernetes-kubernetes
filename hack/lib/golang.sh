@@ -52,6 +52,7 @@ readonly KUBE_SUPPORTED_CLIENT_PLATFORMS=(
   darwin/arm64
   windows/amd64
   windows/386
+  windows/arm64
 )
 
 # Which platforms we should compile test targets for.
@@ -65,6 +66,7 @@ readonly KUBE_SUPPORTED_TEST_PLATFORMS=(
   darwin/amd64
   darwin/arm64
   windows/amd64
+  windows/arm64
 )
 
 # The set of server targets that we are only building for Linux
@@ -209,8 +211,8 @@ kube::golang::setup_platforms() {
 
   elif [[ "${KUBE_FASTBUILD:-}" == "true" ]]; then
     host_arch=$(kube::util::host_arch)
-    if [[ "${host_arch}" != "amd64" && "${host_arch}" != "arm64" ]]; then
-      # on any platform other than amd64 and arm64, we just default to amd64
+    if [[ "${host_arch}" != "amd64" && "${host_arch}" != "arm64" && "${host_arch}" != "ppc64le" ]]; then
+      # on any platform other than amd64, arm64 and ppc64le, we just default to amd64
       host_arch="amd64"
     fi
     KUBE_SERVER_PLATFORMS=("linux/${host_arch}")
@@ -411,10 +413,6 @@ kube::golang::set_platform_envs() {
       "linux/amd64")
         export CGO_ENABLED=1
         export CC=${KUBE_LINUX_AMD64_CC:-x86_64-linux-gnu-gcc}
-        ;;
-      "linux/386")
-        export CGO_ENABLED=1
-        export CC=${KUBE_LINUX_386_CC:-i686-linux-gnu-gcc}
         ;;
       "linux/arm")
         export CGO_ENABLED=1
@@ -726,7 +724,6 @@ kube::golang::build_binaries_for_platform() {
       -gcflags "${gogcflags:-}"
       -asmflags "${goasmflags:-}"
       -ldflags "${goldflags:-}"
-      -buildmode pie
       -tags "${gotags:-}"
     )
     V=1 kube::log::info "> non-static build: ${nonstatics[*]}"

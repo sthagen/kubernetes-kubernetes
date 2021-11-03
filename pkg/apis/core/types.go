@@ -182,9 +182,6 @@ type VolumeSource struct {
 	// A pod can use both types of ephemeral volumes and
 	// persistent volumes at the same time.
 	//
-	// This is a beta feature and only available when the GenericEphemeralVolume
-	// feature gate is enabled.
-	//
 	// +optional
 	Ephemeral *EphemeralVolumeSource
 }
@@ -2025,7 +2022,7 @@ type ExecAction struct {
 // alive or ready to receive traffic.
 type Probe struct {
 	// The action taken to determine the health of a container
-	Handler
+	ProbeHandler
 	// Length of time before health checking is activated.  In seconds.
 	// +optional
 	InitialDelaySeconds int32
@@ -2191,9 +2188,29 @@ type Container struct {
 	TTY bool
 }
 
-// Handler defines a specific action that should be taken
+// ProbeHandler defines a specific action that should be taken in a probe.
+// This type has a strong relationship to LifecycleHandler - overlapping fields
+// should be identical.
 // TODO: pass structured data to these actions, and document that data here.
-type Handler struct {
+type ProbeHandler struct {
+	// One and only one of the following should be specified.
+	// Exec specifies the action to take.
+	// +optional
+	Exec *ExecAction
+	// HTTPGet specifies the http request to perform.
+	// +optional
+	HTTPGet *HTTPGetAction
+	// TCPSocket specifies an action involving a TCP port.
+	// TODO: implement a realistic TCP lifecycle hook
+	// +optional
+	TCPSocket *TCPSocketAction
+}
+
+// LifecycleHandler defines a specific action that should be taken in a lifecycle
+// hook.  This type has a strong relationship to ProbeHandler - overlapping fields
+// should be identical.
+// TODO: pass structured data to these actions, and document that data here.
+type LifecycleHandler struct {
 	// One and only one of the following should be specified.
 	// Exec specifies the action to take.
 	// +optional
@@ -2214,7 +2231,7 @@ type Lifecycle struct {
 	// PostStart is called immediately after a container is created.  If the handler fails, the container
 	// is terminated and restarted.
 	// +optional
-	PostStart *Handler
+	PostStart *LifecycleHandler
 	// PreStop is called immediately before a container is terminated due to an
 	// API request or management event such as liveness/startup probe failure,
 	// preemption, resource contention, etc. The handler is not called if the
@@ -2225,7 +2242,7 @@ type Lifecycle struct {
 	// period. Other management of the container blocks until the hook completes
 	// or until the termination grace period is reached.
 	// +optional
-	PreStop *Handler
+	PreStop *LifecycleHandler
 }
 
 // The below types are used by kube_client and api_server.
@@ -2749,7 +2766,7 @@ type PodSpec struct {
 	// pod to perform user-initiated actions such as debugging. This list cannot be specified when
 	// creating a pod, and it cannot be modified by updating the pod spec. In order to add an
 	// ephemeral container to an existing pod, use the pod's ephemeralcontainers subresource.
-	// This field is alpha-level and is only honored by servers that enable the EphemeralContainers feature.
+	// This field is beta-level and available on clusters that haven't disabled the EphemeralContainers feature gate.
 	// +optional
 	EphemeralContainers []EphemeralContainer
 	// +optional
@@ -2887,6 +2904,54 @@ type PodSpec struct {
 	// All topologySpreadConstraints are ANDed.
 	// +optional
 	TopologySpreadConstraints []TopologySpreadConstraint
+	// Specifies the OS of the containers in the pod.
+	// Some pod and container fields are restricted if this is set.
+	//
+	// If the OS field is set to linux, the following fields must be unset:
+	// - securityContext.windowsOptions
+	//
+	// If the OS field is set to windows, following fields must be unset:
+	// - spec.hostPID
+	// - spec.hostIPC
+	// - spec.securityContext.seLinuxOptions
+	// - spec.securityContext.seccompProfile
+	// - spec.securityContext.fsGroup
+	// - spec.securityContext.fsGroupChangePolicy
+	// - spec.securityContext.sysctls
+	// - spec.shareProcessNamespace
+	// - spec.securityContext.runAsUser
+	// - spec.securityContext.runAsGroup
+	// - spec.securityContext.supplementalGroups
+	// - spec.containers[*].securityContext.seLinuxOptions
+	// - spec.containers[*].securityContext.seccompProfile
+	// - spec.containers[*].securityContext.capabilities
+	// - spec.containers[*].securityContext.readOnlyRootFilesystem
+	// - spec.containers[*].securityContext.privileged
+	// - spec.containers[*].securityContext.allowPrivilegeEscalation
+	// - spec.containers[*].securityContext.procMount
+	// - spec.containers[*].securityContext.runAsUser
+	// - spec.containers[*].securityContext.runAsGroup
+	// +optional
+	// This is an alpha field and requires the IdentifyPodOS feature
+	OS *PodOS
+}
+
+// OSName is the set of OS'es that can be used in OS.
+type OSName string
+
+// These are valid values for OSName
+const (
+	Linux   OSName = "linux"
+	Windows OSName = "windows"
+)
+
+// PodOS defines the OS parameters of a pod.
+type PodOS struct {
+	// Name is the name of the operating system. The currently supported values are linux and windows.
+	// Additional value may be defined in future and can be one of:
+	// https://github.com/opencontainers/runtime-spec/blob/master/config.md#platform-specific-configuration
+	// Clients should expect to handle additional values and treat unrecognized values in this field as os: null
+	Name OSName
 }
 
 // HostAlias holds the mapping between IP and hostnames that will be injected as an entry in the
@@ -2932,11 +2997,13 @@ type PodSecurityContext struct {
 	HostNetwork bool
 	// Use the host's pid namespace.
 	// Optional: Default to false.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +k8s:conversion-gen=false
 	// +optional
 	HostPID bool
 	// Use the host's ipc namespace.
 	// Optional: Default to false.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +k8s:conversion-gen=false
 	// +optional
 	HostIPC bool
@@ -2944,6 +3011,7 @@ type PodSecurityContext struct {
 	// When this is set containers will be able to view and signal processes from other containers
 	// in the same pod, and the first process in each container will not be assigned PID 1.
 	// HostPID and ShareProcessNamespace cannot both be set.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// Optional: Default to false.
 	// +k8s:conversion-gen=false
 	// +optional
@@ -2953,11 +3021,13 @@ type PodSecurityContext struct {
 	// container.  May also be set in SecurityContext.  If set in
 	// both SecurityContext and PodSecurityContext, the value specified in SecurityContext
 	// takes precedence for that container.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	SELinuxOptions *SELinuxOptions
 	// The Windows specific settings applied to all containers.
 	// If unspecified, the options within a container's SecurityContext will be used.
 	// If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence.
+	// Note that this field cannot be set when spec.os.name is linux.
 	// +optional
 	WindowsOptions *WindowsSecurityContextOptions
 	// The UID to run the entrypoint of the container process.
@@ -2965,6 +3035,7 @@ type PodSecurityContext struct {
 	// May also be set in SecurityContext.  If set in both SecurityContext and
 	// PodSecurityContext, the value specified in SecurityContext takes precedence
 	// for that container.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	RunAsUser *int64
 	// The GID to run the entrypoint of the container process.
@@ -2972,6 +3043,7 @@ type PodSecurityContext struct {
 	// May also be set in SecurityContext.  If set in both SecurityContext and
 	// PodSecurityContext, the value specified in SecurityContext takes precedence
 	// for that container.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	RunAsGroup *int64
 	// Indicates that the container must run as a non-root user.
@@ -2986,6 +3058,7 @@ type PodSecurityContext struct {
 	// A list of groups applied to the first process run in each container, in addition
 	// to the container's primary GID.  If unspecified, no groups will be added to
 	// any container.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	SupplementalGroups []int64
 	// A special supplemental group that applies to all containers in a pod.
@@ -2997,6 +3070,7 @@ type PodSecurityContext struct {
 	// 3. The permission bits are OR'd with rw-rw----
 	//
 	// If unset, the Kubelet will not modify the ownership and permissions of any volume.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	FSGroup *int64
 	// fsGroupChangePolicy defines behavior of changing ownership and permission of the volume
@@ -3005,13 +3079,16 @@ type PodSecurityContext struct {
 	// It will have no effect on ephemeral volume types such as: secret, configmaps
 	// and emptydir.
 	// Valid values are "OnRootMismatch" and "Always". If not specified, "Always" is used.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	FSGroupChangePolicy *PodFSGroupChangePolicy
 	// Sysctls hold a list of namespaced sysctls used for the pod. Pods with unsupported
 	// sysctls (by the container runtime) might fail to launch.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	Sysctls []Sysctl
 	// The seccomp options to use by the containers in this pod.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	SeccompProfile *SeccompProfile
 }
@@ -3137,6 +3214,7 @@ type EphemeralContainerCommon struct {
 	// already allocated to the pod.
 	// +optional
 	Resources ResourceRequirements
+	// Pod volumes to mount into the container's filesystem. Subpath mounts are not allowed for ephemeral containers.
 	// +optional
 	VolumeMounts []VolumeMount
 	// volumeDevices is the list of block devices to be used by the container.
@@ -3180,15 +3258,16 @@ type EphemeralContainerCommon struct {
 // these two types.
 var _ = Container(EphemeralContainerCommon{})
 
-// An EphemeralContainer is a temporary container that may be added to an existing pod for
+// An EphemeralContainer is a temporary container that you may add to an existing Pod for
 // user-initiated activities such as debugging. Ephemeral containers have no resource or
-// scheduling guarantees, and they will not be restarted when they exit or when a pod is
-// removed or restarted. If an ephemeral container causes a pod to exceed its resource
-// allocation, the pod may be evicted.
-// Ephemeral containers may not be added by directly updating the pod spec. They must be added
-// via the pod's ephemeralcontainers subresource, and they will appear in the pod spec
-// once added.
-// This is an alpha feature enabled by the EphemeralContainers feature flag.
+// scheduling guarantees, and they will not be restarted when they exit or when a Pod is
+// removed or restarted. The kubelet may evict a Pod if an ephemeral container causes the
+// Pod to exceed its resource allocation.
+//
+// To add an ephemeral container, use the ephemeralcontainers subresource of an existing
+// Pod. Ephemeral containers may not be removed or restarted.
+//
+// This is a beta feature available on clusters that haven't disabled the EphemeralContainers feature gate.
 type EphemeralContainer struct {
 	// Ephemeral containers have all of the fields of Container, plus additional fields
 	// specific to ephemeral containers. Fields in common with Container are in the
@@ -3198,8 +3277,10 @@ type EphemeralContainer struct {
 
 	// If set, the name of the container from PodSpec that this ephemeral container targets.
 	// The ephemeral container will be run in the namespaces (IPC, PID, etc) of this container.
-	// If not set then the ephemeral container is run in whatever namespaces are shared
-	// for the pod. Note that the container runtime must support this feature.
+	// If not set then the ephemeral container uses the namespaces configured in the Pod spec.
+	//
+	// The container runtime must implement support for this feature. If the runtime does not
+	// support namespace targeting then the result of setting this field is undefined.
 	// +optional
 	TargetContainerName string
 }
@@ -3253,7 +3334,7 @@ type PodStatus struct {
 	ContainerStatuses []ContainerStatus
 
 	// Status for any ephemeral containers that have run in this pod.
-	// This field is alpha-level and is only honored by servers that enable the EphemeralContainers feature.
+	// This field is beta-level and available on clusters that haven't disabled the EphemeralContainers feature gate.
 	// +optional
 	EphemeralContainerStatuses []ContainerStatus
 }
@@ -5044,6 +5125,7 @@ type Secret struct {
 	Data map[string][]byte `datapolicy:"password,security-key,token"`
 
 	// Used to facilitate programmatic handling of secret data.
+	// More info: https://kubernetes.io/docs/concepts/configuration/secret/#secret-types
 	// +optional
 	Type SecretType
 }
@@ -5284,34 +5366,40 @@ type ComponentStatusList struct {
 type SecurityContext struct {
 	// The capabilities to add/drop when running containers.
 	// Defaults to the default set of capabilities granted by the container runtime.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	Capabilities *Capabilities
 	// Run container in privileged mode.
 	// Processes in privileged containers are essentially equivalent to root on the host.
 	// Defaults to false.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	Privileged *bool
 	// The SELinux context to be applied to the container.
 	// If unspecified, the container runtime will allocate a random SELinux context for each
 	// container.  May also be set in PodSecurityContext.  If set in both SecurityContext and
 	// PodSecurityContext, the value specified in SecurityContext takes precedence.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	SELinuxOptions *SELinuxOptions
 	// The Windows specific settings applied to all containers.
 	// If unspecified, the options from the PodSecurityContext will be used.
 	// If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence.
+	// Note that this field cannot be set when spec.os.name is linux.
 	// +optional
 	WindowsOptions *WindowsSecurityContextOptions
 	// The UID to run the entrypoint of the container process.
 	// Defaults to user specified in image metadata if unspecified.
 	// May also be set in PodSecurityContext.  If set in both SecurityContext and
 	// PodSecurityContext, the value specified in SecurityContext takes precedence.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	RunAsUser *int64
 	// The GID to run the entrypoint of the container process.
 	// Uses runtime default if unset.
 	// May also be set in PodSecurityContext.  If set in both SecurityContext and
 	// PodSecurityContext, the value specified in SecurityContext takes precedence.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	RunAsGroup *int64
 	// Indicates that the container must run as a non-root user.
@@ -5324,21 +5412,25 @@ type SecurityContext struct {
 	RunAsNonRoot *bool
 	// The read-only root filesystem allows you to restrict the locations that an application can write
 	// files to, ensuring the persistent data can only be written to mounts.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	ReadOnlyRootFilesystem *bool
 	// AllowPrivilegeEscalation controls whether a process can gain more
 	// privileges than its parent process. This bool directly controls if
 	// the no_new_privs flag will be set on the container process.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	AllowPrivilegeEscalation *bool
 	// ProcMount denotes the type of proc mount to use for the containers.
 	// The default is DefaultProcMount which uses the container runtime defaults for
 	// readonly paths and masked paths.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	ProcMount *ProcMountType
 	// The seccomp options to use by this container. If seccomp options are
 	// provided at both the pod & container level, the container options
 	// override the pod options.
+	// Note that this field cannot be set when spec.os.name is windows.
 	// +optional
 	SeccompProfile *SeccompProfile
 }

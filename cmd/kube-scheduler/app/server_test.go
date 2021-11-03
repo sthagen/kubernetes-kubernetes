@@ -29,9 +29,15 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/pflag"
+	"k8s.io/apiserver/pkg/util/feature"
+	componentbaseconfig "k8s.io/component-base/config"
+	"k8s.io/component-base/featuregate"
+	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/kubernetes/cmd/kube-scheduler/app/options"
+	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config/testing/defaults"
+	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/names"
 )
 
 func TestSetup(t *testing.T) {
@@ -75,7 +81,7 @@ users:
 	// plugin config
 	pluginConfigFile := filepath.Join(tmpDir, "plugin.yaml")
 	if err := ioutil.WriteFile(pluginConfigFile, []byte(fmt.Sprintf(`
-apiVersion: kubescheduler.config.k8s.io/v1beta1
+apiVersion: kubescheduler.config.k8s.io/v1beta2
 kind: KubeSchedulerConfiguration
 clientConnection:
   kubeconfig: "%s"
@@ -112,7 +118,7 @@ profiles:
 	// multiple profiles config
 	multiProfilesConfig := filepath.Join(tmpDir, "multi-profiles.yaml")
 	if err := ioutil.WriteFile(multiProfilesConfig, []byte(fmt.Sprintf(`
-apiVersion: kubescheduler.config.k8s.io/v1beta1
+apiVersion: kubescheduler.config.k8s.io/v1beta2
 kind: KubeSchedulerConfiguration
 clientConnection:
   kubeconfig: "%s"
@@ -139,31 +145,53 @@ profiles:
 		t.Fatal(err)
 	}
 
-	// policy config file
-	policyConfigFile := filepath.Join(tmpDir, "policy-config.yaml")
-	if err := ioutil.WriteFile(policyConfigFile, []byte(`{
-		"kind": "Policy",
-		"apiVersion": "v1",
-		"predicates": [
-		  {"name": "MatchInterPodAffinity"}
-		],"priorities": [
-		  {"name": "InterPodAffinityPriority",   "weight": 2}
-		]}`), os.FileMode(0600)); err != nil {
-		t.Fatal(err)
-	}
-
 	testcases := []struct {
-		name        string
-		flags       []string
-		wantPlugins map[string]*config.Plugins
+		name               string
+		flags              []string
+		restoreFeatures    map[featuregate.Feature]bool
+		wantPlugins        map[string]*config.Plugins
+		wantLeaderElection *componentbaseconfig.LeaderElectionConfiguration
 	}{
+		{
+			name: "default config with an alpha feature enabled and an beta feature disabled",
+			flags: []string{
+				"--kubeconfig", configKubeconfig,
+				"--feature-gates=VolumeCapacityPriority=true,DefaultPodTopologySpread=false",
+			},
+			wantPlugins: map[string]*config.Plugins{
+				"default-scheduler": func() *config.Plugins {
+					plugins := &config.Plugins{
+						QueueSort:  defaults.PluginsV1beta3.QueueSort,
+						PreFilter:  defaults.PluginsV1beta3.PreFilter,
+						Filter:     defaults.PluginsV1beta3.Filter,
+						PostFilter: defaults.PluginsV1beta3.PostFilter,
+						PreScore:   defaults.PluginsV1beta3.PreScore,
+						Score:      defaults.PluginsV1beta3.Score,
+						Bind:       defaults.PluginsV1beta3.Bind,
+						PreBind:    defaults.PluginsV1beta3.PreBind,
+						Reserve:    defaults.PluginsV1beta3.Reserve,
+					}
+					plugins.PreScore.Enabled = append(plugins.PreScore.Enabled, config.Plugin{Name: names.SelectorSpread, Weight: 0})
+					plugins.Score.Enabled = append(
+						plugins.Score.Enabled,
+						config.Plugin{Name: names.VolumeBinding, Weight: 1},
+						config.Plugin{Name: names.SelectorSpread, Weight: 1},
+					)
+					return plugins
+				}(),
+			},
+			restoreFeatures: map[featuregate.Feature]bool{
+				features.VolumeCapacityPriority:   false,
+				features.DefaultPodTopologySpread: true,
+			},
+		},
 		{
 			name: "default config",
 			flags: []string{
 				"--kubeconfig", configKubeconfig,
 			},
 			wantPlugins: map[string]*config.Plugins{
-				"default-scheduler": defaults.PluginsV1beta2,
+				"default-scheduler": defaults.PluginsV1beta3,
 			},
 		},
 		{
@@ -206,30 +234,6 @@ profiles:
 				},
 			},
 		},
-		{
-			name: "policy config file",
-			flags: []string{
-				"--kubeconfig", configKubeconfig,
-				"--policy-config-file", policyConfigFile,
-			},
-			wantPlugins: map[string]*config.Plugins{
-				"default-scheduler": {
-					QueueSort: config.PluginSet{Enabled: []config.Plugin{{Name: "PrioritySort"}}},
-					PreFilter: config.PluginSet{Enabled: []config.Plugin{{Name: "InterPodAffinity"}}},
-					Filter: config.PluginSet{
-						Enabled: []config.Plugin{
-							{Name: "NodeUnschedulable"},
-							{Name: "TaintToleration"},
-							{Name: "InterPodAffinity"},
-						},
-					},
-					PostFilter: config.PluginSet{Enabled: []config.Plugin{{Name: "DefaultPreemption"}}},
-					PreScore:   config.PluginSet{Enabled: []config.Plugin{{Name: "InterPodAffinity"}}},
-					Score:      config.PluginSet{Enabled: []config.Plugin{{Name: "InterPodAffinity", Weight: 2}}},
-					Bind:       config.PluginSet{Enabled: []config.Plugin{{Name: "DefaultBinder"}}},
-				},
-			},
-		},
 	}
 
 	makeListener := func(t *testing.T) net.Listener {
@@ -243,21 +247,22 @@ profiles:
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			fs := pflag.NewFlagSet("test", pflag.PanicOnError)
-			opts, err := options.NewOptions()
-			if err != nil {
-				t.Fatal(err)
+			for k, v := range tc.restoreFeatures {
+				defer featuregatetesting.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, k, v)()
 			}
 
-			nfs := opts.Flags()
+			fs := pflag.NewFlagSet("test", pflag.PanicOnError)
+			opts := options.NewOptions()
+
+			// use listeners instead of static ports so parallel test runs don't conflict
+			opts.SecureServing.Listener = makeListener(t)
+			defer opts.SecureServing.Listener.Close()
+
+			nfs := opts.Flags
 			for _, f := range nfs.FlagSets {
 				fs.AddFlagSet(f)
 			}
 			if err := fs.Parse(tc.flags); err != nil {
-				t.Fatal(err)
-			}
-
-			if err := opts.Complete(&nfs); err != nil {
 				t.Fatal(err)
 			}
 

@@ -88,13 +88,13 @@ function set-linux-node-image() {
 function set-windows-node-image() {
   WINDOWS_NODE_IMAGE_PROJECT="windows-cloud"
   if [[ "${WINDOWS_NODE_OS_DISTRIBUTION}" == "win2019" ]]; then
-    WINDOWS_NODE_IMAGE="windows-server-2019-dc-core-v20210413"
+    WINDOWS_NODE_IMAGE="windows-server-2019-dc-core-v20210914"
   elif [[ "${WINDOWS_NODE_OS_DISTRIBUTION}" == "win1909" ]]; then
     WINDOWS_NODE_IMAGE="windows-server-1909-dc-core-v20210413"
   elif [[ "${WINDOWS_NODE_OS_DISTRIBUTION}" == "win2004" ]]; then
-    WINDOWS_NODE_IMAGE="windows-server-2004-dc-core-v20210413"
+    WINDOWS_NODE_IMAGE="windows-server-2004-dc-core-v20210914"
   elif [[ "${WINDOWS_NODE_OS_DISTRIBUTION,,}" == "win20h2" ]]; then
-    WINDOWS_NODE_IMAGE="windows-server-20h2-dc-core-v20210413"
+    WINDOWS_NODE_IMAGE="windows-server-20h2-dc-core-v20210914"
   else
     echo "Unknown WINDOWS_NODE_OS_DISTRIBUTION ${WINDOWS_NODE_OS_DISTRIBUTION}" >&2
     exit 1
@@ -1602,6 +1602,7 @@ BOOTSTRAP_KUBECONFIG_FILE: $(yaml-quote "${WINDOWS_BOOTSTRAP_KUBECONFIG_FILE}")
 KUBEPROXY_KUBECONFIG_FILE: $(yaml-quote "${WINDOWS_KUBEPROXY_KUBECONFIG_FILE}")
 WINDOWS_INFRA_CONTAINER: $(yaml-quote "${WINDOWS_INFRA_CONTAINER}")
 WINDOWS_ENABLE_PIGZ: $(yaml-quote "${WINDOWS_ENABLE_PIGZ}")
+WINDOWS_ENABLE_HYPERV: $(yaml-quote "${WINDOWS_ENABLE_HYPERV}")
 ENABLE_NODE_PROBLEM_DETECTOR: $(yaml-quote "${WINDOWS_ENABLE_NODE_PROBLEM_DETECTOR}")
 NODE_PROBLEM_DETECTOR_VERSION: $(yaml-quote "${NODE_PROBLEM_DETECTOR_VERSION}")
 NODE_PROBLEM_DETECTOR_TAR_HASH: $(yaml-quote "${NODE_PROBLEM_DETECTOR_TAR_HASH}")

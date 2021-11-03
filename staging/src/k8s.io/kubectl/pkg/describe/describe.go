@@ -52,7 +52,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	storagev1 "k8s.io/api/storage/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -414,7 +413,7 @@ func (d *NamespaceDescriber) Describe(namespace, name string, describerSettings 
 			return newList, nil
 		})
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			// Server does not support resource quotas.
 			// Not an error, will not show resource quotas information.
 			resourceQuotaList = nil
@@ -434,7 +433,7 @@ func (d *NamespaceDescriber) Describe(namespace, name string, describerSettings 
 			return newList, nil
 		})
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			// Server does not support limit ranges.
 			// Not an error, will not show limit ranges information.
 			limitRangeList = nil
@@ -2216,7 +2215,11 @@ func describeJob(job *batchv1.Job, events *corev1.EventList) (string, error) {
 		if job.Spec.ActiveDeadlineSeconds != nil {
 			w.Write(LEVEL_0, "Active Deadline Seconds:\t%ds\n", *job.Spec.ActiveDeadlineSeconds)
 		}
-		w.Write(LEVEL_0, "Pods Statuses:\t%d Running / %d Succeeded / %d Failed\n", job.Status.Active, job.Status.Succeeded, job.Status.Failed)
+		if job.Status.Ready == nil {
+			w.Write(LEVEL_0, "Pods Statuses:\t%d Active / %d Succeeded / %d Failed\n", job.Status.Active, job.Status.Succeeded, job.Status.Failed)
+		} else {
+			w.Write(LEVEL_0, "Pods Statuses:\t%d Active (%d Ready) / %d Succeeded / %d Failed\n", job.Status.Active, *job.Status.Ready, job.Status.Succeeded, job.Status.Failed)
+		}
 		if job.Spec.CompletionMode != nil && *job.Spec.CompletionMode == batchv1.IndexedCompletion {
 			w.Write(LEVEL_0, "Completed Indexes:\t%s\n", capIndexesListOrNone(job.Status.CompletedIndexes, 50))
 		}
@@ -3489,7 +3492,7 @@ func (d *NodeDescriber) Describe(namespace, name string, describerSettings Descr
 	}
 	nodeNonTerminatedPodsList, err := getPodsInChunks(d.CoreV1().Pods(namespace), initialOpts)
 	if err != nil {
-		if !errors.IsForbidden(err) {
+		if !apierrors.IsForbidden(err) {
 			return "", err
 		}
 		canViewPods = false

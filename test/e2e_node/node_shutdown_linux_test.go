@@ -32,7 +32,6 @@ import (
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	"k8s.io/kubernetes/pkg/apis/scheduling"
-	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/test/e2e/framework"
 
 	v1 "k8s.io/api/core/v1"
@@ -42,11 +41,12 @@ import (
 	testutils "k8s.io/kubernetes/test/utils"
 )
 
-var _ = SIGDescribe("GracefulNodeShutdown [Serial] [NodeAlphaFeature:GracefulNodeShutdown]", func() {
+var _ = SIGDescribe("GracefulNodeShutdown [Serial] [NodeFeature:GracefulNodeShutdown]", func() {
 	f := framework.NewDefaultFramework("graceful-node-shutdown")
 	ginkgo.Context("when gracefully shutting down", func() {
 
 		const (
+			nodeShutdownReason                  = "Terminated"
 			pollInterval                        = 1 * time.Second
 			podStatusUpdateTimeout              = 5 * time.Second
 			nodeStatusUpdateTimeout             = 10 * time.Second
@@ -55,9 +55,6 @@ var _ = SIGDescribe("GracefulNodeShutdown [Serial] [NodeAlphaFeature:GracefulNod
 		)
 
 		tempSetCurrentKubeletConfig(f, func(initialConfig *kubeletconfig.KubeletConfiguration) {
-			initialConfig.FeatureGates = map[string]bool{
-				string(features.GracefulNodeShutdown): true,
-			}
 			initialConfig.ShutdownGracePeriod = metav1.Duration{Duration: nodeShutdownGracePeriod}
 			initialConfig.ShutdownGracePeriodCriticalPods = metav1.Duration{Duration: nodeShutdownGracePeriodCriticalPods}
 		})
@@ -125,7 +122,7 @@ var _ = SIGDescribe("GracefulNodeShutdown [Serial] [NodeAlphaFeature:GracefulNod
 							return fmt.Errorf("critical pod should not be shutdown, phase: %s", pod.Status.Phase)
 						}
 					} else {
-						if pod.Status.Phase != v1.PodFailed || pod.Status.Reason != "Shutdown" {
+						if pod.Status.Phase != v1.PodFailed || pod.Status.Reason != nodeShutdownReason {
 							framework.Logf("Expecting non-critcal pod to be shutdown, but it's not currently. Pod: %q, Pod Status Phase: %q, Pod Status Reason: %q", pod.Name, pod.Status.Phase, pod.Status.Reason)
 							return fmt.Errorf("pod should be shutdown, phase: %s", pod.Status.Phase)
 						}
@@ -146,7 +143,7 @@ var _ = SIGDescribe("GracefulNodeShutdown [Serial] [NodeAlphaFeature:GracefulNod
 				framework.ExpectEqual(len(list.Items), len(pods), "the number of pods is not as expected")
 
 				for _, pod := range list.Items {
-					if pod.Status.Phase != v1.PodFailed || pod.Status.Reason != "Shutdown" {
+					if pod.Status.Phase != v1.PodFailed || pod.Status.Reason != nodeShutdownReason {
 						framework.Logf("Expecting pod to be shutdown, but it's not currently: Pod: %q, Pod Status Phase: %q, Pod Status Reason: %q", pod.Name, pod.Status.Phase, pod.Status.Reason)
 						return fmt.Errorf("pod should be shutdown, phase: %s", pod.Status.Phase)
 					}

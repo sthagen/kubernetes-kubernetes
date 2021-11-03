@@ -19,7 +19,7 @@ package testing
 import (
 	"fmt"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -281,6 +281,17 @@ func (p *PodWrapper) Toleration(key string) *PodWrapper {
 func (p *PodWrapper) HostPort(port int32) *PodWrapper {
 	p.Spec.Containers = append(p.Spec.Containers, v1.Container{
 		Ports: []v1.ContainerPort{{HostPort: port}},
+	})
+	return p
+}
+
+// PVC creates a Volume with a PVC and injects into the inner pod.
+func (p *PodWrapper) PVC(name string) *PodWrapper {
+	p.Spec.Volumes = append(p.Spec.Volumes, v1.Volume{
+		Name: name,
+		VolumeSource: v1.VolumeSource{
+			PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: name},
+		},
 	})
 	return p
 }

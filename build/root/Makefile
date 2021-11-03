@@ -231,6 +231,7 @@ define TEST_E2E_NODE_HELP_INFO
 #  IMAGE_SERVICE_ENDPOINT: remote image endpoint to connect to, to prepull images.
 #    Used when RUNTIME is set to "remote".
 #  IMAGE_CONFIG_FILE: path to a file containing image configuration.
+#  IMAGE_CONFIG_DIR: path to image config files.
 #  SYSTEM_SPEC_NAME: The name of the system spec to be used for validating the
 #    image in the node conformance test. The specs are located at
 #    test/e2e_node/system/specs/. For example, "SYSTEM_SPEC_NAME=gke" will use
@@ -254,6 +255,7 @@ define TEST_E2E_NODE_HELP_INFO
 #  GUBERNATOR: For REMOTE=true only. Produce link to Gubernator to view logs.
 #    Defaults to false.
 #  TEST_SUITE: For REMOTE=true only. Test suite to use. Defaults to "default".
+#  SSH_KEY: For REMOTE=true only. Path to SSH key to use.
 #
 # Example:
 #   make test-e2e-node FOCUS=Kubelet SKIP=container
@@ -268,36 +270,6 @@ test-e2e-node:
 else
 test-e2e-node: ginkgo generated_files
 	hack/make-rules/test-e2e-node.sh
-endif
-
-define TEST_E2E_KUBEADM_HELP_INFO
-# Build and run kubeadm end-to-end tests.
-#
-# Args:
-#  FOCUS: Regexp that matches the tests to be run.  Defaults to "".
-#  SKIP: Regexp that matches the tests that needs to be skipped.  Defaults
-#    to "".
-#  RUN_UNTIL_FAILURE: If true, pass --untilItFails to ginkgo so tests are run
-#    repeatedly until they fail. Defaults to false.
-#  ARTIFACTS: Local directory to save test artifacts into. Defaults to "/tmp/_artifacts".
-#  PARALLELISM: The number of ginkgo nodes to run.  If empty ginkgo default
-#    parallelism (cores - 1) is used
-#  BUILD: Build kubeadm end-to-end tests. Defaults to true.
-#
-# Example:
-#   make test-e2e-kubeadm 
-#   make test-e2e-kubeadm FOCUS=kubeadm-config 
-#   make test-e2e-kubeadm SKIP=kubeadm-config
-#
-# Build and run tests.
-endef
-.PHONY: test-e2e-kubeadm
-ifeq ($(PRINT_HELP),y)
-test-e2e-kubeadm:
-	@echo "$$TEST_E2E_KUBEADM_HELP_INFO"
-else
-test-e2e-kubeadm: 
-	hack/make-rules/test-e2e-kubeadm.sh
 endif
 
 define TEST_CMD_HELP_INFO

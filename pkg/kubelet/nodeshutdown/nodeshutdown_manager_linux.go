@@ -34,6 +34,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/eviction"
 	"k8s.io/kubernetes/pkg/kubelet/lifecycle"
 	"k8s.io/kubernetes/pkg/kubelet/nodeshutdown/systemd"
+	"k8s.io/kubernetes/pkg/kubelet/prober"
 	kubelettypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/utils/clock"
 )
@@ -59,10 +60,11 @@ type dbusInhibiter interface {
 	OverrideInhibitDelay(inhibitDelayMax time.Duration) error
 }
 
-// Manager has functions that can be used to interact with the Node Shutdown Manager.
-type Manager struct {
-	recorder record.EventRecorder
-	nodeRef  *v1.ObjectReference
+// managerImpl has functions that can be used to interact with the Node Shutdown Manager.
+type managerImpl struct {
+	recorder     record.EventRecorder
+	nodeRef      *v1.ObjectReference
+	probeManager prober.Manager
 
 	shutdownGracePeriodRequested    time.Duration
 	shutdownGracePeriodCriticalPods time.Duration
@@ -81,22 +83,35 @@ type Manager struct {
 }
 
 // NewManager returns a new node shutdown manager.
-func NewManager(recorder record.EventRecorder, nodeRef *v1.ObjectReference, getPodsFunc eviction.ActivePodsFunc, killPodFunc eviction.KillPodFunc, syncNodeStatus func(), shutdownGracePeriodRequested, shutdownGracePeriodCriticalPods time.Duration) (*Manager, lifecycle.PodAdmitHandler) {
-	manager := &Manager{
-		recorder:                        recorder,
-		nodeRef:                         nodeRef,
-		getPods:                         getPodsFunc,
-		killPodFunc:                     killPodFunc,
-		syncNodeStatus:                  syncNodeStatus,
-		shutdownGracePeriodRequested:    shutdownGracePeriodRequested,
-		shutdownGracePeriodCriticalPods: shutdownGracePeriodCriticalPods,
-		clock:                           clock.RealClock{},
+func NewManager(conf *Config) (Manager, lifecycle.PodAdmitHandler) {
+	if !utilfeature.DefaultFeatureGate.Enabled(features.GracefulNodeShutdown) ||
+		(conf.ShutdownGracePeriodRequested == 0 && conf.ShutdownGracePeriodCriticalPods == 0) {
+		m := managerStub{}
+		return m, m
 	}
+	if conf.Clock == nil {
+		conf.Clock = clock.RealClock{}
+	}
+	manager := &managerImpl{
+		probeManager:                    conf.ProbeManager,
+		recorder:                        conf.Recorder,
+		nodeRef:                         conf.NodeRef,
+		getPods:                         conf.GetPodsFunc,
+		killPodFunc:                     conf.KillPodFunc,
+		syncNodeStatus:                  conf.SyncNodeStatusFunc,
+		shutdownGracePeriodRequested:    conf.ShutdownGracePeriodRequested,
+		shutdownGracePeriodCriticalPods: conf.ShutdownGracePeriodCriticalPods,
+		clock:                           conf.Clock,
+	}
+	klog.InfoS("Creating node shutdown manager",
+		"shutdownGracePeriodRequested", conf.ShutdownGracePeriodRequested,
+		"shutdownGracePeriodCriticalPods", conf.ShutdownGracePeriodCriticalPods,
+	)
 	return manager, manager
 }
 
 // Admit rejects all pods if node is shutting
-func (m *Manager) Admit(attrs *lifecycle.PodAdmitAttributes) lifecycle.PodAdmitResult {
+func (m *managerImpl) Admit(attrs *lifecycle.PodAdmitAttributes) lifecycle.PodAdmitResult {
 	nodeShuttingDown := m.ShutdownStatus() != nil
 
 	if nodeShuttingDown {
@@ -110,10 +125,7 @@ func (m *Manager) Admit(attrs *lifecycle.PodAdmitAttributes) lifecycle.PodAdmitR
 }
 
 // Start starts the node shutdown manager and will start watching the node for shutdown events.
-func (m *Manager) Start() error {
-	if !m.isFeatureEnabled() {
-		return nil
-	}
+func (m *managerImpl) Start() error {
 	stop, err := m.start()
 	if err != nil {
 		return err
@@ -135,7 +147,7 @@ func (m *Manager) Start() error {
 	return nil
 }
 
-func (m *Manager) start() (chan struct{}, error) {
+func (m *managerImpl) start() (chan struct{}, error) {
 	systemBus, err := systemDbus()
 	if err != nil {
 		return nil, err
@@ -231,7 +243,7 @@ func (m *Manager) start() (chan struct{}, error) {
 	return stop, nil
 }
 
-func (m *Manager) aquireInhibitLock() error {
+func (m *managerImpl) aquireInhibitLock() error {
 	lock, err := m.dbusCon.InhibitShutdown()
 	if err != nil {
 		return err
@@ -243,17 +255,8 @@ func (m *Manager) aquireInhibitLock() error {
 	return nil
 }
 
-// Returns if the feature is enabled
-func (m *Manager) isFeatureEnabled() bool {
-	return utilfeature.DefaultFeatureGate.Enabled(features.GracefulNodeShutdown) && m.shutdownGracePeriodRequested > 0
-}
-
 // ShutdownStatus will return an error if the node is currently shutting down.
-func (m *Manager) ShutdownStatus() error {
-	if !m.isFeatureEnabled() {
-		return nil
-	}
-
+func (m *managerImpl) ShutdownStatus() error {
 	m.nodeShuttingDownMutex.Lock()
 	defer m.nodeShuttingDownMutex.Unlock()
 
@@ -263,7 +266,7 @@ func (m *Manager) ShutdownStatus() error {
 	return nil
 }
 
-func (m *Manager) processShutdownEvent() error {
+func (m *managerImpl) processShutdownEvent() error {
 	klog.V(1).InfoS("Shutdown manager processing shutdown event")
 	activePods := m.getPods()
 
@@ -282,6 +285,9 @@ func (m *Manager) processShutdownEvent() error {
 			} else {
 				gracePeriodOverride = int64(nonCriticalPodGracePeriod.Seconds())
 			}
+
+			// Stop probes for the pod
+			m.probeManager.RemovePod(pod)
 
 			// If the pod's spec specifies a termination gracePeriod which is less than the gracePeriodOverride calculated, use the pod spec termination gracePeriod.
 			if pod.Spec.TerminationGracePeriodSeconds != nil && *pod.Spec.TerminationGracePeriodSeconds <= gracePeriodOverride {

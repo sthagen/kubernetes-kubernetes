@@ -42,6 +42,7 @@ import (
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	clientset "k8s.io/client-go/kubernetes"
 	cliflag "k8s.io/component-base/cli/flag"
+	"k8s.io/component-base/logs"
 	"k8s.io/kubernetes/pkg/util/rlimit"
 	commontest "k8s.io/kubernetes/test/e2e/common"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -105,6 +106,7 @@ func TestMain(m *testing.M) {
 	e2econfig.CopyFlags(e2econfig.Flags, flag.CommandLine)
 	framework.RegisterCommonFlags(flag.CommandLine)
 	registerNodeFlags(flag.CommandLine)
+	logs.AddFlags(pflag.CommandLine)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	// Mark the run-services-mode flag as hidden to prevent user from using it.
 	pflag.CommandLine.MarkHidden("run-services-mode")
@@ -166,12 +168,13 @@ func TestE2eNode(t *testing.T) {
 		}
 		return
 	}
-	// If run-services-mode is not specified, run test.
+
+	// We're not running in a special mode so lets run tests.
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	reporters := []ginkgo.Reporter{}
 	reportDir := framework.TestContext.ReportDir
 	if reportDir != "" {
-		// Create the directory if it doesn't already exists
+		// Create the directory if it doesn't already exist
 		if err := os.MkdirAll(reportDir, 0755); err != nil {
 			klog.Errorf("Failed creating report directory: %v", err)
 		} else {
@@ -292,8 +295,6 @@ func waitForNodeReady() {
 }
 
 // updateTestContext updates the test context with the node name.
-// TODO(random-liu): Using dynamic kubelet configuration feature to
-// update test context with node configuration.
 func updateTestContext() error {
 	setExtraEnvs()
 	updateImageAllowList()

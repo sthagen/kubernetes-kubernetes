@@ -37,7 +37,7 @@ func TestFlags(t *testing.T) {
 	want := `      --experimental-logging-sanitization   [Experimental] When enabled prevents logging of fields tagged as sensitive (passwords, keys, tokens).
                                             Runtime log sanitization may introduce significant computation overhead and therefore should not be enabled in production.
       --logging-format string               Sets the log format. Permitted formats: "text".
-                                            Non-default formats don't honor these flags: --add_dir_header, --alsologtostderr, --log_backtrace_at, --log_dir, --log_file, --log_file_max_size, --logtostderr, --one_output, --skip_headers, --skip_log_headers, --stderrthreshold, --vmodule, --log-flush-frequency.
+                                            Non-default formats don't honor these flags: --add-dir-header, --alsologtostderr, --log-backtrace-at, --log-dir, --log-file, --log-file-max-size, --logtostderr, --one-output, --skip-headers, --skip-log-headers, --stderrthreshold, --vmodule.
                                             Non-default choices are currently alpha and subject to change without warning. (default "text")
 `
 	if !assert.Equal(t, want, output.String()) {
@@ -68,6 +68,7 @@ func TestOptions(t *testing.T) {
 				Config: config.LoggingConfiguration{
 					Format:       DefaultLogFormat,
 					Sanitization: true,
+					Options:      NewOptions().Config.Options,
 				},
 			},
 		},
@@ -76,7 +77,8 @@ func TestOptions(t *testing.T) {
 			args: []string{"--logging-format=test"},
 			want: &Options{
 				Config: config.LoggingConfiguration{
-					Format: "test",
+					Format:  "test",
+					Options: NewOptions().Config.Options,
 				},
 			},
 			errs: field.ErrorList{&field.Error{
