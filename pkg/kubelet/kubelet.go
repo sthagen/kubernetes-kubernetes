@@ -62,7 +62,6 @@ import (
 	"k8s.io/klog/v2"
 	pluginwatcherapi "k8s.io/kubelet/pkg/apis/pluginregistration/v1"
 	statsapi "k8s.io/kubelet/pkg/apis/stats/v1alpha1"
-	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/features"
 	kubeletconfiginternal "k8s.io/kubernetes/pkg/kubelet/apis/config"
 	"k8s.io/kubernetes/pkg/kubelet/apis/podresources"
@@ -360,7 +359,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	imageCredentialProviderConfigFile string,
 	imageCredentialProviderBinDir string,
 	registerNode bool,
-	registerWithTaints []api.Taint,
+	registerWithTaints []v1.Taint,
 	allowedUnsafeSysctls []string,
 	experimentalMounterPath string,
 	kernelMemcgNotification bool,
@@ -723,7 +722,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 			kubeDeps.RemoteRuntimeService,
 			kubeDeps.RemoteImageService,
 			hostStatsProvider,
-			utilfeature.DefaultFeatureGate.Enabled(features.DisableAcceleratorUsageMetrics))
+			utilfeature.DefaultFeatureGate.Enabled(features.DisableAcceleratorUsageMetrics),
+			utilfeature.DefaultFeatureGate.Enabled(features.PodAndContainerStatsFromCRI))
 	}
 
 	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
@@ -867,14 +867,15 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 
 	// setup node shutdown manager
 	shutdownManager, shutdownAdmitHandler := nodeshutdown.NewManager(&nodeshutdown.Config{
-		ProbeManager:                    klet.probeManager,
-		Recorder:                        kubeDeps.Recorder,
-		NodeRef:                         nodeRef,
-		GetPodsFunc:                     klet.GetActivePods,
-		KillPodFunc:                     killPodNow(klet.podWorkers, kubeDeps.Recorder),
-		SyncNodeStatusFunc:              klet.syncNodeStatus,
-		ShutdownGracePeriodRequested:    kubeCfg.ShutdownGracePeriod.Duration,
-		ShutdownGracePeriodCriticalPods: kubeCfg.ShutdownGracePeriodCriticalPods.Duration,
+		ProbeManager:                     klet.probeManager,
+		Recorder:                         kubeDeps.Recorder,
+		NodeRef:                          nodeRef,
+		GetPodsFunc:                      klet.GetActivePods,
+		KillPodFunc:                      killPodNow(klet.podWorkers, kubeDeps.Recorder),
+		SyncNodeStatusFunc:               klet.syncNodeStatus,
+		ShutdownGracePeriodRequested:     kubeCfg.ShutdownGracePeriod.Duration,
+		ShutdownGracePeriodCriticalPods:  kubeCfg.ShutdownGracePeriodCriticalPods.Duration,
+		ShutdownGracePeriodByPodPriority: kubeCfg.ShutdownGracePeriodByPodPriority,
 	})
 	klet.shutdownManager = shutdownManager
 	klet.admitHandlers.AddPodAdmitHandler(shutdownAdmitHandler)
@@ -943,7 +944,7 @@ type Kubelet struct {
 	// Set to true to have the node register itself with the apiserver.
 	registerNode bool
 	// List of taints to add to a node object when the kubelet registers itself.
-	registerWithTaints []api.Taint
+	registerWithTaints []v1.Taint
 	// Set to true to have the node register itself as schedulable.
 	registerSchedulable bool
 	// for internal book keeping; access only from within registerWithApiserver

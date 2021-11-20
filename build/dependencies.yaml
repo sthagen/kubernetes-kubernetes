@@ -29,7 +29,7 @@ dependencies:
 
   # CoreDNS
   - name: "coredns-kube-up"
-    version: 1.8.0
+    version: 1.8.6
     refPaths:
     - path: cluster/addons/dns/coredns/coredns.yaml.base
       match: k8s.gcr.io/coredns
@@ -39,7 +39,7 @@ dependencies:
       match: k8s.gcr.io/coredns
 
   - name: "coredns-kubeadm"
-    version: 1.8.4
+    version: 1.8.6
     refPaths:
     - path: cmd/kubeadm/app/constants/constants.go
       match: CoreDNSVersion =
@@ -62,7 +62,7 @@ dependencies:
 
   # etcd
   - name: "etcd"
-    version: 3.5.0
+    version: 3.5.1
     refPaths:
     - path: cluster/gce/manifests/etcd.manifest
       match: etcd_docker_tag|etcd_version
@@ -75,6 +75,8 @@ dependencies:
       match: quay.io/coreos/etcd
     - path: test/e2e/framework/nodes_util.go
       match: const etcdImage
+    - path: test/utils/image/manifest.go
+      match: configs\[Etcd\] = Config{list\.GcEtcdRegistry, "etcd", "\d+\.\d+.\d+(-(alpha|beta|rc).\d+)?(-\d+)?"}
 
   - name: "etcd-image"
     version: 3.5.1
@@ -85,7 +87,7 @@ dependencies:
 
   # Golang
   - name: "golang: upstream version"
-    version: 1.17.2
+    version: 1.17.3
     refPaths:
     - path: build/build-image/cross/VERSION
     - path: cluster/addons/fluentd-elasticsearch/es-image/Dockerfile
@@ -108,13 +110,13 @@ dependencies:
       match: minimum_go_version=go([0-9]+\.[0-9]+)
 
   - name: "golang: etcd release version"
-    version: 1.16.9
+    version: 1.16.10
     refPaths:
     - path: cluster/images/etcd/Makefile
       match: 'GOLANG_VERSION\?=\d+.\d+(alpha|beta|rc)?\.?(\d+)?'
 
   - name: "k8s.gcr.io/kube-cross: dependents"
-    version: v1.23.0-go1.17.2-bullseye.0
+    version: v1.23.0-go1.17.3-bullseye.0
     refPaths:
     - path: build/build-image/cross/VERSION
 
@@ -136,7 +138,7 @@ dependencies:
       match: BASE_IMAGE_VERSION\?=
 
   - name: "k8s.gcr.io/debian-iptables: dependents"
-    version: bullseye-v1.0.0
+    version: bullseye-v1.1.0
     refPaths:
     - path: build/common.sh
       match: __default_debian_iptables_version=
@@ -144,7 +146,7 @@ dependencies:
       match: configs\[DebianIptables\] = Config{list\.BuildImageRegistry, "debian-iptables", "[a-zA-Z]+\-v((([0-9]+)\.([0-9]+)\.([0-9]+)(?:-([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?)(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?)"}
 
   - name: "k8s.gcr.io/go-runner: dependents"
-    version: v2.3.1-go1.17.2-bullseye.0
+    version: v2.3.1-go1.17.3-bullseye.0
     refPaths:
     - path: build/common.sh
       match: __default_go_runner_version=

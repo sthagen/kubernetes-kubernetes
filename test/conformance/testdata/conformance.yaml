@@ -1496,6 +1496,14 @@
     action MUST be validated.
   release: v1.21
   file: test/e2e/network/service.go
+- testname: Service, deletes a collection of services
+  codename: '[sig-network] Services should delete a collection of services [Conformance]'
+  description: Create three services with the required labels and ports. It MUST locate
+    three services in the test namespace. It MUST succeed at deleting a collection
+    of services via a label selector. It MUST locate only one service after deleting
+    the service collection.
+  release: v1.23
+  file: test/e2e/network/service.go
 - testname: Find Kubernetes Service in default Namespace
   codename: '[sig-network] Services should find a service from listing all namespaces
     [Conformance]'
@@ -1788,16 +1796,6 @@
     visible at runtime in the container.
   release: v1.9
   file: test/e2e/common/node/downwardapi.go
-- testname: Pod events, verify event from Scheduler and Kubelet
-  codename: '[sig-node] Events should be sent by kubelets and the scheduler about
-    pods scheduling and running  [Conformance]'
-  description: Create a Pod, make sure that the Pod can be queried. Create a event
-    selector for the kind=Pod and the source is the Scheduler. List of the events
-    MUST be at least one. Create a event selector for kind=Pod and the source is the
-    Kubelet. List of the events MUST be at least one. Both Scheduler and Kubelet MUST
-    send events when scheduling and running a Pod.
-  release: v1.9
-  file: test/e2e/node/events.go
 - testname: init-container-starts-app-restartalways-pod
   codename: '[sig-node] InitContainer [NodeConformance] should invoke init containers
     on a RestartAlways pod [Conformance]'

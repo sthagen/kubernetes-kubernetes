@@ -112,13 +112,15 @@ func TestSetDefaultsKubeletConfiguration(t *testing.T) {
 				EnforceNodeAllocatable:                    DefaultNodeAllocatableEnforcement,
 				VolumePluginDir:                           DefaultVolumePluginDir,
 				Logging: componentbaseconfigv1alpha1.LoggingConfiguration{
-					Format: "text",
+					Format:         "text",
+					FlushFrequency: 5 * time.Second,
 				},
 				EnableSystemLogHandler:  utilpointer.BoolPtr(true),
 				EnableProfilingHandler:  utilpointer.BoolPtr(true),
 				EnableDebugFlagsHandler: utilpointer.BoolPtr(true),
 				SeccompDefault:          utilpointer.BoolPtr(false),
 				MemoryThrottlingFactor:  utilpointer.Float64Ptr(DefaultMemoryThrottlingFactor),
+				RegisterNode:            utilpointer.BoolPtr(true),
 			},
 		},
 		{
@@ -231,8 +233,9 @@ func TestSetDefaultsKubeletConfiguration(t *testing.T) {
 				ProviderID:                  "",
 				KernelMemcgNotification:     false,
 				Logging: componentbaseconfigv1alpha1.LoggingConfiguration{
-					Format:       "",
-					Sanitization: false,
+					Format:         "",
+					FlushFrequency: 5 * time.Second,
+					Sanitization:   false,
 				},
 				EnableSystemLogHandler:          utilpointer.Bool(false),
 				ShutdownGracePeriod:             zeroDuration,
@@ -242,6 +245,7 @@ func TestSetDefaultsKubeletConfiguration(t *testing.T) {
 				EnableDebugFlagsHandler:         utilpointer.Bool(false),
 				SeccompDefault:                  utilpointer.Bool(false),
 				MemoryThrottlingFactor:          utilpointer.Float64(0),
+				RegisterNode:                    utilpointer.BoolPtr(false),
 			},
 			&v1beta1.KubeletConfiguration{
 				EnableServer:       utilpointer.BoolPtr(false),
@@ -327,8 +331,9 @@ func TestSetDefaultsKubeletConfiguration(t *testing.T) {
 				AllowedUnsafeSysctls:   []string{},
 				VolumePluginDir:        DefaultVolumePluginDir,
 				Logging: componentbaseconfigv1alpha1.LoggingConfiguration{
-					Format:       "text",
-					Sanitization: false,
+					Format:         "text",
+					FlushFrequency: 5 * time.Second,
+					Sanitization:   false,
 				},
 				EnableSystemLogHandler:  utilpointer.Bool(false),
 				ReservedMemory:          []v1beta1.MemoryReservation{},
@@ -336,6 +341,7 @@ func TestSetDefaultsKubeletConfiguration(t *testing.T) {
 				EnableDebugFlagsHandler: utilpointer.Bool(false),
 				SeccompDefault:          utilpointer.Bool(false),
 				MemoryThrottlingFactor:  utilpointer.Float64(0),
+				RegisterNode:            utilpointer.BoolPtr(false),
 			},
 		},
 		{
@@ -468,8 +474,9 @@ func TestSetDefaultsKubeletConfiguration(t *testing.T) {
 				ProviderID:                  "provider-id",
 				KernelMemcgNotification:     true,
 				Logging: componentbaseconfigv1alpha1.LoggingConfiguration{
-					Format:       "json",
-					Sanitization: true,
+					Format:         "json",
+					FlushFrequency: 5 * time.Second,
+					Sanitization:   true,
 				},
 				EnableSystemLogHandler:          utilpointer.Bool(true),
 				ShutdownGracePeriod:             metav1.Duration{Duration: 60 * time.Second},
@@ -484,6 +491,7 @@ func TestSetDefaultsKubeletConfiguration(t *testing.T) {
 				EnableDebugFlagsHandler: utilpointer.Bool(true),
 				SeccompDefault:          utilpointer.Bool(true),
 				MemoryThrottlingFactor:  utilpointer.Float64(1),
+				RegisterNode:            utilpointer.BoolPtr(true),
 			},
 			&v1beta1.KubeletConfiguration{
 				EnableServer:       utilpointer.BoolPtr(true),
@@ -613,8 +621,9 @@ func TestSetDefaultsKubeletConfiguration(t *testing.T) {
 				ProviderID:                  "provider-id",
 				KernelMemcgNotification:     true,
 				Logging: componentbaseconfigv1alpha1.LoggingConfiguration{
-					Format:       "json",
-					Sanitization: true,
+					Format:         "json",
+					FlushFrequency: 5 * time.Second,
+					Sanitization:   true,
 				},
 				EnableSystemLogHandler:          utilpointer.Bool(true),
 				ShutdownGracePeriod:             metav1.Duration{Duration: 60 * time.Second},
@@ -629,6 +638,7 @@ func TestSetDefaultsKubeletConfiguration(t *testing.T) {
 				EnableDebugFlagsHandler: utilpointer.Bool(true),
 				SeccompDefault:          utilpointer.Bool(true),
 				MemoryThrottlingFactor:  utilpointer.Float64(1),
+				RegisterNode:            utilpointer.BoolPtr(true),
 			},
 		},
 		{
@@ -706,13 +716,15 @@ func TestSetDefaultsKubeletConfiguration(t *testing.T) {
 				EnforceNodeAllocatable:                    DefaultNodeAllocatableEnforcement,
 				VolumePluginDir:                           DefaultVolumePluginDir,
 				Logging: componentbaseconfigv1alpha1.LoggingConfiguration{
-					Format: "text",
+					Format:         "text",
+					FlushFrequency: 5 * time.Second,
 				},
 				EnableSystemLogHandler:  utilpointer.BoolPtr(true),
 				EnableProfilingHandler:  utilpointer.BoolPtr(true),
 				EnableDebugFlagsHandler: utilpointer.BoolPtr(true),
 				SeccompDefault:          utilpointer.BoolPtr(false),
 				MemoryThrottlingFactor:  utilpointer.Float64Ptr(DefaultMemoryThrottlingFactor),
+				RegisterNode:            utilpointer.BoolPtr(true),
 			},
 		},
 	}

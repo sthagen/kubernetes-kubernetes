@@ -430,6 +430,9 @@ type PersistentVolumeClaimSpec struct {
 	// +optional
 	Selector *metav1.LabelSelector
 	// Resources represents the minimum resources required
+	// If RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements
+	// that are lower than previous value but must still be higher than capacity recorded in the
+	// status field of the claim.
 	// +optional
 	Resources ResourceRequirements
 	// VolumeName is the binding reference to the PersistentVolume backing this
@@ -486,6 +489,26 @@ const (
 	PersistentVolumeClaimFileSystemResizePending PersistentVolumeClaimConditionType = "FileSystemResizePending"
 )
 
+// +enum
+type PersistentVolumeClaimResizeStatus string
+
+const (
+	// When expansion is complete, the empty string is set by resize controller or kubelet.
+	PersistentVolumeClaimNoExpansionInProgress PersistentVolumeClaimResizeStatus = ""
+	// State set when resize controller starts expanding the volume in control-plane
+	PersistentVolumeClaimControllerExpansionInProgress PersistentVolumeClaimResizeStatus = "ControllerExpansionInProgress"
+	// State set when expansion has failed in resize controller with a terminal error.
+	// Transient errors such as timeout should not set this status and should leave ResizeStatus
+	// unmodified, so as resize controller can resume the volume expansion.
+	PersistentVolumeClaimControllerExpansionFailed PersistentVolumeClaimResizeStatus = "ControllerExpansionFailed"
+	// State set when resize controller has finished expanding the volume but further expansion is needed on the node.
+	PersistentVolumeClaimNodeExpansionPending PersistentVolumeClaimResizeStatus = "NodeExpansionPending"
+	// State set when kubelet starts expanding the volume.
+	PersistentVolumeClaimNodeExpansionInProgress PersistentVolumeClaimResizeStatus = "NodeExpansionInProgress"
+	// State set when expansion has failed in kubelet with a terminal error. Transient errors don't set NodeExpansionFailed.
+	PersistentVolumeClaimNodeExpansionFailed PersistentVolumeClaimResizeStatus = "NodeExpansionFailed"
+)
+
 // PersistentVolumeClaimCondition represents the current condition of PV claim
 type PersistentVolumeClaimCondition struct {
 	Type   PersistentVolumeClaimConditionType
@@ -513,6 +536,24 @@ type PersistentVolumeClaimStatus struct {
 	Capacity ResourceList
 	// +optional
 	Conditions []PersistentVolumeClaimCondition
+	// The storage resource within AllocatedResources tracks the capacity allocated to a PVC. It may
+	// be larger than the actual capacity when a volume expansion operation is requested.
+	// For storage quota, the larger value from allocatedResources and PVC.spec.resources is used.
+	// If allocatedResources is not set, PVC.spec.resources alone is used for quota calculation.
+	// If a volume expansion capacity request is lowered, allocatedResources is only
+	// lowered if there are no expansion operations in progress and if the actual volume capacity
+	// is equal or lower than the requested capacity.
+	// This is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.
+	// +featureGate=RecoverVolumeExpansionFailure
+	// +optional
+	AllocatedResources ResourceList
+	// ResizeStatus stores status of resize operation.
+	// ResizeStatus is not set by default but when expansion is complete resizeStatus is set to empty
+	// string by resize controller or kubelet.
+	// This is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.
+	// +featureGate=RecoverVolumeExpansionFailure
+	// +optional
+	ResizeStatus *PersistentVolumeClaimResizeStatus
 }
 
 // PersistentVolumeAccessMode defines various access modes for PV.
@@ -2189,11 +2230,8 @@ type Container struct {
 }
 
 // ProbeHandler defines a specific action that should be taken in a probe.
-// This type has a strong relationship to LifecycleHandler - overlapping fields
-// should be identical.
-// TODO: pass structured data to these actions, and document that data here.
+// One and only one of the fields must be specified.
 type ProbeHandler struct {
-	// One and only one of the following should be specified.
 	// Exec specifies the action to take.
 	// +optional
 	Exec *ExecAction
@@ -2201,27 +2239,43 @@ type ProbeHandler struct {
 	// +optional
 	HTTPGet *HTTPGetAction
 	// TCPSocket specifies an action involving a TCP port.
-	// TODO: implement a realistic TCP lifecycle hook
+	// +optional
+	TCPSocket *TCPSocketAction
+
+	// GRPC specifies an action involving a GRPC port.
+	// This is an alpha field and requires enabling GRPCContainerProbe feature gate.
+	// +featureGate=GRPCContainerProbe
+	// +optional
+	GRPC *GRPCAction
+}
+
+// LifecycleHandler defines a specific action that should be taken in a lifecycle
+// hook. One and only one of the fields, except TCPSocket must be specified.
+type LifecycleHandler struct {
+	// Exec specifies the action to take.
+	// +optional
+	Exec *ExecAction
+	// HTTPGet specifies the http request to perform.
+	// +optional
+	HTTPGet *HTTPGetAction
+	// Deprecated. TCPSocket is NOT supported as a LifecycleHandler and kept
+	// for the backward compatibility. There are no validation of this field and
+	// lifecycle hooks will fail in runtime when tcp handler is specified.
 	// +optional
 	TCPSocket *TCPSocketAction
 }
 
-// LifecycleHandler defines a specific action that should be taken in a lifecycle
-// hook.  This type has a strong relationship to ProbeHandler - overlapping fields
-// should be identical.
-// TODO: pass structured data to these actions, and document that data here.
-type LifecycleHandler struct {
-	// One and only one of the following should be specified.
-	// Exec specifies the action to take.
+type GRPCAction struct {
+	// Port number of the gRPC service.
+	// Note: Number must be in the range 1 to 65535.
+	Port int32
+
+	// Service is the name of the service to place in the gRPC HealthCheckRequest
+	// (see https://github.com/grpc/grpc/blob/master/doc/health-checking.md).
+	//
+	// If this is not specified, the default behavior is to probe the server's overall health status.
 	// +optional
-	Exec *ExecAction
-	// HTTPGet specifies the http request to perform.
-	// +optional
-	HTTPGet *HTTPGetAction
-	// TCPSocket specifies an action involving a TCP port.
-	// TODO: implement a realistic TCP lifecycle hook
-	// +optional
-	TCPSocket *TCPSocketAction
+	Service *string
 }
 
 // Lifecycle describes actions that the management system should take in response to container lifecycle
@@ -2230,17 +2284,18 @@ type LifecycleHandler struct {
 type Lifecycle struct {
 	// PostStart is called immediately after a container is created.  If the handler fails, the container
 	// is terminated and restarted.
+	// More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks
 	// +optional
 	PostStart *LifecycleHandler
 	// PreStop is called immediately before a container is terminated due to an
 	// API request or management event such as liveness/startup probe failure,
 	// preemption, resource contention, etc. The handler is not called if the
-	// container crashes or exits. The reason for termination is passed to the
-	// handler. The Pod's termination grace period countdown begins before the
-	// PreStop hooked is executed. Regardless of the outcome of the handler, the
+	// container crashes or exits. The Pod's termination grace period countdown begins before the
+	// PreStop hook is executed. Regardless of the outcome of the handler, the
 	// container will eventually terminate within the Pod's termination grace
-	// period. Other management of the container blocks until the hook completes
+	// period (unless delayed by finalizers). Other management of the container blocks until the hook completes
 	// or until the termination grace period is reached.
+	// More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks
 	// +optional
 	PreStop *LifecycleHandler
 }

@@ -60,13 +60,16 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/controller-manager/pkg/informerfactory"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
+	c "k8s.io/kubernetes/pkg/controller"
 )
 
 type testRESTMapper struct {
 	meta.RESTMapper
 }
 
-func (*testRESTMapper) Reset() {}
+func (m *testRESTMapper) Reset() {
+	meta.MaybeResetRESTMapper(m.RESTMapper)
+}
 
 func TestGarbageCollectorConstruction(t *testing.T) {
 	config := &restclient.Config{}
@@ -594,8 +597,11 @@ func TestDeleteOwnerRefPatch(t *testing.T) {
 			},
 		},
 	}
-	patch := deleteOwnerRefStrategicMergePatch("100", "2", "3")
-	patched, err := strategicpatch.StrategicMergePatch(originalData, patch, v1.Pod{})
+	p, err := c.GenerateDeleteOwnerRefStrategicMergeBytes("100", []types.UID{"2", "3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	patched, err := strategicpatch.StrategicMergePatch(originalData, p, v1.Pod{})
 	if err != nil {
 		t.Fatal(err)
 	}

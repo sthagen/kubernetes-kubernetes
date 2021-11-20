@@ -79,6 +79,7 @@ kube::golang::server_targets() {
     cmd/kubelet
     cmd/kubeadm
     cmd/kube-scheduler
+    vendor/k8s.io/component-base/logs/kube-log-runner
     vendor/k8s.io/kube-aggregator
     vendor/k8s.io/apiextensions-apiserver
     cluster/gce/gci/mounter
@@ -128,6 +129,7 @@ kube::golang::node_targets() {
     cmd/kube-proxy
     cmd/kubeadm
     cmd/kubelet
+    vendor/k8s.io/component-base/logs/kube-log-runner
   )
   echo "${targets[@]}"
 }
@@ -334,8 +336,10 @@ readonly KUBE_STATIC_LIBRARIES=(
   kube-controller-manager
   kube-scheduler
   kube-proxy
+  kube-log-runner
   kubeadm
   kubectl
+  kubemark
 )
 
 # Fully-qualified package names that we want to instrument for coverage information.
