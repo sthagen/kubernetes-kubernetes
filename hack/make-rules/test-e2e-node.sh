@@ -38,6 +38,7 @@ skip=${SKIP-"\[Flaky\]|\[Slow\]|\[Serial\]"}
 parallelism=${PARALLELISM:-8}
 artifacts="${ARTIFACTS:-"/tmp/_artifacts/$(date +%y%m%dT%H%M%S)"}"
 remote=${REMOTE:-"false"}
+remote_mode=${REMOTE_MODE:-"gce"}
 runtime=${RUNTIME:-"docker"}
 container_runtime_endpoint=${CONTAINER_RUNTIME_ENDPOINT:-""}
 image_service_endpoint=${IMAGE_SERVICE_ENDPOINT:-""}
@@ -49,6 +50,7 @@ extra_envs=${EXTRA_ENVS:-}
 runtime_config=${RUNTIME_CONFIG:-}
 ssh_user=${SSH_USER:-"${USER}"}
 ssh_key=${SSH_KEY:-}
+ssh_options=${SSH_OPTIONS:-}
 kubelet_config_file=${KUBELET_CONFIG_FILE:-"test/e2e_node/jenkins/default-kubelet-config.yaml"}
 
 # Parse the flags to pass to ginkgo
@@ -86,8 +88,8 @@ if [[ ${runtime} == "remote" ]] ; then
 fi
 
 
-if [ "${remote}" = true ] ; then
-  # The following options are only valid in remote run.
+if [ "${remote}" = true ] && [ "${remote_mode}" = gce ] ; then
+  # The following options are only valid in remote GCE run.
   images=${IMAGES:-""}
   hosts=${HOSTS:-""}
   image_project=${IMAGE_PROJECT:-"kubernetes-node-e2e-images"}
@@ -100,6 +102,7 @@ if [ "${remote}" = true ] ; then
   gubernator=${GUBERNATOR:-"false"}
   image_config_file=${IMAGE_CONFIG_FILE:-""}
   image_config_dir=${IMAGE_CONFIG_DIR:-""}
+  runtime_config=${RUNTIME_CONFIG:-""}
   if [[ ${hosts} == "" && ${images} == "" && ${image_config_file} == "" ]]; then
     image_project="${IMAGE_PROJECT:-"cos-cloud"}"
     gci_image=$(gcloud compute images list --project "${image_project}" \
@@ -171,13 +174,36 @@ if [ "${remote}" = true ] ; then
   go run test/e2e_node/runner/remote/run_remote.go  --logtostderr --vmodule=*=4 --ssh-env="gce" \
     --zone="${zone}" --project="${project}" --gubernator="${gubernator}" \
     --hosts="${hosts}" --images="${images}" --cleanup="${cleanup}" \
-    --results-dir="${artifacts}" --ginkgo-flags="${ginkgoflags}" \
+    --results-dir="${artifacts}" --ginkgo-flags="${ginkgoflags}" --runtime-config="${runtime_config}" \
     --image-project="${image_project}" --instance-name-prefix="${instance_prefix}" \
     --delete-instances="${delete_instances}" --test_args="${test_args}" --instance-metadata="${metadata}" \
     --image-config-file="${image_config_file}" --system-spec-name="${system_spec_name}" \
     --runtime-config="${runtime_config}" --preemptible-instances="${preemptible_instances}" \
-    --ssh-user="${ssh_user}" --ssh-key="${ssh_key}" --image-config-dir="${image_config_dir}" \
+    --ssh-user="${ssh_user}" --ssh-key="${ssh_key}" --ssh-options="${ssh_options}" \
+    --image-config-dir="${image_config_dir}" \
     --extra-envs="${extra_envs}" --kubelet-config-file="${kubelet_config_file}"  --test-suite="${test_suite}" \
+    "${timeout_arg}" \
+    2>&1 | tee -i "${artifacts}/build-log.txt"
+  exit $?
+
+elif [ "${remote}" = true ] && [ "${remote_mode}" = ssh ] ; then
+  hosts=${HOSTS:-""}
+  test_suite=${TEST_SUITE:-"default"}
+  if [[ -n "${TIMEOUT:-}" ]] ; then
+    timeout_arg="--test-timeout=${TIMEOUT}"
+  fi
+
+  # Use cluster.local as default dns-domain
+  test_args='--dns-domain="'${KUBE_DNS_DOMAIN:-cluster.local}'" '${test_args}
+  test_args='--kubelet-flags="--cluster-domain='${KUBE_DNS_DOMAIN:-cluster.local}'" '${test_args}
+
+  # Invoke the runner
+  go run test/e2e_node/runner/remote/run_remote.go  --mode="ssh" --logtostderr --vmodule=*=4 \
+    --hosts="${hosts}" --results-dir="${artifacts}" --ginkgo-flags="${ginkgoflags}" \
+    --test_args="${test_args}" --system-spec-name="${system_spec_name}" \
+    --runtime-config="${runtime_config}" \
+    --ssh-user="${ssh_user}" --ssh-key="${ssh_key}" --ssh-options="${ssh_options}" \
+    --extra-envs="${extra_envs}" --test-suite="${test_suite}" \
     "${timeout_arg}" \
     2>&1 | tee -i "${artifacts}/build-log.txt"
   exit $?
