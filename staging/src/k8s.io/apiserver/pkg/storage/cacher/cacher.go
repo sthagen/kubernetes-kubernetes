@@ -408,6 +408,7 @@ func (c *Cacher) startCaching(stopChannel <-chan struct{}) {
 		successfulList = true
 		c.ready.set(true)
 		klog.V(1).Infof("cacher (%v): initialized", c.objectType.String())
+		watchCacheInitializations.WithLabelValues(c.objectType.String()).Inc()
 	})
 	defer func() {
 		if successfulList {
@@ -532,11 +533,6 @@ func (c *Cacher) Watch(ctx context.Context, key string, opts storage.ListOptions
 
 	go watcher.processEvents(ctx, initEvents, watchRV)
 	return watcher, nil
-}
-
-// WatchList implements storage.Interface.
-func (c *Cacher) WatchList(ctx context.Context, key string, opts storage.ListOptions) (watch.Interface, error) {
-	return c.Watch(ctx, key, opts)
 }
 
 // Get implements storage.Interface.
@@ -827,6 +823,7 @@ func (c *Cacher) dispatchEvents() {
 				c.dispatchEvent(&event)
 			}
 			lastProcessedResourceVersion = event.ResourceVersion
+			eventsCounter.WithLabelValues(c.objectType.String()).Inc()
 		case <-bookmarkTimer.C():
 			bookmarkTimer.Reset(wait.Jitter(time.Second, 0.25))
 			// Never send a bookmark event if we did not see an event here, this is fine
@@ -1136,11 +1133,12 @@ func (lw *cacherListerWatcher) Watch(options metav1.ListOptions) (watch.Interfac
 	opts := storage.ListOptions{
 		ResourceVersion: options.ResourceVersion,
 		Predicate:       storage.Everything,
+		Recursive:       true,
 	}
 	if utilfeature.DefaultFeatureGate.Enabled(features.EfficientWatchResumption) {
 		opts.ProgressNotify = true
 	}
-	return lw.storage.WatchList(context.TODO(), lw.resourcePrefix, opts)
+	return lw.storage.Watch(context.TODO(), lw.resourcePrefix, opts)
 }
 
 // errWatcher implements watch.Interface to return a single error
