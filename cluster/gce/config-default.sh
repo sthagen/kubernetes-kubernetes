@@ -99,7 +99,7 @@ export KUBELET_TEST_ARGS=${KUBE_KUBELET_EXTRA_ARGS:-}
 # Default container runtime
 export CONTAINER_RUNTIME=${KUBE_CONTAINER_RUNTIME:-containerd}
 # Default container runtime for windows
-export WINDOWS_CONTAINER_RUNTIME=${KUBE_WINDOWS_CONTAINER_RUNTIME:-docker}
+export WINDOWS_CONTAINER_RUNTIME=${KUBE_WINDOWS_CONTAINER_RUNTIME:-containerd}
 
 # Set default values with override
 if [[ "${CONTAINER_RUNTIME}" == "docker" ]]; then
@@ -244,7 +244,7 @@ fi
 
 # Optional: Enable node logging.
 export ENABLE_NODE_LOGGING="${KUBE_ENABLE_NODE_LOGGING:-true}"
-export LOGGING_DESTINATION="${KUBE_LOGGING_DESTINATION:-gcp}" # options: elasticsearch, gcp
+export LOGGING_DESTINATION="${KUBE_LOGGING_DESTINATION:-gcp}" # options: gcp
 
 # Optional: When set to true, Elasticsearch and Kibana will be setup as part of the cluster bring up.
 export ENABLE_CLUSTER_LOGGING="${KUBE_ENABLE_CLUSTER_LOGGING:-true}"

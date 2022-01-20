@@ -323,7 +323,7 @@ func (jm *ControllerV2) deleteJob(obj interface{}) {
 		}
 		job, ok = tombstone.Obj.(*batchv1.Job)
 		if !ok {
-			utilruntime.HandleError(fmt.Errorf("tombstone contained object that is not a ReplicaSet %#v", obj))
+			utilruntime.HandleError(fmt.Errorf("tombstone contained object that is not a Job %#v", obj))
 			return
 		}
 	}
@@ -613,13 +613,14 @@ func (jm *ControllerV2) syncCronJob(
 	}
 	cj.Status.Active = append(cj.Status.Active, *jobRef)
 	cj.Status.LastScheduleTime = &metav1.Time{Time: *scheduledTime}
-	if _, err := jm.cronJobControl.UpdateStatus(ctx, cj); err != nil {
+	updatedCJ, err = jm.cronJobControl.UpdateStatus(ctx, cj)
+	if err != nil {
 		klog.InfoS("Unable to update status", "cronjob", klog.KRef(cj.GetNamespace(), cj.GetName()), "resourceVersion", cj.ResourceVersion, "err", err)
 		return cj, nil, fmt.Errorf("unable to update status for %s (rv = %s): %v", klog.KRef(cj.GetNamespace(), cj.GetName()), cj.ResourceVersion, err)
 	}
 
 	t := nextScheduledTimeDuration(sched, now)
-	return cj, t, nil
+	return updatedCJ, t, nil
 }
 
 func getJobName(cj *batchv1.CronJob, scheduledTime time.Time) string {

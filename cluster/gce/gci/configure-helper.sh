@@ -179,7 +179,7 @@ function config-ip-firewall {
   # node because we don't expect the daemonset to run on this node.
   if [[ "${ENABLE_METADATA_CONCEALMENT:-}" == "true" ]] && [[ ! "${METADATA_CONCEALMENT_NO_FIREWALL:-}" == "true" ]]; then
     echo "Add rule for metadata concealment"
-    ip addr add dev lo 169.254.169.252/32
+    ip addr add dev lo 169.254.169.252/32 scope host
     iptables -w -t nat -I PREROUTING -p tcp ! -i eth0 -d "${METADATA_SERVER_IP}" --dport 80 -m comment --comment "metadata-concealment: bridge traffic to metadata server goes to metadata proxy" -j DNAT --to-destination 169.254.169.252:988
     iptables -w -t nat -I PREROUTING -p tcp ! -i eth0 -d "${METADATA_SERVER_IP}" --dport 8080 -m comment --comment "metadata-concealment: bridge traffic to metadata server goes to metadata proxy" -j DNAT --to-destination 169.254.169.252:987
   fi
@@ -484,7 +484,7 @@ function ensure-local-ssds-ephemeral-storage() {
   safe-format-and-mount "${device}" "${ephemeral_mountpoint}"
 
   # mount container runtime root dir on SSD
-  local container_runtime="${CONTAINER_RUNTIME:-docker}"
+  local container_runtime="${CONTAINER_RUNTIME:-containerd}"
   systemctl stop "$container_runtime"
   # Some images remount the container runtime root dir.
   umount "/var/lib/${container_runtime}" || true
@@ -1537,7 +1537,7 @@ EOF
 
 function disable_aufs() {
   # disable aufs module if aufs is loaded
-  if lsmod | grep "aufs" &> /dev/null ; then 
+  if lsmod | grep "aufs" &> /dev/null ; then
     sudo modprobe -r aufs
   fi
 }
@@ -1601,7 +1601,7 @@ addockeropt "\"pidfile\": \"/var/run/docker.pid\",
   if [[ -n "${DOCKER_REGISTRY_MIRROR_URL:-}" ]]; then
       docker_opts+="--registry-mirror=${DOCKER_REGISTRY_MIRROR_URL} "
   fi
-  
+
   disable_aufs
   set_docker_options_non_ubuntu
 
@@ -1993,8 +1993,8 @@ function prepare-konnectivity-server-manifest {
   if [[ "${KONNECTIVITY_SERVICE_PROXY_PROTOCOL_MODE:-grpc}" == 'grpc' ]]; then
     params+=("--uds-name=/etc/srv/kubernetes/konnectivity-server/konnectivity-server.socket")
   elif [[ "${KONNECTIVITY_SERVICE_PROXY_PROTOCOL_MODE:-grpc}" == 'http-connect' ]]; then
-    # HTTP-CONNECT can work with either UDS or mTLS. 
-    # Linking them here to make sure we get good coverage with two test configurations. 
+    # HTTP-CONNECT can work with either UDS or mTLS.
+    # Linking them here to make sure we get good coverage with two test configurations.
     params+=("--server-ca-cert=${KONNECTIVITY_SERVER_CA_CERT_PATH}")
     params+=("--server-cert=${KONNECTIVITY_SERVER_CERT_PATH}")
     params+=("--server-key=${KONNECTIVITY_SERVER_KEY_PATH}")
@@ -2011,7 +2011,7 @@ function prepare-konnectivity-server-manifest {
     params+=("--kubeconfig=/etc/srv/kubernetes/konnectivity-server/kubeconfig")
     params+=("--proxy-strategies=default")
   elif [[ "${KONNECTIVITY_SERVICE_PROXY_PROTOCOL_MODE:-grpc}" == 'http-connect' ]]; then
-    # GRPC can work with either UDS or mTLS. 
+    # GRPC can work with either UDS or mTLS.
     params+=("--mode=http-connect")
     params+=("--server-port=8131")
     params+=("--agent-namespace=")
@@ -2550,9 +2550,9 @@ function start-volumesnapshot-crd-and-controller {
 # endpoint.
 function update-container-runtime {
   local -r file="$1"
-  local -r container_runtime_endpoint="${CONTAINER_RUNTIME_ENDPOINT:-unix:///var/run/dockershim.sock}"
+  local -r container_runtime_endpoint="${CONTAINER_RUNTIME_ENDPOINT:-unix:///var/run/containerd/containerd.sock}"
   sed -i \
-    -e "s@{{ *fluentd_container_runtime_service *}}@${FLUENTD_CONTAINER_RUNTIME_SERVICE:-${CONTAINER_RUNTIME_NAME:-docker}}@g" \
+    -e "s@{{ *fluentd_container_runtime_service *}}@${FLUENTD_CONTAINER_RUNTIME_SERVICE:-${CONTAINER_RUNTIME_NAME:-containerd}}@g" \
     -e "s@{{ *container_runtime_endpoint *}}@${container_runtime_endpoint#unix://}@g" \
     "${file}"
 }
@@ -2816,9 +2816,9 @@ EOF
   if [[ "${ENABLE_NODE_LOGGING:-}" == "true" ]] && \
      [[ "${LOGGING_DESTINATION:-}" == "elasticsearch" ]] && \
      [[ "${ENABLE_CLUSTER_LOGGING:-}" == "true" ]]; then
-    setup-addon-manifests "addons" "fluentd-elasticsearch"
-    local -r fluentd_es_configmap_yaml="${dst_dir}/fluentd-elasticsearch/fluentd-es-configmap.yaml"
-    update-container-runtime ${fluentd_es_configmap_yaml}
+    echo "fluentd-elasticsearch addon is no longer included here. Terminate cluster initialization."
+    echo "The addon can be installed from https://github.com/kubernetes-sigs/instrumentation-addons"
+    exit 1
   fi
   if [[ "${ENABLE_NODE_LOGGING:-}" == "true" ]] && \
      [[ "${LOGGING_DESTINATION:-}" == "gcp" ]]; then
@@ -2993,7 +2993,7 @@ You can find documentation for Kubernetes at:
 The source for this release can be found at:
   /home/kubernetes/kubernetes-src.tar.gz
 Or you can download it at:
-  https://storage.googleapis.com/kubernetes-release/release/${version}/kubernetes-src.tar.gz
+  https://storage.googleapis.com/gke-release/kubernetes/release/${version}/kubernetes-src.tar.gz
 
 It is based on the Kubernetes source at:
   https://github.com/kubernetes/kubernetes/tree/${gitref}
@@ -3446,7 +3446,7 @@ function main() {
   fi
 
   log-wrap 'OverrideKubectl' override-kubectl
-  container_runtime="${CONTAINER_RUNTIME:-docker}"
+  container_runtime="${CONTAINER_RUNTIME:-containerd}"
   # Run the containerized mounter once to pre-cache the container image.
   if [[ "${container_runtime}" == "docker" ]]; then
     log-wrap 'AssembleDockerFlags' assemble-docker-flags

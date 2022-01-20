@@ -46,19 +46,12 @@ dependencies:
 
   # CRI Tools
   - name: "crictl"
-    version: 1.22.0
+    version: 1.23.0
     refPaths:
     - path: cluster/gce/windows/k8s-node-setup.psm1
       match: CRICTL_VERSION =
     - path: cluster/gce/gci/configure.sh
       match: DEFAULT_CRICTL_VERSION=
-
-  # Docker
-  - name: "docker"
-    version: 20.10
-    refPaths:
-    - path: vendor/k8s.io/system-validators/validators/docker_validator.go
-      match: latestValidatedDockerVersion
 
   # etcd
   - name: "etcd"
@@ -87,11 +80,9 @@ dependencies:
 
   # Golang
   - name: "golang: upstream version"
-    version: 1.17.5
+    version: 1.17.6
     refPaths:
     - path: build/build-image/cross/VERSION
-    - path: cluster/addons/fluentd-elasticsearch/es-image/Dockerfile
-      match: 'FROM golang\:\d+.\d+(alpha|beta|rc)?\.?(\d+)?'
     - path: staging/publishing/rules.yaml
       match: 'default-go-version\: \d+.\d+(alpha|beta|rc)?\.?(\d+)?'
     - path: test/images/Makefile
@@ -116,7 +107,7 @@ dependencies:
       match: 'GOLANG_VERSION\?=\d+.\d+(alpha|beta|rc)?\.?(\d+)?'
 
   - name: "k8s.gcr.io/kube-cross: dependents"
-    version: v1.24.0-go1.17.5-bullseye.0
+    version: v1.24.0-go1.17.6-bullseye.0
     refPaths:
     - path: build/build-image/cross/VERSION
 
@@ -146,7 +137,7 @@ dependencies:
       match: configs\[DebianIptables\] = Config{list\.BuildImageRegistry, "debian-iptables", "[a-zA-Z]+\-v((([0-9]+)\.([0-9]+)\.([0-9]+)(?:-([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?)(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?)"}
 
   - name: "k8s.gcr.io/go-runner: dependents"
-    version: v2.3.1-go1.17.5-bullseye.0
+    version: v2.3.1-go1.17.6-bullseye.0
     refPaths:
     - path: build/common.sh
       match: __default_go_runner_version=
@@ -226,3 +217,12 @@ dependencies:
     refPaths:
     - path: test/utils/image/manifest.go
       match: configs\[CheckMetadataConcealment\] = Config{list\.PromoterE2eRegistry, "metadata-concealment", "\d+\.\d+"}
+
+  # cadvisor
+  - name: "gcr.io/cadvisor/cadvisor: dependents"
+    version: "v0.43.0"
+    refPaths:
+    - path: test/e2e_node/resource_collector.go
+      match: gcr.io\/cadvisor\/cadvisor:v\d+\.\d+\.\d+
+    - path: test/e2e_node/image_list.go
+      mathc: gcr.io\/cadvisor\/cadvisor:v\d+\.\d+\.\d+

@@ -1087,7 +1087,11 @@ func (lw *cacherListerWatcher) List(options metav1.ListOptions) (runtime.Object,
 		Continue: options.Continue,
 	}
 
-	if err := lw.storage.List(context.TODO(), lw.resourcePrefix, storage.ListOptions{ResourceVersionMatch: options.ResourceVersionMatch, Predicate: pred}, list); err != nil {
+	storageOpts := storage.ListOptions{
+		ResourceVersionMatch: options.ResourceVersionMatch,
+		Predicate:            pred,
+	}
+	if err := lw.storage.List(context.TODO(), lw.resourcePrefix, storageOpts, list); err != nil {
 		return nil, err
 	}
 	return list, nil
@@ -1099,9 +1103,7 @@ func (lw *cacherListerWatcher) Watch(options metav1.ListOptions) (watch.Interfac
 		ResourceVersion: options.ResourceVersion,
 		Predicate:       storage.Everything,
 		Recursive:       true,
-	}
-	if utilfeature.DefaultFeatureGate.Enabled(features.EfficientWatchResumption) {
-		opts.ProgressNotify = true
+		ProgressNotify:  true,
 	}
 	return lw.storage.Watch(context.TODO(), lw.resourcePrefix, opts)
 }
