@@ -570,6 +570,7 @@ const (
 	// kep: http://kep.k8s.io/1864
 	// alpha: v1.20
 	// beta: v1.22
+	// ga: v1.24
 	//
 	// Allows control if NodePorts shall be created for services with "type: LoadBalancer" by defining the spec.AllocateLoadBalancerNodePorts field (bool)
 	ServiceLBNodePortControl featuregate.Feature = "ServiceLBNodePortControl"
@@ -833,7 +834,7 @@ func init() {
 // available throughout Kubernetes binaries.
 var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	AppArmor:             {Default: true, PreRelease: featuregate.Beta},
-	DynamicKubeletConfig: {Default: false, PreRelease: featuregate.Deprecated}, // feature gate is deprecated in 1.22, remove no early than 1.23
+	DynamicKubeletConfig: {Default: false, PreRelease: featuregate.Deprecated}, // feature gate is deprecated in 1.22, kubelet logic is removed in 1.24, api server logic can be removed in 1.26
 	ExperimentalHostUserNamespaceDefaultingGate: {Default: false, PreRelease: featuregate.Beta},
 	DevicePlugins:                                  {Default: true, PreRelease: featuregate.Beta},
 	RotateKubeletServerCertificate:                 {Default: true, PreRelease: featuregate.Beta},
