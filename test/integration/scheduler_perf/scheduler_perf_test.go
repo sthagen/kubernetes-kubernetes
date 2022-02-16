@@ -20,8 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -537,12 +537,12 @@ func BenchmarkPerfScheduling(b *testing.B) {
 		})
 	}
 	if err := dataItems2JSONFile(dataItems, b.Name()); err != nil {
-		klog.Fatalf("%v: unable to write measured data: %v", b.Name(), err)
+		klog.Fatalf("%v: unable to write measured data %+v: %v", b.Name(), dataItems, err)
 	}
 }
 
 func loadSchedulerConfig(file string) (*config.KubeSchedulerConfiguration, error) {
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
@@ -940,7 +940,7 @@ func waitUntilPodsScheduled(ctx context.Context, podInformer coreinformers.PodIn
 }
 
 func getSpecFromFile(path *string, spec interface{}) error {
-	bytes, err := ioutil.ReadFile(*path)
+	bytes, err := os.ReadFile(*path)
 	if err != nil {
 		return err
 	}
@@ -948,7 +948,7 @@ func getSpecFromFile(path *string, spec interface{}) error {
 }
 
 func getUnstructuredFromFile(path string) (*unstructured.Unstructured, *schema.GroupVersionKind, error) {
-	bytes, err := ioutil.ReadFile(path)
+	bytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, nil, err
 	}

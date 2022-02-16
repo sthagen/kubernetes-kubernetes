@@ -509,7 +509,7 @@ func (c *Cacher) Watch(ctx context.Context, key string, opts storage.ListOptions
 	// underlying watchCache is calling processEvent under its lock.
 	c.watchCache.RLock()
 	defer c.watchCache.RUnlock()
-	initEvents, err := c.watchCache.GetAllEventsSinceThreadUnsafe(watchRV)
+	cacheInterval, err := c.watchCache.getAllEventsSinceLocked(watchRV)
 	if err != nil {
 		// To match the uncached watch implementation, once we have passed authn/authz/admission,
 		// and successfully parsed a resource version, other errors must fail with a watch event of type ERROR,
@@ -531,7 +531,7 @@ func (c *Cacher) Watch(ctx context.Context, key string, opts storage.ListOptions
 		c.watcherIdx++
 	}()
 
-	go watcher.processEvents(ctx, initEvents, watchRV)
+	go watcher.processInterval(ctx, cacheInterval, watchRV)
 	return watcher, nil
 }
 
@@ -656,7 +656,7 @@ func (c *Cacher) list(ctx context.Context, key string, opts storage.ListOptions,
 		return c.delegateList(ctx, key, opts, listObj, recursive)
 	}
 
-	trace := utiltrace.New("cacher list", utiltrace.Field{"type", c.objectType.String()})
+	trace := utiltrace.New("cacher list", utiltrace.Field{Key: "type", Value: c.objectType.String()})
 	defer trace.LogIfLong(500 * time.Millisecond)
 
 	c.ready.wait()
@@ -680,7 +680,7 @@ func (c *Cacher) list(ctx context.Context, key string, opts storage.ListOptions,
 	if err != nil {
 		return err
 	}
-	trace.Step("Listed items from cache", utiltrace.Field{"count", len(objs)})
+	trace.Step("Listed items from cache", utiltrace.Field{Key: "count", Value: len(objs)})
 	if len(objs) > listVal.Cap() && pred.Label.Empty() && pred.Field.Empty() {
 		// Resize the slice appropriately, since we already know that none
 		// of the elements will be filtered out.
@@ -696,7 +696,7 @@ func (c *Cacher) list(ctx context.Context, key string, opts storage.ListOptions,
 			listVal.Set(reflect.Append(listVal, reflect.ValueOf(elem.Object).Elem()))
 		}
 	}
-	trace.Step("Filtered items", utiltrace.Field{"count", listVal.Len()})
+	trace.Step("Filtered items", utiltrace.Field{Key: "count", Value: listVal.Len()})
 	if c.versioner != nil {
 		if err := c.versioner.UpdateList(listObj, readResourceVersion, "", nil); err != nil {
 			return err
@@ -992,7 +992,7 @@ func (c *Cacher) finishDispatching() {
 	defer c.Unlock()
 	c.dispatching = false
 	for _, watcher := range c.watchersToStop {
-		watcher.stopThreadUnsafe()
+		watcher.stopLocked()
 	}
 	c.watchersToStop = c.watchersToStop[:0]
 }
@@ -1000,14 +1000,14 @@ func (c *Cacher) finishDispatching() {
 func (c *Cacher) terminateAllWatchers() {
 	c.Lock()
 	defer c.Unlock()
-	c.watchers.terminateAll(c.objectType, c.stopWatcherThreadUnsafe)
+	c.watchers.terminateAll(c.objectType, c.stopWatcherLocked)
 }
 
-func (c *Cacher) stopWatcherThreadUnsafe(watcher *cacheWatcher) {
+func (c *Cacher) stopWatcherLocked(watcher *cacheWatcher) {
 	if c.dispatching {
 		c.watchersToStop = append(c.watchersToStop, watcher)
 	} else {
-		watcher.stopThreadUnsafe()
+		watcher.stopLocked()
 	}
 }
 
@@ -1037,9 +1037,9 @@ func forgetWatcher(c *Cacher, index int, triggerValue string, triggerSupported b
 		defer c.Unlock()
 
 		// It's possible that the watcher is already not in the structure (e.g. in case of
-		// simultaneous Stop() and terminateAllWatchers(), but it is safe to call stopThreadUnsafe()
+		// simultaneous Stop() and terminateAllWatchers(), but it is safe to call stopLocked()
 		// on a watcher multiple times.
-		c.watchers.deleteWatcher(index, triggerValue, triggerSupported, c.stopWatcherThreadUnsafe)
+		c.watchers.deleteWatcher(index, triggerValue, triggerSupported, c.stopWatcherLocked)
 	}
 }
 
@@ -1196,8 +1196,8 @@ func (c *cacheWatcher) Stop() {
 	c.forget()
 }
 
-// we rely on the fact that stopThredUnsafe is actually protected by Cacher.Lock()
-func (c *cacheWatcher) stopThreadUnsafe() {
+// we rely on the fact that stopLocked is actually protected by Cacher.Lock()
+func (c *cacheWatcher) stopLocked() {
 	if !c.stopped {
 		c.stopped = true
 		close(c.done)
@@ -1333,7 +1333,7 @@ func (c *cacheWatcher) sendWatchCacheEvent(event *watchCacheEvent) {
 	// would give us non-determinism.
 	// At the same time, we don't want to block infinitely on putting
 	// to c.result, when c.done is already closed.
-
+	//
 	// This ensures that with c.done already close, we at most once go
 	// into the next select after this. With that, no matter which
 	// statement we choose there, we will deliver only consecutive
@@ -1350,8 +1350,10 @@ func (c *cacheWatcher) sendWatchCacheEvent(event *watchCacheEvent) {
 	}
 }
 
-func (c *cacheWatcher) processEvents(ctx context.Context, initEvents []*watchCacheEvent, resourceVersion uint64) {
+func (c *cacheWatcher) processInterval(ctx context.Context, cacheInterval *watchCacheInterval, resourceVersion uint64) {
 	defer utilruntime.HandleCrash()
+	defer close(c.result)
+	defer c.Stop()
 
 	// Check how long we are processing initEvents.
 	// As long as these are not processed, we are not processing
@@ -1368,22 +1370,46 @@ func (c *cacheWatcher) processEvents(ctx context.Context, initEvents []*watchCac
 	// consider increase size of result buffer in those cases.
 	const initProcessThreshold = 500 * time.Millisecond
 	startTime := time.Now()
-	for _, event := range initEvents {
+
+	initEventCount := 0
+	for {
+		event, err := cacheInterval.Next()
+		if err != nil {
+			// An error indicates that the cache interval
+			// has been invalidated and can no longer serve
+			// events.
+			//
+			// Initially we considered sending an "out-of-history"
+			// Error event in this case, but because historically
+			// such events weren't sent out of the watchCache, we
+			// decided not to. This is still ok, because on watch
+			// closure, the watcher will try to re-instantiate the
+			// watch and then will get an explicit "out-of-history"
+			// window. There is potential for optimization, but for
+			// now, in order to be on the safe side and not break
+			// custom clients, the cost of it is something that we
+			// are fully accepting.
+			klog.Warningf("couldn't retrieve watch event to serve: %#v", err)
+			return
+		}
+		if event == nil {
+			break
+		}
 		c.sendWatchCacheEvent(event)
+		// With some events already sent, update resourceVersion so that
+		// events that were buffered and not yet processed won't be delivered
+		// to this watcher second time causing going back in time.
+		resourceVersion = event.ResourceVersion
+		initEventCount++
 	}
 
 	objType := c.objectType.String()
-	if len(initEvents) > 0 {
-		initCounter.WithLabelValues(objType).Add(float64(len(initEvents)))
-		// With some events already sent, update resourceVersion
-		// so that events that were buffered and not yet processed
-		// won't be delivered to this watcher second time causing
-		// going back in time.
-		resourceVersion = initEvents[len(initEvents)-1].ResourceVersion
+	if initEventCount > 0 {
+		initCounter.WithLabelValues(objType).Add(float64(initEventCount))
 	}
 	processingTime := time.Since(startTime)
 	if processingTime > initProcessThreshold {
-		klog.V(2).Infof("processing %d initEvents of %s (%s) took %v", len(initEvents), objType, c.identifier, processingTime)
+		klog.V(2).Infof("processing %d initEvents of %s (%s) took %v", initEventCount, objType, c.identifier, processingTime)
 	}
 
 	c.process(ctx, resourceVersion)
@@ -1398,8 +1424,6 @@ func (c *cacheWatcher) process(ctx context.Context, resourceVersion uint64) {
 	//   process, but we're leaving this to the tuning phase.
 	utilflowcontrol.WatchInitialized(ctx)
 
-	defer close(c.result)
-	defer c.Stop()
 	for {
 		select {
 		case event, ok := <-c.input:
