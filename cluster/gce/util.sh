@@ -749,7 +749,6 @@ function construct-linux-kubelet-flags {
   flags="$(construct-common-kubelet-flags)"
   # Keep in sync with CONTAINERIZED_MOUNTER_HOME in configure-helper.sh
   flags+=" --experimental-mounter-path=/home/kubernetes/containerized_mounter/mounter"
-  flags+=" --experimental-check-node-capabilities-before-mount=true"
   # Keep in sync with the mkdir command in configure-helper.sh (until the TODO is resolved)
   flags+=" --cert-dir=/var/lib/kubelet/pki/"
 
@@ -1176,6 +1175,7 @@ CONTAINER_RUNTIME: $(yaml-quote "${CONTAINER_RUNTIME:-}")
 CONTAINER_RUNTIME_ENDPOINT: $(yaml-quote "${CONTAINER_RUNTIME_ENDPOINT:-}")
 CONTAINER_RUNTIME_NAME: $(yaml-quote "${CONTAINER_RUNTIME_NAME:-}")
 CONTAINER_RUNTIME_TEST_HANDLER: $(yaml-quote "${CONTAINER_RUNTIME_TEST_HANDLER:-}")
+CONTAINERD_INFRA_CONTAINER: $(yaml-quote "${CONTAINER_INFRA_CONTAINER:-}")
 UBUNTU_INSTALL_CONTAINERD_VERSION: $(yaml-quote "${UBUNTU_INSTALL_CONTAINERD_VERSION:-}")
 UBUNTU_INSTALL_RUNC_VERSION: $(yaml-quote "${UBUNTU_INSTALL_RUNC_VERSION:-}")
 NODE_LOCAL_SSDS_EXT: $(yaml-quote "${NODE_LOCAL_SSDS_EXT:-}")
@@ -1529,6 +1529,7 @@ NODE_BINARY_TAR_URL: $(yaml-quote "${NODE_BINARY_TAR_URL}")
 NODE_BINARY_TAR_HASH: $(yaml-quote "${NODE_BINARY_TAR_HASH}")
 CSI_PROXY_STORAGE_PATH: $(yaml-quote "${CSI_PROXY_STORAGE_PATH}")
 CSI_PROXY_VERSION: $(yaml-quote "${CSI_PROXY_VERSION}")
+CSI_PROXY_FLAGS: $(yaml-quote "${CSI_PROXY_FLAGS}")
 ENABLE_CSI_PROXY: $(yaml-quote "${ENABLE_CSI_PROXY}")
 K8S_DIR: $(yaml-quote "${WINDOWS_K8S_DIR}")
 NODE_DIR: $(yaml-quote "${WINDOWS_NODE_DIR}")

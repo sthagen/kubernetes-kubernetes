@@ -6,13 +6,13 @@ go 1.16
 
 require (
 	github.com/google/gofuzz v1.1.0
-	github.com/spf13/cobra v1.2.1
+	github.com/spf13/cobra v1.4.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/apiserver v0.0.0
 	k8s.io/client-go v0.0.0
 	k8s.io/code-generator v0.0.0
 	k8s.io/component-base v0.0.0
-	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65
+	k8s.io/kube-openapi v0.0.0-20220316025549-ddc66922ab18
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
 )
 

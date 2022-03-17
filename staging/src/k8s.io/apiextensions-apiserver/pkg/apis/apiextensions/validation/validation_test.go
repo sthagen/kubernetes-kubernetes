@@ -17,6 +17,7 @@ limitations under the License.
 package validation
 
 import (
+	"context"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -57,6 +58,13 @@ func immutable(path ...string) validationMatch {
 }
 func forbidden(path ...string) validationMatch {
 	return validationMatch{path: field.NewPath(path[0], path[1:]...), errorType: field.ErrorTypeForbidden}
+}
+func notImplemented(path ...string) validationMatch {
+	return validationMatch{
+		path:      field.NewPath(path[0], path[1:]...),
+		errorType: field.ErrorTypeInvalid,
+		contains:  "not yet implemented",
+	}
 }
 
 func (v validationMatch) matches(err *field.Error) bool {
@@ -4065,7 +4073,8 @@ func TestValidateCustomResourceDefinition(t *testing.T) {
 			if tc.resource.Spec.Conversion != nil && tc.resource.Spec.Conversion.Strategy == apiextensions.WebhookConverter && len(tc.resource.Spec.Conversion.ConversionReviewVersions) == 0 {
 				tc.resource.Spec.Conversion.ConversionReviewVersions = []string{"v1beta1"}
 			}
-			errs := ValidateCustomResourceDefinition(tc.resource)
+			ctx := context.TODO()
+			errs := ValidateCustomResourceDefinition(ctx, tc.resource)
 			seenErrs := make([]bool, len(errs))
 
 			for _, expectedError := range tc.errors {
@@ -6192,7 +6201,8 @@ func TestValidateCustomResourceDefinitionUpdate(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			errs := ValidateCustomResourceDefinitionUpdate(tc.resource, tc.old)
+			ctx := context.TODO()
+			errs := ValidateCustomResourceDefinitionUpdate(ctx, tc.resource, tc.old)
 			seenErrs := make([]bool, len(errs))
 
 			for _, expectedError := range tc.errors {
@@ -7588,10 +7598,378 @@ func TestValidateCustomResourceDefinitionValidation(t *testing.T) {
 				invalid("spec.validation.openAPIV3Schema.properties[value].x-kubernetes-validations[2].message"),
 			},
 		},
+		{
+			name: "forbid transition rule on element of list of type atomic",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type:      "array",
+							XListType: strPtr("atomic"),
+							Items: &apiextensions.JSONSchemaPropsOrArray{
+								Schema: &apiextensions.JSONSchemaProps{
+									Type: "string",
+									XValidations: apiextensions.ValidationRules{
+										{Rule: "self == oldSelf"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				invalid("spec.validation.openAPIV3Schema.properties[value].items.x-kubernetes-validations[0].rule"),
+			},
+		},
+		{
+			name: "forbid transition rule on element of list defaulting to type atomic",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type: "array",
+							Items: &apiextensions.JSONSchemaPropsOrArray{
+								Schema: &apiextensions.JSONSchemaProps{
+									Type: "string",
+									XValidations: apiextensions.ValidationRules{
+										{Rule: "self == oldSelf"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				invalid("spec.validation.openAPIV3Schema.properties[value].items.x-kubernetes-validations[0].rule"),
+			},
+		},
+		{
+			name: "allow transition rule on list of type atomic",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type:      "array",
+							XListType: strPtr("atomic"),
+							Items: &apiextensions.JSONSchemaPropsOrArray{
+								Schema: &apiextensions.JSONSchemaProps{
+									Type: "string",
+								},
+							},
+							XValidations: apiextensions.ValidationRules{
+								{Rule: "self == oldSelf"},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				notImplemented("spec.validation.openAPIV3Schema.properties[value].x-kubernetes-validations[0].rule"),
+			},
+		},
+		{
+			name: "allow transition rule on list defaulting to type atomic",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type: "array",
+							Items: &apiextensions.JSONSchemaPropsOrArray{
+								Schema: &apiextensions.JSONSchemaProps{
+									Type: "string",
+								},
+							},
+							XValidations: apiextensions.ValidationRules{
+								{Rule: "self == oldSelf"},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				notImplemented("spec.validation.openAPIV3Schema.properties[value].x-kubernetes-validations[0].rule"),
+			},
+		},
+		{
+			name: "forbid transition rule on element of list of type set",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type:      "array",
+							XListType: strPtr("set"),
+							Items: &apiextensions.JSONSchemaPropsOrArray{
+								Schema: &apiextensions.JSONSchemaProps{
+									Type: "string",
+									XValidations: apiextensions.ValidationRules{
+										{Rule: "self == oldSelf"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				invalid("spec.validation.openAPIV3Schema.properties[value].items.x-kubernetes-validations[0].rule"),
+			},
+		},
+		{
+			name: "allow transition rule on list of type set",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type:      "array",
+							XListType: strPtr("set"),
+							Items: &apiextensions.JSONSchemaPropsOrArray{
+								Schema: &apiextensions.JSONSchemaProps{
+									Type: "string",
+								},
+							},
+							XValidations: apiextensions.ValidationRules{
+								{Rule: "self == oldSelf"},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				notImplemented("spec.validation.openAPIV3Schema.properties[value].x-kubernetes-validations[0].rule"),
+			},
+		},
+		{
+			name: "allow transition rule on element of list of type map",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type:         "array",
+							XListType:    strPtr("map"),
+							XListMapKeys: []string{"name"},
+							Items: &apiextensions.JSONSchemaPropsOrArray{
+								Schema: &apiextensions.JSONSchemaProps{
+									Type: "object",
+									XValidations: apiextensions.ValidationRules{
+										{Rule: "self == oldSelf"},
+									},
+									Required: []string{"name"},
+									Properties: map[string]apiextensions.JSONSchemaProps{
+										"name": {Type: "string"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				notImplemented("spec.validation.openAPIV3Schema.properties[value].items.x-kubernetes-validations[0].rule"),
+			},
+		},
+		{
+			name: "allow transition rule on list of type map",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type:         "array",
+							XListType:    strPtr("map"),
+							XListMapKeys: []string{"name"},
+							Items: &apiextensions.JSONSchemaPropsOrArray{
+								Schema: &apiextensions.JSONSchemaProps{
+									Type:     "object",
+									Required: []string{"name"},
+									Properties: map[string]apiextensions.JSONSchemaProps{
+										"name": {Type: "string"},
+									},
+								},
+							},
+							XValidations: apiextensions.ValidationRules{
+								{Rule: "self == oldSelf"},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				notImplemented("spec.validation.openAPIV3Schema.properties[value].x-kubernetes-validations[0].rule"),
+			},
+		},
+		{
+			name: "allow transition rule on element of map of type granular",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type:     "object",
+							XMapType: strPtr("granular"),
+							Properties: map[string]apiextensions.JSONSchemaProps{
+								"subfield": {
+									Type: "string",
+									XValidations: apiextensions.ValidationRules{
+										{Rule: "self == oldSelf"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				notImplemented("spec.validation.openAPIV3Schema.properties[value].properties[subfield].x-kubernetes-validations[0].rule"),
+			},
+		},
+		{
+			name: "forbid transition rule on element of map of unrecognized type",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type:     "object",
+							XMapType: strPtr("future"),
+							Properties: map[string]apiextensions.JSONSchemaProps{
+								"subfield": {
+									Type: "string",
+									XValidations: apiextensions.ValidationRules{
+										{Rule: "self == oldSelf"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				invalid("spec.validation.openAPIV3Schema.properties[value].properties[subfield].x-kubernetes-validations[0].rule"),
+				unsupported("spec.validation.openAPIV3Schema.properties[value].x-kubernetes-map-type"),
+			},
+		},
+		{
+			name: "allow transition rule on element of map defaulting to type granular",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type: "object",
+							Properties: map[string]apiextensions.JSONSchemaProps{
+								"subfield": {
+									Type: "string",
+									XValidations: apiextensions.ValidationRules{
+										{Rule: "self == oldSelf"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				notImplemented("spec.validation.openAPIV3Schema.properties[value].properties[subfield].x-kubernetes-validations[0].rule"),
+			},
+		},
+		{
+			name: "allow transition rule on map of type granular",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type:     "object",
+							XMapType: strPtr("granular"),
+							XValidations: apiextensions.ValidationRules{
+								{Rule: "self == oldSelf"},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				notImplemented("spec.validation.openAPIV3Schema.properties[value].x-kubernetes-validations[0].rule"),
+			},
+		},
+		{
+			name: "allow transition rule on map defaulting to type granular",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type: "object",
+							XValidations: apiextensions.ValidationRules{
+								{Rule: "self == oldSelf"},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				notImplemented("spec.validation.openAPIV3Schema.properties[value].x-kubernetes-validations[0].rule"),
+			},
+		},
+		{
+			name: "allow transition rule on element of map of type atomic",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type:     "object",
+							XMapType: strPtr("atomic"),
+							Properties: map[string]apiextensions.JSONSchemaProps{
+								"subfield": {
+									Type: "object",
+									XValidations: apiextensions.ValidationRules{
+										{Rule: "self == oldSelf"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				notImplemented("spec.validation.openAPIV3Schema.properties[value].properties[subfield].x-kubernetes-validations[0].rule"),
+			},
+		},
+		{
+			name: "allow transition rule on map of type atomic",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensions.JSONSchemaProps{
+						"value": {
+							Type:     "object",
+							XMapType: strPtr("atomic"),
+							XValidations: apiextensions.ValidationRules{
+								{Rule: "self == oldSelf"},
+							},
+						},
+					},
+				},
+			},
+			expectedErrors: []validationMatch{
+				notImplemented("spec.validation.openAPIV3Schema.properties[value].x-kubernetes-validations[0].rule"),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := validateCustomResourceDefinitionValidation(&tt.input, tt.statusEnabled, tt.opts, field.NewPath("spec", "validation"))
+			ctx := context.TODO()
+			got := validateCustomResourceDefinitionValidation(ctx, &tt.input, tt.statusEnabled, tt.opts, field.NewPath("spec", "validation"))
 
 			seenErrs := make([]bool, len(got))
 

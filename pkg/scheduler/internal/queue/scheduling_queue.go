@@ -34,12 +34,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/informers"
 	listersv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/interpodaffinity"
 	"k8s.io/kubernetes/pkg/scheduler/internal/heap"
@@ -280,9 +278,7 @@ func NewPriorityQueue(
 	}
 	pq.cond.L = &pq.lock
 	pq.podBackoffQ = heap.NewWithRecorder(podInfoKeyFunc, pq.podsCompareBackoffCompleted, metrics.NewBackoffPodsRecorder())
-	if utilfeature.DefaultFeatureGate.Enabled(features.PodAffinityNamespaceSelector) {
-		pq.nsLister = informerFactory.Core().V1().Namespaces().Lister()
-	}
+	pq.nsLister = informerFactory.Core().V1().Namespaces().Lister()
 
 	return pq
 }
@@ -408,6 +404,9 @@ func (p *PriorityQueue) AddUnschedulableIfNotPresent(pInfo *framework.QueuedPodI
 
 	// If a move request has been received, move it to the BackoffQ, otherwise move
 	// it to unschedulableQ.
+	for plugin := range pInfo.UnschedulablePlugins {
+		metrics.UnschedulableReason(plugin, pInfo.Pod.Spec.SchedulerName).Inc()
+	}
 	if p.moveRequestCycle >= podSchedulingCycle {
 		if err := p.podBackoffQ.Add(pInfo); err != nil {
 			return fmt.Errorf("error adding pod %v to the backoff queue: %v", pod.Name, err)
@@ -416,6 +415,7 @@ func (p *PriorityQueue) AddUnschedulableIfNotPresent(pInfo *framework.QueuedPodI
 	} else {
 		p.unschedulableQ.addOrUpdate(pInfo)
 		metrics.SchedulerQueueIncomingPods.WithLabelValues("unschedulable", ScheduleAttemptFailure).Inc()
+
 	}
 
 	p.PodNominator.AddNominatedPod(pInfo.PodInfo, nil)
@@ -656,15 +656,13 @@ func (p *PriorityQueue) movePodsToActiveOrBackoffQueue(podInfoList []*framework.
 // any affinity term that matches "pod".
 // NOTE: this function assumes lock has been acquired in caller.
 func (p *PriorityQueue) getUnschedulablePodsWithMatchingAffinityTerm(pod *v1.Pod) []*framework.QueuedPodInfo {
-	nsSelectorEnabled := p.nsLister != nil
 	var nsLabels labels.Set
-	if nsSelectorEnabled {
-		nsLabels = interpodaffinity.GetNamespaceLabelsSnapshot(pod.Namespace, p.nsLister)
-	}
+	nsLabels = interpodaffinity.GetNamespaceLabelsSnapshot(pod.Namespace, p.nsLister)
+
 	var podsToMove []*framework.QueuedPodInfo
 	for _, pInfo := range p.unschedulableQ.podInfoMap {
 		for _, term := range pInfo.RequiredAffinityTerms {
-			if term.Matches(pod, nsLabels, nsSelectorEnabled) {
+			if term.Matches(pod, nsLabels) {
 				podsToMove = append(podsToMove, pInfo)
 				break
 			}
@@ -946,6 +944,9 @@ func MakeNextPodFunc(queue SchedulingQueue) func() *framework.QueuedPodInfo {
 		podInfo, err := queue.Pop()
 		if err == nil {
 			klog.V(4).InfoS("About to try and schedule pod", "pod", klog.KObj(podInfo.Pod))
+			for plugin := range podInfo.UnschedulablePlugins {
+				metrics.UnschedulableReason(plugin, podInfo.Pod.Spec.SchedulerName).Dec()
+			}
 			return podInfo
 		}
 		klog.ErrorS(err, "Error while retrieving next pod from scheduling queue")

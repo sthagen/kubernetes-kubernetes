@@ -311,10 +311,7 @@ func (d *dummyStorage) Watch(_ context.Context, _ string, _ storage.ListOptions)
 func (d *dummyStorage) Get(_ context.Context, _ string, _ storage.GetOptions, _ runtime.Object) error {
 	return d.err
 }
-func (d *dummyStorage) GetToList(_ context.Context, _ string, _ storage.ListOptions, _ runtime.Object) error {
-	return d.err
-}
-func (d *dummyStorage) List(_ context.Context, _ string, _ storage.ListOptions, listObj runtime.Object) error {
+func (d *dummyStorage) GetList(_ context.Context, _ string, _ storage.ListOptions, listObj runtime.Object) error {
 	podList := listObj.(*example.PodList)
 	podList.ListMeta = metav1.ListMeta{ResourceVersion: "100"}
 	return d.err
@@ -326,7 +323,7 @@ func (d *dummyStorage) Count(_ string) (int64, error) {
 	return 0, fmt.Errorf("unimplemented")
 }
 
-func TestListCacheBypass(t *testing.T) {
+func TestGetListCacheBypass(t *testing.T) {
 	backingStorage := &dummyStorage{}
 	cacher, _, err := newTestCacher(backingStorage)
 	if err != nil {
@@ -344,24 +341,26 @@ func TestListCacheBypass(t *testing.T) {
 
 	// Inject error to underlying layer and check if cacher is not bypassed.
 	backingStorage.err = errDummy
-	err = cacher.List(context.TODO(), "pods/ns", storage.ListOptions{
+	err = cacher.GetList(context.TODO(), "pods/ns", storage.ListOptions{
 		ResourceVersion: "0",
 		Predicate:       pred,
+		Recursive:       true,
 	}, result)
 	if err != nil {
-		t.Errorf("List with Limit and RV=0 should be served from cache: %v", err)
+		t.Errorf("GetList with Limit and RV=0 should be served from cache: %v", err)
 	}
 
-	err = cacher.List(context.TODO(), "pods/ns", storage.ListOptions{
+	err = cacher.GetList(context.TODO(), "pods/ns", storage.ListOptions{
 		ResourceVersion: "",
 		Predicate:       pred,
+		Recursive:       true,
 	}, result)
 	if err != errDummy {
-		t.Errorf("List with Limit without RV=0 should bypass cacher: %v", err)
+		t.Errorf("GetList with Limit without RV=0 should bypass cacher: %v", err)
 	}
 }
 
-func TestGetToListCacheBypass(t *testing.T) {
+func TestGetListNonRecursiveCacheBypass(t *testing.T) {
 	backingStorage := &dummyStorage{}
 	cacher, _, err := newTestCacher(backingStorage)
 	if err != nil {
@@ -379,20 +378,20 @@ func TestGetToListCacheBypass(t *testing.T) {
 
 	// Inject error to underlying layer and check if cacher is not bypassed.
 	backingStorage.err = errDummy
-	err = cacher.GetToList(context.TODO(), "pods/ns", storage.ListOptions{
+	err = cacher.GetList(context.TODO(), "pods/ns", storage.ListOptions{
 		ResourceVersion: "0",
 		Predicate:       pred,
 	}, result)
 	if err != nil {
-		t.Errorf("GetToList with Limit and RV=0 should be served from cache: %v", err)
+		t.Errorf("GetList with Limit and RV=0 should be served from cache: %v", err)
 	}
 
-	err = cacher.GetToList(context.TODO(), "pods/ns", storage.ListOptions{
+	err = cacher.GetList(context.TODO(), "pods/ns", storage.ListOptions{
 		ResourceVersion: "",
 		Predicate:       pred,
 	}, result)
 	if err != errDummy {
-		t.Errorf("List with Limit without RV=0 should bypass cacher: %v", err)
+		t.Errorf("GetList with Limit without RV=0 should bypass cacher: %v", err)
 	}
 }
 
@@ -1371,24 +1370,17 @@ func testCachingObjects(t *testing.T, watchersCount int) {
 			}
 
 			var object runtime.Object
-			if watchersCount >= 3 {
-				if _, ok := event.Object.(runtime.CacheableObject); !ok {
-					t.Fatalf("Object in %s event should support caching: %#v", event.Type, event.Object)
-				}
-				object = event.Object.(runtime.CacheableObject).GetObject()
-			} else {
-				if _, ok := event.Object.(runtime.CacheableObject); ok {
-					t.Fatalf("Object in %s event should not support caching: %#v", event.Type, event.Object)
-				}
-				object = event.Object.DeepCopyObject()
+			if _, ok := event.Object.(runtime.CacheableObject); !ok {
+				t.Fatalf("Object in %s event should support caching: %#v", event.Type, event.Object)
 			}
+			object = event.Object.(runtime.CacheableObject).GetObject()
 
 			if event.Type == watch.Deleted {
 				resourceVersion, err := cacher.versioner.ObjectResourceVersion(cacher.watchCache.cache[index].PrevObject)
 				if err != nil {
 					t.Fatalf("Failed to parse resource version: %v", err)
 				}
-				updateResourceVersionIfNeeded(object, cacher.versioner, resourceVersion)
+				updateResourceVersion(object, cacher.versioner, resourceVersion)
 			}
 
 			var e runtime.Object

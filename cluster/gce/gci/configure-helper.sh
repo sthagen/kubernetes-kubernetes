@@ -505,6 +505,20 @@ function ensure-local-ssds-ephemeral-storage() {
   safe-bind-mount "${ephemeral_mountpoint}/log_pods" "/var/log/pods"
 }
 
+# set journald configuration
+function setup-journald() {
+  if [[ "${SET_JOURNALD_CONFIGURATION:-true}" = "true" ]]; then
+  cat <<EOF > /etc/systemd/journald.conf
+[Journal]
+Storage=persistent
+SystemMaxUse=1G
+SystemMaxFileSize=100M
+RuntimeMaxUse=100M
+EOF
+    systemctl restart systemd-journald.service
+  fi
+}
+
 # Installs logrotate configuration files
 function setup-logrotate() {
   mkdir -p /etc/logrotate.d/
@@ -3036,7 +3050,7 @@ spec:
   - name: vol
   containers:
   - name: pv-recycler
-    image: k8s.gcr.io/busybox:1.27
+    image: k8s.gcr.io/debian-base:v2.0.0
     command:
     - /bin/sh
     args:
@@ -3046,6 +3060,11 @@ spec:
     - name: vol
       mountPath: /scrub
 EOF
+
+# fixup the alternate registry if specified
+if [[ -n "${KUBE_ADDON_REGISTRY:-}" ]]; then
+  sed -i -e "s@k8s.gcr.io@${KUBE_ADDON_REGISTRY}@g" "${PV_RECYCLER_OVERRIDE_TEMPLATE}"
+fi
 }
 
 function wait-till-apiserver-ready() {
@@ -3116,6 +3135,7 @@ oom_score = -999
 [plugins."io.containerd.grpc.v1.cri"]
   stream_server_address = "127.0.0.1"
   max_container_log_line_size = ${CONTAINERD_MAX_CONTAINER_LOG_LINE:-262144}
+  sandbox_image = "${CONTAINERD_INFRA_CONTAINER:-"k8s.gcr.io/pause:3.6"}"
 [plugins."io.containerd.grpc.v1.cri".cni]
   bin_dir = "${KUBE_HOME}/bin"
   conf_dir = "/etc/cni/net.d"
@@ -3404,6 +3424,7 @@ function main() {
   log-wrap 'CreateDirs' create-dirs
   log-wrap 'EnsureLocalSSDs' ensure-local-ssds
   log-wrap 'SetupKubeletDir' setup-kubelet-dir
+  log-wrap 'SetupJournald' setup-journald
   log-wrap 'SetupLogrotate' setup-logrotate
   if [[ "${KUBERNETES_MASTER:-}" == "true" ]]; then
     log-wrap 'MountMasterPD' mount-master-pd

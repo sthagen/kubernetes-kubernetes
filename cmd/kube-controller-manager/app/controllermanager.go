@@ -64,6 +64,7 @@ import (
 	"k8s.io/controller-manager/pkg/informerfactory"
 	"k8s.io/controller-manager/pkg/leadermigration"
 	"k8s.io/klog/v2"
+	kubefeatures "k8s.io/kubernetes/pkg/features"
 
 	"k8s.io/kubernetes/cmd/kube-controller-manager/app/config"
 	"k8s.io/kubernetes/cmd/kube-controller-manager/app/options"
@@ -173,6 +174,8 @@ func ResyncPeriod(c *config.CompletedConfig) func() time.Duration {
 func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 	// To help debugging, immediately log version
 	klog.Infof("Version: %+v", version.Get())
+
+	klog.InfoS("Golang settings", "GOGC", os.Getenv("GOGC"), "GOMAXPROCS", os.Getenv("GOMAXPROCS"), "GOTRACEBACK", os.Getenv("GOTRACEBACK"))
 
 	if cfgz, err := configz.New(ConfigzName); err == nil {
 		cfgz.Set(c.ComponentConfig)
@@ -631,6 +634,7 @@ func (c serviceAccountTokenControllerStarter) startServiceAccountTokenController
 		serviceaccountcontroller.TokensControllerOptions{
 			TokenGenerator: tokenGenerator,
 			RootCA:         rootCA,
+			AutoGenerate:   !utilfeature.DefaultFeatureGate.Enabled(kubefeatures.LegacyServiceAccountTokenNoAutoGeneration),
 		},
 	)
 	if err != nil {

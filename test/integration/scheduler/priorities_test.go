@@ -22,16 +22,13 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/kube-scheduler/config/v1beta3"
-	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/scheduler"
 	configtesting "k8s.io/kubernetes/pkg/scheduler/apis/config/testing"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/imagelocality"
@@ -176,7 +173,7 @@ func TestNodeResourcesScoring(t *testing.T) {
 }
 
 // TestNodeAffinityScoring verifies that scheduler's node affinity priority function
-// works correctly.s
+// works correctly.
 func TestNodeAffinityScoring(t *testing.T) {
 	testCtx := initTestSchedulerForPriorityTest(t, nodeaffinity.Name)
 	defer testutils.CleanupTest(t, testCtx)
@@ -298,7 +295,6 @@ func TestPodAffinityScoring(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.PodAffinityNamespaceSelector, true)()
 			testCtx := initTestSchedulerForPriorityTest(t, interpodaffinity.Name)
 			defer testutils.CleanupTest(t, testCtx)
 			// Add a few nodes.
@@ -445,7 +441,7 @@ func TestPodTopologySpreadScoring(t *testing.T) {
 		{
 			name: "place pod on a ~0~/1/2/3 cluster with MaxSkew=1, node-1 is the preferred fit",
 			incomingPod: st.MakePod().Namespace(ns).Name("p").Label("foo", "").Container(pause).
-				SpreadConstraint(1, "node", softSpread, st.MakeLabelSelector().Exists("foo").Obj()).
+				SpreadConstraint(1, "node", softSpread, st.MakeLabelSelector().Exists("foo").Obj(), nil).
 				Obj(),
 			existingPods: []*v1.Pod{
 				st.MakePod().Namespace(ns).Name("p1").Node("node-1").Label("foo", "").Container(pause).Obj(),
@@ -461,8 +457,8 @@ func TestPodTopologySpreadScoring(t *testing.T) {
 		{
 			name: "combined with hardSpread constraint on a ~4~/0/1/2 cluster",
 			incomingPod: st.MakePod().Namespace(ns).Name("p").Label("foo", "").Container(pause).
-				SpreadConstraint(1, "node", softSpread, st.MakeLabelSelector().Exists("foo").Obj()).
-				SpreadConstraint(1, "zone", hardSpread, st.MakeLabelSelector().Exists("foo").Obj()).
+				SpreadConstraint(1, "node", softSpread, st.MakeLabelSelector().Exists("foo").Obj(), nil).
+				SpreadConstraint(1, "zone", hardSpread, st.MakeLabelSelector().Exists("foo").Obj(), nil).
 				Obj(),
 			existingPods: []*v1.Pod{
 				st.MakePod().Namespace(ns).Name("p0a").Node("node-0").Label("foo", "").Container(pause).Obj(),

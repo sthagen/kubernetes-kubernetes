@@ -51,7 +51,7 @@ import (
 	openapitesting "k8s.io/kubectl/pkg/util/openapi/testing"
 	"k8s.io/kubectl/pkg/validation"
 
-	openapi_v2 "github.com/googleapis/gnostic/openapiv2"
+	openapi_v2 "github.com/google/gnostic/openapiv2"
 )
 
 // InternalType is the schema for internal type
@@ -443,6 +443,12 @@ func NewTestFactory() *TestFactory {
 // WithNamespace is used to mention namespace reactively
 func (f *TestFactory) WithNamespace(ns string) *TestFactory {
 	f.kubeConfigFlags.WithNamespace(ns)
+	return f
+}
+
+// WithClientConfig sets the client config to use
+func (f *TestFactory) WithClientConfig(clientConfig clientcmd.ClientConfig) *TestFactory {
+	f.kubeConfigFlags.WithClientConfig(clientConfig)
 	return f
 }
 
