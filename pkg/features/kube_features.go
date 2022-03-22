@@ -391,6 +391,7 @@ const (
 	// owner: @egernst
 	// alpha: v1.16
 	// beta: v1.18
+	// ga: v1.24
 	//
 	// Enables PodOverhead, for accounting pod overheads which are specific to a given RuntimeClass
 	PodOverhead featuregate.Feature = "PodOverhead"
@@ -625,6 +626,7 @@ const (
 	// kep: http://kep.k8s.io/1959
 	// alpha: v1.21
 	// beta: v1.22
+	// GA: v1.24
 	//
 	// Enable support multiple Service "type: LoadBalancer" implementations in a cluster by specifying LoadBalancerClass
 	ServiceLoadBalancerClass featuregate.Feature = "ServiceLoadBalancerClass"
@@ -722,6 +724,7 @@ const (
 
 	// owner: @enj
 	// beta: v1.22
+	// ga: v1.24
 	//
 	// Allows clients to request a duration for certificates issued via the Kubernetes CSR API.
 	CSRDuration featuregate.Feature = "CSRDuration"
@@ -893,7 +896,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	KubeletPodResources:                            {Default: true, PreRelease: featuregate.Beta},
 	LocalStorageCapacityIsolationFSQuotaMonitoring: {Default: false, PreRelease: featuregate.Alpha},
 	NonPreemptingPriority:                          {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.25
-	PodOverhead:                                    {Default: true, PreRelease: featuregate.Beta},
+	PodOverhead:                                    {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.26
 	IPv6DualStack:                                  {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.25
 	EndpointSlice:                                  {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.25
 	EndpointSliceProxying:                          {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.25
@@ -923,9 +926,9 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	NodeSwap:                                       {Default: false, PreRelease: featuregate.Alpha},
 	PodDeletionCost:                                {Default: true, PreRelease: featuregate.Beta},
 	StatefulSetAutoDeletePVC:                       {Default: false, PreRelease: featuregate.Alpha},
-	TopologyAwareHints:                             {Default: false, PreRelease: featuregate.Beta},
+	TopologyAwareHints:                             {Default: true, PreRelease: featuregate.Beta},
 	PodAffinityNamespaceSelector:                   {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.26
-	ServiceLoadBalancerClass:                       {Default: true, PreRelease: featuregate.Beta},
+	ServiceLoadBalancerClass:                       {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.26
 	IngressClassNamespacedParams:                   {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.25
 	ServiceInternalTrafficPolicy:                   {Default: true, PreRelease: featuregate.Beta},
 	LogarithmicScaleDown:                           {Default: true, PreRelease: featuregate.Beta},
@@ -940,7 +943,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	SeccompDefault:                                 {Default: false, PreRelease: featuregate.Alpha},
 	PodSecurity:                                    {Default: true, PreRelease: featuregate.Beta},
 	ReadWriteOncePod:                               {Default: false, PreRelease: featuregate.Alpha},
-	CSRDuration:                                    {Default: true, PreRelease: featuregate.Beta},
+	CSRDuration:                                    {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.26
 	DelegateFSGroupToCSIDriver:                     {Default: true, PreRelease: featuregate.Beta},
 	KubeletInUserNamespace:                         {Default: false, PreRelease: featuregate.Alpha},
 	MemoryQoS:                                      {Default: false, PreRelease: featuregate.Alpha},

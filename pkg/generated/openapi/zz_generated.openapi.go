@@ -936,10 +936,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"k8s.io/client-go/pkg/apis/clientauthentication/v1.ExecCredential":                                schema_pkg_apis_clientauthentication_v1_ExecCredential(ref),
 		"k8s.io/client-go/pkg/apis/clientauthentication/v1.ExecCredentialSpec":                            schema_pkg_apis_clientauthentication_v1_ExecCredentialSpec(ref),
 		"k8s.io/client-go/pkg/apis/clientauthentication/v1.ExecCredentialStatus":                          schema_pkg_apis_clientauthentication_v1_ExecCredentialStatus(ref),
-		"k8s.io/client-go/pkg/apis/clientauthentication/v1alpha1.ExecCredential":                          schema_pkg_apis_clientauthentication_v1alpha1_ExecCredential(ref),
-		"k8s.io/client-go/pkg/apis/clientauthentication/v1alpha1.ExecCredentialSpec":                      schema_pkg_apis_clientauthentication_v1alpha1_ExecCredentialSpec(ref),
-		"k8s.io/client-go/pkg/apis/clientauthentication/v1alpha1.ExecCredentialStatus":                    schema_pkg_apis_clientauthentication_v1alpha1_ExecCredentialStatus(ref),
-		"k8s.io/client-go/pkg/apis/clientauthentication/v1alpha1.Response":                                schema_pkg_apis_clientauthentication_v1alpha1_Response(ref),
 		"k8s.io/client-go/pkg/apis/clientauthentication/v1beta1.Cluster":                                  schema_pkg_apis_clientauthentication_v1beta1_Cluster(ref),
 		"k8s.io/client-go/pkg/apis/clientauthentication/v1beta1.ExecCredential":                           schema_pkg_apis_clientauthentication_v1beta1_ExecCredential(ref),
 		"k8s.io/client-go/pkg/apis/clientauthentication/v1beta1.ExecCredentialSpec":                       schema_pkg_apis_clientauthentication_v1beta1_ExecCredentialSpec(ref),
@@ -13641,7 +13637,7 @@ func schema_k8sio_api_certificates_v1_CertificateSigningRequestSpec(ref common.R
 					},
 					"expirationSeconds": {
 						SchemaProps: spec.SchemaProps{
-							Description: "expirationSeconds is the requested duration of validity of the issued certificate. The certificate signer may issue a certificate with a different validity duration so a client must check the delta between the notBefore and and notAfter fields in the issued certificate to determine the actual duration.\n\nThe v1.22+ in-tree implementations of the well-known Kubernetes signers will honor this field as long as the requested duration is not greater than the maximum duration they will honor per the --cluster-signing-duration CLI flag to the Kubernetes controller manager.\n\nCertificate signers may not honor this field for various reasons:\n\n  1. Old signer that is unaware of the field (such as the in-tree\n     implementations prior to v1.22)\n  2. Signer whose configured maximum is shorter than the requested duration\n  3. Signer whose configured minimum is longer than the requested duration\n\nThe minimum valid value for expirationSeconds is 600, i.e. 10 minutes.\n\nAs of v1.22, this field is beta and is controlled via the CSRDuration feature gate.",
+							Description: "expirationSeconds is the requested duration of validity of the issued certificate. The certificate signer may issue a certificate with a different validity duration so a client must check the delta between the notBefore and and notAfter fields in the issued certificate to determine the actual duration.\n\nThe v1.22+ in-tree implementations of the well-known Kubernetes signers will honor this field as long as the requested duration is not greater than the maximum duration they will honor per the --cluster-signing-duration CLI flag to the Kubernetes controller manager.\n\nCertificate signers may not honor this field for various reasons:\n\n  1. Old signer that is unaware of the field (such as the in-tree\n     implementations prior to v1.22)\n  2. Signer whose configured maximum is shorter than the requested duration\n  3. Signer whose configured minimum is longer than the requested duration\n\nThe minimum valid value for expirationSeconds is 600, i.e. 10 minutes.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -13964,7 +13960,7 @@ func schema_k8sio_api_certificates_v1beta1_CertificateSigningRequestSpec(ref com
 					},
 					"expirationSeconds": {
 						SchemaProps: spec.SchemaProps{
-							Description: "expirationSeconds is the requested duration of validity of the issued certificate. The certificate signer may issue a certificate with a different validity duration so a client must check the delta between the notBefore and and notAfter fields in the issued certificate to determine the actual duration.\n\nThe v1.22+ in-tree implementations of the well-known Kubernetes signers will honor this field as long as the requested duration is not greater than the maximum duration they will honor per the --cluster-signing-duration CLI flag to the Kubernetes controller manager.\n\nCertificate signers may not honor this field for various reasons:\n\n  1. Old signer that is unaware of the field (such as the in-tree\n     implementations prior to v1.22)\n  2. Signer whose configured maximum is shorter than the requested duration\n  3. Signer whose configured minimum is longer than the requested duration\n\nThe minimum valid value for expirationSeconds is 600, i.e. 10 minutes.\n\nAs of v1.22, this field is beta and is controlled via the CSRDuration feature gate.",
+							Description: "expirationSeconds is the requested duration of validity of the issued certificate. The certificate signer may issue a certificate with a different validity duration so a client must check the delta between the notBefore and and notAfter fields in the issued certificate to determine the actual duration.\n\nThe v1.22+ in-tree implementations of the well-known Kubernetes signers will honor this field as long as the requested duration is not greater than the maximum duration they will honor per the --cluster-signing-duration CLI flag to the Kubernetes controller manager.\n\nCertificate signers may not honor this field for various reasons:\n\n  1. Old signer that is unaware of the field (such as the in-tree\n     implementations prior to v1.22)\n  2. Signer whose configured maximum is shorter than the requested duration\n  3. Signer whose configured minimum is longer than the requested duration\n\nThe minimum valid value for expirationSeconds is 600, i.e. 10 minutes.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -22081,7 +22077,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 					},
 					"overhead": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Overhead represents the resource overhead associated with running a pod for a given RuntimeClass. This field will be autopopulated at admission time by the RuntimeClass admission controller. If the RuntimeClass admission controller is enabled, overhead must not be set in Pod create requests. The RuntimeClass admission controller will reject Pod create requests which have the overhead already set. If RuntimeClass is configured and selected in the PodSpec, Overhead will be set to the value defined in the corresponding RuntimeClass, otherwise it will remain unset and treated as zero. More info: https://git.k8s.io/enhancements/keps/sig-node/688-pod-overhead/README.md This field is beta-level as of Kubernetes v1.18, and is only honored by servers that enable the PodOverhead feature.",
+							Description: "Overhead represents the resource overhead associated with running a pod for a given RuntimeClass. This field will be autopopulated at admission time by the RuntimeClass admission controller. If the RuntimeClass admission controller is enabled, overhead must not be set in Pod create requests. The RuntimeClass admission controller will reject Pod create requests which have the overhead already set. If RuntimeClass is configured and selected in the PodSpec, Overhead will be set to the value defined in the corresponding RuntimeClass, otherwise it will remain unset and treated as zero. More info: https://git.k8s.io/enhancements/keps/sig-node/688-pod-overhead/README.md",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -34564,7 +34560,7 @@ func schema_k8sio_api_node_v1_RuntimeClass(ref common.ReferenceCallback) common.
 					},
 					"overhead": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Overhead represents the resource overhead associated with running a pod for a given RuntimeClass. For more details, see\n https://kubernetes.io/docs/concepts/scheduling-eviction/pod-overhead/\nThis field is in beta starting v1.18 and is only honored by servers that enable the PodOverhead feature.",
+							Description: "Overhead represents the resource overhead associated with running a pod for a given RuntimeClass. For more details, see\n https://kubernetes.io/docs/concepts/scheduling-eviction/pod-overhead/",
 							Ref:         ref("k8s.io/api/node/v1.Overhead"),
 						},
 					},
@@ -34831,7 +34827,7 @@ func schema_k8sio_api_node_v1alpha1_RuntimeClassSpec(ref common.ReferenceCallbac
 					},
 					"overhead": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Overhead represents the resource overhead associated with running a pod for a given RuntimeClass. For more details, see https://git.k8s.io/enhancements/keps/sig-node/688-pod-overhead/README.md This field is beta-level as of Kubernetes v1.18, and is only honored by servers that enable the PodOverhead feature.",
+							Description: "Overhead represents the resource overhead associated with running a pod for a given RuntimeClass. For more details, see https://git.k8s.io/enhancements/keps/sig-node/688-pod-overhead/README.md",
 							Ref:         ref("k8s.io/api/node/v1alpha1.Overhead"),
 						},
 					},
@@ -34973,7 +34969,7 @@ func schema_k8sio_api_node_v1beta1_RuntimeClass(ref common.ReferenceCallback) co
 					},
 					"overhead": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Overhead represents the resource overhead associated with running a pod for a given RuntimeClass. For more details, see https://git.k8s.io/enhancements/keps/sig-node/688-pod-overhead/README.md This field is beta-level as of Kubernetes v1.18, and is only honored by servers that enable the PodOverhead feature.",
+							Description: "Overhead represents the resource overhead associated with running a pod for a given RuntimeClass. For more details, see https://git.k8s.io/enhancements/keps/sig-node/688-pod-overhead/README.md",
 							Ref:         ref("k8s.io/api/node/v1beta1.Overhead"),
 						},
 					},
@@ -46737,161 +46733,6 @@ func schema_pkg_apis_clientauthentication_v1_ExecCredentialStatus(ref common.Ref
 	}
 }
 
-func schema_pkg_apis_clientauthentication_v1alpha1_ExecCredential(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "ExecCredential is used by exec-based plugins to communicate credentials to HTTP transports.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"spec": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Spec holds information passed to the plugin by the transport. This contains request and runtime specific information, such as if the session is interactive.",
-							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/client-go/pkg/apis/clientauthentication/v1alpha1.ExecCredentialSpec"),
-						},
-					},
-					"status": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Status is filled in by the plugin and holds the credentials that the transport should use to contact the API.",
-							Ref:         ref("k8s.io/client-go/pkg/apis/clientauthentication/v1alpha1.ExecCredentialStatus"),
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/client-go/pkg/apis/clientauthentication/v1alpha1.ExecCredentialSpec", "k8s.io/client-go/pkg/apis/clientauthentication/v1alpha1.ExecCredentialStatus"},
-	}
-}
-
-func schema_pkg_apis_clientauthentication_v1alpha1_ExecCredentialSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "ExecCredentialSpec holds request and runtime specific information provided by the transport.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"response": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Response is populated when the transport encounters HTTP status codes, such as 401, suggesting previous credentials were invalid.",
-							Ref:         ref("k8s.io/client-go/pkg/apis/clientauthentication/v1alpha1.Response"),
-						},
-					},
-					"interactive": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Interactive is true when the transport detects the command is being called from an interactive prompt.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/client-go/pkg/apis/clientauthentication/v1alpha1.Response"},
-	}
-}
-
-func schema_pkg_apis_clientauthentication_v1alpha1_ExecCredentialStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "ExecCredentialStatus holds credentials for the transport to use.\n\nToken and ClientKeyData are sensitive fields. This data should only be transmitted in-memory between client and exec plugin process. Exec plugin itself should at least be protected via file permissions.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"expirationTimestamp": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ExpirationTimestamp indicates a time when the provided credentials expire.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
-						},
-					},
-					"token": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Token is a bearer token used by the client for request authentication.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"clientCertificateData": {
-						SchemaProps: spec.SchemaProps{
-							Description: "PEM-encoded client TLS certificates (including intermediates, if any).",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"clientKeyData": {
-						SchemaProps: spec.SchemaProps{
-							Description: "PEM-encoded private key for the above certificate.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
-	}
-}
-
-func schema_pkg_apis_clientauthentication_v1alpha1_Response(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "Response defines metadata about a failed request, including HTTP status code and response headers.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"header": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Header holds HTTP headers returned by the server.",
-							Type:        []string{"object"},
-							AdditionalProperties: &spec.SchemaOrBool{
-								Allows: true,
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Type: []string{"array"},
-										Items: &spec.SchemaOrArray{
-											Schema: &spec.Schema{
-												SchemaProps: spec.SchemaProps{
-													Default: "",
-													Type:    []string{"string"},
-													Format:  "",
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-					"code": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Code is the HTTP status code returned by the server.",
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
 func schema_pkg_apis_clientauthentication_v1beta1_Cluster(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -49808,8 +49649,24 @@ func schema_k8sio_kube_proxy_config_v1alpha1_KubeProxyWinkernelConfiguration(ref
 							Format:      "",
 						},
 					},
+					"rootHnsEndpointName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RootHnsEndpointName is the name of hnsendpoint that is attached to l2bridge for root network namespace",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"forwardHealthCheckVip": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ForwardHealthCheckVip forwards service VIP for health check port on Windows",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
-				Required: []string{"networkName", "sourceVip", "enableDSR"},
+				Required: []string{"networkName", "sourceVip", "enableDSR", "rootHnsEndpointName", "forwardHealthCheckVip"},
 			},
 		},
 	}
