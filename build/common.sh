@@ -91,7 +91,7 @@ readonly KUBE_CONTAINER_RSYNC_PORT=8730
 
 # These are the default versions (image tags) for their respective base images.
 readonly __default_debian_iptables_version=bullseye-v1.1.0
-readonly __default_go_runner_version=v2.3.1-go1.18rc1-bullseye.0
+readonly __default_go_runner_version=v2.3.1-go1.18-bullseye.0
 readonly __default_setcap_version=bullseye-v1.0.0
 
 # These are the base images for the Docker-wrapped binaries.
@@ -189,8 +189,8 @@ function kube::build::verify_prereqs() {
 
 function kube::build::docker_available_on_osx() {
   if [[ -z "${DOCKER_HOST}" ]]; then
-    if [[ -S "/var/run/docker.sock" ]]; then
-      kube::log::status "Using Docker for MacOS"
+    if [[ -S "/var/run/docker.sock" ]] || [[ -S "$(docker context inspect --format  '{{.Endpoints.docker.Host}}' | awk -F 'unix://' '{print $2}')" ]]; then
+      kube::log::status "Using docker on macOS"
       return 0
     fi
 

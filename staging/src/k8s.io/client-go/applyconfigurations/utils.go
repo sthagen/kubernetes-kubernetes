@@ -46,6 +46,7 @@ import (
 	flowcontrolv1beta2 "k8s.io/api/flowcontrol/v1beta2"
 	imagepolicyv1alpha1 "k8s.io/api/imagepolicy/v1alpha1"
 	networkingv1 "k8s.io/api/networking/v1"
+	networkingv1alpha1 "k8s.io/api/networking/v1alpha1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	nodev1 "k8s.io/api/node/v1"
 	nodev1alpha1 "k8s.io/api/node/v1alpha1"
@@ -91,6 +92,7 @@ import (
 	applyconfigurationsimagepolicyv1alpha1 "k8s.io/client-go/applyconfigurations/imagepolicy/v1alpha1"
 	applyconfigurationsmetav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 	applyconfigurationsnetworkingv1 "k8s.io/client-go/applyconfigurations/networking/v1"
+	applyconfigurationsnetworkingv1alpha1 "k8s.io/client-go/applyconfigurations/networking/v1alpha1"
 	applyconfigurationsnetworkingv1beta1 "k8s.io/client-go/applyconfigurations/networking/v1beta1"
 	applyconfigurationsnodev1 "k8s.io/client-go/applyconfigurations/node/v1"
 	applyconfigurationsnodev1alpha1 "k8s.io/client-go/applyconfigurations/node/v1alpha1"
@@ -953,6 +955,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &applyconfigurationsextensionsv1beta1.NetworkPolicyPortApplyConfiguration{}
 	case extensionsv1beta1.SchemeGroupVersion.WithKind("NetworkPolicySpec"):
 		return &applyconfigurationsextensionsv1beta1.NetworkPolicySpecApplyConfiguration{}
+	case extensionsv1beta1.SchemeGroupVersion.WithKind("NetworkPolicyStatus"):
+		return &applyconfigurationsextensionsv1beta1.NetworkPolicyStatusApplyConfiguration{}
 	case extensionsv1beta1.SchemeGroupVersion.WithKind("PodSecurityPolicy"):
 		return &applyconfigurationsextensionsv1beta1.PodSecurityPolicyApplyConfiguration{}
 	case extensionsv1beta1.SchemeGroupVersion.WithKind("PodSecurityPolicySpec"):
@@ -1191,8 +1195,16 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &applyconfigurationsnetworkingv1.NetworkPolicyPortApplyConfiguration{}
 	case networkingv1.SchemeGroupVersion.WithKind("NetworkPolicySpec"):
 		return &applyconfigurationsnetworkingv1.NetworkPolicySpecApplyConfiguration{}
+	case networkingv1.SchemeGroupVersion.WithKind("NetworkPolicyStatus"):
+		return &applyconfigurationsnetworkingv1.NetworkPolicyStatusApplyConfiguration{}
 	case networkingv1.SchemeGroupVersion.WithKind("ServiceBackendPort"):
 		return &applyconfigurationsnetworkingv1.ServiceBackendPortApplyConfiguration{}
+
+		// Group=networking.k8s.io, Version=v1alpha1
+	case networkingv1alpha1.SchemeGroupVersion.WithKind("ClusterCIDRConfig"):
+		return &applyconfigurationsnetworkingv1alpha1.ClusterCIDRConfigApplyConfiguration{}
+	case networkingv1alpha1.SchemeGroupVersion.WithKind("ClusterCIDRConfigSpec"):
+		return &applyconfigurationsnetworkingv1alpha1.ClusterCIDRConfigSpecApplyConfiguration{}
 
 		// Group=networking.k8s.io, Version=v1beta1
 	case networkingv1beta1.SchemeGroupVersion.WithKind("HTTPIngressPath"):
@@ -1369,6 +1381,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &applyconfigurationsstoragev1.CSINodeDriverApplyConfiguration{}
 	case storagev1.SchemeGroupVersion.WithKind("CSINodeSpec"):
 		return &applyconfigurationsstoragev1.CSINodeSpecApplyConfiguration{}
+	case storagev1.SchemeGroupVersion.WithKind("CSIStorageCapacity"):
+		return &applyconfigurationsstoragev1.CSIStorageCapacityApplyConfiguration{}
 	case storagev1.SchemeGroupVersion.WithKind("StorageClass"):
 		return &applyconfigurationsstoragev1.StorageClassApplyConfiguration{}
 	case storagev1.SchemeGroupVersion.WithKind("TokenRequest"):

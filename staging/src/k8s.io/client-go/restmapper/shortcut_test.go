@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/openapi"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
 )
@@ -265,12 +266,6 @@ func (c *fakeDiscoveryClient) ServerResourcesForGroupVersion(groupVersion string
 	return nil, errors.NewNotFound(schema.GroupResource{}, "")
 }
 
-// Deprecated: use ServerGroupsAndResources instead.
-func (c *fakeDiscoveryClient) ServerResources() ([]*metav1.APIResourceList, error) {
-	_, rs, err := c.ServerGroupsAndResources()
-	return rs, err
-}
-
 func (c *fakeDiscoveryClient) ServerGroupsAndResources() ([]*metav1.APIGroup, []*metav1.APIResourceList, error) {
 	sgs, err := c.ServerGroups()
 	if err != nil {
@@ -301,4 +296,8 @@ func (c *fakeDiscoveryClient) ServerVersion() (*version.Info, error) {
 
 func (c *fakeDiscoveryClient) OpenAPISchema() (*openapi_v2.Document, error) {
 	return &openapi_v2.Document{}, nil
+}
+
+func (c *fakeDiscoveryClient) OpenAPIV3() openapi.Client {
+	panic("implement me")
 }

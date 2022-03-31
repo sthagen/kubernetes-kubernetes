@@ -36,7 +36,7 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	cmdwait "k8s.io/kubectl/pkg/cmd/wait"
 	"k8s.io/kubectl/pkg/rawhttp"
-	"k8s.io/kubectl/pkg/util"
+	"k8s.io/kubectl/pkg/util/completion"
 	"k8s.io/kubectl/pkg/util/i18n"
 	"k8s.io/kubectl/pkg/util/templates"
 )
@@ -81,6 +81,9 @@ var (
 
 		# Delete resources from a directory containing kustomization.yaml - e.g. dir/kustomization.yaml
 		kubectl delete -k dir
+
+		# Delete resources from all files that end with '.json' - i.e. expand wildcard characters in file names
+		kubectl apply -f '*.json'
 
 		# Delete a pod based on the type and name in the JSON passed into stdin
 		cat pod.json | kubectl delete -f -
@@ -141,7 +144,7 @@ func NewCmdDelete(f cmdutil.Factory, streams genericclioptions.IOStreams) *cobra
 		Short:                 i18n.T("Delete resources by file names, stdin, resources and names, or by resources and label selector"),
 		Long:                  deleteLong,
 		Example:               deleteExample,
-		ValidArgsFunction:     util.ResourceTypeAndNameCompletionFunc(f),
+		ValidArgsFunction:     completion.ResourceTypeAndNameCompletionFunc(f),
 		Run: func(cmd *cobra.Command, args []string) {
 			o, err := deleteFlags.ToOptions(nil, streams)
 			cmdutil.CheckErr(err)

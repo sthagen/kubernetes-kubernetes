@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	autoscalingv2beta2 "k8s.io/api/autoscaling/v2beta2"
@@ -34,9 +35,11 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	discoveryv1beta1 "k8s.io/api/discovery/v1beta1"
 	networkingv1 "k8s.io/api/networking/v1"
+	networkingv1alpha1 "k8s.io/api/networking/v1alpha1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -340,6 +343,74 @@ func TestDescribePodPriority(t *testing.T) {
 	}
 	if !strings.Contains(out, "high-priority") || !strings.Contains(out, "1000") {
 		t.Errorf("unexpected out: %s", out)
+	}
+}
+
+func TestDescribePriorityClass(t *testing.T) {
+	preemptLowerPriority := corev1.PreemptLowerPriority
+	preemptNever := corev1.PreemptNever
+
+	testCases := []struct {
+		name          string
+		priorityClass *schedulingv1.PriorityClass
+		expect        []string
+	}{
+		{
+			name: "test1",
+			priorityClass: &schedulingv1.PriorityClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bar",
+				},
+				Value:            10,
+				GlobalDefault:    false,
+				PreemptionPolicy: &preemptLowerPriority,
+				Description:      "test1",
+			},
+			expect: []string{
+				"Name", "bar",
+				"Value", "10",
+				"GlobalDefault", "false",
+				"PreemptionPolicy", "PreemptLowerPriority",
+				"Description", "test1",
+				"Annotations", "",
+			},
+		},
+		{
+			name: "test2",
+			priorityClass: &schedulingv1.PriorityClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bar",
+				},
+				Value:            100,
+				GlobalDefault:    true,
+				PreemptionPolicy: &preemptNever,
+				Description:      "test2",
+			},
+			expect: []string{
+				"Name", "bar",
+				"Value", "100",
+				"GlobalDefault", "true",
+				"PreemptionPolicy", "Never",
+				"Description", "test2",
+				"Annotations", "",
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			fake := fake.NewSimpleClientset(testCase.priorityClass)
+			c := &describeClient{T: t, Interface: fake}
+			d := PriorityClassDescriber{c}
+			out, err := d.Describe("", "bar", DescriberSettings{ShowEvents: true})
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			for _, expected := range testCase.expect {
+				if !strings.Contains(out, expected) {
+					t.Errorf("expected to find %q in output: %q", expected, out)
+				}
+			}
+		})
 	}
 }
 
@@ -4865,6 +4936,7 @@ func TestDescribeNode(t *testing.T) {
 		&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "bar",
+				UID:  "uid",
 			},
 			Spec: corev1.NodeSpec{
 				Unschedulable: true,
@@ -4917,6 +4989,42 @@ func TestDescribeNode(t *testing.T) {
 				Phase: corev1.PodRunning,
 			},
 		},
+		&corev1.EventList{
+			Items: []corev1.Event{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "event-1",
+						Namespace: "default",
+					},
+					InvolvedObject: corev1.ObjectReference{
+						Kind: "Node",
+						Name: "bar",
+						UID:  "bar",
+					},
+					Message:        "Node bar status is now: NodeHasNoDiskPressure",
+					FirstTimestamp: metav1.NewTime(time.Date(2014, time.January, 15, 0, 0, 0, 0, time.UTC)),
+					LastTimestamp:  metav1.NewTime(time.Date(2014, time.January, 15, 0, 0, 0, 0, time.UTC)),
+					Count:          1,
+					Type:           corev1.EventTypeNormal,
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "event-2",
+						Namespace: "default",
+					},
+					InvolvedObject: corev1.ObjectReference{
+						Kind: "Node",
+						Name: "bar",
+						UID:  "0ceac5fb-a393-49d7-b04f-9ea5f18de5e9",
+					},
+					Message:        "Node bar status is now: NodeReady",
+					FirstTimestamp: metav1.NewTime(time.Date(2014, time.January, 15, 0, 0, 0, 0, time.UTC)),
+					LastTimestamp:  metav1.NewTime(time.Date(2014, time.January, 15, 0, 0, 0, 0, time.UTC)),
+					Count:          2,
+					Type:           corev1.EventTypeNormal,
+				},
+			},
+		},
 	)
 	c := &describeClient{T: t, Namespace: "foo", Interface: fake}
 	d := NodeDescriber{c}
@@ -4934,7 +5042,9 @@ func TestDescribeNode(t *testing.T) {
   memory             1Gi (8%)     2Gi (16%)
   ephemeral-storage  0 (0%)       0 (0%)
   hugepages-1Gi      0 (0%)       0 (0%)
-  hugepages-2Mi      512Mi (25%)  512Mi (25%)`}
+  hugepages-2Mi      512Mi (25%)  512Mi (25%)`,
+		`Node bar status is now: NodeHasNoDiskPressure`,
+		`Node bar status is now: NodeReady`}
 	for _, expected := range expectedOut {
 		if !strings.Contains(out, expected) {
 			t.Errorf("expected to find %q in output: %q", expected, out)
@@ -5120,6 +5230,64 @@ Events:         <none>` + "\n",
 			if out != tc.output {
 				t.Logf(out)
 				t.Errorf("expected :\n%s\nbut got output:\n%s", tc.output, out)
+			}
+		})
+	}
+}
+
+func TestDescribeClusterCIDRConfig(t *testing.T) {
+
+	testcases := map[string]struct {
+		input  *fake.Clientset
+		output string
+	}{
+		"ClusterCIDRConfig v1alpha1": {
+			input: fake.NewSimpleClientset(&networkingv1alpha1.ClusterCIDRConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo.123",
+				},
+				Spec: networkingv1alpha1.ClusterCIDRConfigSpec{
+					PerNodeHostBits: int32(8),
+					IPv4CIDR:        "10.1.0.0/16",
+					IPv6CIDR:        "fd00:1:1::/64",
+					NodeSelector: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "foo",
+										Operator: "In",
+										Values:   []string{"bar"}},
+								},
+							},
+						},
+					},
+				},
+			}),
+
+			output: `Name:         foo.123
+Labels:       <none>
+Annotations:  <none>
+NodeSelector:
+  NodeSelector Terms:
+    Term 0:       foo in [bar]
+PerNodeHostBits:  8
+IPv4CIDR:         10.1.0.0/16
+IPv6CIDR:         fd00:1:1::/64
+Events:           <none>` + "\n",
+		},
+	}
+
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			c := &describeClient{T: t, Namespace: "foo", Interface: tc.input}
+			d := ClusterCIDRConfigDescriber{c}
+			out, err := d.Describe("bar", "foo.123", DescriberSettings{ShowEvents: true})
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if out != tc.output {
+				t.Errorf("expected :\n%s\nbut got output:\n%s diff:\n%s", tc.output, out, cmp.Diff(tc.output, out))
 			}
 		})
 	}

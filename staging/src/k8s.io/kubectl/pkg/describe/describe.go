@@ -46,6 +46,7 @@ import (
 	discoveryv1beta1 "k8s.io/api/discovery/v1beta1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	networkingv1 "k8s.io/api/networking/v1"
+	networkingv1alpha1 "k8s.io/api/networking/v1alpha1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -213,6 +214,7 @@ func describerMap(clientConfig *rest.Config) (map[schema.GroupKind]ResourceDescr
 		{Group: networkingv1beta1.GroupName, Kind: "IngressClass"}:                &IngressClassDescriber{c},
 		{Group: networkingv1.GroupName, Kind: "Ingress"}:                          &IngressDescriber{c},
 		{Group: networkingv1.GroupName, Kind: "IngressClass"}:                     &IngressClassDescriber{c},
+		{Group: networkingv1alpha1.GroupName, Kind: "CusterCIDRConfig"}:           &ClusterCIDRConfigDescriber{c},
 		{Group: batchv1.GroupName, Kind: "Job"}:                                   &JobDescriber{c},
 		{Group: batchv1.GroupName, Kind: "CronJob"}:                               &CronJobDescriber{c},
 		{Group: batchv1beta1.GroupName, Kind: "CronJob"}:                          &CronJobDescriber{c},
@@ -2819,6 +2821,63 @@ func (i *IngressClassDescriber) describeIngressClassV1(ic *networkingv1.IngressC
 	})
 }
 
+// ClusterCIDRConfigDescriber generates information about a ClusterCIDRConfig.
+type ClusterCIDRConfigDescriber struct {
+	client clientset.Interface
+}
+
+func (c *ClusterCIDRConfigDescriber) Describe(namespace, name string, describerSettings DescriberSettings) (string, error) {
+	var events *corev1.EventList
+
+	cccV1alpha1, err := c.client.NetworkingV1alpha1().ClusterCIDRConfigs().Get(context.TODO(), name, metav1.GetOptions{})
+	if err == nil {
+		if describerSettings.ShowEvents {
+			events, _ = searchEvents(c.client.CoreV1(), cccV1alpha1, describerSettings.ChunkSize)
+		}
+		return c.describeClusterCIDRConfigV1alpha1(cccV1alpha1, events)
+	}
+	return "", err
+}
+
+func (c *ClusterCIDRConfigDescriber) describeClusterCIDRConfigV1alpha1(ccc *networkingv1alpha1.ClusterCIDRConfig, events *corev1.EventList) (string, error) {
+	return tabbedString(func(out io.Writer) error {
+		w := NewPrefixWriter(out)
+		w.Write(LEVEL_0, "Name:\t%v\n", ccc.Name)
+		printLabelsMultiline(w, "Labels", ccc.Labels)
+		printAnnotationsMultiline(w, "Annotations", ccc.Annotations)
+
+		w.Write(LEVEL_0, "NodeSelector:\n")
+		if ccc.Spec.NodeSelector != nil {
+			w.Write(LEVEL_1, "NodeSelector Terms:")
+			if len(ccc.Spec.NodeSelector.NodeSelectorTerms) == 0 {
+				w.WriteLine("<none>")
+			} else {
+				w.WriteLine("")
+				for i, term := range ccc.Spec.NodeSelector.NodeSelectorTerms {
+					printNodeSelectorTermsMultilineWithIndent(w, LEVEL_2, fmt.Sprintf("Term %v", i), "\t", term.MatchExpressions)
+				}
+			}
+		}
+
+		if ccc.Spec.PerNodeHostBits != 0 {
+			w.Write(LEVEL_0, "PerNodeHostBits:\t%s\n", fmt.Sprint(ccc.Spec.PerNodeHostBits))
+		}
+
+		if ccc.Spec.IPv4CIDR != "" {
+			w.Write(LEVEL_0, "IPv4CIDR:\t%s\n", ccc.Spec.IPv4CIDR)
+		}
+
+		if ccc.Spec.IPv6CIDR != "" {
+			w.Write(LEVEL_0, "IPv6CIDR:\t%s\n", ccc.Spec.IPv6CIDR)
+		}
+
+		if events != nil {
+			DescribeEvents(events, w)
+		}
+		return nil
+	})
+}
+
 // ServiceDescriber generates information about a service.
 type ServiceDescriber struct {
 	clientset.Interface
@@ -3519,8 +3578,17 @@ func (d *NodeDescriber) Describe(namespace, name string, describerSettings Descr
 			klog.Errorf("Unable to construct reference to '%#v': %v", node, err)
 		} else {
 			// TODO: We haven't decided the namespace for Node object yet.
-			ref.UID = types.UID(ref.Name)
+			// there are two UIDs for host events:
+			// controller use node.uid
+			// kubelet use node.name
+			// TODO: Uniform use of UID
 			events, _ = searchEvents(d.CoreV1(), ref, describerSettings.ChunkSize)
+
+			ref.UID = types.UID(ref.Name)
+			eventsInvName, _ := searchEvents(d.CoreV1(), ref, describerSettings.ChunkSize)
+
+			// Merge the results of two queries
+			events.Items = append(events.Items, eventsInvName.Items...)
 		}
 	}
 
@@ -4758,6 +4826,7 @@ func describePriorityClass(pc *schedulingv1.PriorityClass, events *corev1.EventL
 		w.Write(LEVEL_0, "Name:\t%s\n", pc.Name)
 		w.Write(LEVEL_0, "Value:\t%v\n", pc.Value)
 		w.Write(LEVEL_0, "GlobalDefault:\t%v\n", pc.GlobalDefault)
+		w.Write(LEVEL_0, "PreemptionPolicy:\t%s\n", *pc.PreemptionPolicy)
 		w.Write(LEVEL_0, "Description:\t%s\n", pc.Description)
 
 		w.Write(LEVEL_0, "Annotations:\t%s\n", labels.FormatLabels(pc.Annotations))
