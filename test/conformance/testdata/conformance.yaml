@@ -763,6 +763,15 @@
     pod. Modify the labels of one of the Job's Pods. The Job MUST release the Pod.
   release: v1.16
   file: test/e2e/apps/job.go
+- testname: Jobs, apply changes to status
+  codename: '[sig-apps] Job should apply changes to a job status [Conformance]'
+  description: Attempt to create a running Job which MUST succeed. Attempt to patch
+    the Job status to include a new start time which MUST succeed. An annotation for
+    the job that was patched MUST be found. Attempt to replace the job status with
+    a new start time which MUST succeed. Attempt to read its status sub-resource which
+    MUST succeed
+  release: v1.24
+  file: test/e2e/apps/job.go
 - testname: Ensure Pods of an Indexed Job get a unique index.
   codename: '[sig-apps] Job should create pods for an Indexed job with completion
     indexes and specified hostname [Conformance]'
@@ -1198,8 +1207,7 @@
   release: v1.20
   file: test/e2e/instrumentation/core_events.go
 - testname: DNS, cluster
-  codename: '[sig-network] DNS should provide /etc/hosts entries for the cluster [LinuxOnly]
-    [Conformance]'
+  codename: '[sig-network] DNS should provide /etc/hosts entries for the cluster [Conformance]'
   description: When a Pod is created, the pod MUST be able to resolve cluster dns
     entries such as kubernetes.default via /etc/hosts.
   release: v1.14
@@ -1213,8 +1221,7 @@
   release: v1.15
   file: test/e2e/network/dns.go
 - testname: DNS, resolve the hostname
-  codename: '[sig-network] DNS should provide DNS for pods for Hostname [LinuxOnly]
-    [Conformance]'
+  codename: '[sig-network] DNS should provide DNS for pods for Hostname [Conformance]'
   description: Create a headless service with label. Create a Pod with label to match
     service's label, with hostname and a subdomain same as service name. Pod MUST
     be able to resolve its fully qualified domain name as well as hostname by serving
@@ -1373,8 +1380,8 @@
     the each of service proxy endpoints in the cluster using a http post(protocol=tcp)  and
     the request MUST be successful. Container will execute curl command to reach the
     service port within specified max retry limit and MUST result in reporting unique
-    hostnames. This test is marked LinuxOnly since HostNetwork is not supported on
-    other platforms like Windows.
+    hostnames. This test is marked LinuxOnly it breaks when using Overlay networking
+    with Windows.
   release: v1.9
   file: test/e2e/common/network/networking.go
 - testname: Networking, intra pod http, from node
@@ -1387,8 +1394,8 @@
     the each of service proxy endpoints in the cluster using a http post(protocol=udp)  and
     the request MUST be successful. Container will execute curl command to reach the
     service port within specified max retry limit and MUST result in reporting unique
-    hostnames. This test is marked LinuxOnly since HostNetwork is not supported on
-    other platforms like Windows.
+    hostnames. This test is marked LinuxOnly it breaks when using Overlay networking
+    with Windows.
   release: v1.9
   file: test/e2e/common/network/networking.go
 - testname: Proxy, validate Proxy responses
@@ -1697,18 +1704,6 @@
     server pod to validate that the pre-stop is executed.
   release: v1.9
   file: test/e2e/common/node/lifecycle_hook.go
-- testname: Container Runtime, TerminationMessagePath, non-root user and non-default
-    path
-  codename: '[sig-node] Container Runtime blackbox test on terminated container should
-    report termination message [LinuxOnly] if TerminationMessagePath is set as non-root
-    user and at a non-default path [NodeConformance] [Conformance]'
-  description: 'Create a pod with a container to run it as a non-root user with a
-    custom TerminationMessagePath set. Pod redirects the output to the provided path
-    successfully. When the container is terminated, the termination message MUST match
-    the expected output logged in the provided custom path. [LinuxOnly]: Tagged LinuxOnly
-    due to use of ''uid'' and unable to mount files in Windows Containers.'
-  release: v1.15
-  file: test/e2e/common/node/runtime.go
 - testname: Container Runtime, TerminationMessage, from log output of succeeding container
   codename: '[sig-node] Container Runtime blackbox test on terminated container should
     report termination message as empty when pod succeeds and TerminationMessagePolicy
@@ -1735,6 +1730,17 @@
   description: Create a pod with an container. Container's output is recorded in log
     and container exits with an error. When container is terminated, termination message
     MUST match the expected output recorded from container's log.
+  release: v1.15
+  file: test/e2e/common/node/runtime.go
+- testname: Container Runtime, TerminationMessagePath, non-root user and non-default
+    path
+  codename: '[sig-node] Container Runtime blackbox test on terminated container should
+    report termination message if TerminationMessagePath is set as non-root user and
+    at a non-default path [NodeConformance] [Conformance]'
+  description: Create a pod with a container to run it as a non-root user with a custom
+    TerminationMessagePath set. Pod redirects the output to the provided path successfully.
+    When the container is terminated, the termination message MUST match the expected
+    output logged in the provided custom path.
   release: v1.15
   file: test/e2e/common/node/runtime.go
 - testname: Container Runtime, Restart Policy, Pod Phases
@@ -2383,6 +2389,16 @@
     pod.
   release: v1.19
   file: test/e2e/scheduling/preemption.go
+- testname: CSIStorageCapacity API
+  codename: '[sig-storage] CSIStorageCapacity  should support CSIStorageCapacities
+    API operations [Conformance]'
+  description: ' The storage.k8s.io API group MUST exist in the /apis discovery document.
+    The storage.k8s.io/v1 API group/version MUST exist in the /apis/mode.k8s.io discovery
+    document. The csistoragecapacities resource MUST exist in the /apis/storage.k8s.io/v1
+    discovery document. The csistoragecapacities resource must support create, get,
+    list, watch, update, patch, delete, and deletecollection.'
+  release: v1.24
+  file: test/e2e/storage/csistoragecapacity.go
 - testname: ConfigMap Volume, text data, binary data
   codename: '[sig-storage] ConfigMap binary data should be reflected in volume [NodeConformance]
     [Conformance]'

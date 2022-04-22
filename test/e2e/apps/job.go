@@ -141,7 +141,7 @@ var _ = SIGDescribe("Job", func() {
 	ginkgo.It("should delete pods when suspended", func() {
 		ginkgo.By("Creating a job with suspend=false")
 		job := e2ejob.NewTestJob("notTerminate", "suspend-false-to-true", v1.RestartPolicyNever, parallelism, completions, nil, backoffLimit)
-		job.Spec.Suspend = pointer.BoolPtr(false)
+		job.Spec.Suspend = pointer.Bool(false)
 		job, err := e2ejob.CreateJob(f.ClientSet, f.Namespace.Name, job)
 		framework.ExpectNoError(err, "failed to create job in namespace: %s", f.Namespace.Name)
 
@@ -150,10 +150,22 @@ var _ = SIGDescribe("Job", func() {
 		framework.ExpectNoError(err, "failed to ensure number of pods associated with job %s is equal to parallelism count in namespace: %s", job.Name, f.Namespace.Name)
 
 		ginkgo.By("Updating the job with suspend=true")
-		job, err = e2ejob.GetJob(f.ClientSet, f.Namespace.Name, job.Name)
-		framework.ExpectNoError(err, "failed to retrieve latest job object")
-		job.Spec.Suspend = pointer.BoolPtr(true)
-		job, err = e2ejob.UpdateJob(f.ClientSet, f.Namespace.Name, job)
+		err = wait.PollImmediate(framework.Poll, framework.SingleCallTimeout, func() (bool, error) {
+			job, err = e2ejob.GetJob(f.ClientSet, f.Namespace.Name, job.Name)
+			if err != nil {
+				return false, err
+			}
+			job.Spec.Suspend = pointer.Bool(true)
+			updatedJob, err := e2ejob.UpdateJob(f.ClientSet, f.Namespace.Name, job)
+			if err == nil {
+				job = updatedJob
+				return true, nil
+			}
+			if apierrors.IsConflict(err) {
+				return false, nil
+			}
+			return false, err
+		})
 		framework.ExpectNoError(err, "failed to update job in namespace: %s", f.Namespace.Name)
 
 		ginkgo.By("Ensuring pods are deleted")
@@ -440,7 +452,16 @@ var _ = SIGDescribe("Job", func() {
 		framework.ExpectEqual(successes, largeCompletions, "expected %d successful job pods, but got  %d", largeCompletions, successes)
 	})
 
-	ginkgo.It("should apply changes to a job status", func() {
+	/*
+		Release: v1.24
+		Testname: Jobs, apply changes to status
+		Description: Attempt to create a running Job which MUST succeed.
+		Attempt to patch the Job status to include a new start time which
+		MUST succeed. An annotation for the job that was patched MUST be found.
+		Attempt to replace the job status with a new start time which MUST
+		succeed. Attempt to read its status sub-resource which MUST succeed
+	*/
+	framework.ConformanceIt("should apply changes to a job status", func() {
 
 		ns := f.Namespace.Name
 		jClient := f.ClientSet.BatchV1().Jobs(ns)
@@ -556,6 +577,9 @@ var _ = SIGDescribe("Job", func() {
 			patchedJob, err = jobClient.Get(context.TODO(), jobName, metav1.GetOptions{})
 			framework.ExpectNoError(err, "Unable to get job %s", jobName)
 			patchedJob.Spec.Suspend = pointer.BoolPtr(false)
+			if patchedJob.Annotations == nil {
+				patchedJob.Annotations = map[string]string{}
+			}
 			patchedJob.Annotations["updated"] = "true"
 			updatedJob, err = e2ejob.UpdateJob(f.ClientSet, ns, patchedJob)
 			return err
