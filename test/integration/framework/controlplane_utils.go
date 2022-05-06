@@ -186,6 +186,7 @@ func startAPIServerOrDie(controlPlaneConfig *controlplane.Config, incomingServer
 			m.GenericAPIServer.RunPreShutdownHooks()
 		}
 		close(stopCh)
+		m.GenericAPIServer.Destroy()
 		s.Close()
 	}
 
@@ -232,6 +233,7 @@ func startAPIServerOrDie(controlPlaneConfig *controlplane.Config, incomingServer
 
 	clientset, err := clientset.NewForConfig(controlPlaneConfig.GenericConfig.LoopbackClientConfig)
 	if err != nil {
+		closeFn()
 		klog.Fatal(err)
 	}
 

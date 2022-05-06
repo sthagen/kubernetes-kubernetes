@@ -295,7 +295,7 @@ func NewFramework(r Registry, profile *config.KubeSchedulerProfile, opts ...Opti
 	pluginsMap := make(map[string]framework.Plugin)
 	for name, factory := range r {
 		// initialize only needed plugins.
-		if _, ok := pg[name]; !ok {
+		if !pg.Has(name) {
 			continue
 		}
 
@@ -1158,7 +1158,7 @@ func (f *frameworkImpl) RunPermitPlugins(ctx context.Context, state *framework.C
 				status.SetFailedPlugin(pl.Name())
 				return status
 			}
-			if status.Code() == framework.Wait {
+			if status.IsWait() {
 				// Not allowed to be greater than maxTimeout.
 				if timeout > maxTimeout {
 					timeout = maxTimeout

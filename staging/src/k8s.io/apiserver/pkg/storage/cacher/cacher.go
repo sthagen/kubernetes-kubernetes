@@ -408,7 +408,7 @@ func (c *Cacher) startCaching(stopChannel <-chan struct{}) {
 		successfulList = true
 		c.ready.set(true)
 		klog.V(1).Infof("cacher (%v): initialized", c.objectType.String())
-		watchCacheInitializations.WithLabelValues(c.objectType.String()).Inc()
+		metrics.WatchCacheInitializations.WithLabelValues(c.objectType.String()).Inc()
 	})
 	defer func() {
 		if successfulList {
@@ -693,7 +693,7 @@ func (c *Cacher) GetList(ctx context.Context, key string, opts storage.ListOptio
 
 // GuaranteedUpdate implements storage.Interface.
 func (c *Cacher) GuaranteedUpdate(
-	ctx context.Context, key string, ptrToType runtime.Object, ignoreNotFound bool,
+	ctx context.Context, key string, destination runtime.Object, ignoreNotFound bool,
 	preconditions *storage.Preconditions, tryUpdate storage.UpdateFunc, _ runtime.Object) error {
 	// Ignore the suggestion and try to pass down the current version of the object
 	// read from cache.
@@ -703,10 +703,10 @@ func (c *Cacher) GuaranteedUpdate(
 		// DeepCopy the object since we modify resource version when serializing the
 		// current object.
 		currObj := elem.(*storeElement).Object.DeepCopyObject()
-		return c.storage.GuaranteedUpdate(ctx, key, ptrToType, ignoreNotFound, preconditions, tryUpdate, currObj)
+		return c.storage.GuaranteedUpdate(ctx, key, destination, ignoreNotFound, preconditions, tryUpdate, currObj)
 	}
 	// If we couldn't get the object, fallback to no-suggestion.
-	return c.storage.GuaranteedUpdate(ctx, key, ptrToType, ignoreNotFound, preconditions, tryUpdate, nil)
+	return c.storage.GuaranteedUpdate(ctx, key, destination, ignoreNotFound, preconditions, tryUpdate, nil)
 }
 
 // Count implements storage.Interface.
@@ -773,7 +773,7 @@ func (c *Cacher) dispatchEvents() {
 				c.dispatchEvent(&event)
 			}
 			lastProcessedResourceVersion = event.ResourceVersion
-			eventsCounter.WithLabelValues(c.objectType.String()).Inc()
+			metrics.EventsCounter.WithLabelValues(c.objectType.String()).Inc()
 		case <-bookmarkTimer.C():
 			bookmarkTimer.Reset(wait.Jitter(time.Second, 0.25))
 			// Never send a bookmark event if we did not see an event here, this is fine
@@ -1212,7 +1212,7 @@ func (c *cacheWatcher) add(event *watchCacheEvent, timer *time.Timer) bool {
 		// Since we don't want to block on it infinitely,
 		// we simply terminate it.
 		klog.V(1).Infof("Forcing %v watcher close due to unresponsiveness: %v. len(c.input) = %v, len(c.result) = %v", c.objectType.String(), c.identifier, len(c.input), len(c.result))
-		terminatedWatchersCounter.WithLabelValues(c.objectType.String()).Inc()
+		metrics.TerminatedWatchersCounter.WithLabelValues(c.objectType.String()).Inc()
 		c.forget()
 	}
 
@@ -1392,7 +1392,7 @@ func (c *cacheWatcher) processInterval(ctx context.Context, cacheInterval *watch
 
 	objType := c.objectType.String()
 	if initEventCount > 0 {
-		initCounter.WithLabelValues(objType).Add(float64(initEventCount))
+		metrics.InitCounter.WithLabelValues(objType).Add(float64(initEventCount))
 	}
 	processingTime := time.Since(startTime)
 	if processingTime > initProcessThreshold {

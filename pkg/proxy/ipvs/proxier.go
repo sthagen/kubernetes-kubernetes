@@ -143,6 +143,7 @@ var iptablesCleanupChains = []struct {
 	{utiliptables.TableNAT, KubeNodePortChain},
 	{utiliptables.TableNAT, KubeLoadBalancerChain},
 	{utiliptables.TableFilter, KubeForwardChain},
+	{utiliptables.TableFilter, KubeNodePortChain},
 }
 
 // ipsetInfo is all ipset we needed in ipvs proxier
@@ -1989,7 +1990,7 @@ func (proxier *Proxier) syncEndpoint(svcPortName proxy.ServicePortName, onlyNode
 	if !ok {
 		klog.InfoS("Unable to filter endpoints due to missing service info", "servicePortName", svcPortName)
 	} else {
-		clusterEndpoints, localEndpoints, _, _ := proxy.CategorizeEndpoints(endpoints, svcInfo, proxier.nodeLabels)
+		clusterEndpoints, localEndpoints, _, hasAnyEndpoints := proxy.CategorizeEndpoints(endpoints, svcInfo, proxier.nodeLabels)
 		if onlyNodeLocalEndpoints {
 			if len(localEndpoints) > 0 {
 				endpoints = localEndpoints
@@ -2000,11 +2001,11 @@ func (proxier *Proxier) syncEndpoint(svcPortName proxy.ServicePortName, onlyNode
 				// will have the POD address and will be discarded.
 				endpoints = clusterEndpoints
 
-				if svcInfo.InternalPolicyLocal() && utilfeature.DefaultFeatureGate.Enabled(features.ServiceInternalTrafficPolicy) {
+				if hasAnyEndpoints && svcInfo.InternalPolicyLocal() && utilfeature.DefaultFeatureGate.Enabled(features.ServiceInternalTrafficPolicy) {
 					proxier.serviceNoLocalEndpointsInternal.Insert(svcPortName.NamespacedName.String())
 				}
 
-				if svcInfo.ExternalPolicyLocal() {
+				if hasAnyEndpoints && svcInfo.ExternalPolicyLocal() {
 					proxier.serviceNoLocalEndpointsExternal.Insert(svcPortName.NamespacedName.String())
 				}
 			}
