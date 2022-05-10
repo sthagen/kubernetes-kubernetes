@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -68,18 +67,11 @@ type ShutdownFunc func()
 
 // StartApiserver starts a local API server for testing and returns the handle to the URL and the shutdown function to stop it.
 func StartApiserver() (string, ShutdownFunc) {
-	h := &framework.APIServerHolder{Initialized: make(chan struct{})}
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		<-h.Initialized
-		h.M.GenericAPIServer.Handler.ServeHTTP(w, req)
-	}))
-
-	_, _, closeFn := framework.RunAnAPIServerUsingServer(framework.NewIntegrationTestControlPlaneConfig(), s, h)
+	_, s, closeFn := framework.RunAnAPIServer(framework.NewIntegrationTestControlPlaneConfig())
 
 	shutdownFunc := func() {
 		klog.Infof("destroying API server")
 		closeFn()
-		s.Close()
 		klog.Infof("destroyed API server")
 	}
 	return s.URL, shutdownFunc
@@ -350,29 +342,25 @@ func InitTestAPIServer(t *testing.T, nsPrefix string, admission admission.Interf
 	}
 
 	// 1. Create API server
-	h := &framework.APIServerHolder{Initialized: make(chan struct{})}
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		<-h.Initialized
-		h.M.GenericAPIServer.Handler.ServeHTTP(w, req)
-	}))
-
 	controlPlaneConfig := framework.NewIntegrationTestControlPlaneConfig()
 
 	if admission != nil {
 		controlPlaneConfig.GenericConfig.AdmissionControl = admission
 	}
 
-	_, testCtx.HTTPServer, testCtx.CloseFn = framework.RunAnAPIServerUsingServer(controlPlaneConfig, s, h)
+	_, testCtx.HTTPServer, testCtx.CloseFn = framework.RunAnAPIServer(controlPlaneConfig)
 
 	if nsPrefix != "default" {
-		testCtx.NS = framework.CreateTestingNamespace(nsPrefix+string(uuid.NewUUID()), s, t)
+		testCtx.NS = framework.CreateTestingNamespace(nsPrefix+string(uuid.NewUUID()), testCtx.HTTPServer, t)
 	} else {
-		testCtx.NS = framework.CreateTestingNamespace("default", s, t)
+		testCtx.NS = framework.CreateTestingNamespace("default", testCtx.HTTPServer, t)
 	}
 
 	// 2. Create kubeclient
 	kubeConfig := &restclient.Config{
-		QPS: -1, Host: s.URL,
+		QPS:   100,
+		Burst: 100,
+		Host:  testCtx.HTTPServer.URL,
 		ContentConfig: restclient.ContentConfig{
 			GroupVersion: &schema.GroupVersion{Group: "", Version: "v1"},
 		},
