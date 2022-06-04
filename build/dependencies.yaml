@@ -46,7 +46,7 @@ dependencies:
 
   # CRI Tools
   - name: "crictl"
-    version: 1.23.0
+    version: 1.24.2
     refPaths:
     - path: cluster/gce/windows/k8s-node-setup.psm1
       match: CRICTL_VERSION =
@@ -55,7 +55,7 @@ dependencies:
 
   # etcd
   - name: "etcd"
-    version: 3.5.3
+    version: 3.5.4
     refPaths:
     - path: cluster/gce/manifests/etcd.manifest
       match: etcd_docker_tag|etcd_version
