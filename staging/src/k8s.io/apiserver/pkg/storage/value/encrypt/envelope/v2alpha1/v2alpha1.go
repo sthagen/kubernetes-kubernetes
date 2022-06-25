@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2022 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,21 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package util
-
-import (
-	"time"
-)
-
-// Clock provides an interface for getting the current time
-type Clock interface {
-	Now() time.Time
-}
-
-// RealClock implements a clock using time
-type RealClock struct{}
-
-// Now returns the current time with time.Now
-func (RealClock) Now() time.Time {
-	return time.Now()
-}
+// Package v2alpha1 contains definition of kms-plugin's gRPC service.
+package v2alpha1
