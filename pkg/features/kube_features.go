@@ -190,6 +190,13 @@ const (
 	// Allows clients to request a duration for certificates issued via the Kubernetes CSR API.
 	CSRDuration featuregate.Feature = "CSRDuration"
 
+	// owner: @adrianreber
+	// kep: http://kep.k8s.io/2008
+	// alpha: v1.25
+	//
+	// Enables container Checkpoint support in the kubelet
+	ContainerCheckpoint featuregate.Feature = "ContainerCheckpoint"
+
 	// owner: @jiahuif
 	// alpha: v1.21
 	// beta:  v1.22
@@ -734,6 +741,7 @@ const (
 	// kep: https://kep.k8s.io/2607
 	// alpha: v1.22
 	// beta: v1.23
+	// GA: v1.25
 	// StatefulSetMinReadySeconds allows minReadySeconds to be respected by StatefulSet controller
 	StatefulSetMinReadySeconds featuregate.Feature = "StatefulSetMinReadySeconds"
 
@@ -845,6 +853,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	CSIVolumeHealth: {Default: false, PreRelease: featuregate.Alpha},
 
 	CSRDuration: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.26
+
+	ContainerCheckpoint: {Default: false, PreRelease: featuregate.Alpha},
 
 	ControllerManagerLeaderMigration: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.26
 
@@ -996,7 +1006,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	StatefulSetAutoDeletePVC: {Default: false, PreRelease: featuregate.Alpha},
 
-	StatefulSetMinReadySeconds: {Default: true, PreRelease: featuregate.Beta},
+	StatefulSetMinReadySeconds: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.27
 
 	SuspendJob: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.26
 
