@@ -455,14 +455,6 @@ kube::golang::set_platform_envs() {
   fi
 }
 
-kube::golang::unset_platform_envs() {
-  unset GOOS
-  unset GOARCH
-  unset GOROOT
-  unset CGO_ENABLED
-  unset CC
-}
-
 # Create the GOPATH tree under $KUBE_OUTPUT
 kube::golang::create_gopath_tree() {
   local go_pkg_dir="${KUBE_GOPATH}/src/${KUBE_GO_PACKAGE}"
@@ -513,9 +505,28 @@ EOF
 kube::golang::setup_env() {
   kube::golang::verify_go_version
 
+  # Set up GOPATH.  We have tools which depend on being in a GOPATH (see
+  # hack/run-in-gopath.sh).
+  #
+  # Even in module mode, we need to set GOPATH for `go build` and `go install`
+  # to work.  We build various tools (usually via `go install`) from a lot of
+  # scripts.
+  #   * We can't set GOBIN because that does not work on cross-compiles.
+  #   * We could use `go build -o <something>`, but it's subtle when it comes
+  #     to cross-compiles and whether the <something> is a file or a directory,
+  #     and EVERY caller has to get it *just* right.
+  #   * We could leave GOPATH alone and let `go install` write binaries
+  #     wherever the user's GOPATH says (or doesn't say).
+  #
+  # Instead we set it to a phony local path and process the results ourselves.
+  # In particular, GOPATH[0]/bin will be used for `go install`, with
+  # cross-compiles adding an extra directory under that.
+  #
+  # Eventually, when we no longer rely on run-in-gopath.sh we may be able to
+  # simplify this some.
   kube::golang::create_gopath_tree
-
   export GOPATH="${KUBE_GOPATH}"
+
   export GOCACHE="${KUBE_GOPATH}/cache"
 
   # Make sure our own Go binaries are in PATH.
@@ -523,8 +534,7 @@ kube::golang::setup_env() {
 
   # Change directories so that we are within the GOPATH.  Some tools get really
   # upset if this is not true.  We use a whole fake GOPATH here to collect the
-  # resultant binaries.  Go will not let us use GOBIN with `go install` and
-  # cross-compiling, and `go install -o <file>` only works for a single pkg.
+  # resultant binaries.
   local subdir
   subdir=$(kube::realpath . | sed "s|${KUBE_ROOT}||")
   cd "${KUBE_GOPATH}/src/${KUBE_GO_PACKAGE}/${subdir}" || return 1
@@ -534,6 +544,7 @@ kube::golang::setup_env() {
   export GOROOT
 
   # Unset GOBIN in case it already exists in the current session.
+  # Cross-compiles will not work with it set.
   unset GOBIN
 
   # This seems to matter to some tools
@@ -595,8 +606,17 @@ kube::golang::outfile_for_binary() {
 # Returns 0 if the binary can be built with coverage, 1 otherwise.
 # NB: this ignores whether coverage is globally enabled or not.
 kube::golang::is_instrumented_package() {
-  kube::util::array_contains "$1" "${KUBE_COVERAGE_INSTRUMENTED_PACKAGES[@]}"
-  return $?
+  if kube::util::array_contains "$1" "${KUBE_COVERAGE_INSTRUMENTED_PACKAGES[@]}"; then
+    return 0
+  fi
+  # Some cases, like `make kubectl`, pass $1 as "./cmd/kubectl" rather than
+  # "k8s.io/kubernetes/kubectl".  Try to normalize and handle that.  We don't
+  # do this always because it is a bit slow.
+  pkg=$(go list -find "$1")
+  if kube::util::array_contains "${pkg}" "${KUBE_COVERAGE_INSTRUMENTED_PACKAGES[@]}"; then
+    return 0
+  fi
+  return 1
 }
 
 # Argument: the name of a Kubernetes package (e.g. k8s.io/kubernetes/cmd/kube-scheduler)
@@ -656,6 +676,8 @@ kube::golang::delete_coverage_dummy_test() {
 # go install. If coverage is enabled, builds covered binaries using go test, temporarily
 # producing the required unit test files and then cleaning up after itself.
 # Non-covered binaries are then built using go install as usual.
+#
+# See comments in kube::golang::setup_env regarding where built binaries go.
 kube::golang::build_some_binaries() {
   if [[ -n "${KUBE_BUILD_WITH_COVERAGE:-}" ]]; then
     local -a uncovered=()
@@ -688,6 +710,8 @@ kube::golang::build_some_binaries() {
    fi
 }
 
+# Args:
+#  $1: platform (e.g. darwin/amd64)
 kube::golang::build_binaries_for_platform() {
   # This is for sanity.  Without it, user umasks can leak through.
   umask 0022
