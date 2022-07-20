@@ -2992,7 +2992,6 @@ type PodSpec struct {
 	// - spec.containers[*].securityContext.runAsUser
 	// - spec.containers[*].securityContext.runAsGroup
 	// +optional
-	// This is a beta field and requires the IdentifyPodOS feature
 	OS *PodOS
 }
 
@@ -5711,7 +5710,7 @@ type TopologySpreadConstraint struct {
 	// because computed skew will be 3(3 - 0) if new Pod is scheduled to any of the three zones,
 	// it will violate MaxSkew.
 	//
-	// This is an alpha field and requires enabling MinDomainsInPodTopologySpread feature gate.
+	// This is a beta field and requires the MinDomainsInPodTopologySpread feature gate to be enabled (enabled by default).
 	// +optional
 	MinDomains *int32
 	// NodeAffinityPolicy indicates how we will treat Pod's nodeAffinity/nodeSelector

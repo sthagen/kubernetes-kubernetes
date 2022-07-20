@@ -374,6 +374,7 @@ const (
 	// owner: @ravig
 	// alpha: v1.23
 	// beta: v1.24
+	// GA: v1.25
 	// IdentifyPodOS allows user to specify OS on which they'd like the Pod run. The user should still set the nodeSelector
 	// with appropriate `kubernetes.io/os` label for scheduler to identify appropriate node for the pod to run.
 	IdentifyPodOS featuregate.Feature = "IdentifyPodOS"
@@ -536,6 +537,7 @@ const (
 	// owner: @sanposhiho
 	// kep: http://kep.k8s.io/3022
 	// alpha: v1.24
+	// beta: v1.25
 	//
 	// Enable MinDomains in Pod Topology Spread.
 	MinDomainsInPodTopologySpread featuregate.Feature = "MinDomainsInPodTopologySpread"
@@ -904,7 +906,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	HonorPVReclaimPolicy: {Default: false, PreRelease: featuregate.Alpha},
 
-	IdentifyPodOS: {Default: true, PreRelease: featuregate.Beta},
+	IdentifyPodOS: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.27
 
 	InTreePluginAWSUnregister: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -952,7 +954,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	MemoryQoS: {Default: false, PreRelease: featuregate.Alpha},
 
-	MinDomainsInPodTopologySpread: {Default: false, PreRelease: featuregate.Alpha},
+	MinDomainsInPodTopologySpread: {Default: false, PreRelease: featuregate.Beta},
 
 	MixedProtocolLBService: {Default: true, PreRelease: featuregate.Beta},
 
@@ -1045,7 +1047,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	genericfeatures.ServerSideApply: {Default: true, PreRelease: featuregate.GA},
 
-	genericfeatures.ServerSideFieldValidation: {Default: false, PreRelease: featuregate.Alpha},
+	genericfeatures.ServerSideFieldValidation: {Default: true, PreRelease: featuregate.Beta},
 
 	// features that enable backwards compatibility but are scheduled to be removed
 	// ...
