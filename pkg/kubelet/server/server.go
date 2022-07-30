@@ -402,6 +402,7 @@ func (s *Server) InstallDefaultHandlers() {
 	p := compbasemetrics.NewKubeRegistry()
 	_ = compbasemetrics.RegisterProcessStartTime(p.Register)
 	p.MustRegister(prober.ProberResults)
+	p.MustRegister(prober.ProberDuration)
 	s.restfulCont.Handle(proberMetricsPath,
 		compbasemetrics.HandlerFor(p, compbasemetrics.HandlerOpts{ErrorHandling: compbasemetrics.ContinueOnError}),
 	)
@@ -916,7 +917,7 @@ func (s *Server) checkpoint(request *restful.Request, response *restful.Response
 			}
 		}
 	}
-	if !found && utilfeature.DefaultFeatureGate.Enabled(features.EphemeralContainers) {
+	if !found {
 		for _, container := range pod.Spec.EphemeralContainers {
 			if container.Name == containerName {
 				found = true
