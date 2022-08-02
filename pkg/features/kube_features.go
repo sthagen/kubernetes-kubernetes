@@ -111,6 +111,7 @@ const (
 	// owner: @leakingtapan
 	// alpha: v1.14
 	// beta: v1.17
+	// GA: v1.25
 	//
 	// Enables the AWS EBS in-tree driver to AWS EBS CSI Driver migration feature.
 	CSIMigrationAWS featuregate.Feature = "CSIMigrationAWS"
@@ -498,6 +499,13 @@ const (
 	// Enable POD resources API to return allocatable resources
 	KubeletPodResourcesGetAllocatable featuregate.Feature = "KubeletPodResourcesGetAllocatable"
 
+	// owner: @sallyom
+	// kep: http://kep.k8s.io/2832
+	// alpha: v1.25
+	//
+	// Add support for distributed tracing in the kubelet
+	KubeletTracing featuregate.Feature = "KubeletTracing"
+
 	// owner: @zshihang
 	// kep: http://kep.k8s.io/2800
 	// beta: v1.24
@@ -627,6 +635,21 @@ const (
 	//
 	// Enables controlling pod ranking on replicaset scale-down.
 	PodDeletionCost featuregate.Feature = "PodDeletionCost"
+
+	// owner: @mimowo
+	// kep: http://kep.k8s.io/3329
+	// alpha: v1.25
+	//
+	// Enables support for appending a dedicated pod condition indicating that
+	// the pod is being deleted due to a disruption.
+	PodDisruptionConditions featuregate.Feature = "PodDisruptionConditions"
+
+	// owner: @ddebroy
+	// alpha: v1.25
+	//
+	// Enables reporting of PodHasNetwork condition in pod status after pod
+	// sandbox creation and network configuration completes successfully
+	PodHasNetworkCondition featuregate.Feature = "PodHasNetworkCondition"
 
 	// owner: @egernst
 	// alpha: v1.16
@@ -851,7 +874,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	CSIMigration: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.27
 
-	CSIMigrationAWS: {Default: true, PreRelease: featuregate.Beta},
+	CSIMigrationAWS: {Default: true, PreRelease: featuregate.GA, LockToDefault: true},
 
 	CSIMigrationAzureDisk: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // On by default in 1.23 (requires Azure Disk CSI driver)
 
@@ -961,6 +984,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	KubeletPodResourcesGetAllocatable: {Default: true, PreRelease: featuregate.Beta},
 
+	KubeletTracing: {Default: false, PreRelease: featuregate.Alpha},
+
 	LegacyServiceAccountTokenNoAutoGeneration: {Default: true, PreRelease: featuregate.Beta},
 
 	LocalStorageCapacityIsolation: {Default: true, PreRelease: featuregate.Beta},
@@ -996,6 +1021,10 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	PodAndContainerStatsFromCRI: {Default: false, PreRelease: featuregate.Alpha},
 
 	PodDeletionCost: {Default: true, PreRelease: featuregate.Beta},
+
+	PodDisruptionConditions: {Default: false, PreRelease: featuregate.Alpha},
+
+	PodHasNetworkCondition: {Default: false, PreRelease: featuregate.Alpha},
 
 	PodOverhead: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.26
 

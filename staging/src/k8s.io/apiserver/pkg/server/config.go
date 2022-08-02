@@ -30,7 +30,7 @@ import (
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/google/uuid"
-	"go.opentelemetry.io/otel/trace"
+	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -139,7 +139,7 @@ type Config struct {
 	ExternalAddress string
 
 	// TracerProvider can provide a tracer, which records spans for distributed tracing.
-	TracerProvider *trace.TracerProvider
+	TracerProvider oteltrace.TracerProvider
 
 	//===========================================================================
 	// Fields you probably don't care about changing
@@ -257,6 +257,9 @@ type Config struct {
 
 	// StorageVersionManager holds the storage versions of the API resources installed by this server.
 	StorageVersionManager storageversion.Manager
+
+	// CompressionDisabledFunc returns whether compression should be disabled for a given request.
+	CompressionDisabledFunc genericapifilters.CompressionDisabledFunc
 }
 
 type RecommendedConfig struct {
@@ -372,6 +375,7 @@ func NewConfig(codecs serializer.CodecFactory) *Config {
 
 		APIServerID:           id,
 		StorageVersionManager: storageversion.NewDefaultManager(),
+		TracerProvider:        oteltrace.NewNoopTracerProvider(),
 	}
 }
 
@@ -854,6 +858,9 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *Config) http.Handler {
 	handler = genericfilters.WithHSTS(handler, c.HSTSDirectives)
 	if c.ShutdownSendRetryAfter {
 		handler = genericfilters.WithRetryAfter(handler, c.lifecycleSignals.NotAcceptingNewRequest.Signaled())
+	}
+	if c.CompressionDisabledFunc != nil {
+		handler = genericapifilters.WithCompressionDisabled(handler, c.CompressionDisabledFunc)
 	}
 	handler = genericfilters.WithHTTPLogging(handler)
 	if utilfeature.DefaultFeatureGate.Enabled(genericfeatures.APIServerTracing) {
