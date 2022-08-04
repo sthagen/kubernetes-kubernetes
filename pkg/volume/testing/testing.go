@@ -181,6 +181,7 @@ type FakeVolumePlugin struct {
 	LimitKey               string
 	ProvisionDelaySeconds  int
 	SupportsRemount        bool
+	SupportsSELinux        bool
 	DisableNodeExpansion   bool
 
 	// default to false which means it is attachable by default
@@ -250,9 +251,14 @@ func (plugin *FakeVolumePlugin) GetVolumeName(spec *volume.Spec) (string, error)
 	var volumeName string
 	if spec.Volume != nil && spec.Volume.GCEPersistentDisk != nil {
 		volumeName = spec.Volume.GCEPersistentDisk.PDName
+	} else if spec.Volume != nil && spec.Volume.RBD != nil {
+		volumeName = spec.Volume.RBD.RBDImage
 	} else if spec.PersistentVolume != nil &&
 		spec.PersistentVolume.Spec.GCEPersistentDisk != nil {
 		volumeName = spec.PersistentVolume.Spec.GCEPersistentDisk.PDName
+	} else if spec.PersistentVolume != nil &&
+		spec.PersistentVolume.Spec.RBD != nil {
+		volumeName = spec.PersistentVolume.Spec.RBD.RBDImage
 	} else if spec.Volume != nil && spec.Volume.CSI != nil {
 		volumeName = spec.Volume.CSI.Driver
 	}
@@ -277,6 +283,10 @@ func (plugin *FakeVolumePlugin) SupportsMountOption() bool {
 
 func (plugin *FakeVolumePlugin) SupportsBulkVolumeVerification() bool {
 	return false
+}
+
+func (plugin *FakeVolumePlugin) SupportsSELinuxContextMount(spec *volume.Spec) (bool, error) {
+	return plugin.SupportsSELinux, nil
 }
 
 func (plugin *FakeVolumePlugin) NewMounter(spec *volume.Spec, pod *v1.Pod, opts volume.VolumeOptions) (volume.Mounter, error) {
@@ -540,6 +550,10 @@ func (f *FakeBasicVolumePlugin) SupportsBulkVolumeVerification() bool {
 	return f.Plugin.SupportsBulkVolumeVerification()
 }
 
+func (f *FakeBasicVolumePlugin) SupportsSELinuxContextMount(spec *volume.Spec) (bool, error) {
+	return f.Plugin.SupportsSELinuxContextMount(spec)
+}
+
 func (f *FakeBasicVolumePlugin) SupportsMountOption() bool {
 	return f.Plugin.SupportsMountOption()
 }
@@ -621,6 +635,10 @@ func (plugin *FakeFileVolumePlugin) SupportsBulkVolumeVerification() bool {
 	return false
 }
 
+func (plugin *FakeFileVolumePlugin) SupportsSELinuxContextMount(spec *volume.Spec) (bool, error) {
+	return false, nil
+}
+
 func (plugin *FakeFileVolumePlugin) NewMounter(spec *volume.Spec, podRef *v1.Pod, opts volume.VolumeOptions) (volume.Mounter, error) {
 	return nil, nil
 }
@@ -671,9 +689,14 @@ func getUniqueVolumeName(spec *volume.Spec) (string, error) {
 	var volumeName string
 	if spec.Volume != nil && spec.Volume.GCEPersistentDisk != nil {
 		volumeName = spec.Volume.GCEPersistentDisk.PDName
+	} else if spec.Volume != nil && spec.Volume.RBD != nil {
+		volumeName = spec.Volume.RBD.RBDImage
 	} else if spec.PersistentVolume != nil &&
 		spec.PersistentVolume.Spec.GCEPersistentDisk != nil {
 		volumeName = spec.PersistentVolume.Spec.GCEPersistentDisk.PDName
+	} else if spec.PersistentVolume != nil &&
+		spec.PersistentVolume.Spec.RBD != nil {
+		volumeName = spec.PersistentVolume.Spec.RBD.RBDImage
 	}
 	if volumeName == "" {
 		volumeName = spec.Name()

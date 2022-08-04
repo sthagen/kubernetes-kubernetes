@@ -773,7 +773,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	klet.backOff = flowcontrol.NewBackOff(backOffPeriod, MaxContainerBackOff)
 
 	// setup eviction manager
-	evictionManager, evictionAdmitHandler := eviction.NewManager(klet.resourceAnalyzer, evictionConfig, killPodNow(klet.podWorkers, kubeDeps.Recorder), klet.podManager.GetMirrorPodByPod, klet.imageManager, klet.containerGC, kubeDeps.Recorder, nodeRef, klet.clock)
+	evictionManager, evictionAdmitHandler := eviction.NewManager(klet.resourceAnalyzer, evictionConfig,
+		killPodNow(klet.podWorkers, kubeDeps.Recorder), klet.podManager.GetMirrorPodByPod, klet.imageManager, klet.containerGC, kubeDeps.Recorder, nodeRef, klet.clock, kubeCfg.LocalStorageCapacityIsolation)
 
 	klet.evictionManager = evictionManager
 	klet.admitHandlers.AddPodAdmitHandler(evictionAdmitHandler)
@@ -837,6 +838,10 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		StateDirectory:                   rootDirectory,
 	})
 	klet.shutdownManager = shutdownManager
+	klet.usernsManager, err = MakeUserNsManager(klet)
+	if err != nil {
+		return nil, err
+	}
 	klet.admitHandlers.AddPodAdmitHandler(shutdownAdmitHandler)
 
 	// Finally, put the most recent version of the config on the Kubelet, so
@@ -1175,6 +1180,9 @@ type Kubelet struct {
 
 	// Handles node shutdown events for the Node.
 	shutdownManager nodeshutdown.Manager
+
+	// Manage user namespaces
+	usernsManager *usernsManager
 }
 
 // ListPodStats is delegated to StatsProvider, which implements stats.Provider interface
@@ -1384,7 +1392,7 @@ func (kl *Kubelet) initializeRuntimeDependentModules() {
 		os.Exit(1)
 	}
 	// containerManager must start after cAdvisor because it needs filesystem capacity information
-	if err := kl.containerManager.Start(node, kl.GetActivePods, kl.sourcesReady, kl.statusManager, kl.runtimeService); err != nil {
+	if err := kl.containerManager.Start(node, kl.GetActivePods, kl.sourcesReady, kl.statusManager, kl.runtimeService, kl.supportLocalStorageCapacityIsolation()); err != nil {
 		// Fail kubelet and rely on the babysitter to retry starting kubelet.
 		klog.ErrorS(err, "Failed to start ContainerManager")
 		os.Exit(1)
@@ -1888,6 +1896,8 @@ func (kl *Kubelet) syncTerminatedPod(ctx context.Context, pod *v1.Pod, podStatus
 		}
 		klog.V(4).InfoS("Pod termination removed cgroups", "pod", klog.KObj(pod), "podUID", pod.UID)
 	}
+
+	kl.usernsManager.Release(pod.UID)
 
 	// mark the final pod status
 	kl.statusManager.TerminatePod(pod)
@@ -2487,6 +2497,10 @@ func (kl *Kubelet) CheckpointContainer(
 	}
 
 	return nil
+}
+
+func (kl *Kubelet) supportLocalStorageCapacityIsolation() bool {
+	return kl.GetConfiguration().LocalStorageCapacityIsolation
 }
 
 // isSyncPodWorthy filters out events that are not worthy of pod syncing

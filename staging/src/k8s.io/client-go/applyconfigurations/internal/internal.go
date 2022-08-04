@@ -5433,6 +5433,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: claimRef
       type:
         namedType: io.k8s.api.core.v1.ObjectReference
+        elementRelationship: separable
     - name: csi
       type:
         namedType: io.k8s.api.core.v1.CSIPersistentVolumeSource
@@ -5760,6 +5761,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: boolean
     - name: hostPID
+      type:
+        scalar: boolean
+    - name: hostUsers
       type:
         scalar: boolean
     - name: hostname
@@ -10839,6 +10843,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: requiresRepublish
       type:
         scalar: boolean
+    - name: seLinuxMount
+      type:
+        scalar: boolean
     - name: storageCapacity
       type:
         scalar: boolean
@@ -11189,6 +11196,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: boolean
     - name: requiresRepublish
+      type:
+        scalar: boolean
+    - name: seLinuxMount
       type:
         scalar: boolean
     - name: storageCapacity

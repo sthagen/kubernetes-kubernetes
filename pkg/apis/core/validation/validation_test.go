@@ -1192,6 +1192,17 @@ func testVolumeClaimStorageClassInSpec(name, namespace, scName string, spec core
 	}
 }
 
+func testVolumeClaimStorageClassNilInSpec(name, namespace string, spec core.PersistentVolumeClaimSpec) *core.PersistentVolumeClaim {
+	spec.StorageClassName = nil
+	return &core.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: spec,
+	}
+}
+
 func testVolumeSnapshotDataSourceInSpec(name string, kind string, apiGroup string) *core.PersistentVolumeClaimSpec {
 	scName := "csi-plugin"
 	dataSourceInSpec := core.PersistentVolumeClaimSpec{
@@ -1239,6 +1250,18 @@ func TestAlphaVolumeSnapshotDataSource(t *testing.T) {
 
 func testVolumeClaimStorageClassInAnnotationAndSpec(name, namespace, scNameInAnn, scName string, spec core.PersistentVolumeClaimSpec) *core.PersistentVolumeClaim {
 	spec.StorageClassName = &scName
+	return &core.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			Annotations: map[string]string{v1.BetaStorageClassAnnotation: scNameInAnn},
+		},
+		Spec: spec,
+	}
+}
+
+func testVolumeClaimStorageClassInAnnotationAndNilInSpec(name, namespace, scNameInAnn string, spec core.PersistentVolumeClaimSpec) *core.PersistentVolumeClaim {
+	spec.StorageClassName = nil
 	return &core.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
@@ -1972,6 +1995,28 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 		},
 	})
 
+	validClaimStorageClassInSpecChanged := testVolumeClaimStorageClassInSpec("foo", "ns", "fast2", core.PersistentVolumeClaimSpec{
+		AccessModes: []core.PersistentVolumeAccessMode{
+			core.ReadOnlyMany,
+		},
+		Resources: core.ResourceRequirements{
+			Requests: core.ResourceList{
+				core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+			},
+		},
+	})
+
+	validClaimStorageClassNil := testVolumeClaimStorageClassNilInSpec("foo", "ns", core.PersistentVolumeClaimSpec{
+		AccessModes: []core.PersistentVolumeAccessMode{
+			core.ReadOnlyMany,
+		},
+		Resources: core.ResourceRequirements{
+			Requests: core.ResourceList{
+				core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+			},
+		},
+	})
+
 	invalidClaimStorageClassInSpec := testVolumeClaimStorageClassInSpec("foo", "ns", "fast2", core.PersistentVolumeClaimSpec{
 		AccessModes: []core.PersistentVolumeAccessMode{
 			core.ReadOnlyMany,
@@ -1985,6 +2030,18 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 
 	validClaimStorageClassInAnnotationAndSpec := testVolumeClaimStorageClassInAnnotationAndSpec(
 		"foo", "ns", "fast", "fast", core.PersistentVolumeClaimSpec{
+			AccessModes: []core.PersistentVolumeAccessMode{
+				core.ReadOnlyMany,
+			},
+			Resources: core.ResourceRequirements{
+				Requests: core.ResourceList{
+					core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+				},
+			},
+		})
+
+	validClaimStorageClassInAnnotationAndNilInSpec := testVolumeClaimStorageClassInAnnotationAndNilInSpec(
+		"foo", "ns", "fast", core.PersistentVolumeClaimSpec{
 			AccessModes: []core.PersistentVolumeAccessMode{
 				core.ReadOnlyMany,
 			},
@@ -2116,10 +2173,11 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 	})
 
 	scenarios := map[string]struct {
-		isExpectedFailure          bool
-		oldClaim                   *core.PersistentVolumeClaim
-		newClaim                   *core.PersistentVolumeClaim
-		enableRecoverFromExpansion bool
+		isExpectedFailure                    bool
+		oldClaim                             *core.PersistentVolumeClaim
+		newClaim                             *core.PersistentVolumeClaim
+		enableRecoverFromExpansion           bool
+		enableRetroactiveDefaultStorageClass bool
 	}{
 		"valid-update-volumeName-only": {
 			isExpectedFailure: false,
@@ -2230,6 +2288,69 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 			oldClaim:          validClaimStorageClass,
 			newClaim:          validClaimStorageClassInSpec,
 		},
+		"valid-upgrade-nil-storage-class-spec-to-spec": {
+			isExpectedFailure:                    false,
+			oldClaim:                             validClaimStorageClassNil,
+			newClaim:                             validClaimStorageClassInSpec,
+			enableRetroactiveDefaultStorageClass: true,
+			// Feature enabled - change from nil sc name is valid if there is no beta annotation.
+		},
+		"invalid-upgrade-nil-storage-class-spec-to-spec": {
+			isExpectedFailure:                    true,
+			oldClaim:                             validClaimStorageClassNil,
+			newClaim:                             validClaimStorageClassInSpec,
+			enableRetroactiveDefaultStorageClass: false,
+			// Feature disabled - change from nil sc name is invalid if there is no beta annotation.
+		},
+		"invalid-upgrade-not-nil-storage-class-spec-to-spec": {
+			isExpectedFailure:                    true,
+			oldClaim:                             validClaimStorageClassInSpec,
+			newClaim:                             validClaimStorageClassInSpecChanged,
+			enableRetroactiveDefaultStorageClass: true,
+			// Feature enablement must not allow non nil value change.
+		},
+		"invalid-upgrade-to-nil-storage-class-spec-to-spec": {
+			isExpectedFailure:                    true,
+			oldClaim:                             validClaimStorageClassInSpec,
+			newClaim:                             validClaimStorageClassNil,
+			enableRetroactiveDefaultStorageClass: true,
+			// Feature enablement must not allow change to nil value change.
+		},
+		"valid-upgrade-storage-class-annotation-and-nil-spec-to-spec": {
+			isExpectedFailure:                    false,
+			oldClaim:                             validClaimStorageClassInAnnotationAndNilInSpec,
+			newClaim:                             validClaimStorageClassInAnnotationAndSpec,
+			enableRetroactiveDefaultStorageClass: false,
+			// Change from nil sc name is valid if annotations match.
+		},
+		"valid-upgrade-storage-class-annotation-and-nil-spec-to-spec-retro": {
+			isExpectedFailure:                    false,
+			oldClaim:                             validClaimStorageClassInAnnotationAndNilInSpec,
+			newClaim:                             validClaimStorageClassInAnnotationAndSpec,
+			enableRetroactiveDefaultStorageClass: true,
+			// Change from nil sc name is valid if annotations match, feature enablement must not break this old behavior.
+		},
+		"invalid-upgrade-storage-class-annotation-and-spec-to-spec": {
+			isExpectedFailure:                    true,
+			oldClaim:                             validClaimStorageClassInAnnotationAndSpec,
+			newClaim:                             validClaimStorageClassInSpecChanged,
+			enableRetroactiveDefaultStorageClass: false,
+			// Change from non nil sc name is invalid if annotations don't match.
+		},
+		"invalid-upgrade-storage-class-annotation-and-spec-to-spec-retro": {
+			isExpectedFailure:                    true,
+			oldClaim:                             validClaimStorageClassInAnnotationAndSpec,
+			newClaim:                             validClaimStorageClassInSpecChanged,
+			enableRetroactiveDefaultStorageClass: true,
+			// Change from non nil sc name is invalid if annotations don't match, feature enablement must not break this old behavior.
+		},
+		"invalid-upgrade-storage-class-annotation-and-no-spec": {
+			isExpectedFailure:                    true,
+			oldClaim:                             validClaimStorageClassInAnnotationAndNilInSpec,
+			newClaim:                             validClaimStorageClassInSpecChanged,
+			enableRetroactiveDefaultStorageClass: true,
+			// Change from nil sc name is invalid if annotations don't match, feature enablement must not break this old behavior.
+		},
 		"invalid-upgrade-storage-class-annotation-to-spec": {
 			isExpectedFailure: true,
 			oldClaim:          validClaimStorageClass,
@@ -2294,6 +2415,7 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 	for name, scenario := range scenarios {
 		t.Run(name, func(t *testing.T) {
 			defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.RecoverVolumeExpansionFailure, scenario.enableRecoverFromExpansion)()
+			defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.RetroactiveDefaultStorageClass, scenario.enableRetroactiveDefaultStorageClass)()
 			scenario.oldClaim.ResourceVersion = "1"
 			scenario.newClaim.ResourceVersion = "1"
 			opts := ValidationOptionsForPersistentVolumeClaim(scenario.newClaim, scenario.oldClaim)
@@ -18277,6 +18399,7 @@ func TestValidateOSFields(t *testing.T) {
 		"SecurityContext.HostIPC",
 		"SecurityContext.HostNetwork",
 		"SecurityContext.HostPID",
+		"SecurityContext.HostUsers",
 		"SecurityContext.RunAsGroup",
 		"SecurityContext.RunAsUser",
 		"SecurityContext.SELinuxOptions",
@@ -20567,6 +20690,172 @@ func TestValidateNonSpecialIP(t *testing.T) {
 			errs := ValidateNonSpecialIP(tc.ip, fp)
 			if len(errs) == 0 {
 				t.Errorf("ValidateNonSpecialIP(%q, ...) = nil; want non-nil (errors)", tc.ip)
+			}
+		})
+	}
+}
+
+func TestValidateHostUsers(t *testing.T) {
+	falseVar := false
+	trueVar := true
+
+	cases := []struct {
+		name    string
+		success bool
+		spec    *core.PodSpec
+	}{
+		{
+			name:    "empty",
+			success: true,
+			spec:    &core.PodSpec{},
+		},
+		{
+			name:    "hostUsers unset",
+			success: true,
+			spec: &core.PodSpec{
+				SecurityContext: &core.PodSecurityContext{},
+			},
+		},
+		{
+			name:    "hostUsers=false",
+			success: true,
+			spec: &core.PodSpec{
+				SecurityContext: &core.PodSecurityContext{
+					HostUsers: &falseVar,
+				},
+			},
+		},
+		{
+			name:    "hostUsers=true",
+			success: true,
+			spec: &core.PodSpec{
+				SecurityContext: &core.PodSecurityContext{
+					HostUsers: &trueVar,
+				},
+			},
+		},
+		{
+			name:    "hostUsers=false & volumes",
+			success: true,
+			spec: &core.PodSpec{
+				SecurityContext: &core.PodSecurityContext{
+					HostUsers: &falseVar,
+				},
+				Volumes: []core.Volume{
+					{
+						Name: "configmap",
+						VolumeSource: core.VolumeSource{
+							ConfigMap: &core.ConfigMapVolumeSource{
+								LocalObjectReference: core.LocalObjectReference{Name: "configmap"},
+							},
+						},
+					},
+					{
+						Name: "secret",
+						VolumeSource: core.VolumeSource{
+							Secret: &core.SecretVolumeSource{
+								SecretName: "secret",
+							},
+						},
+					},
+					{
+						Name: "downward-api",
+						VolumeSource: core.VolumeSource{
+							DownwardAPI: &core.DownwardAPIVolumeSource{},
+						},
+					},
+					{
+						Name: "proj",
+						VolumeSource: core.VolumeSource{
+							Projected: &core.ProjectedVolumeSource{},
+						},
+					},
+					{
+						Name: "empty-dir",
+						VolumeSource: core.VolumeSource{
+							EmptyDir: &core.EmptyDirVolumeSource{},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:    "hostUsers=false - unsupported volume",
+			success: false,
+			spec: &core.PodSpec{
+				SecurityContext: &core.PodSecurityContext{
+					HostUsers: &falseVar,
+				},
+				Volumes: []core.Volume{
+					{
+						Name: "host-path",
+						VolumeSource: core.VolumeSource{
+							HostPath: &core.HostPathVolumeSource{},
+						},
+					},
+				},
+			},
+		},
+		{
+			// It should ignore unsupported volumes with hostUsers=true.
+			name:    "hostUsers=true - unsupported volume",
+			success: true,
+			spec: &core.PodSpec{
+				SecurityContext: &core.PodSecurityContext{
+					HostUsers: &trueVar,
+				},
+				Volumes: []core.Volume{
+					{
+						Name: "host-path",
+						VolumeSource: core.VolumeSource{
+							HostPath: &core.HostPathVolumeSource{},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:    "hostUsers=false & HostNetwork",
+			success: false,
+			spec: &core.PodSpec{
+				SecurityContext: &core.PodSecurityContext{
+					HostUsers:   &falseVar,
+					HostNetwork: true,
+				},
+			},
+		},
+		{
+			name:    "hostUsers=false & HostPID",
+			success: false,
+			spec: &core.PodSpec{
+				SecurityContext: &core.PodSecurityContext{
+					HostUsers: &falseVar,
+					HostPID:   true,
+				},
+			},
+		},
+		{
+			name:    "hostUsers=false & HostIPC",
+			success: false,
+			spec: &core.PodSpec{
+				SecurityContext: &core.PodSecurityContext{
+					HostUsers: &falseVar,
+					HostIPC:   true,
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fPath := field.NewPath("spec")
+
+			allErrs := validateHostUsers(tc.spec, fPath)
+			if !tc.success && len(allErrs) == 0 {
+				t.Errorf("Unexpected success")
+			}
+			if tc.success && len(allErrs) != 0 {
+				t.Errorf("Unexpected error(s): %v", allErrs)
 			}
 		})
 	}

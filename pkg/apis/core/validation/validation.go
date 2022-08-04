@@ -2027,12 +2027,15 @@ type PersistentVolumeClaimSpecValidationOptions struct {
 	AllowReadWriteOncePod bool
 	// Allow users to recover from previously failing expansion operation
 	EnableRecoverFromExpansionFailure bool
+	// Allow assigning StorageClass to unbound PVCs retroactively
+	EnableRetroactiveDefaultStorageClass bool
 }
 
 func ValidationOptionsForPersistentVolumeClaim(pvc, oldPvc *core.PersistentVolumeClaim) PersistentVolumeClaimSpecValidationOptions {
 	opts := PersistentVolumeClaimSpecValidationOptions{
-		AllowReadWriteOncePod:             utilfeature.DefaultFeatureGate.Enabled(features.ReadWriteOncePod),
-		EnableRecoverFromExpansionFailure: utilfeature.DefaultFeatureGate.Enabled(features.RecoverVolumeExpansionFailure),
+		AllowReadWriteOncePod:                utilfeature.DefaultFeatureGate.Enabled(features.ReadWriteOncePod),
+		EnableRecoverFromExpansionFailure:    utilfeature.DefaultFeatureGate.Enabled(features.RecoverVolumeExpansionFailure),
+		EnableRetroactiveDefaultStorageClass: utilfeature.DefaultFeatureGate.Enabled(features.RetroactiveDefaultStorageClass),
 	}
 	if oldPvc == nil {
 		// If there's no old PVC, use the options based solely on feature enablement
@@ -2168,7 +2171,7 @@ func ValidatePersistentVolumeClaimUpdate(newPvc, oldPvc *core.PersistentVolumeCl
 		oldPvcClone.Spec.VolumeName = newPvcClone.Spec.VolumeName // +k8s:verify-mutation:reason=clone
 	}
 
-	if validateStorageClassUpgrade(oldPvcClone.Annotations, newPvcClone.Annotations,
+	if validateStorageClassUpgradeFromAnnotation(oldPvcClone.Annotations, newPvcClone.Annotations,
 		oldPvcClone.Spec.StorageClassName, newPvcClone.Spec.StorageClassName) {
 		newPvcClone.Spec.StorageClassName = nil
 		metav1.SetMetaDataAnnotation(&newPvcClone.ObjectMeta, core.BetaStorageClassAnnotation, oldPvcClone.Annotations[core.BetaStorageClassAnnotation])
@@ -2176,6 +2179,13 @@ func ValidatePersistentVolumeClaimUpdate(newPvc, oldPvc *core.PersistentVolumeCl
 		// storageclass annotation should be immutable after creation
 		// TODO: remove Beta when no longer needed
 		allErrs = append(allErrs, ValidateImmutableAnnotation(newPvc.ObjectMeta.Annotations[v1.BetaStorageClassAnnotation], oldPvc.ObjectMeta.Annotations[v1.BetaStorageClassAnnotation], v1.BetaStorageClassAnnotation, field.NewPath("metadata"))...)
+
+		// If update from annotation to attribute failed we can attempt try to validate update from nil value.
+		if validateStorageClassUpgradeFromNil(oldPvc.Annotations, oldPvc.Spec.StorageClassName, newPvc.Spec.StorageClassName, opts) {
+			newPvcClone.Spec.StorageClassName = oldPvcClone.Spec.StorageClassName // +k8s:verify-mutation:reason=clone
+		}
+		// TODO: add a specific error with a hint that storage class name can not be changed
+		// (instead of letting spec comparison below return generic field forbidden error)
 	}
 
 	// lets make sure storage values are same.
@@ -2216,13 +2226,27 @@ func ValidatePersistentVolumeClaimUpdate(newPvc, oldPvc *core.PersistentVolumeCl
 // 2. The old pvc's StorageClassName is not set
 // 3. The new pvc's StorageClassName is set and equal to the old value in annotation
 // 4. If the new pvc's StorageClassAnnotation is set,it must be equal to the old pv/pvc's StorageClassAnnotation
-func validateStorageClassUpgrade(oldAnnotations, newAnnotations map[string]string, oldScName, newScName *string) bool {
+func validateStorageClassUpgradeFromAnnotation(oldAnnotations, newAnnotations map[string]string, oldScName, newScName *string) bool {
 	oldSc, oldAnnotationExist := oldAnnotations[core.BetaStorageClassAnnotation]
 	newScInAnnotation, newAnnotationExist := newAnnotations[core.BetaStorageClassAnnotation]
 	return oldAnnotationExist /* condition 1 */ &&
 		oldScName == nil /* condition 2*/ &&
 		(newScName != nil && *newScName == oldSc) /* condition 3 */ &&
 		(!newAnnotationExist || newScInAnnotation == oldSc) /* condition 4 */
+}
+
+// Provide an upgrade path from PVC with nil storage class. We allow update of
+// StorageClassName only if following four conditions are met at the same time:
+// 1. RetroactiveDefaultStorageClass FeatureGate is enabled
+// 2. The new pvc's StorageClassName is not nil
+// 3. The old pvc's StorageClassName is nil
+// 4. The old pvc either does not have beta annotation set, or the beta annotation matches new pvc's StorageClassName
+func validateStorageClassUpgradeFromNil(oldAnnotations map[string]string, oldScName, newScName *string, opts PersistentVolumeClaimSpecValidationOptions) bool {
+	oldAnnotation, oldAnnotationExist := oldAnnotations[core.BetaStorageClassAnnotation]
+	return opts.EnableRetroactiveDefaultStorageClass /* condition 1 */ &&
+		newScName != nil /* condition 2 */ &&
+		oldScName == nil /* condition 3 */ &&
+		(!oldAnnotationExist || *newScName == oldAnnotation) /* condition 4 */
 }
 
 var resizeStatusSet = sets.NewString(string(core.PersistentVolumeClaimNoExpansionInProgress),
@@ -3075,6 +3099,52 @@ func validateContainerCommon(ctr *core.Container, volumes map[string]core.Volume
 	allErrs = append(allErrs, validatePullPolicy(ctr.ImagePullPolicy, path.Child("imagePullPolicy"))...)
 	allErrs = append(allErrs, ValidateResourceRequirements(&ctr.Resources, path.Child("resources"), opts)...)
 	allErrs = append(allErrs, ValidateSecurityContext(ctr.SecurityContext, path.Child("securityContext"))...)
+	return allErrs
+}
+
+func validateHostUsers(spec *core.PodSpec, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	// Only make the following checks if hostUsers is false (otherwise, the container uses the
+	// same userns as the host, and so there isn't anything to check).
+	if spec.SecurityContext == nil || spec.SecurityContext.HostUsers == nil || *spec.SecurityContext.HostUsers == true {
+		return allErrs
+	}
+
+	// For now only these volumes are supported:
+	// - configmap
+	// - secret
+	// - downwardAPI
+	// - emptyDir
+	// - projected
+	// So reject anything else.
+	for i, vol := range spec.Volumes {
+		switch {
+		case vol.EmptyDir != nil:
+		case vol.Secret != nil:
+		case vol.DownwardAPI != nil:
+		case vol.ConfigMap != nil:
+		case vol.Projected != nil:
+		default:
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("volumes").Index(i), "volume type not supported when `pod.Spec.HostUsers` is false"))
+		}
+	}
+
+	// We decided to restrict the usage of userns with other host namespaces:
+	// 	https://github.com/kubernetes/kubernetes/pull/111090#discussion_r935994282
+	// The tl;dr is: you can easily run into permission issues that seem unexpected, we don't
+	// know of any good use case and we can always enable them later.
+
+	// Note we already validated above spec.SecurityContext is not nil.
+	if spec.SecurityContext.HostNetwork {
+		allErrs = append(allErrs, field.Forbidden(fldPath.Child("hostNetwork"), "when `pod.Spec.HostUsers` is false"))
+	}
+	if spec.SecurityContext.HostPID {
+		allErrs = append(allErrs, field.Forbidden(fldPath.Child("HostPID"), "when `pod.Spec.HostUsers` is false"))
+	}
+	if spec.SecurityContext.HostIPC {
+		allErrs = append(allErrs, field.Forbidden(fldPath.Child("HostIPC"), "when `pod.Spec.HostUsers` is false"))
+	}
 
 	return allErrs
 }
@@ -3545,6 +3615,7 @@ func ValidatePodSpec(spec *core.PodSpec, podMeta *metav1.ObjectMeta, fldPath *fi
 	allErrs = append(allErrs, validateReadinessGates(spec.ReadinessGates, fldPath.Child("readinessGates"))...)
 	allErrs = append(allErrs, validateTopologySpreadConstraints(spec.TopologySpreadConstraints, fldPath.Child("topologySpreadConstraints"))...)
 	allErrs = append(allErrs, validateWindowsHostProcessPod(spec, fldPath, opts)...)
+	allErrs = append(allErrs, validateHostUsers(spec, fldPath)...)
 	if len(spec.ServiceAccountName) > 0 {
 		for _, msg := range ValidateServiceAccountName(spec.ServiceAccountName, false) {
 			allErrs = append(allErrs, field.Invalid(fldPath.Child("serviceAccountName"), spec.ServiceAccountName, msg))
@@ -3636,6 +3707,9 @@ func validateWindows(spec *core.PodSpec, fldPath *field.Path) field.ErrorList {
 	if securityContext != nil {
 		if securityContext.SELinuxOptions != nil {
 			allErrs = append(allErrs, field.Forbidden(fldPath.Child("securityContext").Child("seLinuxOptions"), "cannot be set for a windows pod"))
+		}
+		if securityContext.HostUsers != nil {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("hostUsers"), "cannot be set for a windows pod"))
 		}
 		if securityContext.HostPID {
 			allErrs = append(allErrs, field.Forbidden(fldPath.Child("hostPID"), "cannot be set for a windows pod"))

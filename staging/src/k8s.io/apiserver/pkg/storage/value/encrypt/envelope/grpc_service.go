@@ -21,8 +21,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -31,13 +29,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope/util"
 	kmsapi "k8s.io/apiserver/pkg/storage/value/encrypt/envelope/v1beta1"
 )
 
 const (
-	// Now only supported unix domain socket.
+	// unixProtocol is the only supported protocol for remote KMS provider.
 	unixProtocol = "unix"
-
 	// Current version for the protocol interface definition.
 	kmsapiVersion = "v1beta1"
 
@@ -57,7 +55,7 @@ type gRPCService struct {
 func NewGRPCService(endpoint string, callTimeout time.Duration) (Service, error) {
 	klog.V(4).Infof("Configure KMS provider with endpoint: %s", endpoint)
 
-	addr, err := parseEndpoint(endpoint)
+	addr, err := util.ParseEndpoint(endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -87,32 +85,6 @@ func NewGRPCService(endpoint string, callTimeout time.Duration) (Service, error)
 
 	s.kmsClient = kmsapi.NewKeyManagementServiceClient(s.connection)
 	return s, nil
-}
-
-// Parse the endpoint to extract schema, host or path.
-func parseEndpoint(endpoint string) (string, error) {
-	if len(endpoint) == 0 {
-		return "", fmt.Errorf("remote KMS provider can't use empty string as endpoint")
-	}
-
-	u, err := url.Parse(endpoint)
-	if err != nil {
-		return "", fmt.Errorf("invalid endpoint %q for remote KMS provider, error: %v", endpoint, err)
-	}
-
-	if u.Scheme != unixProtocol {
-		return "", fmt.Errorf("unsupported scheme %q for remote KMS provider", u.Scheme)
-	}
-
-	// Linux abstract namespace socket - no physical file required
-	// Warning: Linux Abstract sockets have not concept of ACL (unlike traditional file based sockets).
-	// However, Linux Abstract sockets are subject to Linux networking namespace, so will only be accessible to
-	// containers within the same pod (unless host networking is used).
-	if strings.HasPrefix(u.Path, "/@") {
-		return strings.TrimPrefix(u.Path, "/"), nil
-	}
-
-	return u.Path, nil
 }
 
 func (g *gRPCService) checkAPIVersion(ctx context.Context) error {
