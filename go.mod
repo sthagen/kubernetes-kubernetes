@@ -53,8 +53,8 @@ require (
 	github.com/mrunalp/fileutils v0.5.0
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 	github.com/mvdan/xurls v1.1.0
-	github.com/onsi/ginkgo/v2 v2.1.4
-	github.com/onsi/gomega v1.19.0
+	github.com/onsi/ginkgo/v2 v2.1.6
+	github.com/onsi/gomega v1.20.1
 	github.com/opencontainers/runc v1.1.3
 	github.com/opencontainers/selinux v1.10.0
 	github.com/pkg/errors v0.9.1
@@ -110,8 +110,8 @@ require (
 	k8s.io/controller-manager v0.0.0
 	k8s.io/cri-api v0.0.0
 	k8s.io/csi-translation-lib v0.0.0
-	k8s.io/gengo v0.0.0-20211129171323-c02415ce4185
-	k8s.io/klog/v2 v2.70.1
+	k8s.io/gengo v0.0.0-20220902162205-c0856e24416d
+	k8s.io/klog/v2 v2.80.0
 	k8s.io/kube-aggregator v0.0.0
 	k8s.io/kube-controller-manager v0.0.0
 	k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1
@@ -176,7 +176,7 @@ require (
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/golang-jwt/jwt/v4 v4.2.0 // indirect
 	github.com/google/btree v1.0.1 // indirect
-	github.com/google/cel-go v0.12.4 // indirect
+	github.com/google/cel-go v0.12.5 // indirect
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/googleapis/gax-go/v2 v2.1.1 // indirect
@@ -376,7 +376,7 @@ replace (
 	github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
 	github.com/golang-jwt/jwt/v4 => github.com/golang-jwt/jwt/v4 v4.2.0
 	github.com/golang/freetype => github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
-	github.com/golang/glog => github.com/golang/glog v1.0.0
+	github.com/golang/glog => github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/groupcache => github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 	github.com/golang/mock => github.com/golang/mock v1.6.0
 	github.com/golang/protobuf => github.com/golang/protobuf v1.5.2
@@ -386,7 +386,7 @@ replace (
 	github.com/golangplus/testing => github.com/golangplus/testing v1.0.0
 	github.com/google/btree => github.com/google/btree v1.0.1
 	github.com/google/cadvisor => github.com/google/cadvisor v0.45.0
-	github.com/google/cel-go => github.com/google/cel-go v0.12.4
+	github.com/google/cel-go => github.com/google/cel-go v0.12.5
 	github.com/google/gnostic => github.com/google/gnostic v0.5.7-v3refs
 	github.com/google/go-cmp => github.com/google/go-cmp v0.5.8
 	github.com/google/gofuzz => github.com/google/gofuzz v1.1.0
@@ -452,8 +452,8 @@ replace (
 	github.com/mxk/go-flowrate => github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 	github.com/niemeyer/pretty => github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e
 	github.com/olekukonko/tablewriter => github.com/olekukonko/tablewriter v0.0.4
-	github.com/onsi/ginkgo/v2 => github.com/onsi/ginkgo/v2 v2.1.4
-	github.com/onsi/gomega => github.com/onsi/gomega v1.19.0
+	github.com/onsi/ginkgo/v2 => github.com/onsi/ginkgo/v2 v2.1.6
+	github.com/onsi/gomega => github.com/onsi/gomega v1.20.1
 	github.com/opencontainers/go-digest => github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec => github.com/opencontainers/image-spec v1.0.2
 	github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.3
@@ -576,8 +576,8 @@ replace (
 	k8s.io/controller-manager => ./staging/src/k8s.io/controller-manager
 	k8s.io/cri-api => ./staging/src/k8s.io/cri-api
 	k8s.io/csi-translation-lib => ./staging/src/k8s.io/csi-translation-lib
-	k8s.io/gengo => k8s.io/gengo v0.0.0-20211129171323-c02415ce4185
-	k8s.io/klog/v2 => k8s.io/klog/v2 v2.70.1
+	k8s.io/gengo => k8s.io/gengo v0.0.0-20220902162205-c0856e24416d
+	k8s.io/klog/v2 => k8s.io/klog/v2 v2.80.0
 	k8s.io/kube-aggregator => ./staging/src/k8s.io/kube-aggregator
 	k8s.io/kube-controller-manager => ./staging/src/k8s.io/kube-controller-manager
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1
