@@ -90,8 +90,8 @@ readonly KUBE_RSYNC_PORT="${KUBE_RSYNC_PORT:-}"
 readonly KUBE_CONTAINER_RSYNC_PORT=8730
 
 # These are the default versions (image tags) for their respective base images.
-readonly __default_distroless_iptables_version=v0.1.1
-readonly __default_go_runner_version=v2.3.1-go1.19.1-bullseye.0
+readonly __default_distroless_iptables_version=v0.1.2
+readonly __default_go_runner_version=v2.3.1-go1.19.2-bullseye.0
 readonly __default_setcap_version=bullseye-v1.3.0
 
 # These are the base images for the Docker-wrapped binaries.
@@ -663,12 +663,9 @@ function kube::build::sync_to_container() {
   kube::build::rsync \
     --delete \
     --filter='H /.git' \
-    --filter='- /.make/' \
     --filter='- /_tmp/' \
     --filter='- /_output/' \
     --filter='- /' \
-    --filter='H zz_generated.*' \
-    --filter='H generated.proto' \
     "${KUBE_ROOT}/" "rsync://k8s@${KUBE_RSYNC_ADDR}/k8s/"
 
   kube::build::stop_rsyncd_container
