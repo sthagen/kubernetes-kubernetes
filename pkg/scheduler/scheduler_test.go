@@ -292,7 +292,7 @@ func TestFailureHandler(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			testPodInfo := &framework.QueuedPodInfo{PodInfo: framework.NewPodInfo(testPod)}
+			testPodInfo := &framework.QueuedPodInfo{PodInfo: mustNewPodInfo(t, testPod)}
 			s.FailureHandler(ctx, fwk, testPodInfo, tt.injectErr, v1.PodReasonUnschedulable, nil)
 
 			var got *v1.Pod
@@ -367,7 +367,7 @@ func TestFailureHandler_NodeNotFound(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			testPodInfo := &framework.QueuedPodInfo{PodInfo: framework.NewPodInfo(testPod)}
+			testPodInfo := &framework.QueuedPodInfo{PodInfo: mustNewPodInfo(t, testPod)}
 			s.FailureHandler(ctx, fwk, testPodInfo, tt.injectErr, v1.PodReasonUnschedulable, nil)
 
 			gotNodes := schedulerCache.Dump().Nodes
@@ -406,7 +406,7 @@ func TestFailureHandler_PodAlreadyBound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testPodInfo := &framework.QueuedPodInfo{PodInfo: framework.NewPodInfo(testPod)}
+	testPodInfo := &framework.QueuedPodInfo{PodInfo: mustNewPodInfo(t, testPod)}
 	s.FailureHandler(ctx, fwk, testPodInfo, fmt.Errorf("binding rejected: timeout"), v1.PodReasonUnschedulable, nil)
 
 	pod := getPodFromPriorityQueue(queue, testPod)
@@ -460,17 +460,14 @@ func initScheduler(stop <-chan struct{}, cache internalcache.Cache, queue intern
 		return nil, nil, err
 	}
 
-	s := newScheduler(
-		cache,
-		nil,
-		nil,
-		stop,
-		queue,
-		profile.Map{testSchedulerName: fwk},
-		client,
-		nil,
-		0,
-	)
+	s := &Scheduler{
+		Cache:           cache,
+		client:          client,
+		StopEverything:  stop,
+		SchedulingQueue: queue,
+		Profiles:        profile.Map{testSchedulerName: fwk},
+	}
+	s.applyDefaultHandlers()
 
 	return s, fwk, nil
 }

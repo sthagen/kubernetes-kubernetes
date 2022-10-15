@@ -256,12 +256,6 @@ const (
 	// Enables usage of hugepages-<size> in downward API.
 	DownwardAPIHugePages featuregate.Feature = "DownwardAPIHugePages"
 
-	// owner: @mtaufen
-	// alpha: v1.4
-	// beta: v1.11
-	// deprecated: 1.22
-	DynamicKubeletConfig featuregate.Feature = "DynamicKubeletConfig"
-
 	// owner: @andrewsykim
 	// kep: https://kep.k8s.io/1672
 	// alpha: v1.20
@@ -308,6 +302,7 @@ const (
 	// owner: @gjkim42
 	// kep: https://kep.k8s.io/2595
 	// alpha: v1.22
+	// beta: v1.26
 	//
 	// Enables apiserver and kubelet to allow up to 32 DNSSearchPaths and up to 2048 DNSSearchListChars.
 	ExpandedDNSConfig featuregate.Feature = "ExpandedDNSConfig"
@@ -451,9 +446,10 @@ const (
 	// yet.
 	JobTrackingWithFinalizers featuregate.Feature = "JobTrackingWithFinalizers"
 
-	// owner: @andrewsykim @adisky
+	// owner: @andrewsykim @adisky @ndixita
 	// alpha: v1.20
 	// beta: v1.24
+	// GA: v1.26
 	//
 	// Enable kubelet exec plugins for image pull credentials.
 	KubeletCredentialProviders featuregate.Feature = "KubeletCredentialProviders"
@@ -704,6 +700,7 @@ const (
 	// kep: https://kep.k8s.io/3070
 	// alpha: v1.24
 	// beta: v1.25
+	// ga: v1.26
 	//
 	// Subdivide the ClusterIP range for dynamic and static IP allocation.
 	ServiceIPStaticSubrange featuregate.Feature = "ServiceIPStaticSubrange"
@@ -863,8 +860,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	DownwardAPIHugePages: {Default: true, PreRelease: featuregate.Beta}, // on by default in 1.22
 
-	DynamicKubeletConfig: {Default: false, PreRelease: featuregate.Deprecated}, // feature gate is deprecated in 1.22, kubelet logic is removed in 1.24, api server logic can be removed in 1.26
-
 	EndpointSliceTerminatingCondition: {Default: true, PreRelease: featuregate.Beta},
 
 	EphemeralContainers: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.27
@@ -877,7 +872,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	ExpandPersistentVolumes: {Default: true, PreRelease: featuregate.GA}, // remove in 1.26
 
-	ExpandedDNSConfig: {Default: false, PreRelease: featuregate.Alpha},
+	ExpandedDNSConfig: {Default: true, PreRelease: featuregate.Beta},
 
 	ExperimentalHostUserNamespaceDefaultingGate: {Default: false, PreRelease: featuregate.Beta},
 
@@ -917,7 +912,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	JobTrackingWithFinalizers: {Default: true, PreRelease: featuregate.Beta},
 
-	KubeletCredentialProviders: {Default: true, PreRelease: featuregate.Beta},
+	KubeletCredentialProviders: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.28
 
 	KubeletInUserNamespace: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -985,7 +980,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	SeccompDefault: {Default: true, PreRelease: featuregate.Beta},
 
-	ServiceIPStaticSubrange: {Default: true, PreRelease: featuregate.Beta},
+	ServiceIPStaticSubrange: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.28
 
 	ServiceInternalTrafficPolicy: {Default: true, PreRelease: featuregate.Beta},
 

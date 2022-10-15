@@ -33,7 +33,7 @@ require (
 	github.com/elazarl/goproxy v0.0.0-20180725130230-947c36da3153
 	github.com/emicklei/go-restful/v3 v3.9.0
 	github.com/evanphx/json-patch v4.12.0+incompatible
-	github.com/fsnotify/fsnotify v1.5.4
+	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-logr/logr v1.2.3
 	github.com/godbus/dbus/v5 v5.0.6
 	github.com/gogo/protobuf v1.3.2
@@ -61,7 +61,7 @@ require (
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.37.0
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/spf13/cobra v1.5.0
+	github.com/spf13/cobra v1.6.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.0
 	github.com/vishvananda/netlink v1.1.0
@@ -81,7 +81,7 @@ require (
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	golang.org/x/oauth2 v0.0.0-20220223155221-ee480838109b
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
-	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f
+	golang.org/x/sys v0.0.0-20220908164124-27713097b956
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8
 	golang.org/x/tools v0.1.12
@@ -112,7 +112,7 @@ require (
 	k8s.io/kms v0.0.0
 	k8s.io/kube-aggregator v0.0.0
 	k8s.io/kube-controller-manager v0.0.0
-	k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1
+	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280
 	k8s.io/kube-proxy v0.0.0
 	k8s.io/kube-scheduler v0.0.0
 	k8s.io/kubectl v0.0.0
@@ -182,7 +182,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/jonboulle/clockwork v0.2.2 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
@@ -234,7 +234,7 @@ require (
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/text v0.3.8 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
@@ -335,9 +335,8 @@ replace (
 	github.com/flynn/go-shlex => github.com/flynn/go-shlex v0.0.0-20150515145356-3f9db97f8568
 	github.com/form3tech-oss/jwt-go => github.com/form3tech-oss/jwt-go v3.2.3+incompatible
 	github.com/frankban/quicktest => github.com/frankban/quicktest v1.11.3
-	github.com/fsnotify/fsnotify => github.com/fsnotify/fsnotify v1.5.4
+	github.com/fsnotify/fsnotify => github.com/fsnotify/fsnotify v1.6.0
 	github.com/fvbommel/sortorder => github.com/fvbommel/sortorder v1.0.1
-	github.com/getkin/kin-openapi => github.com/getkin/kin-openapi v0.76.0
 	github.com/getsentry/raven-go => github.com/getsentry/raven-go v0.2.0
 	github.com/ghodss/yaml => github.com/ghodss/yaml v1.0.0
 	github.com/go-errors/errors => github.com/go-errors/errors v1.0.1
@@ -385,7 +384,7 @@ replace (
 	github.com/grpc-ecosystem/grpc-gateway/v2 => github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0
 	github.com/ianlancetaylor/demangle => github.com/ianlancetaylor/demangle v0.0.0-20200824232613-28f6c0f3b639
 	github.com/imdario/mergo => github.com/imdario/mergo v0.3.6
-	github.com/inconshreveable/mousetrap => github.com/inconshreveable/mousetrap v1.0.0
+	github.com/inconshreveable/mousetrap => github.com/inconshreveable/mousetrap v1.0.1
 	github.com/ishidawataru/sctp => github.com/ishidawataru/sctp v0.0.0-20190723014705-7c296d48a2b5
 	github.com/jmespath/go-jmespath => github.com/jmespath/go-jmespath v0.4.0
 	github.com/jmespath/go-jmespath/internal/testify => github.com/jmespath/go-jmespath/internal/testify v1.5.1
@@ -450,7 +449,7 @@ replace (
 	github.com/sergi/go-diff => github.com/sergi/go-diff v1.1.0
 	github.com/sirupsen/logrus => github.com/sirupsen/logrus v1.8.1
 	github.com/soheilhy/cmux => github.com/soheilhy/cmux v0.1.5
-	github.com/spf13/cobra => github.com/spf13/cobra v1.5.0
+	github.com/spf13/cobra => github.com/spf13/cobra v1.6.0
 	github.com/spf13/pflag => github.com/spf13/pflag v1.0.5
 	github.com/stoewer/go-strcase => github.com/stoewer/go-strcase v1.2.0
 	github.com/stretchr/objx => github.com/stretchr/objx v0.4.0
@@ -496,9 +495,9 @@ replace (
 	golang.org/x/net => golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	golang.org/x/oauth2 => golang.org/x/oauth2 v0.0.0-20220223155221-ee480838109b
 	golang.org/x/sync => golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
-	golang.org/x/sys => golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f
+	golang.org/x/sys => golang.org/x/sys v0.0.0-20220908164124-27713097b956
 	golang.org/x/term => golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
-	golang.org/x/text => golang.org/x/text v0.3.7
+	golang.org/x/text => golang.org/x/text v0.3.8
 	golang.org/x/time => golang.org/x/time v0.0.0-20220210224613-90d013bbcef8
 	golang.org/x/tools => golang.org/x/tools v0.1.12
 	golang.org/x/xerrors => golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
@@ -539,7 +538,7 @@ replace (
 	k8s.io/kms => ./staging/src/k8s.io/kms
 	k8s.io/kube-aggregator => ./staging/src/k8s.io/kube-aggregator
 	k8s.io/kube-controller-manager => ./staging/src/k8s.io/kube-controller-manager
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280
 	k8s.io/kube-proxy => ./staging/src/k8s.io/kube-proxy
 	k8s.io/kube-scheduler => ./staging/src/k8s.io/kube-scheduler
 	k8s.io/kubectl => ./staging/src/k8s.io/kubectl
