@@ -20,7 +20,7 @@ require (
 	github.com/Microsoft/hcsshim v0.8.22
 	github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
-	github.com/aws/aws-sdk-go v1.38.49
+	github.com/aws/aws-sdk-go v1.44.116
 	github.com/blang/semver/v4 v4.0.0
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/coredns/corefile-migration v1.0.17
@@ -51,8 +51,8 @@ require (
 	github.com/moby/ipvs v1.0.1
 	github.com/mrunalp/fileutils v0.5.0
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
-	github.com/onsi/ginkgo/v2 v2.2.0
-	github.com/onsi/gomega v1.20.1
+	github.com/onsi/ginkgo/v2 v2.3.1
+	github.com/onsi/gomega v1.22.1
 	github.com/opencontainers/runc v1.1.3
 	github.com/opencontainers/selinux v1.10.0
 	github.com/pkg/errors v0.9.1
@@ -277,7 +277,7 @@ replace (
 	github.com/armon/circbuf => github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e
 	github.com/armon/go-socks5 => github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 	github.com/asaskevich/govalidator => github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a
-	github.com/aws/aws-sdk-go => github.com/aws/aws-sdk-go v1.38.49
+	github.com/aws/aws-sdk-go => github.com/aws/aws-sdk-go v1.44.116
 	github.com/benbjohnson/clock => github.com/benbjohnson/clock v1.1.0
 	github.com/beorn7/perks => github.com/beorn7/perks v1.0.1
 	github.com/blang/semver => github.com/blang/semver v3.5.1+incompatible
@@ -424,8 +424,8 @@ replace (
 	github.com/mxk/go-flowrate => github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 	github.com/niemeyer/pretty => github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e
 	github.com/olekukonko/tablewriter => github.com/olekukonko/tablewriter v0.0.4
-	github.com/onsi/ginkgo/v2 => github.com/onsi/ginkgo/v2 v2.2.0
-	github.com/onsi/gomega => github.com/onsi/gomega v1.20.1
+	github.com/onsi/ginkgo/v2 => github.com/onsi/ginkgo/v2 v2.3.1
+	github.com/onsi/gomega => github.com/onsi/gomega v1.22.1
 	github.com/opencontainers/go-digest => github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec => github.com/opencontainers/image-spec v1.0.2
 	github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.3

@@ -1,3 +1,120 @@
+- name: network_programming_duration_seconds
+  subsystem: kube_proxy
+  help: In Cluster Network Programming Latency in seconds
+  type: Histogram
+  stabilityLevel: BETA
+  buckets:
+  - 0.25
+  - 0.5
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+  - 12
+  - 13
+  - 14
+  - 15
+  - 16
+  - 17
+  - 18
+  - 19
+  - 20
+  - 21
+  - 22
+  - 23
+  - 24
+  - 25
+  - 26
+  - 27
+  - 28
+  - 29
+  - 30
+  - 31
+  - 32
+  - 33
+  - 34
+  - 35
+  - 36
+  - 37
+  - 38
+  - 39
+  - 40
+  - 41
+  - 42
+  - 43
+  - 44
+  - 45
+  - 46
+  - 47
+  - 48
+  - 49
+  - 50
+  - 51
+  - 52
+  - 53
+  - 54
+  - 55
+  - 56
+  - 57
+  - 58
+  - 59
+  - 60
+  - 65
+  - 70
+  - 75
+  - 80
+  - 85
+  - 90
+  - 95
+  - 100
+  - 105
+  - 110
+  - 115
+  - 120
+  - 150
+  - 180
+  - 210
+  - 240
+  - 270
+  - 300
+- name: network_programming_duration_seconds2
+  subsystem: kube_proxy
+  help: In Cluster Network Programming Latency in seconds
+  type: Histogram
+  stabilityLevel: BETA
+  buckets:
+  - 0.25
+  - 0.5
+  - 1
+  - 5
+  - 10
+  - 59
+  - 60
+  - 65
+  - 70
+  - 75
+  - 80
+  - 85
+  - 90
+  - 95
+  - 100
+  - 105
+  - 110
+  - 115
+  - 120
+  - 150
+  - 180
+  - 210
+  - 240
+  - 270
+  - 300
 - name: certificate_manager_client_ttl_seconds
   subsystem: kubelet
   help: Gauge of the TTL (time-to-live) of the Kubelet's client certificate. The value
@@ -39,14 +156,13 @@
   type: Summary
   stabilityLevel: BETA
   maxAge: 120000000000
-- name: multiline
+- name: running_containers
   subsystem: kubelet
-  help: Cumulative number of pod preemptions by preemption resource asdf asdf asdf
-    asdfas dfasdf
-  type: Counter
-  stabilityLevel: STABLE
+  help: Number of containers currently running
+  type: Gauge
+  stabilityLevel: BETA
   labels:
-  - preemption_signal
+  - container_state
 - name: runtime_operations_duration_seconds
   subsystem: kubelet
   help: Duration in seconds of runtime operations. Broken down by operation type.
@@ -69,43 +185,6 @@
   - 119.20928955078125
   - 298.0232238769531
   - 745.0580596923828
-- name: summary_metric_test
-  subsystem: kubelet
-  help: Cumulative number of device plugin registrations. Broken down by resource
-    name.
-  type: Summary
-  stabilityLevel: STABLE
-- name: summary_vec_metric_test
-  subsystem: kubelet
-  help: Duration in seconds to serve a device plugin Allocation request. Broken down
-    by resource name.
-  type: Summary
-  stabilityLevel: STABLE
-  labels:
-  - resource_name
-  objectives:
-    0.5: 0.5
-    0.75: 0.75
-  ageBuckets: 5
-  bufCap: 500
-  maxAge: 600000000000
-- name: test_histogram_metric
-  subsystem: kubelet
-  help: Interval in seconds between relisting in PLEG.
-  type: Histogram
-  stabilityLevel: STABLE
-  buckets:
-  - 0.005
-  - 0.01
-  - 0.025
-  - 0.05
-  - 0.1
-  - 0.25
-  - 0.5
-  - 1
-  - 2.5
-  - 5
-  - 10
 - name: priority_level_seat_utilization
   subsystem: subsystem
   namespace: namespace
@@ -157,3 +236,48 @@
   constLabels:
     phase: blah
     somestring: executing
+- name: multiline
+  subsystem: kubelet
+  help: Cumulative number of pod preemptions by preemption resource asdf asdf asdf
+    asdfas dfasdf
+  type: Counter
+  stabilityLevel: STABLE
+  labels:
+  - preemption_signal
+- name: summary_metric_test
+  subsystem: kubelet
+  help: Cumulative number of device plugin registrations. Broken down by resource
+    name.
+  type: Summary
+  stabilityLevel: STABLE
+- name: summary_vec_metric_test
+  subsystem: kubelet
+  help: Duration in seconds to serve a device plugin Allocation request. Broken down
+    by resource name.
+  type: Summary
+  stabilityLevel: STABLE
+  labels:
+  - resource_name
+  objectives:
+    0.5: 0.5
+    0.75: 0.75
+  ageBuckets: 5
+  bufCap: 500
+  maxAge: 600000000000
+- name: test_histogram_metric
+  subsystem: kubelet
+  help: Interval in seconds between relisting in PLEG.
+  type: Histogram
+  stabilityLevel: STABLE
+  buckets:
+  - 0.005
+  - 0.01
+  - 0.025
+  - 0.05
+  - 0.1
+  - 0.25
+  - 0.5
+  - 1
+  - 2.5
+  - 5
+  - 10

@@ -78,14 +78,12 @@ func TestMetrics(t *testing.T) {
 	closeFn, restConfig, clientSet, ns := setup(t, "simple")
 	defer closeFn()
 	ctx, cancel := startJobControllerAndWaitForCaches(restConfig)
-	defer func() {
-		cancel()
-	}()
+	defer cancel()
 
 	testCases := map[string]struct {
-		job                            *batchv1.Job
-		wantJobFinishedNumMetricDelta  metricLabelsWithValue
-		wantJobPodsFinishedMetricDelta metricLabelsWithValue
+		job                       *batchv1.Job
+		wantJobFinishedNumMetric  metricLabelsWithValue
+		wantJobPodsFinishedMetric metricLabelsWithValue
 	}{
 		"non-indexed job": {
 			job: &batchv1.Job{
@@ -95,11 +93,11 @@ func TestMetrics(t *testing.T) {
 					CompletionMode: &nonIndexedCompletion,
 				},
 			},
-			wantJobFinishedNumMetricDelta: metricLabelsWithValue{
+			wantJobFinishedNumMetric: metricLabelsWithValue{
 				Labels: []string{"NonIndexed", "succeeded"},
 				Value:  1,
 			},
-			wantJobPodsFinishedMetricDelta: metricLabelsWithValue{
+			wantJobPodsFinishedMetric: metricLabelsWithValue{
 				Labels: []string{"NonIndexed", "succeeded"},
 				Value:  2,
 			},
@@ -112,11 +110,11 @@ func TestMetrics(t *testing.T) {
 					CompletionMode: &indexedCompletion,
 				},
 			},
-			wantJobFinishedNumMetricDelta: metricLabelsWithValue{
+			wantJobFinishedNumMetric: metricLabelsWithValue{
 				Labels: []string{"Indexed", "succeeded"},
 				Value:  1,
 			},
-			wantJobPodsFinishedMetricDelta: metricLabelsWithValue{
+			wantJobPodsFinishedMetric: metricLabelsWithValue{
 				Labels: []string{"Indexed", "succeeded"},
 				Value:  2,
 			},
@@ -125,17 +123,7 @@ func TestMetrics(t *testing.T) {
 	job_index := 0 // job index to avoid collisions between job names created by different test cases
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-
-			// record the metrics after the job is created
-			jobFinishedNumBefore, err := getCounterMetricValueForLabels(metrics.JobFinishedNum, tc.wantJobFinishedNumMetricDelta.Labels)
-			if err != nil {
-				t.Fatalf("Failed to collect the JobFinishedNum metric before creating the job: %q", err)
-			}
-			jobPodsFinishedBefore, err := getCounterMetricValueForLabels(metrics.JobPodsFinished, tc.wantJobPodsFinishedMetricDelta.Labels)
-			if err != nil {
-				t.Fatalf("Failed to collect the JobPodsFinished metric before creating the job: %q", err)
-			}
-
+			resetMetrics()
 			// create a single job and wait for its completion
 			job := tc.job.DeepCopy()
 			job.Name = fmt.Sprintf("job-%v", job_index)
@@ -154,45 +142,45 @@ func TestMetrics(t *testing.T) {
 			validateJobSucceeded(ctx, t, clientSet, jobObj)
 
 			// verify metric values after the job is finished
-			validateMetricValueDeltas(t, metrics.JobFinishedNum, tc.wantJobFinishedNumMetricDelta, jobFinishedNumBefore)
-			validateMetricValueDeltas(t, metrics.JobPodsFinished, tc.wantJobPodsFinishedMetricDelta, jobPodsFinishedBefore)
+			validateCounterMetric(t, metrics.JobFinishedNum, tc.wantJobFinishedNumMetric)
+			validateCounterMetric(t, metrics.JobPodsFinished, tc.wantJobPodsFinishedMetric)
+			validateTerminatedPodsTrackingFinalizerMetric(t, int(*jobObj.Spec.Parallelism))
 		})
 	}
 }
 
-func validateMetricValueDeltas(t *testing.T, counterVer *basemetrics.CounterVec, wantMetricDelta metricLabelsWithValue, metricValuesBefore metricLabelsWithValue) {
+func validateCounterMetric(t *testing.T, counterVec *basemetrics.CounterVec, wantMetric metricLabelsWithValue) {
 	t.Helper()
 	var cmpErr error
 	err := wait.PollImmediate(10*time.Millisecond, 10*time.Second, func() (bool, error) {
 		cmpErr = nil
-		metricValuesAfter, err := getCounterMetricValueForLabels(counterVer, wantMetricDelta.Labels)
+		value, err := testutil.GetCounterMetricValue(counterVec.WithLabelValues(wantMetric.Labels...))
 		if err != nil {
-			return true, fmt.Errorf("Failed to collect the %q metric after the job is finished: %q", counterVer.Name, err)
+			return true, fmt.Errorf("collecting the %q metric: %q", counterVec.Name, err)
 		}
-		wantDelta := wantMetricDelta.Value
-		gotDelta := metricValuesAfter.Value - metricValuesBefore.Value
-		if wantDelta != gotDelta {
-			cmpErr = fmt.Errorf("Unexepected metric delta for %q metric with labels %q. want: %v, got: %v", counterVer.Name, wantMetricDelta.Labels, wantDelta, gotDelta)
+		if wantMetric.Value != int(value) {
+			cmpErr = fmt.Errorf("Unexpected metric delta for %q metric with labels %q. want: %v, got: %v", counterVec.Name, wantMetric.Labels, wantMetric.Value, int(value))
 			return false, nil
 		}
 		return true, nil
 	})
 	if err != nil {
-		t.Errorf("Failed waiting for expected metric delta: %q", err)
+		t.Errorf("Failed waiting for expected metric: %q", err)
 	}
 	if cmpErr != nil {
 		t.Error(cmpErr)
 	}
 }
 
-func getCounterMetricValueForLabels(counterVec *basemetrics.CounterVec, labels []string) (metricLabelsWithValue, error) {
-	var result metricLabelsWithValue = metricLabelsWithValue{Labels: labels}
-	value, err := testutil.GetCounterMetricValue(counterVec.WithLabelValues(labels...))
-	if err != nil {
-		return result, err
-	}
-	result.Value = int(value)
-	return result, nil
+func validateTerminatedPodsTrackingFinalizerMetric(t *testing.T, want int) {
+	validateCounterMetric(t, metrics.TerminatedPodsTrackingFinalizerTotal, metricLabelsWithValue{
+		Value:  want,
+		Labels: []string{metrics.Add},
+	})
+	validateCounterMetric(t, metrics.TerminatedPodsTrackingFinalizerTotal, metricLabelsWithValue{
+		Value:  want,
+		Labels: []string{metrics.Delete},
+	})
 }
 
 // TestJobPodFailurePolicyWithFailedPodDeletedDuringControllerRestart verifies that the job is properly marked as Failed
@@ -260,6 +248,7 @@ func TestJobPodFailurePolicyWithFailedPodDeletedDuringControllerRestart(t *testi
 	defer func() {
 		cancel()
 	}()
+	resetMetrics()
 	restConfig.QPS = 200
 	restConfig.Burst = 200
 
@@ -298,7 +287,7 @@ func TestJobPodFailurePolicyWithFailedPodDeletedDuringControllerRestart(t *testi
 			return false, nil
 		})
 		if err != nil {
-			t.Logf("Failed awaiting for the the finalizer removal for pod %v", klog.KObj(jobPods[failedIndex]))
+			t.Logf("Failed awaiting for the finalizer removal for pod %v", klog.KObj(jobPods[failedIndex]))
 		}
 		wg.Done()
 	}()
@@ -578,6 +567,7 @@ func TestParallelJob(t *testing.T) {
 			defer closeFn()
 			ctx, cancel := startJobControllerAndWaitForCaches(restConfig)
 			defer cancel()
+			resetMetrics()
 
 			jobObj, err := createJobWithDefaults(ctx, clientSet, ns.Name, &batchv1.Job{
 				Spec: batchv1.JobSpec{
@@ -653,6 +643,9 @@ func TestParallelJob(t *testing.T) {
 			}
 			validateJobPodsStatus(ctx, t, clientSet, jobObj, want, false)
 			validateFinishedPodsNoFinalizer(ctx, t, clientSet, jobObj)
+			if tc.trackWithFinalizers {
+				validateTerminatedPodsTrackingFinalizerMetric(t, 7)
+			}
 		})
 	}
 }
@@ -825,9 +818,8 @@ func TestIndexedJob(t *testing.T) {
 			closeFn, restConfig, clientSet, ns := setup(t, "indexed")
 			defer closeFn()
 			ctx, cancel := startJobControllerAndWaitForCaches(restConfig)
-			defer func() {
-				cancel()
-			}()
+			defer cancel()
+			resetMetrics()
 
 			mode := batchv1.IndexedCompletion
 			jobObj, err := createJobWithDefaults(ctx, clientSet, ns.Name, &batchv1.Job{
@@ -885,6 +877,9 @@ func TestIndexedJob(t *testing.T) {
 			validateIndexedJobPods(ctx, t, clientSet, jobObj, nil, "0-3")
 			validateJobSucceeded(ctx, t, clientSet, jobObj)
 			validateFinishedPodsNoFinalizer(ctx, t, clientSet, jobObj)
+			if wFinalizers {
+				validateTerminatedPodsTrackingFinalizerMetric(t, 5)
+			}
 		})
 	}
 }
@@ -979,6 +974,7 @@ func TestOrphanPodsFinalizersClearedWithGC(t *testing.T) {
 			restConfig.QPS = 1
 			restConfig.Burst = 1
 			jc, ctx, cancel := createJobControllerWithSharedInformers(restConfig, informerSet)
+			resetMetrics()
 			defer cancel()
 			restConfig.QPS = 200
 			restConfig.Burst = 200
@@ -1011,6 +1007,8 @@ func TestOrphanPodsFinalizersClearedWithGC(t *testing.T) {
 				t.Fatalf("Failed to delete job: %v", err)
 			}
 			validateNoOrphanPodsWithFinalizers(ctx, t, clientSet, jobObj)
+			// Pods never finished, so they are not counted in the metric.
+			validateTerminatedPodsTrackingFinalizerMetric(t, 0)
 		})
 	}
 }
@@ -1695,6 +1693,12 @@ func startJobControllerAndWaitForCaches(restConfig *restclient.Config) (context.
 	// thus we wait until caches have synced
 	informerSet.WaitForCacheSync(ctx.Done())
 	return ctx, cancel
+}
+
+func resetMetrics() {
+	metrics.TerminatedPodsTrackingFinalizerTotal.Reset()
+	metrics.JobFinishedNum.Reset()
+	metrics.JobPodsFinished.Reset()
 }
 
 func createJobControllerWithSharedInformers(restConfig *restclient.Config, informerSet informers.SharedInformerFactory) (*jobcontroller.Controller, context.Context, context.CancelFunc) {

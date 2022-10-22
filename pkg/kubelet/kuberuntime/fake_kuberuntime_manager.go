@@ -46,12 +46,12 @@ const (
 )
 
 type fakeHTTP struct {
-	url string
+	req *http.Request
 	err error
 }
 
-func (f *fakeHTTP) Get(url string) (*http.Response, error) {
-	f.url = url
+func (f *fakeHTTP) Do(req *http.Request) (*http.Response, error) {
+	f.req = req
 	return nil, f.err
 }
 
@@ -127,7 +127,8 @@ func newFakeKubeRuntimeManager(runtimeService internalapi.RuntimeService, imageS
 	kubeRuntimeManager.runner = lifecycle.NewHandlerRunner(
 		&fakeHTTP{},
 		kubeRuntimeManager,
-		kubeRuntimeManager)
+		kubeRuntimeManager,
+		recorder)
 
 	kubeRuntimeManager.getNodeAllocatable = func() v1.ResourceList {
 		return v1.ResourceList{

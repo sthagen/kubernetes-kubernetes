@@ -497,6 +497,15 @@ var (
 			StabilityLevel: metrics.ALPHA,
 		},
 	)
+
+	LifecycleHandlerHTTPFallbacks = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           "lifecycle_handler_http_fallbacks_total",
+			Help:           "The number of times lifecycle handlers successfully fell back to http from https.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
 )
 
 var registerMetrics sync.Once
@@ -527,6 +536,16 @@ func Register(collectors ...metrics.StableCollector) {
 		legacyregistry.MustRegister(RunningContainerCount)
 		legacyregistry.MustRegister(RunningPodCount)
 		legacyregistry.MustRegister(ManagedEphemeralContainers)
+		if utilfeature.DefaultFeatureGate.Enabled(features.KubeletPodResources) {
+			legacyregistry.MustRegister(PodResourcesEndpointRequestsTotalCount)
+
+			if utilfeature.DefaultFeatureGate.Enabled(features.KubeletPodResourcesGetAllocatable) {
+				legacyregistry.MustRegister(PodResourcesEndpointRequestsListCount)
+				legacyregistry.MustRegister(PodResourcesEndpointRequestsGetAllocatableCount)
+				legacyregistry.MustRegister(PodResourcesEndpointErrorsListCount)
+				legacyregistry.MustRegister(PodResourcesEndpointErrorsGetAllocatableCount)
+			}
+		}
 		legacyregistry.MustRegister(StartedPodsTotal)
 		legacyregistry.MustRegister(StartedPodsErrorsTotal)
 		legacyregistry.MustRegister(StartedContainersTotal)
@@ -537,6 +556,7 @@ func Register(collectors ...metrics.StableCollector) {
 		}
 		legacyregistry.MustRegister(RunPodSandboxDuration)
 		legacyregistry.MustRegister(RunPodSandboxErrors)
+
 		for _, collector := range collectors {
 			legacyregistry.CustomMustRegister(collector)
 		}
@@ -547,6 +567,9 @@ func Register(collectors ...metrics.StableCollector) {
 			legacyregistry.MustRegister(GracefulShutdownEndTime)
 		}
 
+		if utilfeature.DefaultFeatureGate.Enabled(features.ConsistentHTTPGetHandlers) {
+			legacyregistry.MustRegister(LifecycleHandlerHTTPFallbacks)
+		}
 	})
 }
 

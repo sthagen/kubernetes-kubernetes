@@ -105,7 +105,7 @@ github.com/armon/go-socks5
 # github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a => github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a
 ## explicit
 github.com/asaskevich/govalidator
-# github.com/aws/aws-sdk-go v1.38.49 => github.com/aws/aws-sdk-go v1.38.49
+# github.com/aws/aws-sdk-go v1.44.116 => github.com/aws/aws-sdk-go v1.44.116
 ## explicit; go 1.11
 github.com/aws/aws-sdk-go/aws
 github.com/aws/aws-sdk-go/aws/awserr
@@ -573,7 +573,7 @@ github.com/munnerz/goautoneg
 # github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f => github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 ## explicit
 github.com/mxk/go-flowrate/flowrate
-# github.com/onsi/ginkgo/v2 v2.2.0 => github.com/onsi/ginkgo/v2 v2.2.0
+# github.com/onsi/ginkgo/v2 v2.3.1 => github.com/onsi/ginkgo/v2 v2.3.1
 ## explicit; go 1.18
 github.com/onsi/ginkgo/v2
 github.com/onsi/ginkgo/v2/config
@@ -595,7 +595,7 @@ github.com/onsi/ginkgo/v2/internal/parallel_support
 github.com/onsi/ginkgo/v2/internal/testingtproxy
 github.com/onsi/ginkgo/v2/reporters
 github.com/onsi/ginkgo/v2/types
-# github.com/onsi/gomega v1.20.1 => github.com/onsi/gomega v1.20.1
+# github.com/onsi/gomega v1.22.1 => github.com/onsi/gomega v1.22.1
 ## explicit; go 1.18
 github.com/onsi/gomega
 github.com/onsi/gomega/format
@@ -1262,6 +1262,7 @@ k8s.io/api/admission/v1
 k8s.io/api/admission/v1beta1
 k8s.io/api/admissionregistration/v1
 k8s.io/api/admissionregistration/v1beta1
+k8s.io/api/apidiscovery/v2beta1
 k8s.io/api/apiserverinternal/v1alpha1
 k8s.io/api/apps/v1
 k8s.io/api/apps/v1beta1
@@ -1980,7 +1981,6 @@ k8s.io/component-base/metrics/prometheus/clientgo
 k8s.io/component-base/metrics/prometheus/clientgo/leaderelection
 k8s.io/component-base/metrics/prometheus/controllers
 k8s.io/component-base/metrics/prometheus/feature
-k8s.io/component-base/metrics/prometheus/ratelimiter
 k8s.io/component-base/metrics/prometheus/restclient
 k8s.io/component-base/metrics/prometheus/slis
 k8s.io/component-base/metrics/prometheus/version
@@ -2190,6 +2190,7 @@ k8s.io/kubectl/pkg/cmd/wait
 k8s.io/kubectl/pkg/describe
 k8s.io/kubectl/pkg/drain
 k8s.io/kubectl/pkg/explain
+k8s.io/kubectl/pkg/explain/v2
 k8s.io/kubectl/pkg/generate
 k8s.io/kubectl/pkg/generate/versioned
 k8s.io/kubectl/pkg/metricsutil
@@ -2505,7 +2506,7 @@ sigs.k8s.io/yaml
 # github.com/armon/circbuf => github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e
 # github.com/armon/go-socks5 => github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 # github.com/asaskevich/govalidator => github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a
-# github.com/aws/aws-sdk-go => github.com/aws/aws-sdk-go v1.38.49
+# github.com/aws/aws-sdk-go => github.com/aws/aws-sdk-go v1.44.116
 # github.com/benbjohnson/clock => github.com/benbjohnson/clock v1.1.0
 # github.com/beorn7/perks => github.com/beorn7/perks v1.0.1
 # github.com/blang/semver => github.com/blang/semver v3.5.1+incompatible
@@ -2652,8 +2653,8 @@ sigs.k8s.io/yaml
 # github.com/mxk/go-flowrate => github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 # github.com/niemeyer/pretty => github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e
 # github.com/olekukonko/tablewriter => github.com/olekukonko/tablewriter v0.0.4
-# github.com/onsi/ginkgo/v2 => github.com/onsi/ginkgo/v2 v2.2.0
-# github.com/onsi/gomega => github.com/onsi/gomega v1.20.1
+# github.com/onsi/ginkgo/v2 => github.com/onsi/ginkgo/v2 v2.3.1
+# github.com/onsi/gomega => github.com/onsi/gomega v1.22.1
 # github.com/opencontainers/go-digest => github.com/opencontainers/go-digest v1.0.0
 # github.com/opencontainers/image-spec => github.com/opencontainers/image-spec v1.0.2
 # github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.3

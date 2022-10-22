@@ -35,7 +35,6 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/component-base/metrics/prometheus/ratelimiter"
 	"k8s.io/klog/v2"
 	apipod "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/pkg/features"
@@ -75,9 +74,6 @@ func NewPodGC(ctx context.Context, kubeClient clientset.Interface, podInformer c
 // This function is only intended for integration tests
 func NewPodGCInternal(ctx context.Context, kubeClient clientset.Interface, podInformer coreinformers.PodInformer,
 	nodeInformer coreinformers.NodeInformer, terminatedPodThreshold int, gcCheckPeriod, quarantineTime time.Duration) *PodGCController {
-	if kubeClient != nil && kubeClient.CoreV1().RESTClient().GetRateLimiter() != nil {
-		ratelimiter.RegisterMetricAndTrackRateLimiterUsage("gc_controller", kubeClient.CoreV1().RESTClient().GetRateLimiter())
-	}
 	gcc := &PodGCController{
 		kubeClient:             kubeClient,
 		terminatedPodThreshold: terminatedPodThreshold,
@@ -147,9 +143,9 @@ func (gcc *PodGCController) gcTerminating(ctx context.Context, pods []*v1.Pod) {
 	terminatingPods := []*v1.Pod{}
 	for _, pod := range pods {
 		if isPodTerminating(pod) {
-			node, err := gcc.nodeLister.Get(string(pod.Spec.NodeName))
+			node, err := gcc.nodeLister.Get(pod.Spec.NodeName)
 			if err != nil {
-				klog.Errorf("failed to get node %s : %s", string(pod.Spec.NodeName), err)
+				klog.Errorf("failed to get node %s : %s", pod.Spec.NodeName, err)
 				continue
 			}
 			// Add this pod to terminatingPods list only if the following conditions are met:

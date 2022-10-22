@@ -527,7 +527,7 @@ func TestSchedulerScheduleOne(t *testing.T) {
 			expectBind:       &v1.Binding{ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: types.UID("foo")}, Target: v1.ObjectReference{Kind: "Node", Name: testNode.Name}},
 			expectAssumedPod: podWithID("foo", testNode.Name),
 			injectBindError:  errB,
-			expectError:      fmt.Errorf(`binding rejected: %w`, fmt.Errorf("running Bind plugin %q: %w", "DefaultBinder", errors.New("binder"))),
+			expectError:      fmt.Errorf("running Bind plugin %q: %w", "DefaultBinder", errors.New("binder")),
 			expectErrorPod:   podWithID("foo", testNode.Name),
 			expectForgetPod:  podWithID("foo", testNode.Name),
 			eventReason:      "FailedScheduling",
@@ -597,7 +597,7 @@ func TestSchedulerScheduleOne(t *testing.T) {
 			sched.SchedulePod = func(ctx context.Context, fwk framework.Framework, state *framework.CycleState, pod *v1.Pod) (ScheduleResult, error) {
 				return item.mockResult.result, item.mockResult.err
 			}
-			sched.FailureHandler = func(_ context.Context, fwk framework.Framework, p *framework.QueuedPodInfo, err error, _ string, _ *framework.NominatingInfo) {
+			sched.FailureHandler = func(_ context.Context, fwk framework.Framework, p *framework.QueuedPodInfo, err error, _ string, _ *framework.NominatingInfo, _ time.Time) {
 				gotPod = p.Pod
 				gotError = err
 
@@ -2346,10 +2346,11 @@ var lowPriority, midPriority, highPriority = int32(0), int32(100), int32(1000)
 
 func TestNumFeasibleNodesToFind(t *testing.T) {
 	tests := []struct {
-		name                     string
-		percentageOfNodesToScore int32
-		numAllNodes              int32
-		wantNumNodes             int32
+		name              string
+		globalPercentage  int32
+		profilePercentage *int32
+		numAllNodes       int32
+		wantNumNodes      int32
 	}{
 		{
 			name:         "not set percentageOfNodesToScore and nodes number not more than 50",
@@ -2357,10 +2358,10 @@ func TestNumFeasibleNodesToFind(t *testing.T) {
 			wantNumNodes: 10,
 		},
 		{
-			name:                     "set percentageOfNodesToScore and nodes number not more than 50",
-			percentageOfNodesToScore: 40,
-			numAllNodes:              10,
-			wantNumNodes:             10,
+			name:              "set profile percentageOfNodesToScore and nodes number not more than 50",
+			profilePercentage: pointer.Int32(40),
+			numAllNodes:       10,
+			wantNumNodes:      10,
 		},
 		{
 			name:         "not set percentageOfNodesToScore and nodes number more than 50",
@@ -2368,29 +2369,43 @@ func TestNumFeasibleNodesToFind(t *testing.T) {
 			wantNumNodes: 420,
 		},
 		{
-			name:                     "set percentageOfNodesToScore and nodes number more than 50",
-			percentageOfNodesToScore: 40,
-			numAllNodes:              1000,
-			wantNumNodes:             400,
+			name:              "set profile percentageOfNodesToScore and nodes number more than 50",
+			profilePercentage: pointer.Int32(40),
+			numAllNodes:       1000,
+			wantNumNodes:      400,
 		},
 		{
-			name:         "not set percentageOfNodesToScore and nodes number more than 50*125",
+			name:              "set global and profile percentageOfNodesToScore and nodes number more than 50",
+			globalPercentage:  100,
+			profilePercentage: pointer.Int32(40),
+			numAllNodes:       1000,
+			wantNumNodes:      400,
+		},
+		{
+			name:             "set global percentageOfNodesToScore and nodes number more than 50",
+			globalPercentage: 40,
+			numAllNodes:      1000,
+			wantNumNodes:     400,
+		},
+		{
+			name:         "not set profile percentageOfNodesToScore and nodes number more than 50*125",
 			numAllNodes:  6000,
 			wantNumNodes: 300,
 		},
 		{
-			name:                     "set percentageOfNodesToScore and nodes number more than 50*125",
-			percentageOfNodesToScore: 40,
-			numAllNodes:              6000,
-			wantNumNodes:             2400,
+			name:              "set profile percentageOfNodesToScore and nodes number more than 50*125",
+			profilePercentage: pointer.Int32(40),
+			numAllNodes:       6000,
+			wantNumNodes:      2400,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sched := &Scheduler{
-				percentageOfNodesToScore: tt.percentageOfNodesToScore,
+				percentageOfNodesToScore: tt.globalPercentage,
 			}
-			if gotNumNodes := sched.numFeasibleNodesToFind(tt.numAllNodes); gotNumNodes != tt.wantNumNodes {
+			if gotNumNodes := sched.numFeasibleNodesToFind(tt.profilePercentage, tt.numAllNodes); gotNumNodes != tt.wantNumNodes {
 				t.Errorf("Scheduler.numFeasibleNodesToFind() = %v, want %v", gotNumNodes, tt.wantNumNodes)
 			}
 		})
@@ -2423,7 +2438,7 @@ func TestFairEvaluationForNodes(t *testing.T) {
 
 	// To make numAllNodes % nodesToFind != 0
 	sched.percentageOfNodesToScore = 30
-	nodesToFind := int(sched.numFeasibleNodesToFind(int32(numAllNodes)))
+	nodesToFind := int(sched.numFeasibleNodesToFind(fwk.PercentageOfNodesToScore(), int32(numAllNodes)))
 
 	// Iterating over all nodes more than twice
 	for i := 0; i < 2*(numAllNodes/nodesToFind+1); i++ {
@@ -2665,7 +2680,7 @@ func setupTestScheduler(ctx context.Context, t *testing.T, queuedPodStore *clien
 	}
 
 	sched.SchedulePod = sched.schedulePod
-	sched.FailureHandler = func(_ context.Context, _ framework.Framework, p *framework.QueuedPodInfo, err error, _ string, _ *framework.NominatingInfo) {
+	sched.FailureHandler = func(_ context.Context, _ framework.Framework, p *framework.QueuedPodInfo, err error, _ string, _ *framework.NominatingInfo, _ time.Time) {
 		errChan <- err
 
 		msg := truncateMessage(err.Error())
