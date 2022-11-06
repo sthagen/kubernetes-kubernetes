@@ -18,6 +18,7 @@ package testing
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -112,12 +113,12 @@ func testWatch(ctx context.Context, t *testing.T, store storage.Interface, recur
 						expectObj = prevObj
 						expectObj.ResourceVersion = out.ResourceVersion
 					}
-					TestCheckResult(t, watchTest.watchType, w, expectObj)
+					testCheckResult(t, watchTest.watchType, w, expectObj)
 				}
 				prevObj = out
 			}
 			w.Stop()
-			TestCheckStop(t, w)
+			testCheckStop(t, w)
 		})
 	}
 }
@@ -126,13 +127,13 @@ func testWatch(ctx context.Context, t *testing.T, store storage.Interface, recur
 // - watch from 0 should sync up and grab the object added before
 // - watch from 0 is able to return events for objects whose previous version has been compacted
 func RunTestWatchFromZero(ctx context.Context, t *testing.T, store storage.Interface, compaction Compaction) {
-	key, storedObj := TestPropagateStore(ctx, t, store, &example.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "ns"}})
+	key, storedObj := testPropagateStore(ctx, t, store, &example.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "ns"}})
 
 	w, err := store.Watch(ctx, key, storage.ListOptions{ResourceVersion: "0", Predicate: storage.Everything})
 	if err != nil {
 		t.Fatalf("Watch failed: %v", err)
 	}
-	TestCheckResult(t, watch.Added, w, storedObj)
+	testCheckResult(t, watch.Added, w, storedObj)
 	w.Stop()
 
 	// Update
@@ -150,7 +151,7 @@ func RunTestWatchFromZero(ctx context.Context, t *testing.T, store storage.Inter
 	if err != nil {
 		t.Fatalf("Watch failed: %v", err)
 	}
-	TestCheckResult(t, watch.Added, w, out)
+	testCheckResult(t, watch.Added, w, out)
 	w.Stop()
 
 	if compaction == nil {
@@ -175,11 +176,11 @@ func RunTestWatchFromZero(ctx context.Context, t *testing.T, store storage.Inter
 	if err != nil {
 		t.Fatalf("Watch failed: %v", err)
 	}
-	TestCheckResult(t, watch.Added, w, out)
+	testCheckResult(t, watch.Added, w, out)
 }
 
 func RunTestDeleteTriggerWatch(ctx context.Context, t *testing.T, store storage.Interface) {
-	key, storedObj := TestPropagateStore(ctx, t, store, &example.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}})
+	key, storedObj := testPropagateStore(ctx, t, store, &example.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}})
 	w, err := store.Watch(ctx, key, storage.ListOptions{ResourceVersion: storedObj.ResourceVersion, Predicate: storage.Everything})
 	if err != nil {
 		t.Fatalf("Watch failed: %v", err)
@@ -187,11 +188,11 @@ func RunTestDeleteTriggerWatch(ctx context.Context, t *testing.T, store storage.
 	if err := store.Delete(ctx, key, &example.Pod{}, nil, storage.ValidateAllObjectFunc, nil); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
-	TestCheckEventType(t, watch.Deleted, w)
+	testCheckEventType(t, watch.Deleted, w)
 }
 
 func RunTestWatchFromNoneZero(ctx context.Context, t *testing.T, store storage.Interface) {
-	key, storedObj := TestPropagateStore(ctx, t, store, &example.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}})
+	key, storedObj := testPropagateStore(ctx, t, store, &example.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}})
 
 	w, err := store.Watch(ctx, key, storage.ListOptions{ResourceVersion: storedObj.ResourceVersion, Predicate: storage.Everything})
 	if err != nil {
@@ -202,7 +203,7 @@ func RunTestWatchFromNoneZero(ctx context.Context, t *testing.T, store storage.I
 		func(runtime.Object) (runtime.Object, error) {
 			return &example.Pod{ObjectMeta: metav1.ObjectMeta{Name: "bar"}}, err
 		}), nil)
-	TestCheckResult(t, watch.Modified, w, out)
+	testCheckResult(t, watch.Modified, w, out)
 }
 
 func RunTestWatchError(ctx context.Context, t *testing.T, store InterfaceWithPrefixTransformer) {
@@ -235,7 +236,7 @@ func RunTestWatchError(ctx context.Context, t *testing.T, store InterfaceWithPre
 	if err != nil {
 		t.Fatalf("Watch failed: %v", err)
 	}
-	TestCheckEventType(t, watch.Error, w)
+	testCheckEventType(t, watch.Error, w)
 }
 
 func RunTestWatchContextCancel(ctx context.Context, t *testing.T, store storage.Interface) {
@@ -261,18 +262,92 @@ func RunTestWatchContextCancel(ctx context.Context, t *testing.T, store storage.
 	}
 }
 
+func RunTestWatchDeleteEventObjectHaveLatestRV(ctx context.Context, t *testing.T, store storage.Interface) {
+	key, storedObj := testPropagateStore(ctx, t, store, &example.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}})
+
+	watchCtx, _ := context.WithTimeout(ctx, wait.ForeverTestTimeout)
+	w, err := store.Watch(watchCtx, key, storage.ListOptions{ResourceVersion: storedObj.ResourceVersion, Predicate: storage.Everything})
+	if err != nil {
+		t.Fatalf("Watch failed: %v", err)
+	}
+
+	deletedObj := &example.Pod{}
+	if err := store.Delete(ctx, key, deletedObj, &storage.Preconditions{}, storage.ValidateAllObjectFunc, nil); err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+
+	// Verify that ResourceVersion has changed on deletion.
+	if storedObj.ResourceVersion == deletedObj.ResourceVersion {
+		t.Fatalf("ResourceVersion didn't changed on deletion: %s", deletedObj.ResourceVersion)
+	}
+
+	select {
+	case event := <-w.ResultChan():
+		watchedDeleteObj := event.Object.(*example.Pod)
+		if e, a := deletedObj.ResourceVersion, watchedDeleteObj.ResourceVersion; e != a {
+			t.Errorf("Unexpected resource version: %v, expected %v", a, e)
+		}
+	}
+}
+
 func RunTestWatchInitializationSignal(ctx context.Context, t *testing.T, store storage.Interface) {
 	ctx, _ = context.WithTimeout(ctx, 5*time.Second)
 	initSignal := utilflowcontrol.NewInitializationSignal()
 	ctx = utilflowcontrol.WithInitializationSignal(ctx, initSignal)
 
-	key, storedObj := TestPropagateStore(ctx, t, store, &example.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}})
+	key, storedObj := testPropagateStore(ctx, t, store, &example.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}})
 	_, err := store.Watch(ctx, key, storage.ListOptions{ResourceVersion: storedObj.ResourceVersion, Predicate: storage.Everything})
 	if err != nil {
 		t.Fatalf("Watch failed: %v", err)
 	}
 
 	initSignal.Wait()
+}
+
+// RunOptionalTestProgressNotify tests ProgressNotify feature of ListOptions.
+// Given this feature is currently not explicitly used by higher layers of Kubernetes
+// (it rather is used by wrappers of storage.Interface to implement its functionalities)
+// this test is currently considered optional.
+func RunOptionalTestProgressNotify(ctx context.Context, t *testing.T, store storage.Interface) {
+	key := "/somekey"
+	input := &example.Pod{ObjectMeta: metav1.ObjectMeta{Name: "name"}}
+	out := &example.Pod{}
+	if err := store.Create(ctx, key, input, out, 0); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	validateResourceVersion := resourceVersionNotOlderThan(out.ResourceVersion)
+
+	opts := storage.ListOptions{
+		ResourceVersion: out.ResourceVersion,
+		Predicate:       storage.Everything,
+		ProgressNotify:  true,
+	}
+	w, err := store.Watch(ctx, key, opts)
+	if err != nil {
+		t.Fatalf("Watch failed: %v", err)
+	}
+
+	// when we send a bookmark event, the client expects the event to contain an
+	// object of the correct type, but with no fields set other than the resourceVersion
+	testCheckResultFunc(t, watch.Bookmark, w, func(object runtime.Object) error {
+		// first, check that we have the correct resource version
+		obj, ok := object.(metav1.Object)
+		if !ok {
+			return fmt.Errorf("got %T, not metav1.Object", object)
+		}
+		if err := validateResourceVersion(obj.GetResourceVersion()); err != nil {
+			return err
+		}
+
+		// then, check that we have the right type and content
+		pod, ok := object.(*example.Pod)
+		if !ok {
+			return fmt.Errorf("got %T, not *example.Pod", object)
+		}
+		pod.ResourceVersion = ""
+		ExpectNoDiff(t, "bookmark event should contain an object with no fields set other than resourceVersion", &example.Pod{}, pod)
+		return nil
+	})
 }
 
 type testWatchStruct struct {

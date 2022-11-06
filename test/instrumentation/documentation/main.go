@@ -55,7 +55,7 @@ components using an HTTP scrape, and fetch the current metrics data in Prometheu
 
 ### List of Stable Kubernetes Metrics
 
-<table class="table" caption="This is the list of STABLE metrics emitted from core Kubernetes components">
+<table class="table metrics" caption="This is the list of STABLE metrics emitted from core Kubernetes components">
 <thead>
 	<tr>
 		<th class="metric_name">Name</th>
@@ -79,7 +79,7 @@ components using an HTTP scrape, and fetch the current metrics data in Prometheu
 
 ### List of Alpha Kubernetes Metrics
 
-<table class="table" caption="This is the list of ALPHA metrics emitted from core Kubernetes components">
+<table class="table metrics" caption="This is the list of ALPHA metrics emitted from core Kubernetes components">
 <thead>
 	<tr>
 		<th class="metric_name">Name</th>
@@ -110,7 +110,7 @@ type templateData struct {
 }
 
 func main() {
-	dat, err := os.ReadFile("test/instrumentation/testdata/documentation-list.yaml")
+	dat, err := os.ReadFile("test/instrumentation/documentation/documentation-list.yaml")
 	if err == nil {
 		var parsedMetrics []metric
 		err = yaml.Unmarshal(dat, &parsedMetrics)
