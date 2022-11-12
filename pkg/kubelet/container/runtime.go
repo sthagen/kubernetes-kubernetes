@@ -122,6 +122,16 @@ type Runtime interface {
 	// CheckpointContainer tells the runtime to checkpoint a container
 	// and store the resulting archive to the checkpoint directory.
 	CheckpointContainer(ctx context.Context, options *runtimeapi.CheckpointContainerRequest) error
+	// Generate pod status from the CRI event
+	GeneratePodStatus(event *runtimeapi.ContainerEventResponse) (*PodStatus, error)
+	// ListMetricDescriptors gets the descriptors for the metrics that will be returned in ListPodSandboxMetrics.
+	// This list should be static at startup: either the client and server restart together when
+	// adding or removing metrics descriptors, or they should not change.
+	// Put differently, if ListPodSandboxMetrics references a name that is not described in the initial
+	// ListMetricDescriptors call, then the metric will not be broadcasted.
+	ListMetricDescriptors(ctx context.Context) ([]*runtimeapi.MetricDescriptor, error)
+	// ListPodSandboxMetrics retrieves the metrics for all pod sandboxes.
+	ListPodSandboxMetrics(ctx context.Context) ([]*runtimeapi.PodSandboxMetrics, error)
 }
 
 // StreamingRuntime is the interface implemented by runtimes that handle the serving of the
@@ -305,6 +315,8 @@ type PodStatus struct {
 	// Status of the pod sandbox.
 	// Only for kuberuntime now, other runtime may keep it nil.
 	SandboxStatuses []*runtimeapi.PodSandboxStatus
+	// Timestamp at which container and pod statuses were recorded
+	TimeStamp time.Time
 }
 
 // Status represents the status of a container.

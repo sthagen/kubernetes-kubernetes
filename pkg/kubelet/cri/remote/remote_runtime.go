@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -792,5 +793,55 @@ func (r *remoteRuntimeService) CheckpointContainer(ctx context.Context, options 
 }
 
 func (r *remoteRuntimeService) GetContainerEvents(containerEventsCh chan *runtimeapi.ContainerEventResponse) error {
-	return nil
+	containerEventsStreamingClient, err := r.runtimeClient.GetContainerEvents(context.Background(), &runtimeapi.GetEventsRequest{})
+	if err != nil {
+		klog.ErrorS(err, "GetContainerEvents failed to get streaming client")
+		return err
+	}
+
+	for {
+		resp, err := containerEventsStreamingClient.Recv()
+		if err == io.EOF {
+			klog.ErrorS(err, "container events stream is closed")
+			return err
+		}
+		if err != nil {
+			klog.ErrorS(err, "failed to receive streaming container event")
+			return err
+		}
+		if resp != nil {
+			containerEventsCh <- resp
+			klog.V(4).InfoS("container event received", "resp", resp)
+		}
+	}
+}
+
+// ListMetricDescriptors gets the descriptors for the metrics that will be returned in ListPodSandboxMetrics.
+func (r *remoteRuntimeService) ListMetricDescriptors(ctx context.Context) ([]*runtimeapi.MetricDescriptor, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.timeout)
+	defer cancel()
+
+	resp, err := r.runtimeClient.ListMetricDescriptors(ctx, &runtimeapi.ListMetricDescriptorsRequest{})
+	if err != nil {
+		klog.ErrorS(err, "ListMetricDescriptors from runtime service failed")
+		return nil, err
+	}
+	klog.V(10).InfoS("[RemoteRuntimeService] ListMetricDescriptors Response", "stats", resp.GetDescriptors())
+
+	return resp.GetDescriptors(), nil
+}
+
+// ListPodSandboxMetrics retrieves the metrics for all pod sandboxes.
+func (r *remoteRuntimeService) ListPodSandboxMetrics(ctx context.Context) ([]*runtimeapi.PodSandboxMetrics, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.timeout)
+	defer cancel()
+
+	resp, err := r.runtimeClient.ListPodSandboxMetrics(ctx, &runtimeapi.ListPodSandboxMetricsRequest{})
+	if err != nil {
+		klog.ErrorS(err, "ListPodSandboxMetrics from runtime service failed")
+		return nil, err
+	}
+	klog.V(10).InfoS("[RemoteRuntimeService] ListPodSandboxMetrics Response", "stats", resp.GetPodMetrics())
+
+	return resp.GetPodMetrics(), nil
 }

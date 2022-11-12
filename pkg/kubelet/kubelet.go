@@ -28,7 +28,6 @@ import (
 	"path/filepath"
 	sysruntime "runtime"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -73,6 +72,7 @@ import (
 	kubeletcertificate "k8s.io/kubernetes/pkg/kubelet/certificate"
 	"k8s.io/kubernetes/pkg/kubelet/cloudresource"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
+	draplugin "k8s.io/kubernetes/pkg/kubelet/cm/dra/plugin"
 	"k8s.io/kubernetes/pkg/kubelet/config"
 	"k8s.io/kubernetes/pkg/kubelet/configmap"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
@@ -128,8 +128,12 @@ const (
 	// nodeStatusUpdateRetry specifies how many times kubelet retries when posting node status failed.
 	nodeStatusUpdateRetry = 5
 
-	// ContainerLogsDir is the location of container logs.
-	ContainerLogsDir = "/var/log/containers"
+	// nodeReadyGracePeriod is the period to allow for before fast status update is
+	// terminated and container runtime not being ready is logged without verbosity guard.
+	nodeReadyGracePeriod = 120 * time.Second
+
+	// DefaultContainerLogsDir is the location of container logs.
+	DefaultContainerLogsDir = "/var/log/containers"
 
 	// MaxContainerBackOff is the max backoff period, exported for the e2e test
 	MaxContainerBackOff = 300 * time.Second
@@ -162,7 +166,13 @@ const (
 	// Note that even though we set the period to 1s, the relisting itself can
 	// take more than 1s to finish if the container runtime responds slowly
 	// and/or when there are many container changes in one cycle.
-	plegRelistPeriod = time.Second * 1
+	genericPlegRelistPeriod    = time.Second * 1
+	genericPlegRelistThreshold = time.Minute * 3
+
+	// Generic PLEG relist period and threshold when used with Evented PLEG.
+	eventedPlegRelistPeriod     = time.Second * 300
+	eventedPlegRelistThreshold  = time.Minute * 10
+	eventedPlegMaxStreamRetries = 5
 
 	// backOffPeriod is the period to back off when pod syncing results in an
 	// error. It is also used as the base period for the exponential backoff
@@ -181,7 +191,11 @@ const (
 	nodeLeaseRenewIntervalFraction = 0.25
 )
 
-var etcHostsPath = getContainerEtcHostsPath()
+var (
+	// ContainerLogsDir can be overwrited for testing usage
+	ContainerLogsDir = DefaultContainerLogsDir
+	etcHostsPath     = getContainerEtcHostsPath()
+)
 
 func getContainerEtcHostsPath() string {
 	if sysruntime.GOOS == "windows" {
@@ -552,24 +566,26 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 
 	var secretManager secret.Manager
 	var configMapManager configmap.Manager
-	switch kubeCfg.ConfigMapAndSecretChangeDetectionStrategy {
-	case kubeletconfiginternal.WatchChangeDetectionStrategy:
-		secretManager = secret.NewWatchingSecretManager(kubeDeps.KubeClient, klet.resyncInterval)
-		configMapManager = configmap.NewWatchingConfigMapManager(kubeDeps.KubeClient, klet.resyncInterval)
-	case kubeletconfiginternal.TTLCacheChangeDetectionStrategy:
-		secretManager = secret.NewCachingSecretManager(
-			kubeDeps.KubeClient, manager.GetObjectTTLFromNodeFunc(klet.GetNode))
-		configMapManager = configmap.NewCachingConfigMapManager(
-			kubeDeps.KubeClient, manager.GetObjectTTLFromNodeFunc(klet.GetNode))
-	case kubeletconfiginternal.GetChangeDetectionStrategy:
-		secretManager = secret.NewSimpleSecretManager(kubeDeps.KubeClient)
-		configMapManager = configmap.NewSimpleConfigMapManager(kubeDeps.KubeClient)
-	default:
-		return nil, fmt.Errorf("unknown configmap and secret manager mode: %v", kubeCfg.ConfigMapAndSecretChangeDetectionStrategy)
-	}
+	if klet.kubeClient != nil {
+		switch kubeCfg.ConfigMapAndSecretChangeDetectionStrategy {
+		case kubeletconfiginternal.WatchChangeDetectionStrategy:
+			secretManager = secret.NewWatchingSecretManager(klet.kubeClient, klet.resyncInterval)
+			configMapManager = configmap.NewWatchingConfigMapManager(klet.kubeClient, klet.resyncInterval)
+		case kubeletconfiginternal.TTLCacheChangeDetectionStrategy:
+			secretManager = secret.NewCachingSecretManager(
+				klet.kubeClient, manager.GetObjectTTLFromNodeFunc(klet.GetNode))
+			configMapManager = configmap.NewCachingConfigMapManager(
+				klet.kubeClient, manager.GetObjectTTLFromNodeFunc(klet.GetNode))
+		case kubeletconfiginternal.GetChangeDetectionStrategy:
+			secretManager = secret.NewSimpleSecretManager(klet.kubeClient)
+			configMapManager = configmap.NewSimpleConfigMapManager(klet.kubeClient)
+		default:
+			return nil, fmt.Errorf("unknown configmap and secret manager mode: %v", kubeCfg.ConfigMapAndSecretChangeDetectionStrategy)
+		}
 
-	klet.secretManager = secretManager
-	klet.configMapManager = configMapManager
+		klet.secretManager = secretManager
+		klet.configMapManager = configMapManager
+	}
 
 	if klet.experimentalHostUserNamespaceDefaulting {
 		klog.InfoS("Experimental host user namespace defaulting is enabled")
@@ -699,9 +715,37 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 			utilfeature.DefaultFeatureGate.Enabled(features.PodAndContainerStatsFromCRI))
 	}
 
-	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
+	eventChannel := make(chan *pleg.PodLifecycleEvent, plegChannelCapacity)
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.EventedPLEG) {
+		// adjust Generic PLEG relisting period and threshold to higher value when Evented PLEG is turned on
+		genericRelistDuration := &pleg.RelistDuration{
+			RelistPeriod:    eventedPlegRelistPeriod,
+			RelistThreshold: eventedPlegRelistThreshold,
+		}
+		klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, eventChannel, genericRelistDuration, klet.podCache, clock.RealClock{})
+		// In case Evented PLEG has to fall back on Generic PLEG due to an error,
+		// Evented PLEG should be able to reset the Generic PLEG relisting duration
+		// to the default value.
+		eventedRelistDuration := &pleg.RelistDuration{
+			RelistPeriod:    genericPlegRelistPeriod,
+			RelistThreshold: genericPlegRelistThreshold,
+		}
+		klet.eventedPleg = pleg.NewEventedPLEG(klet.containerRuntime, klet.runtimeService, eventChannel,
+			klet.podCache, klet.pleg, eventedPlegMaxStreamRetries, eventedRelistDuration, clock.RealClock{})
+	} else {
+		genericRelistDuration := &pleg.RelistDuration{
+			RelistPeriod:    genericPlegRelistPeriod,
+			RelistThreshold: genericPlegRelistThreshold,
+		}
+		klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, eventChannel, genericRelistDuration, klet.podCache, clock.RealClock{})
+	}
+
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
 	klet.runtimeState.addHealthCheck("PLEG", klet.pleg.Healthy)
+	if utilfeature.DefaultFeatureGate.Enabled(features.EventedPLEG) {
+		klet.runtimeState.addHealthCheck("EventedPLEG", klet.eventedPleg.Healthy)
+	}
 	if _, err := klet.updatePodCIDR(ctx, kubeCfg.PodCIDR); err != nil {
 		klog.ErrorS(err, "Pod CIDR update failed")
 	}
@@ -1023,6 +1067,12 @@ type Kubelet struct {
 	// used for generating ContainerStatus.
 	reasonCache *ReasonCache
 
+	// containerRuntimeReadyExpected indicates whether container runtime being ready is expected
+	// so errors are logged without verbosity guard, to avoid excessive error logs at node startup.
+	// It's false during the node initialization period of nodeReadyGracePeriod, and after that
+	// it's set to true by fastStatusUpdateOnce when it exits.
+	containerRuntimeReadyExpected bool
+
 	// nodeStatusUpdateFrequency specifies how often kubelet computes node status. If node lease
 	// feature is not enabled, it is also the frequency that kubelet posts node status to master.
 	// In that case, be cautious when changing the constant, it must work with nodeMonitorGracePeriod
@@ -1045,15 +1095,15 @@ type Kubelet struct {
 	lastStatusReportTime time.Time
 
 	// syncNodeStatusMux is a lock on updating the node status, because this path is not thread-safe.
-	// This lock is used by Kubelet.syncNodeStatus function and shouldn't be used anywhere else.
+	// This lock is used by Kubelet.syncNodeStatus and Kubelet.fastNodeStatusUpdate functions and shouldn't be used anywhere else.
 	syncNodeStatusMux sync.Mutex
 
 	// updatePodCIDRMux is a lock on updating pod CIDR, because this path is not thread-safe.
-	// This lock is used by Kubelet.syncNodeStatus function and shouldn't be used anywhere else.
+	// This lock is used by Kubelet.updatePodCIDR function and shouldn't be used anywhere else.
 	updatePodCIDRMux sync.Mutex
 
 	// updateRuntimeMux is a lock on updating runtime, because this path is not thread-safe.
-	// This lock is used by Kubelet.updateRuntimeUp function and shouldn't be used anywhere else.
+	// This lock is used by Kubelet.updateRuntimeUp and Kubelet.fastNodeStatusUpdate functions and shouldn't be used anywhere else.
 	updateRuntimeMux sync.Mutex
 
 	// nodeLeaseController claims and renews the node lease for this Kubelet
@@ -1061,6 +1111,9 @@ type Kubelet struct {
 
 	// Generates pod events.
 	pleg pleg.PodLifecycleEventGenerator
+
+	// Evented PLEG
+	eventedPleg pleg.PodLifecycleEventGenerator
 
 	// Store kubecontainer.PodStatus for all pods.
 	podCache kubecontainer.Cache
@@ -1421,8 +1474,13 @@ func (kl *Kubelet) initializeRuntimeDependentModules() {
 	kl.containerLogManager.Start()
 	// Adding Registration Callback function for CSI Driver
 	kl.pluginManager.AddHandler(pluginwatcherapi.CSIPlugin, plugincache.PluginHandler(csi.PluginHandler))
+	// Adding Registration Callback function for DRA Plugin
+	if utilfeature.DefaultFeatureGate.Enabled(features.DynamicResourceAllocation) {
+		kl.pluginManager.AddHandler(pluginwatcherapi.DRAPlugin, plugincache.PluginHandler(draplugin.NewRegistrationHandler()))
+	}
 	// Adding Registration Callback function for Device Manager
 	kl.pluginManager.AddHandler(pluginwatcherapi.DevicePlugin, kl.containerManager.GetPluginRegistrationHandler())
+
 	// Start the plugin manager
 	klog.V(4).InfoS("Starting plugin manager")
 	go kl.pluginManager.Run(kl.sourcesReady, wait.NeverStop)
@@ -1459,6 +1517,12 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 	go kl.volumeManager.Run(kl.sourcesReady, wait.NeverStop)
 
 	if kl.kubeClient != nil {
+		// Start two go-routines to update the status.
+		//
+		// The first will report to the apiserver every nodeStatusUpdateFrequency and is aimed to provide regular status intervals,
+		// while the second is used to provide a more timely status update during initialization and runs an one-shot update to the apiserver
+		// once the node becomes ready, then exits afterwards.
+		//
 		// Introduce some small jittering to ensure that over time the requests won't start
 		// accumulating at approximately the same time from the set of nodes due to priority and
 		// fairness effect.
@@ -1485,6 +1549,12 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 
 	// Start the pod lifecycle event generator.
 	kl.pleg.Start()
+
+	// Start eventedPLEG only if EventedPLEG feature gate is enabled.
+	if utilfeature.DefaultFeatureGate.Enabled(features.EventedPLEG) {
+		kl.eventedPleg.Start()
+	}
+
 	kl.syncLoop(ctx, updates, kl)
 }
 
@@ -1872,6 +1942,15 @@ func (kl *Kubelet) syncTerminatingPod(_ context.Context, pod *v1.Pod, podStatus 
 		return fmt.Errorf("detected running containers after a successful KillPod, CRI violation: %v", runningContainers)
 	}
 
+	// NOTE: resources must be unprepared AFTER all containers have stopped
+	// and BEFORE the pod status is changed on the API server
+	// to avoid race conditions with the resource deallocation code in kubernetes core.
+	if utilfeature.DefaultFeatureGate.Enabled(features.DynamicResourceAllocation) {
+		if err := kl.containerManager.UnprepareResources(pod); err != nil {
+			return err
+		}
+	}
+
 	// we have successfully stopped all containers, the pod is terminating, our status is "done"
 	klog.V(4).InfoS("Pod termination stopped all running containers", "pod", klog.KObj(pod), "podUID", pod.UID)
 
@@ -1889,6 +1968,7 @@ func (kl *Kubelet) syncTerminatedPod(ctx context.Context, pod *v1.Pod, podStatus
 	// generate the final status of the pod
 	// TODO: should we simply fold this into TerminatePod? that would give a single pod update
 	apiPodStatus := kl.generateAPIPodStatus(pod, podStatus)
+
 	kl.statusManager.SetPodStatus(pod, apiPodStatus)
 
 	// volumes are unmounted after the pod worker reports ShouldPodRuntimeBeRemoved (which is satisfied
@@ -2386,9 +2466,13 @@ func (kl *Kubelet) updateRuntimeUp() {
 	}
 	// Periodically log the whole runtime status for debugging.
 	klog.V(4).InfoS("Container runtime status", "status", s)
+	klogErrorS := klog.ErrorS
+	if !kl.containerRuntimeReadyExpected {
+		klogErrorS = klog.V(4).ErrorS
+	}
 	networkReady := s.GetRuntimeCondition(kubecontainer.NetworkReady)
 	if networkReady == nil || !networkReady.Status {
-		klog.ErrorS(nil, "Container runtime network not ready", "networkReady", networkReady)
+		klogErrorS(nil, "Container runtime network not ready", "networkReady", networkReady)
 		kl.runtimeState.setNetworkState(fmt.Errorf("container runtime network not ready: %v", networkReady))
 	} else {
 		// Set nil if the container runtime network is ready.
@@ -2398,7 +2482,7 @@ func (kl *Kubelet) updateRuntimeUp() {
 	runtimeReady := s.GetRuntimeCondition(kubecontainer.RuntimeReady)
 	// If RuntimeReady is not set or is false, report an error.
 	if runtimeReady == nil || !runtimeReady.Status {
-		klog.ErrorS(nil, "Container runtime not ready", "runtimeReady", runtimeReady)
+		klogErrorS(nil, "Container runtime not ready", "runtimeReady", runtimeReady)
 		kl.runtimeState.setRuntimeState(fmt.Errorf("container runtime not ready: %v", runtimeReady))
 		return
 	}
@@ -2453,31 +2537,25 @@ func (kl *Kubelet) cleanUpContainersInPod(podID types.UID, exitedContainerID str
 	}
 }
 
-// fastStatusUpdateOnce starts a loop that checks the internal node indexer cache for when a CIDR
-// is applied  and tries to update pod CIDR immediately. After pod CIDR is updated it fires off
-// a runtime update and a node status update. Function returns after one successful node status update.
+// fastStatusUpdateOnce starts a loop that checks if the current state of kubelet + container runtime
+// would be able to turn the node ready, and sync the ready state to the apiserver as soon as possible.
+// Function returns after the node status update after such event, or when the node is already ready.
 // Function is executed only during Kubelet start which improves latency to ready node by updating
-// pod CIDR, runtime status and node statuses ASAP.
+// kubelet state, runtime status and node statuses ASAP.
 func (kl *Kubelet) fastStatusUpdateOnce() {
 	ctx := context.Background()
-	for {
-		time.Sleep(100 * time.Millisecond)
-		node, err := kl.GetNode()
-		if err != nil {
-			klog.ErrorS(err, "Error getting node")
-			continue
+	start := kl.clock.Now()
+	stopCh := make(chan struct{})
+
+	// Keep trying to make fast node status update until either timeout is reached or an update is successful.
+	wait.Until(func() {
+		// fastNodeStatusUpdate returns true when it succeeds or when the grace period has expired
+		// (status was not updated within nodeReadyGracePeriod and the second argument below gets true),
+		// then we close the channel and abort the loop.
+		if kl.fastNodeStatusUpdate(ctx, kl.clock.Since(start) >= nodeReadyGracePeriod) {
+			close(stopCh)
 		}
-		if len(node.Spec.PodCIDRs) != 0 {
-			podCIDRs := strings.Join(node.Spec.PodCIDRs, ",")
-			if _, err := kl.updatePodCIDR(ctx, podCIDRs); err != nil {
-				klog.ErrorS(err, "Pod CIDR update failed", "CIDR", podCIDRs)
-				continue
-			}
-			kl.updateRuntimeUp()
-			kl.syncNodeStatus()
-			return
-		}
-	}
+	}, 100*time.Millisecond, stopCh)
 }
 
 // CheckpointContainer tries to checkpoint a container. The parameters are used to
@@ -2517,6 +2595,16 @@ func (kl *Kubelet) CheckpointContainer(
 	}
 
 	return nil
+}
+
+// ListMetricDescriptors gets the descriptors for the metrics that will be returned in ListPodSandboxMetrics.
+func (kl *Kubelet) ListMetricDescriptors(ctx context.Context) ([]*runtimeapi.MetricDescriptor, error) {
+	return kl.containerRuntime.ListMetricDescriptors(ctx)
+}
+
+// ListPodSandboxMetrics retrieves the metrics for all pod sandboxes.
+func (kl *Kubelet) ListPodSandboxMetrics(ctx context.Context) ([]*runtimeapi.PodSandboxMetrics, error) {
+	return kl.containerRuntime.ListPodSandboxMetrics(ctx)
 }
 
 func (kl *Kubelet) supportLocalStorageCapacityIsolation() bool {

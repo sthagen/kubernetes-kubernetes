@@ -18,6 +18,7 @@ package scheduling
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -25,8 +26,10 @@ import (
 	nodev1 "k8s.io/api/node/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 	clientset "k8s.io/client-go/kubernetes"
@@ -59,6 +62,7 @@ var workerNodes = sets.String{}
 type pausePodConfig struct {
 	Name                              string
 	Namespace                         string
+	Finalizers                        []string
 	Affinity                          *v1.Affinity
 	Annotations, Labels, NodeSelector map[string]string
 	Resources                         *v1.ResourceRequirements
@@ -70,6 +74,7 @@ type pausePodConfig struct {
 	PriorityClassName                 string
 	DeletionGracePeriodSeconds        *int64
 	TopologySpreadConstraints         []v1.TopologySpreadConstraint
+	SchedulingGates                   []v1.PodSchedulingGate
 }
 
 var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
@@ -799,7 +804,74 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 			framework.ExpectEqual(numInNode2, expected, fmt.Sprintf("Pods are not distributed as expected on node %q", nodeNames[1]))
 		})
 	})
+
+	ginkgo.It("validates Pods with non-empty schedulingGates are blocked on scheduling [Feature:PodSchedulingReadiness] [alpha]", func() {
+		podLabel := "e2e-scheduling-gates"
+		replicas := 3
+		ginkgo.By(fmt.Sprintf("Creating a ReplicaSet with replicas=%v, carrying scheduling gates [foo bar]", replicas))
+		rsConfig := pauseRSConfig{
+			Replicas: int32(replicas),
+			PodConfig: pausePodConfig{
+				Name:      podLabel,
+				Namespace: ns,
+				Labels:    map[string]string{podLabel: ""},
+				SchedulingGates: []v1.PodSchedulingGate{
+					{Name: "foo"},
+					{Name: "bar"},
+				},
+			},
+		}
+		createPauseRS(f, rsConfig)
+
+		ginkgo.By("Expect all pods stay in pending state")
+		podList, err := e2epod.WaitForNumberOfPods(cs, ns, replicas, time.Minute)
+		framework.ExpectNoError(err)
+		framework.ExpectNoError(e2epod.WaitForPodsSchedulingGated(cs, ns, replicas, time.Minute))
+
+		ginkgo.By("Remove one scheduling gate")
+		want := []v1.PodSchedulingGate{{Name: "bar"}}
+		var pods []*v1.Pod
+		for _, pod := range podList.Items {
+			clone := pod.DeepCopy()
+			clone.Spec.SchedulingGates = want
+			live, err := patchPod(cs, &pod, clone)
+			framework.ExpectNoError(err)
+			pods = append(pods, live)
+		}
+
+		ginkgo.By("Expect all pods carry one scheduling gate and are still in pending state")
+		framework.ExpectNoError(e2epod.WaitForPodsWithSchedulingGates(cs, ns, replicas, time.Minute, want))
+		framework.ExpectNoError(e2epod.WaitForPodsSchedulingGated(cs, ns, replicas, time.Minute))
+
+		ginkgo.By("Remove the remaining scheduling gates")
+		for _, pod := range pods {
+			clone := pod.DeepCopy()
+			clone.Spec.SchedulingGates = nil
+			_, err := patchPod(cs, pod, clone)
+			framework.ExpectNoError(err)
+		}
+
+		ginkgo.By("Expect all pods are scheduled and running")
+		framework.ExpectNoError(e2epod.WaitForPodsRunning(cs, ns, replicas, time.Minute))
+	})
 })
+
+func patchPod(cs clientset.Interface, old, new *v1.Pod) (*v1.Pod, error) {
+	oldData, err := json.Marshal(old)
+	if err != nil {
+		return nil, err
+	}
+
+	newData, err := json.Marshal(new)
+	if err != nil {
+		return nil, err
+	}
+	patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, &v1.Pod{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create merge patch for Pod %q: %v", old.Name, err)
+	}
+	return cs.CoreV1().Pods(new.Namespace).Patch(context.TODO(), new.Name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+}
 
 // printAllPodsOnNode outputs status of all kubelet pods into log.
 func printAllPodsOnNode(c clientset.Interface, nodeName string) {
@@ -826,6 +898,7 @@ func initPausePod(f *framework.Framework, conf pausePodConfig) *v1.Pod {
 			Labels:          map[string]string{},
 			Annotations:     map[string]string{},
 			OwnerReferences: conf.OwnerReferences,
+			Finalizers:      conf.Finalizers,
 		},
 		Spec: v1.PodSpec{
 			SecurityContext:           e2epod.GetRestrictedPodSecurityContext(),
@@ -844,6 +917,7 @@ func initPausePod(f *framework.Framework, conf pausePodConfig) *v1.Pod {
 			Tolerations:                   conf.Tolerations,
 			PriorityClassName:             conf.PriorityClassName,
 			TerminationGracePeriodSeconds: &gracePeriod,
+			SchedulingGates:               conf.SchedulingGates,
 		},
 	}
 	for key, value := range conf.Labels {

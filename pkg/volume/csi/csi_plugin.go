@@ -222,6 +222,9 @@ func (p *csiPlugin) Init(host volume.VolumeHost) error {
 		csitranslationplugins.AWSEBSInTreePluginName: func() bool {
 			return utilfeature.DefaultFeatureGate.Enabled(features.CSIMigrationAWS)
 		},
+		csitranslationplugins.CinderInTreePluginName: func() bool {
+			return true
+		},
 		csitranslationplugins.AzureDiskInTreePluginName: func() bool {
 			return utilfeature.DefaultFeatureGate.Enabled(features.CSIMigrationAzureDisk)
 		},
@@ -448,27 +451,30 @@ func (p *csiPlugin) NewUnmounter(specName string, podUID types.UID) (volume.Unmo
 	return unmounter, nil
 }
 
-func (p *csiPlugin) ConstructVolumeSpec(volumeName, mountPath string) (*volume.Spec, error) {
+func (p *csiPlugin) ConstructVolumeSpec(volumeName, mountPath string) (volume.ReconstructedVolume, error) {
 	klog.V(4).Info(log("plugin.ConstructVolumeSpec [pv.Name=%v, path=%v]", volumeName, mountPath))
 
 	volData, err := loadVolumeData(mountPath, volDataFileName)
 	if err != nil {
-		return nil, errors.New(log("plugin.ConstructVolumeSpec failed loading volume data using [%s]: %v", mountPath, err))
+		return volume.ReconstructedVolume{}, errors.New(log("plugin.ConstructVolumeSpec failed loading volume data using [%s]: %v", mountPath, err))
 	}
-
 	klog.V(4).Info(log("plugin.ConstructVolumeSpec extracted [%#v]", volData))
 
-	var spec *volume.Spec
+	var ret volume.ReconstructedVolume
+	if utilfeature.DefaultFeatureGate.Enabled(features.SELinuxMountReadWriteOncePod) {
+		ret.SELinuxMountContext = volData[volDataKey.seLinuxMountContext]
+	}
+
 	// If mode is VolumeLifecycleEphemeral, use constructVolSourceSpec
 	// to construct volume source spec. If mode is VolumeLifecyclePersistent,
 	// use constructPVSourceSpec to construct volume construct pv source spec.
 	if storage.VolumeLifecycleMode(volData[volDataKey.volumeLifecycleMode]) == storage.VolumeLifecycleEphemeral {
-		spec = p.constructVolSourceSpec(volData[volDataKey.specVolID], volData[volDataKey.driverName])
-		return spec, nil
+		ret.Spec = p.constructVolSourceSpec(volData[volDataKey.specVolID], volData[volDataKey.driverName])
+		return ret, nil
 	}
-	spec = p.constructPVSourceSpec(volData[volDataKey.specVolID], volData[volDataKey.driverName], volData[volDataKey.volHandle])
 
-	return spec, nil
+	ret.Spec = p.constructPVSourceSpec(volData[volDataKey.specVolID], volData[volDataKey.driverName], volData[volDataKey.volHandle])
+	return ret, nil
 }
 
 // constructVolSourceSpec constructs volume.Spec with CSIVolumeSource

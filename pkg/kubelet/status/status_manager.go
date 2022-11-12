@@ -34,8 +34,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/klog/v2"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
+	"k8s.io/kubernetes/pkg/features"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/metrics"
 	kubepod "k8s.io/kubernetes/pkg/kubelet/pod"
@@ -150,7 +152,8 @@ func NewManager(kubeClient clientset.Interface, podManager kubepod.Manager, podD
 func isPodStatusByKubeletEqual(oldStatus, status *v1.PodStatus) bool {
 	oldCopy := oldStatus.DeepCopy()
 	for _, c := range status.Conditions {
-		if kubetypes.PodConditionByKubelet(c.Type) {
+		// both owned and shared conditions are used for kubelet status equality
+		if kubetypes.PodConditionByKubelet(c.Type) || kubetypes.PodConditionSharedByKubelet(c.Type) {
 			_, oc := podutil.GetPodCondition(oldCopy, c.Type)
 			if oc == nil || oc.Status != c.Status || oc.Message != c.Message || oc.Reason != c.Reason {
 				return false
@@ -500,6 +503,11 @@ func (m *manager) updateStatusInternal(pod *v1.Pod, status v1.PodStatus, forceUp
 
 	// Set PodScheduledCondition.LastTransitionTime.
 	updateLastTransitionTime(&status, &oldStatus, v1.PodScheduled)
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.PodDisruptionConditions) {
+		// Set DisruptionTarget.LastTransitionTime.
+		updateLastTransitionTime(&status, &oldStatus, v1.DisruptionTarget)
+	}
 
 	// ensure that the start time does not change across updates.
 	if oldStatus.StartTime != nil && !oldStatus.StartTime.IsZero() {
@@ -879,9 +887,30 @@ func mergePodStatus(oldPodStatus, newPodStatus v1.PodStatus, couldHaveRunningCon
 			podConditions = append(podConditions, c)
 		}
 	}
+
+	transitioningToTerminalPhase := !podutil.IsPodPhaseTerminal(oldPodStatus.Phase) && podutil.IsPodPhaseTerminal(newPodStatus.Phase)
+
 	for _, c := range newPodStatus.Conditions {
 		if kubetypes.PodConditionByKubelet(c.Type) {
 			podConditions = append(podConditions, c)
+		} else if kubetypes.PodConditionSharedByKubelet(c.Type) {
+			// we replace or append all the "shared by kubelet" conditions
+			if c.Type == v1.DisruptionTarget {
+				// guard the update of the DisruptionTarget condition with a check to ensure
+				// it will only be sent once all containers have terminated and the phase
+				// is terminal. This avoids sending an unnecessary patch request to add
+				// the condition if the actual status phase transition is delayed.
+				if transitioningToTerminalPhase && !couldHaveRunningContainers {
+					// update the LastTransitionTime again here because the older transition
+					// time set in updateStatusInternal is likely stale as sending of
+					// the condition was delayed until all pod's containers have terminated.
+					updateLastTransitionTime(&newPodStatus, &oldPodStatus, c.Type)
+					if _, c := podutil.GetPodConditionFromList(newPodStatus.Conditions, c.Type); c != nil {
+						// for shared conditions we update or append in podConditions
+						podConditions = statusutil.ReplaceOrAppendPodCondition(podConditions, c)
+					}
+				}
+			}
 		}
 	}
 	newPodStatus.Conditions = podConditions
@@ -895,7 +924,7 @@ func mergePodStatus(oldPodStatus, newPodStatus v1.PodStatus, couldHaveRunningCon
 	// the Kubelet exclusively owns must be released prior to a pod being reported terminal,
 	// while resources that have participanting components above the API use the pod's
 	// transition to a terminal phase (or full deletion) to release those resources.
-	if !podutil.IsPodPhaseTerminal(oldPodStatus.Phase) && podutil.IsPodPhaseTerminal(newPodStatus.Phase) {
+	if transitioningToTerminalPhase {
 		if couldHaveRunningContainers {
 			newPodStatus.Phase = oldPodStatus.Phase
 			newPodStatus.Reason = oldPodStatus.Reason

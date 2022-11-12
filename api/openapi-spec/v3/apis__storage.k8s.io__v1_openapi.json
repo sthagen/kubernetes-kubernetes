@@ -2113,6 +2113,11 @@
           {
             "group": "admissionregistration.k8s.io",
             "kind": "DeleteOptions",
+            "version": "v1alpha1"
+          },
+          {
+            "group": "admissionregistration.k8s.io",
+            "kind": "DeleteOptions",
             "version": "v1beta1"
           },
           {
@@ -2334,6 +2339,11 @@
             "group": "rbac.authorization.k8s.io",
             "kind": "DeleteOptions",
             "version": "v1beta1"
+          },
+          {
+            "group": "resource.k8s.io",
+            "kind": "DeleteOptions",
+            "version": "v1alpha1"
           },
           {
             "group": "scheduling.k8s.io",
@@ -2712,6 +2722,11 @@
             "group": "",
             "kind": "Status",
             "version": "v1"
+          },
+          {
+            "group": "resource.k8s.io",
+            "kind": "Status",
+            "version": "v1alpha1"
           }
         ]
       },
@@ -2819,6 +2834,11 @@
             "group": "admissionregistration.k8s.io",
             "kind": "WatchEvent",
             "version": "v1"
+          },
+          {
+            "group": "admissionregistration.k8s.io",
+            "kind": "WatchEvent",
+            "version": "v1alpha1"
           },
           {
             "group": "admissionregistration.k8s.io",
@@ -3044,6 +3064,11 @@
             "group": "rbac.authorization.k8s.io",
             "kind": "WatchEvent",
             "version": "v1beta1"
+          },
+          {
+            "group": "resource.k8s.io",
+            "kind": "WatchEvent",
+            "version": "v1alpha1"
           },
           {
             "group": "scheduling.k8s.io",

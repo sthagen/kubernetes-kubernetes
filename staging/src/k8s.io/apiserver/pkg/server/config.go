@@ -18,8 +18,9 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base32"
 	"fmt"
-	"hash/fnv"
 	"net"
 	"net/http"
 	"os"
@@ -34,6 +35,7 @@ import (
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/google/uuid"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -49,6 +51,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/discovery"
+	discoveryendpoint "k8s.io/apiserver/pkg/endpoints/discovery/aggregated"
 	"k8s.io/apiserver/pkg/endpoints/filterlatency"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	apiopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
@@ -124,6 +127,7 @@ type Config struct {
 	EnableIndex     bool
 	EnableProfiling bool
 	EnableDiscovery bool
+
 	// Requires generic profiling enabled
 	EnableContentionProfiling bool
 	EnableMetrics             bool
@@ -261,6 +265,9 @@ type Config struct {
 
 	// StorageVersionManager holds the storage versions of the API resources installed by this server.
 	StorageVersionManager storageversion.Manager
+
+	// AggregatedDiscoveryGroupManager serves /apis in an aggregated form.
+	AggregatedDiscoveryGroupManager discoveryendpoint.ResourceManager
 }
 
 type RecommendedConfig struct {
@@ -335,9 +342,8 @@ func NewConfig(codecs serializer.CodecFactory) *Config {
 			klog.Fatalf("error getting hostname for apiserver identity: %v", err)
 		}
 
-		h := fnv.New32a()
-		h.Write([]byte(hostname))
-		id = "kube-apiserver-" + fmt.Sprint(h.Sum32())
+		hash := sha256.Sum256([]byte(hostname))
+		id = "kube-apiserver-" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hash[:16]))
 	}
 	lifecycleSignals := newLifecycleSignals()
 
@@ -677,6 +683,14 @@ func (c completedConfig) New(name string, delegationTarget DelegationTarget) (*G
 		muxAndDiscoveryCompleteSignals: map[string]<-chan struct{}{},
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(genericfeatures.AggregatedDiscoveryEndpoint) {
+		manager := c.AggregatedDiscoveryGroupManager
+		if manager == nil {
+			manager = discoveryendpoint.NewResourceManager()
+		}
+		s.AggregatedDiscoveryGroupManager = manager
+		s.AggregatedLegacyDiscoveryGroupManager = discoveryendpoint.NewResourceManager()
+	}
 	for {
 		if c.JSONPatchMaxCopyBytes <= 0 {
 			break
@@ -918,7 +932,12 @@ func installAPI(s *GenericAPIServer, c *Config) {
 	routes.Version{Version: c.Version}.Install(s.Handler.GoRestfulContainer)
 
 	if c.EnableDiscovery {
-		s.Handler.GoRestfulContainer.Add(s.DiscoveryGroupManager.WebService())
+		if utilfeature.DefaultFeatureGate.Enabled(genericfeatures.AggregatedDiscoveryEndpoint) {
+			wrapped := discoveryendpoint.WrapAggregatedDiscoveryToHandler(s.DiscoveryGroupManager, s.AggregatedDiscoveryGroupManager)
+			s.Handler.GoRestfulContainer.Add(wrapped.GenerateWebService("/apis", metav1.APIGroupList{}))
+		} else {
+			s.Handler.GoRestfulContainer.Add(s.DiscoveryGroupManager.WebService())
+		}
 	}
 	if c.FlowControl != nil && utilfeature.DefaultFeatureGate.Enabled(genericfeatures.APIPriorityAndFairness) {
 		c.FlowControl.Install(s.Handler.NonGoRestfulMux)

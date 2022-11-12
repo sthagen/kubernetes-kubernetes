@@ -205,6 +205,19 @@ func buildControllerRoles() ([]rbacv1.ClusterRole, []rbacv1.ClusterRoleBinding) 
 		},
 	})
 
+	if utilfeature.DefaultFeatureGate.Enabled(features.DynamicResourceAllocation) {
+		addControllerRole(&controllerRoles, &controllerRoleBindings, rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{Name: saRolePrefix + "resource-claim-controller"},
+			Rules: []rbacv1.PolicyRule{
+				rbacv1helpers.NewRule("get", "list", "watch").Groups(legacyGroup).Resources("pods").RuleOrDie(),
+				rbacv1helpers.NewRule("update").Groups(legacyGroup).Resources("pods/finalizers").RuleOrDie(),
+				rbacv1helpers.NewRule("get", "list", "watch", "create").Groups(resourceGroup).Resources("resourceclaims").RuleOrDie(),
+				rbacv1helpers.NewRule("update", "patch").Groups(resourceGroup).Resources("resourceclaims/status").RuleOrDie(),
+				eventsRule(),
+			},
+		})
+	}
+
 	addControllerRole(&controllerRoles, &controllerRoleBindings, rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{Name: saRolePrefix + "generic-garbage-collector"},
 		Rules: []rbacv1.PolicyRule{
@@ -254,7 +267,7 @@ func buildControllerRoles() ([]rbacv1.ClusterRole, []rbacv1.ClusterRoleBinding) 
 				rbacv1helpers.NewRule("get", "list", "update", "delete", "patch").Groups(legacyGroup).Resources("nodes").RuleOrDie(),
 				rbacv1helpers.NewRule("patch", "update").Groups(legacyGroup).Resources("nodes/status").RuleOrDie(),
 				// used for pod deletion
-				rbacv1helpers.NewRule("update").Groups(legacyGroup).Resources("pods/status").RuleOrDie(),
+				rbacv1helpers.NewRule("patch", "update").Groups(legacyGroup).Resources("pods/status").RuleOrDie(),
 				rbacv1helpers.NewRule("list", "delete").Groups(legacyGroup).Resources("pods").RuleOrDie(),
 				rbacv1helpers.NewRule("get", "list", "create", "update").Groups(networkingGroup).Resources("clustercidrs").RuleOrDie(),
 				eventsRule(),
@@ -262,7 +275,6 @@ func buildControllerRoles() ([]rbacv1.ClusterRole, []rbacv1.ClusterRoleBinding) 
 		}
 		if utilfeature.DefaultFeatureGate.Enabled(features.PodDisruptionConditions) {
 			role.Rules = append(role.Rules, rbacv1helpers.NewRule("get").Groups(legacyGroup).Resources("pods").RuleOrDie())
-			role.Rules = append(role.Rules, rbacv1helpers.NewRule("patch").Groups(legacyGroup).Resources("pods/status").RuleOrDie())
 		}
 		return role
 	}())

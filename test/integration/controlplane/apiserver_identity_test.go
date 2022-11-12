@@ -18,9 +18,11 @@ package controlplane
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base32"
 	"fmt"
-	"hash/fnv"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,9 +46,8 @@ const (
 )
 
 func expectedAPIServerIdentity(hostname string) string {
-	h := fnv.New32a()
-	h.Write([]byte(hostname))
-	return "kube-apiserver-" + fmt.Sprint(h.Sum32())
+	hash := sha256.Sum256([]byte(hostname))
+	return "kube-apiserver-" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hash[:16]))
 }
 
 func TestCreateLeaseOnStart(t *testing.T) {
@@ -98,13 +99,23 @@ func TestCreateLeaseOnStart(t *testing.T) {
 }
 
 func TestLeaseGarbageCollection(t *testing.T) {
+	oldIdentityLeaseDurationSeconds := controlplane.IdentityLeaseDurationSeconds
+	oldIdentityLeaseGCPeriod := controlplane.IdentityLeaseGCPeriod
+	oldIdentityLeaseRenewIntervalPeriod := controlplane.IdentityLeaseRenewIntervalPeriod
+	defer func() {
+		// reset the default values for leases after this test
+		controlplane.IdentityLeaseDurationSeconds = oldIdentityLeaseDurationSeconds
+		controlplane.IdentityLeaseGCPeriod = oldIdentityLeaseGCPeriod
+		controlplane.IdentityLeaseRenewIntervalPeriod = oldIdentityLeaseRenewIntervalPeriod
+	}()
+
+	// Shorten lease parameters so GC behavior can be exercised in integration tests
+	controlplane.IdentityLeaseDurationSeconds = 1
+	controlplane.IdentityLeaseGCPeriod = time.Second
+	controlplane.IdentityLeaseRenewIntervalPeriod = time.Second
+
 	defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.APIServerIdentity, true)()
-	result := kubeapiservertesting.StartTestServerOrDie(t, nil,
-		// This shorten the GC check period to make the test run faster.
-		// Since we are testing GC behavior on leases we create, what happens to
-		// the real apiserver lease doesn't matter.
-		[]string{"--identity-lease-duration-seconds=1"},
-		framework.SharedEtcd())
+	result := kubeapiservertesting.StartTestServerOrDie(t, nil, nil, framework.SharedEtcd())
 	defer result.TearDownFn()
 
 	kubeclient, err := kubernetes.NewForConfig(result.ClientConfig)

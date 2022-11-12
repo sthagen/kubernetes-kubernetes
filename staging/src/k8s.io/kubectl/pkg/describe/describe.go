@@ -950,6 +950,8 @@ func describeVolumes(volumes []corev1.Volume, w PrefixWriter, space string) {
 			printAzureDiskVolumeSource(volume.VolumeSource.AzureDisk, w)
 		case volume.VolumeSource.VsphereVolume != nil:
 			printVsphereVolumeSource(volume.VolumeSource.VsphereVolume, w)
+		case volume.VolumeSource.Cinder != nil:
+			printCinderVolumeSource(volume.VolumeSource.Cinder, w)
 		case volume.VolumeSource.PhotonPersistentDisk != nil:
 			printPhotonPersistentDiskVolumeSource(volume.VolumeSource.PhotonPersistentDisk, w)
 		case volume.VolumeSource.PortworxVolume != nil:
@@ -1226,6 +1228,24 @@ func printPhotonPersistentDiskVolumeSource(photon *corev1.PhotonPersistentDiskVo
 		"    PdID:\t%v\n"+
 		"    FSType:\t%v\n",
 		photon.PdID, photon.FSType)
+}
+
+func printCinderVolumeSource(cinder *corev1.CinderVolumeSource, w PrefixWriter) {
+	w.Write(LEVEL_2, "Type:\tCinder (a Persistent Disk resource in OpenStack)\n"+
+		"    VolumeID:\t%v\n"+
+		"    FSType:\t%v\n"+
+		"    ReadOnly:\t%v\n"+
+		"    SecretRef:\t%v\n",
+		cinder.VolumeID, cinder.FSType, cinder.ReadOnly, cinder.SecretRef)
+}
+
+func printCinderPersistentVolumeSource(cinder *corev1.CinderPersistentVolumeSource, w PrefixWriter) {
+	w.Write(LEVEL_2, "Type:\tCinder (a Persistent Disk resource in OpenStack)\n"+
+		"    VolumeID:\t%v\n"+
+		"    FSType:\t%v\n"+
+		"    ReadOnly:\t%v\n"+
+		"    SecretRef:\t%v\n",
+		cinder.VolumeID, cinder.FSType, cinder.ReadOnly, cinder.SecretRef)
 }
 
 func printScaleIOVolumeSource(sio *corev1.ScaleIOVolumeSource, w PrefixWriter) {
@@ -1545,6 +1565,8 @@ func describePersistentVolume(pv *corev1.PersistentVolume, events *corev1.EventL
 			printQuobyteVolumeSource(pv.Spec.Quobyte, w)
 		case pv.Spec.VsphereVolume != nil:
 			printVsphereVolumeSource(pv.Spec.VsphereVolume, w)
+		case pv.Spec.Cinder != nil:
+			printCinderPersistentVolumeSource(pv.Spec.Cinder, w)
 		case pv.Spec.AzureDisk != nil:
 			printAzureDiskVolumeSource(pv.Spec.AzureDisk, w)
 		case pv.Spec.PhotonPersistentDisk != nil:
@@ -2653,11 +2675,11 @@ func (i *IngressDescriber) describeIngressV1(ing *networkingv1.Ingress, events *
 		w.Write(LEVEL_0, "Ingress Class:\t%v\n", ingressClassName)
 		def := ing.Spec.DefaultBackend
 		ns := ing.Namespace
-		if def == nil {
-			w.Write(LEVEL_0, "Default backend:\t<default>\n")
-		} else {
-			w.Write(LEVEL_0, "Default backend:\t%s\n", i.describeBackendV1(ns, def))
+		defaultBackendDescribe := "<default>"
+		if def != nil {
+			defaultBackendDescribe = i.describeBackendV1(ns, def)
 		}
+		w.Write(LEVEL_0, "Default backend:\t%s\n", defaultBackendDescribe)
 		if len(ing.Spec.TLS) != 0 {
 			describeIngressTLSV1(w, ing.Spec.TLS)
 		}
@@ -2680,7 +2702,7 @@ func (i *IngressDescriber) describeIngressV1(ing *networkingv1.Ingress, events *
 			}
 		}
 		if count == 0 {
-			w.Write(LEVEL_1, "%s\t%s\t%s\n", "*", "*", i.describeBackendV1(ns, def))
+			w.Write(LEVEL_1, "%s\t%s\t%s\n", "*", "*", defaultBackendDescribe)
 		}
 		printAnnotationsMultiline(w, "Annotations", ing.Annotations)
 

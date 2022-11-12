@@ -386,17 +386,17 @@ func (plugin *rbdPlugin) newUnmounterInternal(volName string, podUID types.UID, 
 	}, nil
 }
 
-func (plugin *rbdPlugin) ConstructVolumeSpec(volumeName, mountPath string) (*volume.Spec, error) {
+func (plugin *rbdPlugin) ConstructVolumeSpec(volumeName, mountPath string) (volume.ReconstructedVolume, error) {
 	mounter := plugin.host.GetMounter(plugin.GetPluginName())
 	kvh, ok := plugin.host.(volume.KubeletVolumeHost)
 	if !ok {
-		return nil, fmt.Errorf("plugin volume host does not implement KubeletVolumeHost interface")
+		return volume.ReconstructedVolume{}, fmt.Errorf("plugin volume host does not implement KubeletVolumeHost interface")
 	}
 	hu := kvh.GetHostUtil()
 	pluginMntDir := volutil.GetPluginMountDir(plugin.host, plugin.GetPluginName())
 	sourceName, err := hu.GetDeviceNameFromMount(mounter, mountPath, pluginMntDir)
 	if err != nil {
-		return nil, err
+		return volume.ReconstructedVolume{}, err
 	}
 	s := dstrings.Split(sourceName, "-image-")
 	if len(s) != 2 {
@@ -414,11 +414,11 @@ func (plugin *rbdPlugin) ConstructVolumeSpec(volumeName, mountPath string) (*vol
 		klog.V(3).Infof("SourceName %s wrong, fallback to old format", sourceName)
 		sourceName, err = plugin.getDeviceNameFromOldMountPath(mounter, mountPath)
 		if err != nil {
-			return nil, err
+			return volume.ReconstructedVolume{}, err
 		}
 		s = dstrings.Split(sourceName, "-image-")
 		if len(s) != 2 {
-			return nil, fmt.Errorf("sourceName %s wrong, should be pool+\"-image-\"+imageName", sourceName)
+			return volume.ReconstructedVolume{}, fmt.Errorf("sourceName %s wrong, should be pool+\"-image-\"+imageName", sourceName)
 		}
 	}
 	rbdVolume := &v1.Volume{
@@ -430,7 +430,19 @@ func (plugin *rbdPlugin) ConstructVolumeSpec(volumeName, mountPath string) (*vol
 			},
 		},
 	}
-	return volume.NewSpecFromVolume(rbdVolume), nil
+
+	var mountContext string
+	if utilfeature.DefaultFeatureGate.Enabled(features.SELinuxMountReadWriteOncePod) {
+		mountContext, err = hu.GetSELinuxMountContext(mountPath)
+		if err != nil {
+			return volume.ReconstructedVolume{}, err
+		}
+	}
+
+	return volume.ReconstructedVolume{
+		Spec:                volume.NewSpecFromVolume(rbdVolume),
+		SELinuxMountContext: mountContext,
+	}, nil
 }
 
 func (plugin *rbdPlugin) ConstructBlockVolumeSpec(podUID types.UID, volumeName, mapPath string) (*volume.Spec, error) {

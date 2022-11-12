@@ -57,6 +57,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/status"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/kubelet/util"
+	utilpod "k8s.io/kubernetes/pkg/util/pod"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
 	"k8s.io/kubernetes/pkg/volume/util/hostutil"
 	"k8s.io/kubernetes/pkg/volume/util/subpath"
@@ -926,7 +927,21 @@ func countRunningContainerStatus(status v1.PodStatus) int {
 // PodCouldHaveRunningContainers returns true if the pod with the given UID could still have running
 // containers. This returns false if the pod has not yet been started or the pod is unknown.
 func (kl *Kubelet) PodCouldHaveRunningContainers(pod *v1.Pod) bool {
-	return kl.podWorkers.CouldHaveRunningContainers(pod.UID)
+	if kl.podWorkers.CouldHaveRunningContainers(pod.UID) {
+		return true
+	}
+
+	// Check if pod might need to unprepare resources before termination
+	// NOTE: This is a temporary solution. This call is here to avoid changing
+	// status manager and its tests.
+	// TODO: extend PodDeletionSafetyProvider interface and implement it
+	// in a separate Kubelet method.
+	if utilfeature.DefaultFeatureGate.Enabled(features.DynamicResourceAllocation) {
+		if kl.containerManager.PodMightNeedToUnprepareResources(pod.UID) {
+			return true
+		}
+	}
+	return false
 }
 
 // PodResourcesAreReclaimed returns true if all required node-level resources that a pod was consuming have
@@ -1510,6 +1525,18 @@ func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.Po
 			s.Conditions = append(s.Conditions, c)
 		}
 	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.PodDisruptionConditions) {
+		// copy over the pod disruption conditions from state which is already
+		// updated during the eviciton (due to either node resource pressure or
+		// node graceful shutdown). We do not re-generate the conditions based
+		// on the container statuses as they are added based on one-time events.
+		cType := v1.DisruptionTarget
+		if _, condition := podutil.GetPodConditionFromList(oldPodStatus.Conditions, cType); condition != nil {
+			s.Conditions = utilpod.ReplaceOrAppendPodCondition(s.Conditions, condition)
+		}
+	}
+
 	// set all Kubelet-owned conditions
 	if utilfeature.DefaultFeatureGate.Enabled(features.PodHasNetworkCondition) {
 		s.Conditions = append(s.Conditions, status.GeneratePodHasNetworkCondition(pod, podStatus))

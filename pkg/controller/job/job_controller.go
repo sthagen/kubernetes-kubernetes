@@ -714,17 +714,13 @@ func (jm *Controller) syncJob(ctx context.Context, key string) (forget bool, rEr
 
 	var expectedRmFinalizers sets.String
 	var uncounted *uncountedTerminatedPods
-	if trackingUncountedPods(&job) {
+	if hasJobTrackingAnnotation(&job) {
 		klog.V(4).InfoS("Tracking uncounted Pods with pod finalizers", "job", klog.KObj(&job))
 		if job.Status.UncountedTerminatedPods == nil {
 			job.Status.UncountedTerminatedPods = &batch.UncountedTerminatedPods{}
 		}
 		uncounted = newUncountedTerminatedPods(*job.Status.UncountedTerminatedPods)
 		expectedRmFinalizers = jm.finalizerExpectations.getExpectedUIDs(key)
-	} else if patch := removeTrackingAnnotationPatch(&job); patch != nil {
-		if err := jm.patchJobHandler(ctx, &job, patch); err != nil {
-			return false, fmt.Errorf("removing tracking finalizer from job %s: %w", key, err)
-		}
 	}
 
 	// Check the expectations of the job before counting active pods, otherwise a new pod can sneak in
@@ -762,12 +758,12 @@ func (jm *Controller) syncJob(ctx context.Context, key string) (forget bool, rEr
 		(failed > *job.Spec.BackoffLimit)
 
 	if feature.DefaultFeatureGate.Enabled(features.JobPodFailurePolicy) {
-		if failureTargetCondition := findConditionByType(job.Status.Conditions, batch.AlphaNoCompatGuaranteeJobFailureTarget); failureTargetCondition != nil {
+		if failureTargetCondition := findConditionByType(job.Status.Conditions, batch.JobFailureTarget); failureTargetCondition != nil {
 			finishedCondition = newFailedConditionForFailureTarget(failureTargetCondition)
 		} else if failJobMessage := getFailJobMessage(&job, pods, uncounted.Failed()); failJobMessage != nil {
 			if uncounted != nil {
 				// Prepare the interim FailureTarget condition to record the failure message before the finalizers (allowing removal of the pods) are removed.
-				finishedCondition = newCondition(batch.AlphaNoCompatGuaranteeJobFailureTarget, v1.ConditionTrue, jobConditionReasonPodFailurePolicy, *failJobMessage)
+				finishedCondition = newCondition(batch.JobFailureTarget, v1.ConditionTrue, jobConditionReasonPodFailurePolicy, *failJobMessage)
 			} else {
 				// Prepare the Failed job condition for the legacy path without finalizers (don't use the interim FailureTarget condition).
 				finishedCondition = newCondition(batch.JobFailed, v1.ConditionTrue, jobConditionReasonPodFailurePolicy, *failJobMessage)
@@ -1094,7 +1090,7 @@ func (jm *Controller) trackJobStatusAndRemoveFinalizers(ctx context.Context, job
 		job.Status.CompletedIndexes = succeededIndexes.String()
 	}
 	if feature.DefaultFeatureGate.Enabled(features.JobPodFailurePolicy) {
-		if finishedCond != nil && finishedCond.Type == batch.AlphaNoCompatGuaranteeJobFailureTarget {
+		if finishedCond != nil && finishedCond.Type == batch.JobFailureTarget {
 
 			// Append the interim FailureTarget condition to update the job status with before finalizers are removed.
 			job.Status.Conditions = append(job.Status.Conditions, *finishedCond)
@@ -1476,7 +1472,7 @@ func (jm *Controller) manageJob(ctx context.Context, job *batch.Job, activePods 
 		if isIndexedJob(job) {
 			addCompletionIndexEnvVariables(podTemplate)
 		}
-		if trackingUncountedPods(job) {
+		if hasJobTrackingAnnotation(job) {
 			podTemplate.Finalizers = appendJobCompletionFinalizerIfNotFound(podTemplate.Finalizers)
 		}
 
@@ -1635,10 +1631,6 @@ func getCompletionMode(job *batch.Job) string {
 	return string(batch.NonIndexedCompletion)
 }
 
-func trackingUncountedPods(job *batch.Job) bool {
-	return feature.DefaultFeatureGate.Enabled(features.JobTrackingWithFinalizers) && hasJobTrackingAnnotation(job)
-}
-
 func hasJobTrackingAnnotation(job *batch.Job) bool {
 	if job.Annotations == nil {
 		return false
@@ -1663,21 +1655,6 @@ func removeTrackingFinalizerPatch(pod *v1.Pod) []byte {
 	patch := map[string]interface{}{
 		"metadata": map[string]interface{}{
 			"$deleteFromPrimitiveList/finalizers": []string{batch.JobTrackingFinalizer},
-		},
-	}
-	patchBytes, _ := json.Marshal(patch)
-	return patchBytes
-}
-
-func removeTrackingAnnotationPatch(job *batch.Job) []byte {
-	if !hasJobTrackingAnnotation(job) {
-		return nil
-	}
-	patch := map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"annotations": map[string]interface{}{
-				batch.JobTrackingFinalizer: nil,
-			},
 		},
 	}
 	patchBytes, _ := json.Marshal(patch)

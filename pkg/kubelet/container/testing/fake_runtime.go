@@ -276,6 +276,15 @@ func (f *FakeRuntime) KillContainerInPod(container v1.Container, pod *v1.Pod) er
 	return f.Err
 }
 
+func (f *FakeRuntime) GeneratePodStatus(event *runtimeapi.ContainerEventResponse) (*kubecontainer.PodStatus, error) {
+	f.Lock()
+	defer f.Unlock()
+
+	f.CalledFunctions = append(f.CalledFunctions, "GeneratePodStatus")
+	status := f.PodStatus
+	return &status, f.Err
+}
+
 func (f *FakeRuntime) GetPodStatus(_ context.Context, uid types.UID, name, namespace string) (*kubecontainer.PodStatus, error) {
 	f.Lock()
 	defer f.Unlock()
@@ -368,6 +377,22 @@ func (f *FakeRuntime) CheckpointContainer(_ context.Context, options *runtimeapi
 
 	f.CalledFunctions = append(f.CalledFunctions, "CheckpointContainer")
 	return f.Err
+}
+
+func (f *FakeRuntime) ListMetricDescriptors(_ context.Context) ([]*runtimeapi.MetricDescriptor, error) {
+	f.Lock()
+	defer f.Unlock()
+
+	f.CalledFunctions = append(f.CalledFunctions, "ListMetricDescriptors")
+	return nil, f.Err
+}
+
+func (f *FakeRuntime) ListPodSandboxMetrics(_ context.Context) ([]*runtimeapi.PodSandboxMetrics, error) {
+	f.Lock()
+	defer f.Unlock()
+
+	f.CalledFunctions = append(f.CalledFunctions, "ListPodSandboxMetrics")
+	return nil, f.Err
 }
 
 func (f *FakeRuntime) ImageStats(_ context.Context) (*kubecontainer.ImageStats, error) {
