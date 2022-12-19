@@ -86,19 +86,17 @@ type ApplyOptions struct {
 
 	DeleteOptions *delete.DeleteOptions
 
-	ServerSideApply         bool
-	ForceConflicts          bool
-	FieldManager            string
-	Selector                string
-	DryRunStrategy          cmdutil.DryRunStrategy
-	DryRunVerifier          *resource.QueryParamVerifier
-	FieldValidationVerifier *resource.QueryParamVerifier
-	Prune                   bool
-	PruneResources          []prune.Resource
-	cmdBaseName             string
-	All                     bool
-	Overwrite               bool
-	OpenAPIPatch            bool
+	ServerSideApply bool
+	ForceConflicts  bool
+	FieldManager    string
+	Selector        string
+	DryRunStrategy  cmdutil.DryRunStrategy
+	Prune           bool
+	PruneResources  []prune.Resource
+	cmdBaseName     string
+	All             bool
+	Overwrite       bool
+	OpenAPIPatch    bool
 
 	ValidationDirective string
 	Validator           validation.Schema
@@ -256,8 +254,6 @@ func (flags *ApplyFlags) ToOptions(cmd *cobra.Command, baseName string, args []s
 		return nil, err
 	}
 
-	dryRunVerifier := resource.NewQueryParamVerifier(dynamicClient, flags.Factory.OpenAPIGetter(), resource.QueryParamDryRun)
-	fieldValidationVerifier := resource.NewQueryParamVerifier(dynamicClient, flags.Factory.OpenAPIGetter(), resource.QueryParamFieldValidation)
 	fieldManager := GetApplyFieldManagerFlag(cmd, serverSideApply)
 
 	// allow for a success message operation to be specified at print time
@@ -289,7 +285,7 @@ func (flags *ApplyFlags) ToOptions(cmd *cobra.Command, baseName string, args []s
 	if err != nil {
 		return nil, err
 	}
-	validator, err := flags.Factory.Validator(validationDirective, fieldValidationVerifier)
+	validator, err := flags.Factory.Validator(validationDirective)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +322,6 @@ func (flags *ApplyFlags) ToOptions(cmd *cobra.Command, baseName string, args []s
 		FieldManager:    fieldManager,
 		Selector:        flags.Selector,
 		DryRunStrategy:  dryRunStrategy,
-		DryRunVerifier:  dryRunVerifier,
 		Prune:           flags.Prune,
 		PruneResources:  flags.PruneResources,
 		All:             flags.All,
@@ -501,16 +496,6 @@ func (o *ApplyOptions) applyOneObject(info *resource.Info) error {
 		DryRun(o.DryRunStrategy == cmdutil.DryRunServer).
 		WithFieldManager(o.FieldManager).
 		WithFieldValidation(o.ValidationDirective)
-
-	if o.DryRunStrategy == cmdutil.DryRunServer {
-		// Ensure the APIServer supports server-side dry-run for the resource,
-		// otherwise fail early.
-		// For APIServers that don't support server-side dry-run will persist
-		// changes.
-		if err := o.DryRunVerifier.HasSupport(info.Mapping.GroupVersionKind); err != nil {
-			return err
-		}
-	}
 
 	if o.ServerSideApply {
 		// Send the full object to be applied on the server side.

@@ -17,6 +17,7 @@ limitations under the License.
 package autoscaling
 
 import (
+	"context"
 	"time"
 
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -53,36 +54,36 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 	waitBuffer := 1 * time.Minute
 
 	ginkgo.Describe("with short downscale stabilization window", func() {
-		ginkgo.It("should scale down soon after the stabilization period", func() {
+		ginkgo.It("should scale down soon after the stabilization period", func(ctx context.Context) {
 			ginkgo.By("setting up resource consumer and HPA")
 			initPods := 1
 			initCPUUsageTotal := initPods * usageForSingleReplica
 			upScaleStabilization := 0 * time.Minute
 			downScaleStabilization := 1 * time.Minute
 
-			rc := e2eautoscaling.NewDynamicResourceConsumer(
+			rc := e2eautoscaling.NewDynamicResourceConsumer(ctx,
 				hpaName, f.Namespace.Name, e2eautoscaling.KindDeployment, initPods,
 				initCPUUsageTotal, 0, 0, int64(podCPURequest), 200,
 				f.ClientSet, f.ScalesGetter, e2eautoscaling.Disable, e2eautoscaling.Idle,
 			)
-			defer rc.CleanUp()
+			ginkgo.DeferCleanup(rc.CleanUp)
 
-			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(
+			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(ctx,
 				rc, int32(targetCPUUtilizationPercent), 1, 5,
 				e2eautoscaling.HPABehaviorWithStabilizationWindows(upScaleStabilization, downScaleStabilization),
 			)
-			defer e2eautoscaling.DeleteHPAWithBehavior(rc, hpa.Name)
+			ginkgo.DeferCleanup(e2eautoscaling.DeleteHPAWithBehavior, rc, hpa.Name)
 
 			// making sure HPA is ready, doing its job and already has a recommendation recorded
 			// for stabilization logic before lowering the consumption
 			ginkgo.By("triggering scale up to record a recommendation")
 			rc.ConsumeCPU(3 * usageForSingleReplica)
-			rc.WaitForReplicas(3, maxHPAReactionTime+maxResourceConsumerDelay+waitBuffer)
+			rc.WaitForReplicas(ctx, 3, maxHPAReactionTime+maxResourceConsumerDelay+waitBuffer)
 
 			ginkgo.By("triggering scale down by lowering consumption")
 			rc.ConsumeCPU(2 * usageForSingleReplica)
 			waitStart := time.Now()
-			rc.WaitForReplicas(2, downScaleStabilization+maxHPAReactionTime+maxResourceConsumerDelay+waitBuffer)
+			rc.WaitForReplicas(ctx, 2, downScaleStabilization+maxHPAReactionTime+maxResourceConsumerDelay+waitBuffer)
 			timeWaited := time.Now().Sub(waitStart)
 
 			ginkgo.By("verifying time waited for a scale down")
@@ -94,36 +95,36 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 	})
 
 	ginkgo.Describe("with long upscale stabilization window", func() {
-		ginkgo.It("should scale up only after the stabilization period", func() {
+		ginkgo.It("should scale up only after the stabilization period", func(ctx context.Context) {
 			ginkgo.By("setting up resource consumer and HPA")
 			initPods := 2
 			initCPUUsageTotal := initPods * usageForSingleReplica
 			upScaleStabilization := 3 * time.Minute
 			downScaleStabilization := 0 * time.Minute
 
-			rc := e2eautoscaling.NewDynamicResourceConsumer(
+			rc := e2eautoscaling.NewDynamicResourceConsumer(ctx,
 				hpaName, f.Namespace.Name, e2eautoscaling.KindDeployment, initPods,
 				initCPUUsageTotal, 0, 0, int64(podCPURequest), 200,
 				f.ClientSet, f.ScalesGetter, e2eautoscaling.Disable, e2eautoscaling.Idle,
 			)
-			defer rc.CleanUp()
+			ginkgo.DeferCleanup(rc.CleanUp)
 
-			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(
+			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(ctx,
 				rc, int32(targetCPUUtilizationPercent), 1, 10,
 				e2eautoscaling.HPABehaviorWithStabilizationWindows(upScaleStabilization, downScaleStabilization),
 			)
-			defer e2eautoscaling.DeleteHPAWithBehavior(rc, hpa.Name)
+			ginkgo.DeferCleanup(e2eautoscaling.DeleteHPAWithBehavior, rc, hpa.Name)
 
 			// making sure HPA is ready, doing its job and already has a recommendation recorded
 			// for stabilization logic before increasing the consumption
 			ginkgo.By("triggering scale down to record a recommendation")
 			rc.ConsumeCPU(1 * usageForSingleReplica)
-			rc.WaitForReplicas(1, maxHPAReactionTime+maxResourceConsumerDelay+waitBuffer)
+			rc.WaitForReplicas(ctx, 1, maxHPAReactionTime+maxResourceConsumerDelay+waitBuffer)
 
 			ginkgo.By("triggering scale up by increasing consumption")
 			rc.ConsumeCPU(3 * usageForSingleReplica)
 			waitStart := time.Now()
-			rc.WaitForReplicas(3, upScaleStabilization+maxHPAReactionTime+maxResourceConsumerDelay+waitBuffer)
+			rc.WaitForReplicas(ctx, 3, upScaleStabilization+maxHPAReactionTime+maxResourceConsumerDelay+waitBuffer)
 			timeWaited := time.Now().Sub(waitStart)
 
 			ginkgo.By("verifying time waited for a scale up")
@@ -135,22 +136,22 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 	})
 
 	ginkgo.Describe("with autoscaling disabled", func() {
-		ginkgo.It("shouldn't scale up", func() {
+		ginkgo.It("shouldn't scale up", func(ctx context.Context) {
 			ginkgo.By("setting up resource consumer and HPA")
 			initPods := 1
 			initCPUUsageTotal := initPods * usageForSingleReplica
 
-			rc := e2eautoscaling.NewDynamicResourceConsumer(
+			rc := e2eautoscaling.NewDynamicResourceConsumer(ctx,
 				hpaName, f.Namespace.Name, e2eautoscaling.KindDeployment, initPods,
 				initCPUUsageTotal, 0, 0, int64(podCPURequest), 200,
 				f.ClientSet, f.ScalesGetter, e2eautoscaling.Disable, e2eautoscaling.Idle,
 			)
-			defer rc.CleanUp()
+			ginkgo.DeferCleanup(rc.CleanUp)
 
-			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(
+			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(ctx,
 				rc, int32(targetCPUUtilizationPercent), 1, 10, e2eautoscaling.HPABehaviorWithScaleDisabled(e2eautoscaling.ScaleUpDirection),
 			)
-			defer e2eautoscaling.DeleteHPAWithBehavior(rc, hpa.Name)
+			ginkgo.DeferCleanup(e2eautoscaling.DeleteHPAWithBehavior, rc, hpa.Name)
 
 			waitDeadline := maxHPAReactionTime + maxResourceConsumerDelay + waitBuffer
 
@@ -158,7 +159,7 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 			rc.ConsumeCPU(8 * usageForSingleReplica)
 			waitStart := time.Now()
 
-			rc.EnsureDesiredReplicasInRange(initPods, initPods, waitDeadline, hpa.Name)
+			rc.EnsureDesiredReplicasInRange(ctx, initPods, initPods, waitDeadline, hpa.Name)
 			timeWaited := time.Now().Sub(waitStart)
 
 			ginkgo.By("verifying time waited for a scale up")
@@ -166,26 +167,26 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 			framework.ExpectEqual(timeWaited > waitDeadline, true, "waited %s, wanted to wait more than %s", timeWaited, waitDeadline)
 
 			ginkgo.By("verifying number of replicas")
-			replicas := rc.GetReplicas()
+			replicas := rc.GetReplicas(ctx)
 			framework.ExpectEqual(replicas == initPods, true, "had %s replicas, still have %s replicas after time deadline", initPods, replicas)
 		})
 
-		ginkgo.It("shouldn't scale down", func() {
+		ginkgo.It("shouldn't scale down", func(ctx context.Context) {
 			ginkgo.By("setting up resource consumer and HPA")
 			initPods := 3
 			initCPUUsageTotal := initPods * usageForSingleReplica
 
-			rc := e2eautoscaling.NewDynamicResourceConsumer(
+			rc := e2eautoscaling.NewDynamicResourceConsumer(ctx,
 				hpaName, f.Namespace.Name, e2eautoscaling.KindDeployment, initPods,
 				initCPUUsageTotal, 0, 0, int64(podCPURequest), 200,
 				f.ClientSet, f.ScalesGetter, e2eautoscaling.Disable, e2eautoscaling.Idle,
 			)
-			defer rc.CleanUp()
+			ginkgo.DeferCleanup(rc.CleanUp)
 
-			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(
+			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(ctx,
 				rc, int32(targetCPUUtilizationPercent), 1, 10, e2eautoscaling.HPABehaviorWithScaleDisabled(e2eautoscaling.ScaleDownDirection),
 			)
-			defer e2eautoscaling.DeleteHPAWithBehavior(rc, hpa.Name)
+			ginkgo.DeferCleanup(e2eautoscaling.DeleteHPAWithBehavior, rc, hpa.Name)
 
 			defaultDownscaleStabilisation := 5 * time.Minute
 			waitDeadline := maxHPAReactionTime + maxResourceConsumerDelay + defaultDownscaleStabilisation
@@ -194,7 +195,7 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 			rc.ConsumeCPU(1 * usageForSingleReplica)
 			waitStart := time.Now()
 
-			rc.EnsureDesiredReplicasInRange(initPods, initPods, waitDeadline, hpa.Name)
+			rc.EnsureDesiredReplicasInRange(ctx, initPods, initPods, waitDeadline, hpa.Name)
 			timeWaited := time.Now().Sub(waitStart)
 
 			ginkgo.By("verifying time waited for a scale down")
@@ -202,7 +203,7 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 			framework.ExpectEqual(timeWaited > waitDeadline, true, "waited %s, wanted to wait more than %s", timeWaited, waitDeadline)
 
 			ginkgo.By("verifying number of replicas")
-			replicas := rc.GetReplicas()
+			replicas := rc.GetReplicas(ctx)
 			framework.ExpectEqual(replicas == initPods, true, "had %s replicas, still have %s replicas after time deadline", initPods, replicas)
 		})
 
@@ -213,35 +214,35 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 		targetCPUUtilizationPercent := 25
 		usageForSingleReplica := 45
 
-		ginkgo.It("should scale up no more than given number of Pods per minute", func() {
+		ginkgo.It("should scale up no more than given number of Pods per minute", func(ctx context.Context) {
 			ginkgo.By("setting up resource consumer and HPA")
 			initPods := 1
 			initCPUUsageTotal := initPods * usageForSingleReplica
 			limitWindowLength := 1 * time.Minute
 			podsLimitPerMinute := 1
 
-			rc := e2eautoscaling.NewDynamicResourceConsumer(
+			rc := e2eautoscaling.NewDynamicResourceConsumer(ctx,
 				hpaName, f.Namespace.Name, e2eautoscaling.KindDeployment, initPods,
 				initCPUUsageTotal, 0, 0, int64(podCPURequest), 200,
 				f.ClientSet, f.ScalesGetter, e2eautoscaling.Disable, e2eautoscaling.Idle,
 			)
-			defer rc.CleanUp()
+			ginkgo.DeferCleanup(rc.CleanUp)
 
-			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(
+			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(ctx,
 				rc, int32(targetCPUUtilizationPercent), 1, 10,
 				e2eautoscaling.HPABehaviorWithScaleLimitedByNumberOfPods(e2eautoscaling.ScaleUpDirection, int32(podsLimitPerMinute), int32(limitWindowLength.Seconds())),
 			)
-			defer e2eautoscaling.DeleteHPAWithBehavior(rc, hpa.Name)
+			ginkgo.DeferCleanup(e2eautoscaling.DeleteHPAWithBehavior, rc, hpa.Name)
 
 			ginkgo.By("triggering scale up by increasing consumption")
 			rc.ConsumeCPU(3 * usageForSingleReplica)
 
 			waitStart := time.Now()
-			rc.WaitForReplicas(2, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
+			rc.WaitForReplicas(ctx, 2, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
 			timeWaitedFor2 := time.Now().Sub(waitStart)
 
 			waitStart = time.Now()
-			rc.WaitForReplicas(3, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
+			rc.WaitForReplicas(ctx, 3, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
 			timeWaitedFor3 := time.Now().Sub(waitStart)
 
 			ginkgo.By("verifying time waited for a scale up to 2 replicas")
@@ -255,35 +256,35 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 			framework.ExpectEqual(timeWaitedFor3 < deadline, true, "waited %s, wanted less than %s", timeWaitedFor3, deadline)
 		})
 
-		ginkgo.It("should scale down no more than given number of Pods per minute", func() {
+		ginkgo.It("should scale down no more than given number of Pods per minute", func(ctx context.Context) {
 			ginkgo.By("setting up resource consumer and HPA")
 			initPods := 3
 			initCPUUsageTotal := initPods * usageForSingleReplica
 			limitWindowLength := 1 * time.Minute
 			podsLimitPerMinute := 1
 
-			rc := e2eautoscaling.NewDynamicResourceConsumer(
+			rc := e2eautoscaling.NewDynamicResourceConsumer(ctx,
 				hpaName, f.Namespace.Name, e2eautoscaling.KindDeployment, initPods,
 				initCPUUsageTotal, 0, 0, int64(podCPURequest), 200,
 				f.ClientSet, f.ScalesGetter, e2eautoscaling.Disable, e2eautoscaling.Idle,
 			)
-			defer rc.CleanUp()
+			ginkgo.DeferCleanup(rc.CleanUp)
 
-			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(
+			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(ctx,
 				rc, int32(targetCPUUtilizationPercent), 1, 10,
 				e2eautoscaling.HPABehaviorWithScaleLimitedByNumberOfPods(e2eautoscaling.ScaleDownDirection, int32(podsLimitPerMinute), int32(limitWindowLength.Seconds())),
 			)
-			defer e2eautoscaling.DeleteHPAWithBehavior(rc, hpa.Name)
+			ginkgo.DeferCleanup(e2eautoscaling.DeleteHPAWithBehavior, rc, hpa.Name)
 
 			ginkgo.By("triggering scale down by lowering consumption")
 			rc.ConsumeCPU(1 * usageForSingleReplica)
 
 			waitStart := time.Now()
-			rc.WaitForReplicas(2, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
+			rc.WaitForReplicas(ctx, 2, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
 			timeWaitedFor2 := time.Now().Sub(waitStart)
 
 			waitStart = time.Now()
-			rc.WaitForReplicas(1, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
+			rc.WaitForReplicas(ctx, 1, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
 			timeWaitedFor1 := time.Now().Sub(waitStart)
 
 			ginkgo.By("verifying time waited for a scale down to 2 replicas")
@@ -303,36 +304,36 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 		targetCPUUtilizationPercent := 25
 		usageForSingleReplica := 45
 
-		ginkgo.It("should scale up no more than given percentage of current Pods per minute", func() {
+		ginkgo.It("should scale up no more than given percentage of current Pods per minute", func(ctx context.Context) {
 			ginkgo.By("setting up resource consumer and HPA")
 			initPods := 2
 			initCPUUsageTotal := initPods * usageForSingleReplica
 			limitWindowLength := 1 * time.Minute
 			percentageLimitPerMinute := 50
 
-			rc := e2eautoscaling.NewDynamicResourceConsumer(
+			rc := e2eautoscaling.NewDynamicResourceConsumer(ctx,
 				hpaName, f.Namespace.Name, e2eautoscaling.KindDeployment, initPods,
 				initCPUUsageTotal, 0, 0, int64(podCPURequest), 200,
 				f.ClientSet, f.ScalesGetter, e2eautoscaling.Disable, e2eautoscaling.Idle,
 			)
-			defer rc.CleanUp()
+			ginkgo.DeferCleanup(rc.CleanUp)
 
-			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(
+			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(ctx,
 				rc, int32(targetCPUUtilizationPercent), 1, 10,
 				e2eautoscaling.HPABehaviorWithScaleLimitedByPercentage(e2eautoscaling.ScaleUpDirection, int32(percentageLimitPerMinute), int32(limitWindowLength.Seconds())),
 			)
-			defer e2eautoscaling.DeleteHPAWithBehavior(rc, hpa.Name)
+			ginkgo.DeferCleanup(e2eautoscaling.DeleteHPAWithBehavior, rc, hpa.Name)
 
 			ginkgo.By("triggering scale up by increasing consumption")
 			rc.ConsumeCPU(8 * usageForSingleReplica)
 
 			waitStart := time.Now()
-			rc.WaitForReplicas(3, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
+			rc.WaitForReplicas(ctx, 3, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
 			timeWaitedFor3 := time.Now().Sub(waitStart)
 
 			waitStart = time.Now()
 			// Scale up limited by percentage takes ceiling, so new replicas number is ceil(3 * 1.5) = ceil(4.5) = 5
-			rc.WaitForReplicas(5, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
+			rc.WaitForReplicas(ctx, 5, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
 			timeWaitedFor5 := time.Now().Sub(waitStart)
 
 			ginkgo.By("verifying time waited for a scale up to 3 replicas")
@@ -346,36 +347,36 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 			framework.ExpectEqual(timeWaitedFor5 < deadline, true, "waited %s, wanted less than %s", timeWaitedFor5, deadline)
 		})
 
-		ginkgo.It("should scale down no more than given percentage of current Pods per minute", func() {
+		ginkgo.It("should scale down no more than given percentage of current Pods per minute", func(ctx context.Context) {
 			ginkgo.By("setting up resource consumer and HPA")
 			initPods := 7
 			initCPUUsageTotal := initPods * usageForSingleReplica
 			limitWindowLength := 1 * time.Minute
 			percentageLimitPerMinute := 25
 
-			rc := e2eautoscaling.NewDynamicResourceConsumer(
+			rc := e2eautoscaling.NewDynamicResourceConsumer(ctx,
 				hpaName, f.Namespace.Name, e2eautoscaling.KindDeployment, initPods,
 				initCPUUsageTotal, 0, 0, int64(podCPURequest), 200,
 				f.ClientSet, f.ScalesGetter, e2eautoscaling.Disable, e2eautoscaling.Idle,
 			)
-			defer rc.CleanUp()
+			ginkgo.DeferCleanup(rc.CleanUp)
 
-			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(
+			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(ctx,
 				rc, int32(targetCPUUtilizationPercent), 1, 10,
 				e2eautoscaling.HPABehaviorWithScaleLimitedByPercentage(e2eautoscaling.ScaleDownDirection, int32(percentageLimitPerMinute), int32(limitWindowLength.Seconds())),
 			)
-			defer e2eautoscaling.DeleteHPAWithBehavior(rc, hpa.Name)
+			ginkgo.DeferCleanup(e2eautoscaling.DeleteHPAWithBehavior, rc, hpa.Name)
 
 			ginkgo.By("triggering scale down by lowering consumption")
 			rc.ConsumeCPU(1 * usageForSingleReplica)
 
 			waitStart := time.Now()
-			rc.WaitForReplicas(5, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
+			rc.WaitForReplicas(ctx, 5, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
 			timeWaitedFor5 := time.Now().Sub(waitStart)
 
 			waitStart = time.Now()
 			// Scale down limited by percentage takes floor, so new replicas number is floor(5 * 0.75) = floor(3.75) = 3
-			rc.WaitForReplicas(3, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
+			rc.WaitForReplicas(ctx, 3, maxHPAReactionTime+maxResourceConsumerDelay+limitWindowLength)
 			timeWaitedFor3 := time.Now().Sub(waitStart)
 
 			ginkgo.By("verifying time waited for a scale down to 5 replicas")
@@ -393,37 +394,37 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 	ginkgo.Describe("with both scale up and down controls configured", func() {
 		waitBuffer := 2 * time.Minute
 
-		ginkgo.It("should keep recommendation within the range over two stabilization windows", func() {
+		ginkgo.It("should keep recommendation within the range over two stabilization windows", func(ctx context.Context) {
 			ginkgo.By("setting up resource consumer and HPA")
 			initPods := 2
 			initCPUUsageTotal := initPods * usageForSingleReplica
 			upScaleStabilization := 3 * time.Minute
 			downScaleStabilization := 3 * time.Minute
 
-			rc := e2eautoscaling.NewDynamicResourceConsumer(
+			rc := e2eautoscaling.NewDynamicResourceConsumer(ctx,
 				hpaName, f.Namespace.Name, e2eautoscaling.KindDeployment, initPods,
 				initCPUUsageTotal, 0, 0, int64(podCPURequest), 200,
 				f.ClientSet, f.ScalesGetter, e2eautoscaling.Disable, e2eautoscaling.Idle,
 			)
-			defer rc.CleanUp()
+			ginkgo.DeferCleanup(rc.CleanUp)
 
-			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(
+			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(ctx,
 				rc, int32(targetCPUUtilizationPercent), 2, 5,
 				e2eautoscaling.HPABehaviorWithStabilizationWindows(upScaleStabilization, downScaleStabilization),
 			)
-			defer e2eautoscaling.DeleteHPAWithBehavior(rc, hpa.Name)
+			ginkgo.DeferCleanup(e2eautoscaling.DeleteHPAWithBehavior, rc, hpa.Name)
 
 			ginkgo.By("triggering scale up by increasing consumption")
 			rc.ConsumeCPU(4 * usageForSingleReplica)
 			waitDeadline := upScaleStabilization
 
 			ginkgo.By("verifying number of replicas stay in desired range within stabilisation window")
-			rc.EnsureDesiredReplicasInRange(2, 2, waitDeadline, hpa.Name)
+			rc.EnsureDesiredReplicasInRange(ctx, 2, 2, waitDeadline, hpa.Name)
 
 			ginkgo.By("waiting for replicas to scale up after stabilisation window passed")
 			waitStart := time.Now()
 			waitDeadline = maxHPAReactionTime + maxResourceConsumerDelay + waitBuffer
-			rc.WaitForReplicas(4, waitDeadline)
+			rc.WaitForReplicas(ctx, 4, waitDeadline)
 			timeWaited := time.Now().Sub(waitStart)
 			framework.Logf("time waited for scale up: %s", timeWaited)
 			framework.ExpectEqual(timeWaited < waitDeadline, true, "waited %s, wanted less than %s", timeWaited, waitDeadline)
@@ -433,18 +434,18 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 			waitDeadline = downScaleStabilization
 
 			ginkgo.By("verifying number of replicas stay in desired range within stabilisation window")
-			rc.EnsureDesiredReplicasInRange(4, 4, waitDeadline, hpa.Name)
+			rc.EnsureDesiredReplicasInRange(ctx, 4, 4, waitDeadline, hpa.Name)
 
 			ginkgo.By("waiting for replicas to scale down after stabilisation window passed")
 			waitStart = time.Now()
 			waitDeadline = maxHPAReactionTime + maxResourceConsumerDelay + waitBuffer
-			rc.WaitForReplicas(2, waitDeadline)
+			rc.WaitForReplicas(ctx, 2, waitDeadline)
 			timeWaited = time.Now().Sub(waitStart)
 			framework.Logf("time waited for scale down: %s", timeWaited)
 			framework.ExpectEqual(timeWaited < waitDeadline, true, "waited %s, wanted less than %s", timeWaited, waitDeadline)
 		})
 
-		ginkgo.It("should keep recommendation within the range with stabilization window and pod limit rate", func() {
+		ginkgo.It("should keep recommendation within the range with stabilization window and pod limit rate", func(ctx context.Context) {
 			ginkgo.By("setting up resource consumer and HPA")
 			initPods := 2
 			initCPUUsageTotal := initPods * usageForSingleReplica
@@ -452,32 +453,32 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 			limitWindowLength := 2 * time.Minute
 			podsLimitPerMinute := 1
 
-			rc := e2eautoscaling.NewDynamicResourceConsumer(
+			rc := e2eautoscaling.NewDynamicResourceConsumer(ctx,
 				hpaName, f.Namespace.Name, e2eautoscaling.KindDeployment, initPods,
 				initCPUUsageTotal, 0, 0, int64(podCPURequest), 200,
 				f.ClientSet, f.ScalesGetter, e2eautoscaling.Disable, e2eautoscaling.Idle,
 			)
-			defer rc.CleanUp()
+			ginkgo.DeferCleanup(rc.CleanUp)
 
 			scaleUpRule := e2eautoscaling.HPAScalingRuleWithScalingPolicy(autoscalingv2.PodsScalingPolicy, int32(podsLimitPerMinute), int32(limitWindowLength.Seconds()))
 			scaleDownRule := e2eautoscaling.HPAScalingRuleWithStabilizationWindow(int32(downScaleStabilization.Seconds()))
-			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(
+			hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscalerWithBehavior(ctx,
 				rc, int32(targetCPUUtilizationPercent), 2, 5,
 				e2eautoscaling.HPABehaviorWithScaleUpAndDownRules(scaleUpRule, scaleDownRule),
 			)
-			defer e2eautoscaling.DeleteHPAWithBehavior(rc, hpa.Name)
+			ginkgo.DeferCleanup(e2eautoscaling.DeleteHPAWithBehavior, rc, hpa.Name)
 
 			ginkgo.By("triggering scale up by increasing consumption")
 			rc.ConsumeCPU(4 * usageForSingleReplica)
 			waitDeadline := limitWindowLength
 
 			ginkgo.By("verifying number of replicas stay in desired range with pod limit rate")
-			rc.EnsureDesiredReplicasInRange(2, 3, waitDeadline, hpa.Name)
+			rc.EnsureDesiredReplicasInRange(ctx, 2, 3, waitDeadline, hpa.Name)
 
 			ginkgo.By("waiting for replicas to scale up")
 			waitStart := time.Now()
 			waitDeadline = limitWindowLength + maxHPAReactionTime + maxResourceConsumerDelay + waitBuffer
-			rc.WaitForReplicas(4, waitDeadline)
+			rc.WaitForReplicas(ctx, 4, waitDeadline)
 			timeWaited := time.Now().Sub(waitStart)
 			framework.Logf("time waited for scale up: %s", timeWaited)
 			framework.ExpectEqual(timeWaited < waitDeadline, true, "waited %s, wanted less than %s", timeWaited, waitDeadline)
@@ -487,12 +488,12 @@ var _ = SIGDescribe("[Feature:HPA] [Serial] [Slow] Horizontal pod autoscaling (n
 
 			ginkgo.By("verifying number of replicas stay in desired range within stabilisation window")
 			waitDeadline = downScaleStabilization
-			rc.EnsureDesiredReplicasInRange(4, 4, waitDeadline, hpa.Name)
+			rc.EnsureDesiredReplicasInRange(ctx, 4, 4, waitDeadline, hpa.Name)
 
 			ginkgo.By("waiting for replicas to scale down after stabilisation window passed")
 			waitStart = time.Now()
 			waitDeadline = maxHPAReactionTime + maxResourceConsumerDelay + waitBuffer
-			rc.WaitForReplicas(2, waitDeadline)
+			rc.WaitForReplicas(ctx, 2, waitDeadline)
 			timeWaited = time.Now().Sub(waitStart)
 			framework.Logf("time waited for scale down: %s", timeWaited)
 			framework.ExpectEqual(timeWaited < waitDeadline, true, "waited %s, wanted less than %s", timeWaited, waitDeadline)

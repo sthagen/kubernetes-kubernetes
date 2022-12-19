@@ -29,7 +29,7 @@ dependencies:
 
   # CoreDNS
   - name: "coredns-kube-up"
-    version: 1.9.3
+    version: 1.10.0
     refPaths:
     - path: cluster/addons/dns/coredns/coredns.yaml.base
       match: registry.k8s.io/coredns
@@ -39,7 +39,7 @@ dependencies:
       match: registry.k8s.io/coredns
 
   - name: "coredns-kubeadm"
-    version: 1.9.3
+    version: 1.10.0
     refPaths:
     - path: cmd/kubeadm/app/constants/constants.go
       match: CoreDNSVersion =
@@ -88,7 +88,7 @@ dependencies:
 
   # Golang
   - name: "golang: upstream version"
-    version: 1.19.3
+    version: 1.19.4
     refPaths:
     - path: build/build-image/cross/VERSION
     - path: staging/publishing/rules.yaml
@@ -109,7 +109,7 @@ dependencies:
       match: minimum_go_version=go([0-9]+\.[0-9]+)
 
   - name: "registry.k8s.io/kube-cross: dependents"
-    version: v1.25.0-go1.19.3-bullseye.0
+    version: v1.26.0-go1.19.4-bullseye.1
     refPaths:
     - path: build/build-image/cross/VERSION
 
@@ -139,7 +139,7 @@ dependencies:
       match: configs\[DistrolessIptables\] = Config{list\.BuildImageRegistry, "distroless-iptables", "v([0-9]+)\.([0-9]+)\.([0-9]+)"}
 
   - name: "registry.k8s.io/go-runner: dependents"
-    version: v2.3.1-go1.19.3-bullseye.0
+    version: v2.3.1-go1.19.4-bullseye.0
     refPaths:
     - path: build/common.sh
       match: __default_go_runner_version=
@@ -220,3 +220,14 @@ dependencies:
       match: gcr.io\/cadvisor\/cadvisor:v\d+\.\d+\.\d+
     - path: test/e2e_node/image_list.go
       mathc: gcr.io\/cadvisor\/cadvisor:v\d+\.\d+\.\d+
+
+  # GCB docker gcloud image
+  - name: "gcb-docker-gcloud: dependents"
+    version: v20221007-69e0da97ef
+    refPaths:
+    - path: build/pause/cloudbuild.yaml
+      match: gcr.io/k8s-staging-test-infra/gcb-docker-gcloud
+    - path: cluster/images/etcd/cloudbuild.yaml
+      match: gcr.io/k8s-staging-test-infra/gcb-docker-gcloud
+    - path: test/images/cloudbuild.yaml
+      match: gcr.io/k8s-staging-test-infra/gcb-docker-gcloud
