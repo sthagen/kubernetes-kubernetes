@@ -17,7 +17,9 @@ limitations under the License.
 package fieldmanager_test
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -27,29 +29,26 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apiserver/pkg/endpoints/handlers/fieldmanager"
-	"k8s.io/kube-openapi/pkg/util/proto"
-	prototesting "k8s.io/kube-openapi/pkg/util/proto/testing"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
-var testSchema = prototesting.Fake{
-	Path: filepath.Join("testdata", "swagger.json"),
-}
+var testTypeConverter = func() fieldmanager.TypeConverter {
+	data, err := ioutil.ReadFile(filepath.Join("testdata", "swagger.json"))
+	if err != nil {
+		panic(err)
+	}
+	spec := spec.Swagger{}
+	if err := json.Unmarshal(data, &spec); err != nil {
+		panic(err)
+	}
+	typeConverter, err := fieldmanager.NewTypeConverter(&spec, false)
+	if err != nil {
+		panic(err)
+	}
+	return typeConverter
+}()
 
 func TestTypeConverter(t *testing.T) {
-	d, err := testSchema.OpenAPISchema()
-	if err != nil {
-		t.Fatalf("Failed to parse OpenAPI schema: %v", err)
-	}
-	m, err := proto.NewOpenAPIData(d)
-	if err != nil {
-		t.Fatalf("Failed to build OpenAPI models: %v", err)
-	}
-
-	tc, err := fieldmanager.NewTypeConverter(m, false)
-	if err != nil {
-		t.Fatalf("Failed to build TypeConverter: %v", err)
-	}
-
 	dtc := fieldmanager.DeducedTypeConverter{}
 
 	testCases := []struct {
@@ -119,7 +118,7 @@ spec:
 
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprintf("%v ObjectToTyped with TypeConverter", testCase.name), func(t *testing.T) {
-			testObjectToTyped(t, tc, testCase.yaml)
+			testObjectToTyped(t, testTypeConverter, testCase.yaml)
 		})
 		t.Run(fmt.Sprintf("%v ObjectToTyped with DeducedTypeConverter", testCase.name), func(t *testing.T) {
 			testObjectToTyped(t, dtc, testCase.yaml)
@@ -177,27 +176,13 @@ spec:
 		b.Fatalf("Failed to parse yaml object: %v", err)
 	}
 
-	d, err := testSchema.OpenAPISchema()
-	if err != nil {
-		b.Fatalf("Failed to parse OpenAPI schema: %v", err)
-	}
-	m, err := proto.NewOpenAPIData(d)
-	if err != nil {
-		b.Fatalf("Failed to build OpenAPI models: %v", err)
-	}
-
-	tc, err := fieldmanager.NewTypeConverter(m, false)
-	if err != nil {
-		b.Fatalf("Failed to build TypeConverter: %v", err)
-	}
-
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	var r *typed.TypedValue
 	for i := 0; i < b.N; i++ {
 		var err error
-		r, err = tc.ObjectToTyped(obj)
+		r, err = testTypeConverter.ObjectToTyped(obj)
 		if err != nil {
 			b.Fatalf("Failed to convert object to typed: %v", err)
 		}

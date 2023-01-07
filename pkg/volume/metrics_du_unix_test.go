@@ -2,7 +2,7 @@
 // +build !windows
 
 /*
-Copyright 2019 The Kubernetes Authors.
+Copyright 2023 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,11 +17,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta2
+package volume_test
 
-const (
-	// DefaultCACertPath defines default location of CA certificate on Linux
-	DefaultCACertPath = "/etc/kubernetes/pki/ca.crt"
-	// DefaultContainerRuntimeURLScheme defines default socket url prefix
-	DefaultContainerRuntimeURLScheme = "unix"
+import (
+	"golang.org/x/sys/unix"
 )
+
+func getExpectedBlockSize(path string) int64 {
+	statfs := &unix.Statfs_t{}
+	err := unix.Statfs(path, statfs)
+	if err != nil {
+		return 0
+	}
+
+	return int64(statfs.Bsize)
+}

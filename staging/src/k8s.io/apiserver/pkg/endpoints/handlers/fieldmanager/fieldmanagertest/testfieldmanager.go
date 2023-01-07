@@ -19,8 +19,6 @@ package fieldmanagertest
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
-	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,40 +26,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/endpoints/handlers/fieldmanager"
-	"k8s.io/kube-openapi/pkg/util/proto"
-	prototesting "k8s.io/kube-openapi/pkg/util/proto/testing"
 	"sigs.k8s.io/structured-merge-diff/v4/fieldpath"
 	"sigs.k8s.io/structured-merge-diff/v4/merge"
 	"sigs.k8s.io/structured-merge-diff/v4/typed"
 )
-
-var kubernetesSwaggerSchema = prototesting.Fake{
-	Path: filepath.Join(
-		strings.Repeat(".."+string(filepath.Separator), 8),
-		"api", "openapi-spec", "swagger.json"),
-}
-
-// NewBuiltinTypeConverter creates a TypeConverter with all the built-in
-// types defined, given the committed kubernetes swagger.json.
-func NewBuiltinTypeConverter() fieldmanager.TypeConverter {
-	tc, err := fieldmanager.NewTypeConverter(newFakeOpenAPIModels(), false)
-	if err != nil {
-		panic(fmt.Errorf("Failed to build TypeConverter: %v", err))
-	}
-	return tc
-}
-
-func newFakeOpenAPIModels() proto.Models {
-	d, err := kubernetesSwaggerSchema.OpenAPISchema()
-	if err != nil {
-		panic(err)
-	}
-	m, err := proto.NewOpenAPIData(d)
-	if err != nil {
-		panic(err)
-	}
-	return m
-}
 
 type fakeObjectConvertor struct {
 	converter  merge.Converter
@@ -135,13 +103,12 @@ type TestFieldManager struct {
 
 // NewDefaultTestFieldManager returns a new TestFieldManager built for
 // the given gvk, on the main resource.
-func NewDefaultTestFieldManager(gvk schema.GroupVersionKind) TestFieldManager {
-	return NewTestFieldManager(gvk, "", nil)
+func NewDefaultTestFieldManager(typeConverter fieldmanager.TypeConverter, gvk schema.GroupVersionKind) TestFieldManager {
+	return NewTestFieldManager(typeConverter, gvk, "", nil)
 }
 
 // NewTestFieldManager creates a new manager for the given GVK.
-func NewTestFieldManager(gvk schema.GroupVersionKind, subresource string, chainFieldManager func(fieldmanager.Manager) fieldmanager.Manager) TestFieldManager {
-	typeConverter := NewBuiltinTypeConverter()
+func NewTestFieldManager(typeConverter fieldmanager.TypeConverter, gvk schema.GroupVersionKind, subresource string, chainFieldManager func(fieldmanager.Manager) fieldmanager.Manager) TestFieldManager {
 	apiVersion := fieldpath.APIVersion(gvk.GroupVersion().String())
 	objectConverter := &fakeObjectConvertor{sameVersionConverter{}, apiVersion}
 	f, err := fieldmanager.NewStructuredMergeManager(
