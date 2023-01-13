@@ -559,9 +559,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"k8s.io/api/events/v1beta1.Event":                                                                 schema_k8sio_api_events_v1beta1_Event(ref),
 		"k8s.io/api/events/v1beta1.EventList":                                                             schema_k8sio_api_events_v1beta1_EventList(ref),
 		"k8s.io/api/events/v1beta1.EventSeries":                                                           schema_k8sio_api_events_v1beta1_EventSeries(ref),
-		"k8s.io/api/extensions/v1beta1.AllowedCSIDriver":                                                  schema_k8sio_api_extensions_v1beta1_AllowedCSIDriver(ref),
-		"k8s.io/api/extensions/v1beta1.AllowedFlexVolume":                                                 schema_k8sio_api_extensions_v1beta1_AllowedFlexVolume(ref),
-		"k8s.io/api/extensions/v1beta1.AllowedHostPath":                                                   schema_k8sio_api_extensions_v1beta1_AllowedHostPath(ref),
 		"k8s.io/api/extensions/v1beta1.DaemonSet":                                                         schema_k8sio_api_extensions_v1beta1_DaemonSet(ref),
 		"k8s.io/api/extensions/v1beta1.DaemonSetCondition":                                                schema_k8sio_api_extensions_v1beta1_DaemonSetCondition(ref),
 		"k8s.io/api/extensions/v1beta1.DaemonSetList":                                                     schema_k8sio_api_extensions_v1beta1_DaemonSetList(ref),
@@ -575,11 +572,8 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"k8s.io/api/extensions/v1beta1.DeploymentSpec":                                                    schema_k8sio_api_extensions_v1beta1_DeploymentSpec(ref),
 		"k8s.io/api/extensions/v1beta1.DeploymentStatus":                                                  schema_k8sio_api_extensions_v1beta1_DeploymentStatus(ref),
 		"k8s.io/api/extensions/v1beta1.DeploymentStrategy":                                                schema_k8sio_api_extensions_v1beta1_DeploymentStrategy(ref),
-		"k8s.io/api/extensions/v1beta1.FSGroupStrategyOptions":                                            schema_k8sio_api_extensions_v1beta1_FSGroupStrategyOptions(ref),
 		"k8s.io/api/extensions/v1beta1.HTTPIngressPath":                                                   schema_k8sio_api_extensions_v1beta1_HTTPIngressPath(ref),
 		"k8s.io/api/extensions/v1beta1.HTTPIngressRuleValue":                                              schema_k8sio_api_extensions_v1beta1_HTTPIngressRuleValue(ref),
-		"k8s.io/api/extensions/v1beta1.HostPortRange":                                                     schema_k8sio_api_extensions_v1beta1_HostPortRange(ref),
-		"k8s.io/api/extensions/v1beta1.IDRange":                                                           schema_k8sio_api_extensions_v1beta1_IDRange(ref),
 		"k8s.io/api/extensions/v1beta1.IPBlock":                                                           schema_k8sio_api_extensions_v1beta1_IPBlock(ref),
 		"k8s.io/api/extensions/v1beta1.Ingress":                                                           schema_k8sio_api_extensions_v1beta1_Ingress(ref),
 		"k8s.io/api/extensions/v1beta1.IngressBackend":                                                    schema_k8sio_api_extensions_v1beta1_IngressBackend(ref),
@@ -600,9 +594,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"k8s.io/api/extensions/v1beta1.NetworkPolicyPort":                                                 schema_k8sio_api_extensions_v1beta1_NetworkPolicyPort(ref),
 		"k8s.io/api/extensions/v1beta1.NetworkPolicySpec":                                                 schema_k8sio_api_extensions_v1beta1_NetworkPolicySpec(ref),
 		"k8s.io/api/extensions/v1beta1.NetworkPolicyStatus":                                               schema_k8sio_api_extensions_v1beta1_NetworkPolicyStatus(ref),
-		"k8s.io/api/extensions/v1beta1.PodSecurityPolicy":                                                 schema_k8sio_api_extensions_v1beta1_PodSecurityPolicy(ref),
-		"k8s.io/api/extensions/v1beta1.PodSecurityPolicyList":                                             schema_k8sio_api_extensions_v1beta1_PodSecurityPolicyList(ref),
-		"k8s.io/api/extensions/v1beta1.PodSecurityPolicySpec":                                             schema_k8sio_api_extensions_v1beta1_PodSecurityPolicySpec(ref),
 		"k8s.io/api/extensions/v1beta1.ReplicaSet":                                                        schema_k8sio_api_extensions_v1beta1_ReplicaSet(ref),
 		"k8s.io/api/extensions/v1beta1.ReplicaSetCondition":                                               schema_k8sio_api_extensions_v1beta1_ReplicaSetCondition(ref),
 		"k8s.io/api/extensions/v1beta1.ReplicaSetList":                                                    schema_k8sio_api_extensions_v1beta1_ReplicaSetList(ref),
@@ -611,14 +602,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"k8s.io/api/extensions/v1beta1.RollbackConfig":                                                    schema_k8sio_api_extensions_v1beta1_RollbackConfig(ref),
 		"k8s.io/api/extensions/v1beta1.RollingUpdateDaemonSet":                                            schema_k8sio_api_extensions_v1beta1_RollingUpdateDaemonSet(ref),
 		"k8s.io/api/extensions/v1beta1.RollingUpdateDeployment":                                           schema_k8sio_api_extensions_v1beta1_RollingUpdateDeployment(ref),
-		"k8s.io/api/extensions/v1beta1.RunAsGroupStrategyOptions":                                         schema_k8sio_api_extensions_v1beta1_RunAsGroupStrategyOptions(ref),
-		"k8s.io/api/extensions/v1beta1.RunAsUserStrategyOptions":                                          schema_k8sio_api_extensions_v1beta1_RunAsUserStrategyOptions(ref),
-		"k8s.io/api/extensions/v1beta1.RuntimeClassStrategyOptions":                                       schema_k8sio_api_extensions_v1beta1_RuntimeClassStrategyOptions(ref),
-		"k8s.io/api/extensions/v1beta1.SELinuxStrategyOptions":                                            schema_k8sio_api_extensions_v1beta1_SELinuxStrategyOptions(ref),
 		"k8s.io/api/extensions/v1beta1.Scale":                                                             schema_k8sio_api_extensions_v1beta1_Scale(ref),
 		"k8s.io/api/extensions/v1beta1.ScaleSpec":                                                         schema_k8sio_api_extensions_v1beta1_ScaleSpec(ref),
 		"k8s.io/api/extensions/v1beta1.ScaleStatus":                                                       schema_k8sio_api_extensions_v1beta1_ScaleStatus(ref),
-		"k8s.io/api/extensions/v1beta1.SupplementalGroupsStrategyOptions":                                 schema_k8sio_api_extensions_v1beta1_SupplementalGroupsStrategyOptions(ref),
 		"k8s.io/api/flowcontrol/v1alpha1.FlowDistinguisherMethod":                                         schema_k8sio_api_flowcontrol_v1alpha1_FlowDistinguisherMethod(ref),
 		"k8s.io/api/flowcontrol/v1alpha1.FlowSchema":                                                      schema_k8sio_api_flowcontrol_v1alpha1_FlowSchema(ref),
 		"k8s.io/api/flowcontrol/v1alpha1.FlowSchemaCondition":                                             schema_k8sio_api_flowcontrol_v1alpha1_FlowSchemaCondition(ref),
@@ -28863,77 +28849,6 @@ func schema_k8sio_api_events_v1beta1_EventSeries(ref common.ReferenceCallback) c
 	}
 }
 
-func schema_k8sio_api_extensions_v1beta1_AllowedCSIDriver(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "AllowedCSIDriver represents a single inline CSI Driver that is allowed to be used.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"name": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Name is the registered name of the CSI driver",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-				},
-				Required: []string{"name"},
-			},
-		},
-	}
-}
-
-func schema_k8sio_api_extensions_v1beta1_AllowedFlexVolume(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "AllowedFlexVolume represents a single Flexvolume that is allowed to be used. Deprecated: use AllowedFlexVolume from policy API Group instead.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"driver": {
-						SchemaProps: spec.SchemaProps{
-							Description: "driver is the name of the Flexvolume driver.",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-				},
-				Required: []string{"driver"},
-			},
-		},
-	}
-}
-
-func schema_k8sio_api_extensions_v1beta1_AllowedHostPath(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "AllowedHostPath defines the host volume conditions that will be enabled by a policy for pods to use. It requires the path prefix to be defined. Deprecated: use AllowedHostPath from policy API Group instead.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"pathPrefix": {
-						SchemaProps: spec.SchemaProps{
-							Description: "pathPrefix is the path prefix that the host volume must match. It does not support `*`. Trailing slashes are trimmed when validating the path prefix with a host path.\n\nExamples: `/foo` would allow `/foo`, `/foo/` and `/foo/bar` `/foo` would not allow `/food` or `/etc/foo`",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"readOnly": {
-						SchemaProps: spec.SchemaProps{
-							Description: "when set to true, will allow host volumes matching the pathPrefix only if all volume mounts are readOnly.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
 func schema_k8sio_api_extensions_v1beta1_DaemonSet(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -29692,42 +29607,6 @@ func schema_k8sio_api_extensions_v1beta1_DeploymentStrategy(ref common.Reference
 	}
 }
 
-func schema_k8sio_api_extensions_v1beta1_FSGroupStrategyOptions(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "FSGroupStrategyOptions defines the strategy type and options used to create the strategy. Deprecated: use FSGroupStrategyOptions from policy API Group instead.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"rule": {
-						SchemaProps: spec.SchemaProps{
-							Description: "rule is the strategy that will dictate what FSGroup is used in the SecurityContext.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"ranges": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ranges are the allowed ranges of fs groups.  If you would like to force a single fs group then supply a single range with the same start and end. Required for MustRunAs.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/extensions/v1beta1.IDRange"),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/api/extensions/v1beta1.IDRange"},
-	}
-}
-
 func schema_k8sio_api_extensions_v1beta1_HTTPIngressPath(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -29792,66 +29671,6 @@ func schema_k8sio_api_extensions_v1beta1_HTTPIngressRuleValue(ref common.Referen
 		},
 		Dependencies: []string{
 			"k8s.io/api/extensions/v1beta1.HTTPIngressPath"},
-	}
-}
-
-func schema_k8sio_api_extensions_v1beta1_HostPortRange(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "HostPortRange defines a range of host ports that will be enabled by a policy for pods to use.  It requires both the start and end to be defined. Deprecated: use HostPortRange from policy API Group instead.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"min": {
-						SchemaProps: spec.SchemaProps{
-							Description: "min is the start of the range, inclusive.",
-							Default:     0,
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-					"max": {
-						SchemaProps: spec.SchemaProps{
-							Description: "max is the end of the range, inclusive.",
-							Default:     0,
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-				},
-				Required: []string{"min", "max"},
-			},
-		},
-	}
-}
-
-func schema_k8sio_api_extensions_v1beta1_IDRange(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "IDRange provides a min/max of an allowed range of IDs. Deprecated: use IDRange from policy API Group instead.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"min": {
-						SchemaProps: spec.SchemaProps{
-							Description: "min is the start of the range, inclusive.",
-							Default:     0,
-							Type:        []string{"integer"},
-							Format:      "int64",
-						},
-					},
-					"max": {
-						SchemaProps: spec.SchemaProps{
-							Description: "max is the end of the range, inclusive.",
-							Default:     0,
-							Type:        []string{"integer"},
-							Format:      "int64",
-						},
-					},
-				},
-				Required: []string{"min", "max"},
-			},
-		},
 	}
 }
 
@@ -30666,366 +30485,6 @@ func schema_k8sio_api_extensions_v1beta1_NetworkPolicyStatus(ref common.Referenc
 	}
 }
 
-func schema_k8sio_api_extensions_v1beta1_PodSecurityPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "PodSecurityPolicy governs the ability to make requests that affect the Security Context that will be applied to a pod and container. Deprecated: use PodSecurityPolicy from policy API Group instead.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
-							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
-						},
-					},
-					"spec": {
-						SchemaProps: spec.SchemaProps{
-							Description: "spec defines the policy enforced.",
-							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/extensions/v1beta1.PodSecurityPolicySpec"),
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/api/extensions/v1beta1.PodSecurityPolicySpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
-	}
-}
-
-func schema_k8sio_api_extensions_v1beta1_PodSecurityPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "PodSecurityPolicyList is a list of PodSecurityPolicy objects. Deprecated: use PodSecurityPolicyList from policy API Group instead.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
-							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
-						},
-					},
-					"items": {
-						SchemaProps: spec.SchemaProps{
-							Description: "items is a list of schema objects.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/extensions/v1beta1.PodSecurityPolicy"),
-									},
-								},
-							},
-						},
-					},
-				},
-				Required: []string{"items"},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/api/extensions/v1beta1.PodSecurityPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
-	}
-}
-
-func schema_k8sio_api_extensions_v1beta1_PodSecurityPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "PodSecurityPolicySpec defines the policy enforced. Deprecated: use PodSecurityPolicySpec from policy API Group instead.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"privileged": {
-						SchemaProps: spec.SchemaProps{
-							Description: "privileged determines if a pod can request to be run as privileged.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"defaultAddCapabilities": {
-						SchemaProps: spec.SchemaProps{
-							Description: "defaultAddCapabilities is the default set of capabilities that will be added to the container unless the pod spec specifically drops the capability.  You may not list a capability in both defaultAddCapabilities and requiredDropCapabilities. Capabilities added here are implicitly allowed, and need not be included in the allowedCapabilities list.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-					"requiredDropCapabilities": {
-						SchemaProps: spec.SchemaProps{
-							Description: "requiredDropCapabilities are the capabilities that will be dropped from the container.  These are required to be dropped and cannot be added.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-					"allowedCapabilities": {
-						SchemaProps: spec.SchemaProps{
-							Description: "allowedCapabilities is a list of capabilities that can be requested to add to the container. Capabilities in this field may be added at the pod author's discretion. You must not list a capability in both allowedCapabilities and requiredDropCapabilities.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-					"volumes": {
-						SchemaProps: spec.SchemaProps{
-							Description: "volumes is an allowlist of volume plugins. Empty indicates that no volumes may be used. To allow all volumes you may use '*'.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-					"hostNetwork": {
-						SchemaProps: spec.SchemaProps{
-							Description: "hostNetwork determines if the policy allows the use of HostNetwork in the pod spec.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"hostPorts": {
-						SchemaProps: spec.SchemaProps{
-							Description: "hostPorts determines which host port ranges are allowed to be exposed.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/extensions/v1beta1.HostPortRange"),
-									},
-								},
-							},
-						},
-					},
-					"hostPID": {
-						SchemaProps: spec.SchemaProps{
-							Description: "hostPID determines if the policy allows the use of HostPID in the pod spec.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"hostIPC": {
-						SchemaProps: spec.SchemaProps{
-							Description: "hostIPC determines if the policy allows the use of HostIPC in the pod spec.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"seLinux": {
-						SchemaProps: spec.SchemaProps{
-							Description: "seLinux is the strategy that will dictate the allowable labels that may be set.",
-							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/extensions/v1beta1.SELinuxStrategyOptions"),
-						},
-					},
-					"runAsUser": {
-						SchemaProps: spec.SchemaProps{
-							Description: "runAsUser is the strategy that will dictate the allowable RunAsUser values that may be set.",
-							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/extensions/v1beta1.RunAsUserStrategyOptions"),
-						},
-					},
-					"runAsGroup": {
-						SchemaProps: spec.SchemaProps{
-							Description: "RunAsGroup is the strategy that will dictate the allowable RunAsGroup values that may be set. If this field is omitted, the pod's RunAsGroup can take any value. This field requires the RunAsGroup feature gate to be enabled.",
-							Ref:         ref("k8s.io/api/extensions/v1beta1.RunAsGroupStrategyOptions"),
-						},
-					},
-					"supplementalGroups": {
-						SchemaProps: spec.SchemaProps{
-							Description: "supplementalGroups is the strategy that will dictate what supplemental groups are used by the SecurityContext.",
-							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/extensions/v1beta1.SupplementalGroupsStrategyOptions"),
-						},
-					},
-					"fsGroup": {
-						SchemaProps: spec.SchemaProps{
-							Description: "fsGroup is the strategy that will dictate what fs group is used by the SecurityContext.",
-							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/extensions/v1beta1.FSGroupStrategyOptions"),
-						},
-					},
-					"readOnlyRootFilesystem": {
-						SchemaProps: spec.SchemaProps{
-							Description: "readOnlyRootFilesystem when set to true will force containers to run with a read only root file system.  If the container specifically requests to run with a non-read only root file system the PSP should deny the pod. If set to false the container may run with a read only root file system if it wishes but it will not be forced to.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"defaultAllowPrivilegeEscalation": {
-						SchemaProps: spec.SchemaProps{
-							Description: "defaultAllowPrivilegeEscalation controls the default setting for whether a process can gain more privileges than its parent process.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"allowPrivilegeEscalation": {
-						SchemaProps: spec.SchemaProps{
-							Description: "allowPrivilegeEscalation determines if a pod can request to allow privilege escalation. If unspecified, defaults to true.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"allowedHostPaths": {
-						SchemaProps: spec.SchemaProps{
-							Description: "allowedHostPaths is an allowlist of host paths. Empty indicates that all host paths may be used.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/extensions/v1beta1.AllowedHostPath"),
-									},
-								},
-							},
-						},
-					},
-					"allowedFlexVolumes": {
-						SchemaProps: spec.SchemaProps{
-							Description: "allowedFlexVolumes is an allowlist of Flexvolumes.  Empty or nil indicates that all Flexvolumes may be used.  This parameter is effective only when the usage of the Flexvolumes is allowed in the \"volumes\" field.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/extensions/v1beta1.AllowedFlexVolume"),
-									},
-								},
-							},
-						},
-					},
-					"allowedCSIDrivers": {
-						SchemaProps: spec.SchemaProps{
-							Description: "AllowedCSIDrivers is an allowlist of inline CSI drivers that must be explicitly set to be embedded within a pod spec. An empty value indicates that any CSI driver can be used for inline ephemeral volumes.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/extensions/v1beta1.AllowedCSIDriver"),
-									},
-								},
-							},
-						},
-					},
-					"allowedUnsafeSysctls": {
-						SchemaProps: spec.SchemaProps{
-							Description: "allowedUnsafeSysctls is a list of explicitly allowed unsafe sysctls, defaults to none. Each entry is either a plain sysctl name or ends in \"*\" in which case it is considered as a prefix of allowed sysctls. Single * means all unsafe sysctls are allowed. Kubelet has to allowlist all unsafe sysctls explicitly to avoid rejection.\n\nExamples: e.g. \"foo/*\" allows \"foo/bar\", \"foo/baz\", etc. e.g. \"foo.*\" allows \"foo.bar\", \"foo.baz\", etc.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-					"forbiddenSysctls": {
-						SchemaProps: spec.SchemaProps{
-							Description: "forbiddenSysctls is a list of explicitly forbidden sysctls, defaults to none. Each entry is either a plain sysctl name or ends in \"*\" in which case it is considered as a prefix of forbidden sysctls. Single * means all sysctls are forbidden.\n\nExamples: e.g. \"foo/*\" forbids \"foo/bar\", \"foo/baz\", etc. e.g. \"foo.*\" forbids \"foo.bar\", \"foo.baz\", etc.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-					"allowedProcMountTypes": {
-						SchemaProps: spec.SchemaProps{
-							Description: "AllowedProcMountTypes is an allowlist of allowed ProcMountTypes. Empty or nil indicates that only the DefaultProcMountType may be used. This requires the ProcMountType feature flag to be enabled.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-					"runtimeClass": {
-						SchemaProps: spec.SchemaProps{
-							Description: "runtimeClass is the strategy that will dictate the allowable RuntimeClasses for a pod. If this field is omitted, the pod's runtimeClassName field is unrestricted. Enforcement of this field depends on the RuntimeClass feature gate being enabled.",
-							Ref:         ref("k8s.io/api/extensions/v1beta1.RuntimeClassStrategyOptions"),
-						},
-					},
-				},
-				Required: []string{"seLinux", "runAsUser", "supplementalGroups", "fsGroup"},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/api/extensions/v1beta1.AllowedCSIDriver", "k8s.io/api/extensions/v1beta1.AllowedFlexVolume", "k8s.io/api/extensions/v1beta1.AllowedHostPath", "k8s.io/api/extensions/v1beta1.FSGroupStrategyOptions", "k8s.io/api/extensions/v1beta1.HostPortRange", "k8s.io/api/extensions/v1beta1.RunAsGroupStrategyOptions", "k8s.io/api/extensions/v1beta1.RunAsUserStrategyOptions", "k8s.io/api/extensions/v1beta1.RuntimeClassStrategyOptions", "k8s.io/api/extensions/v1beta1.SELinuxStrategyOptions", "k8s.io/api/extensions/v1beta1.SupplementalGroupsStrategyOptions"},
-	}
-}
-
 func schema_k8sio_api_extensions_v1beta1_ReplicaSet(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -31368,148 +30827,6 @@ func schema_k8sio_api_extensions_v1beta1_RollingUpdateDeployment(ref common.Refe
 	}
 }
 
-func schema_k8sio_api_extensions_v1beta1_RunAsGroupStrategyOptions(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "RunAsGroupStrategyOptions defines the strategy type and any options used to create the strategy. Deprecated: use RunAsGroupStrategyOptions from policy API Group instead.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"rule": {
-						SchemaProps: spec.SchemaProps{
-							Description: "rule is the strategy that will dictate the allowable RunAsGroup values that may be set.",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"ranges": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ranges are the allowed ranges of gids that may be used. If you would like to force a single gid then supply a single range with the same start and end. Required for MustRunAs.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/extensions/v1beta1.IDRange"),
-									},
-								},
-							},
-						},
-					},
-				},
-				Required: []string{"rule"},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/api/extensions/v1beta1.IDRange"},
-	}
-}
-
-func schema_k8sio_api_extensions_v1beta1_RunAsUserStrategyOptions(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "RunAsUserStrategyOptions defines the strategy type and any options used to create the strategy. Deprecated: use RunAsUserStrategyOptions from policy API Group instead.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"rule": {
-						SchemaProps: spec.SchemaProps{
-							Description: "rule is the strategy that will dictate the allowable RunAsUser values that may be set.",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"ranges": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ranges are the allowed ranges of uids that may be used. If you would like to force a single uid then supply a single range with the same start and end. Required for MustRunAs.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/extensions/v1beta1.IDRange"),
-									},
-								},
-							},
-						},
-					},
-				},
-				Required: []string{"rule"},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/api/extensions/v1beta1.IDRange"},
-	}
-}
-
-func schema_k8sio_api_extensions_v1beta1_RuntimeClassStrategyOptions(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "RuntimeClassStrategyOptions define the strategy that will dictate the allowable RuntimeClasses for a pod.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"allowedRuntimeClassNames": {
-						SchemaProps: spec.SchemaProps{
-							Description: "allowedRuntimeClassNames is an allowlist of RuntimeClass names that may be specified on a pod. A value of \"*\" means that any RuntimeClass name is allowed, and must be the only item in the list. An empty list requires the RuntimeClassName field to be unset.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-					"defaultRuntimeClassName": {
-						SchemaProps: spec.SchemaProps{
-							Description: "defaultRuntimeClassName is the default RuntimeClassName to set on the pod. The default MUST be allowed by the allowedRuntimeClassNames list. A value of nil does not mutate the Pod.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-				},
-				Required: []string{"allowedRuntimeClassNames"},
-			},
-		},
-	}
-}
-
-func schema_k8sio_api_extensions_v1beta1_SELinuxStrategyOptions(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "SELinuxStrategyOptions defines the strategy type and any options used to create the strategy. Deprecated: use SELinuxStrategyOptions from policy API Group instead.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"rule": {
-						SchemaProps: spec.SchemaProps{
-							Description: "rule is the strategy that will dictate the allowable labels that may be set.",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"seLinuxOptions": {
-						SchemaProps: spec.SchemaProps{
-							Description: "seLinuxOptions required to run as; required for MustRunAs More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/",
-							Ref:         ref("k8s.io/api/core/v1.SELinuxOptions"),
-						},
-					},
-				},
-				Required: []string{"rule"},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/api/core/v1.SELinuxOptions"},
-	}
-}
-
 func schema_k8sio_api_extensions_v1beta1_Scale(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -31627,42 +30944,6 @@ func schema_k8sio_api_extensions_v1beta1_ScaleStatus(ref common.ReferenceCallbac
 				Required: []string{"replicas"},
 			},
 		},
-	}
-}
-
-func schema_k8sio_api_extensions_v1beta1_SupplementalGroupsStrategyOptions(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "SupplementalGroupsStrategyOptions defines the strategy type and options used to create the strategy. Deprecated: use SupplementalGroupsStrategyOptions from policy API Group instead.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"rule": {
-						SchemaProps: spec.SchemaProps{
-							Description: "rule is the strategy that will dictate what supplemental groups is used in the SecurityContext.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"ranges": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ranges are the allowed ranges of supplemental groups.  If you would like to force a single supplemental group then supply a single range with the same start and end. Required for MustRunAs.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/extensions/v1beta1.IDRange"),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/api/extensions/v1beta1.IDRange"},
 	}
 }
 
@@ -35843,14 +35124,14 @@ func schema_k8sio_api_networking_v1_HTTPIngressPath(ref common.ReferenceCallback
 				Properties: map[string]spec.Schema{
 					"path": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Path is matched against the path of an incoming request. Currently it can contain characters disallowed from the conventional \"path\" part of a URL as defined by RFC 3986. Paths must begin with a '/' and must be present when using PathType with value \"Exact\" or \"Prefix\".",
+							Description: "path is matched against the path of an incoming request. Currently it can contain characters disallowed from the conventional \"path\" part of a URL as defined by RFC 3986. Paths must begin with a '/' and must be present when using PathType with value \"Exact\" or \"Prefix\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"pathType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PathType determines the interpretation of the Path matching. PathType can be one of the following values: * Exact: Matches the URL path exactly. * Prefix: Matches based on a URL path prefix split by '/'. Matching is\n  done on a path element by element basis. A path element refers is the\n  list of labels in the path split by the '/' separator. A request is a\n  match for path p if every p is an element-wise prefix of p of the\n  request path. Note that if the last element of the path is a substring\n  of the last element in request path, it is not a match (e.g. /foo/bar\n  matches /foo/bar/baz, but does not match /foo/barbaz).\n* ImplementationSpecific: Interpretation of the Path matching is up to\n  the IngressClass. Implementations can treat this as a separate PathType\n  or treat it identically to Prefix or Exact path types.\nImplementations are required to support all path types.\n\nPossible enum values:\n - `\"Exact\"` matches the URL path exactly and with case sensitivity.\n - `\"ImplementationSpecific\"` matching is up to the IngressClass. Implementations can treat this as a separate PathType or treat it identically to Prefix or Exact path types.\n - `\"Prefix\"` matches based on a URL path prefix split by '/'. Matching is case sensitive and done on a path element by element basis. A path element refers to the list of labels in the path split by the '/' separator. A request is a match for path p if every p is an element-wise prefix of p of the request path. Note that if the last element of the path is a substring of the last element in request path, it is not a match (e.g. /foo/bar matches /foo/bar/baz, but does not match /foo/barbaz). If multiple matching paths exist in an Ingress spec, the longest matching path is given priority. Examples: - /foo/bar does not match requests to /foo/barbaz - /foo/bar matches request to /foo/bar and /foo/bar/baz - /foo and /foo/ both match requests to /foo and /foo/. If both paths are present in an Ingress spec, the longest matching path (/foo/) is given priority.",
+							Description: "pathType determines the interpretation of the path matching. PathType can be one of the following values: * Exact: Matches the URL path exactly. * Prefix: Matches based on a URL path prefix split by '/'. Matching is\n  done on a path element by element basis. A path element refers is the\n  list of labels in the path split by the '/' separator. A request is a\n  match for path p if every p is an element-wise prefix of p of the\n  request path. Note that if the last element of the path is a substring\n  of the last element in request path, it is not a match (e.g. /foo/bar\n  matches /foo/bar/baz, but does not match /foo/barbaz).\n* ImplementationSpecific: Interpretation of the Path matching is up to\n  the IngressClass. Implementations can treat this as a separate PathType\n  or treat it identically to Prefix or Exact path types.\nImplementations are required to support all path types.\n\nPossible enum values:\n - `\"Exact\"` matches the URL path exactly and with case sensitivity.\n - `\"ImplementationSpecific\"` matching is up to the IngressClass. Implementations can treat this as a separate PathType or treat it identically to Prefix or Exact path types.\n - `\"Prefix\"` matches based on a URL path prefix split by '/'. Matching is case sensitive and done on a path element by element basis. A path element refers to the list of labels in the path split by the '/' separator. A request is a match for path p if every p is an element-wise prefix of p of the request path. Note that if the last element of the path is a substring of the last element in request path, it is not a match (e.g. /foo/bar matches /foo/bar/baz, but does not match /foo/barbaz). If multiple matching paths exist in an Ingress spec, the longest matching path is given priority. Examples: - /foo/bar does not match requests to /foo/barbaz - /foo/bar matches request to /foo/bar and /foo/bar/baz - /foo and /foo/ both match requests to /foo and /foo/. If both paths are present in an Ingress spec, the longest matching path (/foo/) is given priority.",
 							Type:        []string{"string"},
 							Format:      "",
 							Enum:        []interface{}{"Exact", "ImplementationSpecific", "Prefix"},
@@ -35858,7 +35139,7 @@ func schema_k8sio_api_networking_v1_HTTPIngressPath(ref common.ReferenceCallback
 					},
 					"backend": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Backend defines the referenced service endpoint to which the traffic will be forwarded to.",
+							Description: "backend defines the referenced service endpoint to which the traffic will be forwarded to.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1.IngressBackend"),
 						},
@@ -35886,7 +35167,7 @@ func schema_k8sio_api_networking_v1_HTTPIngressRuleValue(ref common.ReferenceCal
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "A collection of paths that map requests to backends.",
+							Description: "paths is a collection of paths that map requests to backends.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -35916,7 +35197,7 @@ func schema_k8sio_api_networking_v1_IPBlock(ref common.ReferenceCallback) common
 				Properties: map[string]spec.Schema{
 					"cidr": {
 						SchemaProps: spec.SchemaProps{
-							Description: "CIDR is a string representing the IP Block Valid examples are \"192.168.1.0/24\" or \"2001:db8::/64\"",
+							Description: "cidr is a string representing the IPBlock Valid examples are \"192.168.1.0/24\" or \"2001:db8::/64\"",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -35924,7 +35205,7 @@ func schema_k8sio_api_networking_v1_IPBlock(ref common.ReferenceCallback) common
 					},
 					"except": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Except is a slice of CIDRs that should not be included within an IP Block Valid examples are \"192.168.1.0/24\" or \"2001:db8::/64\" Except values will be rejected if they are outside the CIDR range",
+							Description: "except is a slice of CIDRs that should not be included within an IPBlock Valid examples are \"192.168.1.0/24\" or \"2001:db8::/64\" Except values will be rejected if they are outside the cidr range",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -35974,14 +35255,14 @@ func schema_k8sio_api_networking_v1_Ingress(ref common.ReferenceCallback) common
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Spec is the desired state of the Ingress. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
+							Description: "spec is the desired state of the Ingress. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1.IngressSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Status is the current state of the Ingress. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
+							Description: "status is the current state of the Ingress. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1.IngressStatus"),
 						},
@@ -36003,13 +35284,13 @@ func schema_k8sio_api_networking_v1_IngressBackend(ref common.ReferenceCallback)
 				Properties: map[string]spec.Schema{
 					"service": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Service references a Service as a Backend. This is a mutually exclusive setting with \"Resource\".",
+							Description: "service references a service as a backend. This is a mutually exclusive setting with \"Resource\".",
 							Ref:         ref("k8s.io/api/networking/v1.IngressServiceBackend"),
 						},
 					},
 					"resource": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Resource is an ObjectRef to another Kubernetes resource in the namespace of the Ingress object. If resource is specified, a service.Name and service.Port must not be specified. This is a mutually exclusive setting with \"Service\".",
+							Description: "resource is an ObjectRef to another Kubernetes resource in the namespace of the Ingress object. If resource is specified, a service.Name and service.Port must not be specified. This is a mutually exclusive setting with \"Service\".",
 							Ref:         ref("k8s.io/api/core/v1.TypedLocalObjectReference"),
 						},
 					},
@@ -36051,7 +35332,7 @@ func schema_k8sio_api_networking_v1_IngressClass(ref common.ReferenceCallback) c
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Spec is the desired state of the IngressClass. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
+							Description: "spec is the desired state of the IngressClass. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1.IngressClassSpec"),
 						},
@@ -36094,7 +35375,7 @@ func schema_k8sio_api_networking_v1_IngressClassList(ref common.ReferenceCallbac
 					},
 					"items": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Items is the list of IngressClasses.",
+							Description: "items is the list of IngressClasses.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36124,14 +35405,14 @@ func schema_k8sio_api_networking_v1_IngressClassParametersReference(ref common.R
 				Properties: map[string]spec.Schema{
 					"apiGroup": {
 						SchemaProps: spec.SchemaProps{
-							Description: "APIGroup is the group for the resource being referenced. If APIGroup is not specified, the specified Kind must be in the core API group. For any other third-party types, APIGroup is required.",
+							Description: "apiGroup is the group for the resource being referenced. If APIGroup is not specified, the specified Kind must be in the core API group. For any other third-party types, APIGroup is required.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"kind": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Kind is the type of resource being referenced.",
+							Description: "kind is the type of resource being referenced.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -36139,7 +35420,7 @@ func schema_k8sio_api_networking_v1_IngressClassParametersReference(ref common.R
 					},
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Name is the name of resource being referenced.",
+							Description: "name is the name of resource being referenced.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -36147,14 +35428,14 @@ func schema_k8sio_api_networking_v1_IngressClassParametersReference(ref common.R
 					},
 					"scope": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Scope represents if this refers to a cluster or namespace scoped resource. This may be set to \"Cluster\" (default) or \"Namespace\".",
+							Description: "scope represents if this refers to a cluster or namespace scoped resource. This may be set to \"Cluster\" (default) or \"Namespace\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"namespace": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Namespace is the namespace of the resource being referenced. This field is required when scope is set to \"Namespace\" and must be unset when scope is set to \"Cluster\".",
+							Description: "namespace is the namespace of the resource being referenced. This field is required when scope is set to \"Namespace\" and must be unset when scope is set to \"Cluster\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -36175,14 +35456,14 @@ func schema_k8sio_api_networking_v1_IngressClassSpec(ref common.ReferenceCallbac
 				Properties: map[string]spec.Schema{
 					"controller": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Controller refers to the name of the controller that should handle this class. This allows for different \"flavors\" that are controlled by the same controller. For example, you may have different Parameters for the same implementing controller. This should be specified as a domain-prefixed path no more than 250 characters in length, e.g. \"acme.io/ingress-controller\". This field is immutable.",
+							Description: "controller refers to the name of the controller that should handle this class. This allows for different \"flavors\" that are controlled by the same controller. For example, you may have different parameters for the same implementing controller. This should be specified as a domain-prefixed path no more than 250 characters in length, e.g. \"acme.io/ingress-controller\". This field is immutable.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"parameters": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Parameters is a link to a custom resource containing additional configuration for the controller. This is optional if the controller does not require extra parameters.",
+							Description: "parameters is a link to a custom resource containing additional configuration for the controller. This is optional if the controller does not require extra parameters.",
 							Ref:         ref("k8s.io/api/networking/v1.IngressClassParametersReference"),
 						},
 					},
@@ -36224,7 +35505,7 @@ func schema_k8sio_api_networking_v1_IngressList(ref common.ReferenceCallback) co
 					},
 					"items": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Items is the list of Ingress.",
+							Description: "items is the list of Ingress.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36254,14 +35535,14 @@ func schema_k8sio_api_networking_v1_IngressLoadBalancerIngress(ref common.Refere
 				Properties: map[string]spec.Schema{
 					"ip": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IP is set for load-balancer ingress points that are IP based.",
+							Description: "ip is set for load-balancer ingress points that are IP based.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"hostname": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Hostname is set for load-balancer ingress points that are DNS based.",
+							Description: "hostname is set for load-balancer ingress points that are DNS based.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -36273,7 +35554,7 @@ func schema_k8sio_api_networking_v1_IngressLoadBalancerIngress(ref common.Refere
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Ports provides information about the ports exposed by this LoadBalancer.",
+							Description: "ports provides information about the ports exposed by this LoadBalancer.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36302,7 +35583,7 @@ func schema_k8sio_api_networking_v1_IngressLoadBalancerStatus(ref common.Referen
 				Properties: map[string]spec.Schema{
 					"ingress": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ingress is a list containing ingress points for the load-balancer.",
+							Description: "ingress is a list containing ingress points for the load-balancer.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36331,7 +35612,7 @@ func schema_k8sio_api_networking_v1_IngressPortStatus(ref common.ReferenceCallba
 				Properties: map[string]spec.Schema{
 					"port": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Port is the port number of the ingress port.",
+							Description: "port is the port number of the ingress port.",
 							Default:     0,
 							Type:        []string{"integer"},
 							Format:      "int32",
@@ -36339,7 +35620,7 @@ func schema_k8sio_api_networking_v1_IngressPortStatus(ref common.ReferenceCallba
 					},
 					"protocol": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Protocol is the protocol of the ingress port. The supported values are: \"TCP\", \"UDP\", \"SCTP\"\n\nPossible enum values:\n - `\"SCTP\"` is the SCTP protocol.\n - `\"TCP\"` is the TCP protocol.\n - `\"UDP\"` is the UDP protocol.",
+							Description: "protocol is the protocol of the ingress port. The supported values are: \"TCP\", \"UDP\", \"SCTP\"\n\nPossible enum values:\n - `\"SCTP\"` is the SCTP protocol.\n - `\"TCP\"` is the TCP protocol.\n - `\"UDP\"` is the UDP protocol.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -36348,7 +35629,7 @@ func schema_k8sio_api_networking_v1_IngressPortStatus(ref common.ReferenceCallba
 					},
 					"error": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Error is to record the problem with the service port The format of the error shall comply with the following rules: - built-in error values shall be specified in this file and those shall use\n  CamelCase names\n- cloud provider specific error values must have names that comply with the\n  format foo.example.com/CamelCase.",
+							Description: "error is to record the problem with the service port The format of the error shall comply with the following rules: - built-in error values shall be specified in this file and those shall use\n  CamelCase names\n- cloud provider specific error values must have names that comply with the\n  format foo.example.com/CamelCase.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -36369,7 +35650,7 @@ func schema_k8sio_api_networking_v1_IngressRule(ref common.ReferenceCallback) co
 				Properties: map[string]spec.Schema{
 					"host": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Host is the fully qualified domain name of a network host, as defined by RFC 3986. Note the following deviations from the \"host\" part of the URI as defined in RFC 3986: 1. IPs are not allowed. Currently an IngressRuleValue can only apply to\n   the IP in the Spec of the parent Ingress.\n2. The `:` delimiter is not respected because ports are not allowed.\n\t  Currently the port of an Ingress is implicitly :80 for http and\n\t  :443 for https.\nBoth these may change in the future. Incoming requests are matched against the host before the IngressRuleValue. If the host is unspecified, the Ingress routes all traffic based on the specified IngressRuleValue.\n\nHost can be \"precise\" which is a domain name without the terminating dot of a network host (e.g. \"foo.bar.com\") or \"wildcard\", which is a domain name prefixed with a single wildcard label (e.g. \"*.foo.com\"). The wildcard character '*' must appear by itself as the first DNS label and matches only a single label. You cannot have a wildcard label by itself (e.g. Host == \"*\"). Requests will be matched against the Host field in the following way: 1. If Host is precise, the request matches this rule if the http host header is equal to Host. 2. If Host is a wildcard, then the request matches this rule if the http host header is to equal to the suffix (removing the first label) of the wildcard rule.",
+							Description: "host is the fully qualified domain name of a network host, as defined by RFC 3986. Note the following deviations from the \"host\" part of the URI as defined in RFC 3986: 1. IPs are not allowed. Currently an IngressRuleValue can only apply to\n   the IP in the Spec of the parent Ingress.\n2. The `:` delimiter is not respected because ports are not allowed.\n\t  Currently the port of an Ingress is implicitly :80 for http and\n\t  :443 for https.\nBoth these may change in the future. Incoming requests are matched against the host before the IngressRuleValue. If the host is unspecified, the Ingress routes all traffic based on the specified IngressRuleValue.\n\nhost can be \"precise\" which is a domain name without the terminating dot of a network host (e.g. \"foo.bar.com\") or \"wildcard\", which is a domain name prefixed with a single wildcard label (e.g. \"*.foo.com\"). The wildcard character '*' must appear by itself as the first DNS label and matches only a single label. You cannot have a wildcard label by itself (e.g. Host == \"*\"). Requests will be matched against the Host field in the following way: 1. If host is precise, the request matches this rule if the http host header is equal to Host. 2. If host is a wildcard, then the request matches this rule if the http host header is to equal to the suffix (removing the first label) of the wildcard rule.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -36416,7 +35697,7 @@ func schema_k8sio_api_networking_v1_IngressServiceBackend(ref common.ReferenceCa
 				Properties: map[string]spec.Schema{
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Name is the referenced service. The service must exist in the same namespace as the Ingress object.",
+							Description: "name is the referenced service. The service must exist in the same namespace as the Ingress object.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -36424,7 +35705,7 @@ func schema_k8sio_api_networking_v1_IngressServiceBackend(ref common.ReferenceCa
 					},
 					"port": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Port of the referenced service. A port name or port number is required for a IngressServiceBackend.",
+							Description: "port of the referenced service. A port name or port number is required for a IngressServiceBackend.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1.ServiceBackendPort"),
 						},
@@ -36447,14 +35728,14 @@ func schema_k8sio_api_networking_v1_IngressSpec(ref common.ReferenceCallback) co
 				Properties: map[string]spec.Schema{
 					"ingressClassName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IngressClassName is the name of an IngressClass cluster resource. Ingress controller implementations use this field to know whether they should be serving this Ingress resource, by a transitive connection (controller -> IngressClass -> Ingress resource). Although the `kubernetes.io/ingress.class` annotation (simple constant name) was never formally defined, it was widely supported by Ingress controllers to create a direct binding between Ingress controller and Ingress resources. Newly created Ingress resources should prefer using the field. However, even though the annotation is officially deprecated, for backwards compatibility reasons, ingress controllers should still honor that annotation if present.",
+							Description: "ingressClassName is the name of an IngressClass cluster resource. Ingress controller implementations use this field to know whether they should be serving this Ingress resource, by a transitive connection (controller -> IngressClass -> Ingress resource). Although the `kubernetes.io/ingress.class` annotation (simple constant name) was never formally defined, it was widely supported by Ingress controllers to create a direct binding between Ingress controller and Ingress resources. Newly created Ingress resources should prefer using the field. However, even though the annotation is officially deprecated, for backwards compatibility reasons, ingress controllers should still honor that annotation if present.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"defaultBackend": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DefaultBackend is the backend that should handle requests that don't match any rule. If Rules are not specified, DefaultBackend must be specified. If DefaultBackend is not set, the handling of requests that do not match any of the rules will be up to the Ingress controller.",
+							Description: "defaultBackend is the backend that should handle requests that don't match any rule. If Rules are not specified, DefaultBackend must be specified. If DefaultBackend is not set, the handling of requests that do not match any of the rules will be up to the Ingress controller.",
 							Ref:         ref("k8s.io/api/networking/v1.IngressBackend"),
 						},
 					},
@@ -36465,7 +35746,7 @@ func schema_k8sio_api_networking_v1_IngressSpec(ref common.ReferenceCallback) co
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "TLS configuration. Currently the Ingress only supports a single TLS port, 443. If multiple members of this list specify different hosts, they will be multiplexed on the same port according to the hostname specified through the SNI TLS extension, if the ingress controller fulfilling the ingress supports SNI.",
+							Description: "tls represents the TLS configuration. Currently the Ingress only supports a single TLS port, 443. If multiple members of this list specify different hosts, they will be multiplexed on the same port according to the hostname specified through the SNI TLS extension, if the ingress controller fulfilling the ingress supports SNI.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36484,7 +35765,7 @@ func schema_k8sio_api_networking_v1_IngressSpec(ref common.ReferenceCallback) co
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "A list of host rules used to configure the Ingress. If unspecified, or no rule matches, all traffic is sent to the default backend.",
+							Description: "rules is a list of host rules used to configure the Ingress. If unspecified, or no rule matches, all traffic is sent to the default backend.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36513,7 +35794,7 @@ func schema_k8sio_api_networking_v1_IngressStatus(ref common.ReferenceCallback) 
 				Properties: map[string]spec.Schema{
 					"loadBalancer": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LoadBalancer contains the current status of the load-balancer.",
+							Description: "loadBalancer contains the current status of the load-balancer.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1.IngressLoadBalancerStatus"),
 						},
@@ -36530,7 +35811,7 @@ func schema_k8sio_api_networking_v1_IngressTLS(ref common.ReferenceCallback) com
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "IngressTLS describes the transport layer security associated with an Ingress.",
+				Description: "IngressTLS describes the transport layer security associated with an ingress.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"hosts": {
@@ -36540,7 +35821,7 @@ func schema_k8sio_api_networking_v1_IngressTLS(ref common.ReferenceCallback) com
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Hosts are a list of hosts included in the TLS certificate. The values in this list must match the name/s used in the tlsSecret. Defaults to the wildcard host setting for the loadbalancer controller fulfilling this Ingress, if left unspecified.",
+							Description: "hosts is a list of hosts included in the TLS certificate. The values in this list must match the name/s used in the tlsSecret. Defaults to the wildcard host setting for the loadbalancer controller fulfilling this Ingress, if left unspecified.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36555,7 +35836,7 @@ func schema_k8sio_api_networking_v1_IngressTLS(ref common.ReferenceCallback) com
 					},
 					"secretName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "SecretName is the name of the secret used to terminate TLS traffic on port 443. Field is left optional to allow TLS routing based on SNI hostname alone. If the SNI host in a listener conflicts with the \"Host\" header field used by an IngressRule, the SNI host is used for termination and value of the Host header is used for routing.",
+							Description: "secretName is the name of the secret used to terminate TLS traffic on port 443. Field is left optional to allow TLS routing based on SNI hostname alone. If the SNI host in a listener conflicts with the \"Host\" header field used by an IngressRule, the SNI host is used for termination and value of the \"Host\" header is used for routing.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -36596,14 +35877,14 @@ func schema_k8sio_api_networking_v1_NetworkPolicy(ref common.ReferenceCallback) 
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Specification of the desired behavior for this NetworkPolicy.",
+							Description: "spec represents the specification of the desired behavior for this NetworkPolicy.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1.NetworkPolicySpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Status is the current state of the NetworkPolicy. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
+							Description: "status represents the current state of the NetworkPolicy. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1.NetworkPolicyStatus"),
 						},
@@ -36625,7 +35906,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyEgressRule(ref common.Reference
 				Properties: map[string]spec.Schema{
 					"ports": {
 						SchemaProps: spec.SchemaProps{
-							Description: "List of destination ports for outgoing traffic. Each item in this list is combined using a logical OR. If this field is empty or missing, this rule matches all ports (traffic not restricted by port). If this field is present and contains at least one item, then this rule allows traffic only if the traffic matches at least one port in the list.",
+							Description: "ports is a list of destination ports for outgoing traffic. Each item in this list is combined using a logical OR. If this field is empty or missing, this rule matches all ports (traffic not restricted by port). If this field is present and contains at least one item, then this rule allows traffic only if the traffic matches at least one port in the list.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36639,7 +35920,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyEgressRule(ref common.Reference
 					},
 					"to": {
 						SchemaProps: spec.SchemaProps{
-							Description: "List of destinations for outgoing traffic of pods selected for this rule. Items in this list are combined using a logical OR operation. If this field is empty or missing, this rule matches all destinations (traffic not restricted by destination). If this field is present and contains at least one item, this rule allows traffic only if the traffic matches at least one item in the to list.",
+							Description: "to is a list of destinations for outgoing traffic of pods selected for this rule. Items in this list are combined using a logical OR operation. If this field is empty or missing, this rule matches all destinations (traffic not restricted by destination). If this field is present and contains at least one item, this rule allows traffic only if the traffic matches at least one item in the to list.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36668,7 +35949,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyIngressRule(ref common.Referenc
 				Properties: map[string]spec.Schema{
 					"ports": {
 						SchemaProps: spec.SchemaProps{
-							Description: "List of ports which should be made accessible on the pods selected for this rule. Each item in this list is combined using a logical OR. If this field is empty or missing, this rule matches all ports (traffic not restricted by port). If this field is present and contains at least one item, then this rule allows traffic only if the traffic matches at least one port in the list.",
+							Description: "ports is a list of ports which should be made accessible on the pods selected for this rule. Each item in this list is combined using a logical OR. If this field is empty or missing, this rule matches all ports (traffic not restricted by port). If this field is present and contains at least one item, then this rule allows traffic only if the traffic matches at least one port in the list.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36682,7 +35963,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyIngressRule(ref common.Referenc
 					},
 					"from": {
 						SchemaProps: spec.SchemaProps{
-							Description: "List of sources which should be able to access the pods selected for this rule. Items in this list are combined using a logical OR operation. If this field is empty or missing, this rule matches all sources (traffic not restricted by source). If this field is present and contains at least one item, this rule allows traffic only if the traffic matches at least one item in the from list.",
+							Description: "from is a list of sources which should be able to access the pods selected for this rule. Items in this list are combined using a logical OR operation. If this field is empty or missing, this rule matches all sources (traffic not restricted by source). If this field is present and contains at least one item, this rule allows traffic only if the traffic matches at least one item in the from list.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36732,7 +36013,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyList(ref common.ReferenceCallba
 					},
 					"items": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Items is a list of schema objects.",
+							Description: "items is a list of schema objects.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36762,19 +36043,19 @@ func schema_k8sio_api_networking_v1_NetworkPolicyPeer(ref common.ReferenceCallba
 				Properties: map[string]spec.Schema{
 					"podSelector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "This is a label selector which selects Pods. This field follows standard label selector semantics; if present but empty, it selects all pods.\n\nIf NamespaceSelector is also set, then the NetworkPolicyPeer as a whole selects the Pods matching PodSelector in the Namespaces selected by NamespaceSelector. Otherwise it selects the Pods matching PodSelector in the policy's own Namespace.",
+							Description: "podSelector is a label selector which selects pods. This field follows standard label selector semantics; if present but empty, it selects all pods.\n\nIf namespaceSelector is also set, then the NetworkPolicyPeer as a whole selects the pods matching podSelector in the Namespaces selected by NamespaceSelector. Otherwise it selects the pods matching podSelector in the policy's own namespace.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
 						},
 					},
 					"namespaceSelector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Selects Namespaces using cluster-scoped labels. This field follows standard label selector semantics; if present but empty, it selects all namespaces.\n\nIf PodSelector is also set, then the NetworkPolicyPeer as a whole selects the Pods matching PodSelector in the Namespaces selected by NamespaceSelector. Otherwise it selects all Pods in the Namespaces selected by NamespaceSelector.",
+							Description: "namespaceSelector selects namespaces using cluster-scoped labels. This field follows standard label selector semantics; if present but empty, it selects all namespaces.\n\nIf podSelector is also set, then the NetworkPolicyPeer as a whole selects the pods matching podSelector in the namespaces selected by namespaceSelector. Otherwise it selects all pods in the namespaces selected by namespaceSelector.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
 						},
 					},
 					"ipBlock": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IPBlock defines policy on a particular IPBlock. If this field is set then neither of the other fields can be.",
+							Description: "ipBlock defines policy on a particular IPBlock. If this field is set then neither of the other fields can be.",
 							Ref:         ref("k8s.io/api/networking/v1.IPBlock"),
 						},
 					},
@@ -36795,7 +36076,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyPort(ref common.ReferenceCallba
 				Properties: map[string]spec.Schema{
 					"protocol": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The protocol (TCP, UDP, or SCTP) which traffic must match. If not specified, this field defaults to TCP.\n\nPossible enum values:\n - `\"SCTP\"` is the SCTP protocol.\n - `\"TCP\"` is the TCP protocol.\n - `\"UDP\"` is the UDP protocol.",
+							Description: "protocol represents the protocol (TCP, UDP, or SCTP) which traffic must match. If not specified, this field defaults to TCP.\n\nPossible enum values:\n - `\"SCTP\"` is the SCTP protocol.\n - `\"TCP\"` is the TCP protocol.\n - `\"UDP\"` is the UDP protocol.",
 							Type:        []string{"string"},
 							Format:      "",
 							Enum:        []interface{}{"SCTP", "TCP", "UDP"},
@@ -36803,13 +36084,13 @@ func schema_k8sio_api_networking_v1_NetworkPolicyPort(ref common.ReferenceCallba
 					},
 					"port": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The port on the given protocol. This can either be a numerical or named port on a pod. If this field is not provided, this matches all port names and numbers. If present, only traffic on the specified protocol AND port will be matched.",
+							Description: "port represents the port on the given protocol. This can either be a numerical or named port on a pod. If this field is not provided, this matches all port names and numbers. If present, only traffic on the specified protocol AND port will be matched.",
 							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
 						},
 					},
 					"endPort": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If set, indicates that the range of ports from port to endPort, inclusive, should be allowed by the policy. This field cannot be defined if the port field is not defined or if the port field is defined as a named (string) port. The endPort must be equal or greater than port.",
+							Description: "endPort indicates that the range of ports from port to endPort if set, inclusive, should be allowed by the policy. This field cannot be defined if the port field is not defined or if the port field is defined as a named (string) port. The endPort must be equal or greater than port.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -36831,14 +36112,14 @@ func schema_k8sio_api_networking_v1_NetworkPolicySpec(ref common.ReferenceCallba
 				Properties: map[string]spec.Schema{
 					"podSelector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Selects the pods to which this NetworkPolicy object applies. The array of ingress rules is applied to any pods selected by this field. Multiple network policies can select the same set of pods. In this case, the ingress rules for each are combined additively. This field is NOT optional and follows standard label selector semantics. An empty podSelector matches all pods in this namespace.",
+							Description: "podSelector selects the pods to which this NetworkPolicy object applies. The array of ingress rules is applied to any pods selected by this field. Multiple network policies can select the same set of pods. In this case, the ingress rules for each are combined additively. This field is NOT optional and follows standard label selector semantics. An empty podSelector matches all pods in this namespace.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
 						},
 					},
 					"ingress": {
 						SchemaProps: spec.SchemaProps{
-							Description: "List of ingress rules to be applied to the selected pods. Traffic is allowed to a pod if there are no NetworkPolicies selecting the pod (and cluster policy otherwise allows the traffic), OR if the traffic source is the pod's local node, OR if the traffic matches at least one ingress rule across all of the NetworkPolicy objects whose podSelector matches the pod. If this field is empty then this NetworkPolicy does not allow any traffic (and serves solely to ensure that the pods it selects are isolated by default)",
+							Description: "ingress is a list of ingress rules to be applied to the selected pods. Traffic is allowed to a pod if there are no NetworkPolicies selecting the pod (and cluster policy otherwise allows the traffic), OR if the traffic source is the pod's local node, OR if the traffic matches at least one ingress rule across all of the NetworkPolicy objects whose podSelector matches the pod. If this field is empty then this NetworkPolicy does not allow any traffic (and serves solely to ensure that the pods it selects are isolated by default)",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36852,7 +36133,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicySpec(ref common.ReferenceCallba
 					},
 					"egress": {
 						SchemaProps: spec.SchemaProps{
-							Description: "List of egress rules to be applied to the selected pods. Outgoing traffic is allowed if there are no NetworkPolicies selecting the pod (and cluster policy otherwise allows the traffic), OR if the traffic matches at least one egress rule across all of the NetworkPolicy objects whose podSelector matches the pod. If this field is empty then this NetworkPolicy limits all outgoing traffic (and serves solely to ensure that the pods it selects are isolated by default). This field is beta-level in 1.8",
+							Description: "egress is a list of egress rules to be applied to the selected pods. Outgoing traffic is allowed if there are no NetworkPolicies selecting the pod (and cluster policy otherwise allows the traffic), OR if the traffic matches at least one egress rule across all of the NetworkPolicy objects whose podSelector matches the pod. If this field is empty then this NetworkPolicy limits all outgoing traffic (and serves solely to ensure that the pods it selects are isolated by default). This field is beta-level in 1.8",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36866,7 +36147,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicySpec(ref common.ReferenceCallba
 					},
 					"policyTypes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "List of rule types that the NetworkPolicy relates to. Valid options are [\"Ingress\"], [\"Egress\"], or [\"Ingress\", \"Egress\"]. If this field is not specified, it will default based on the existence of Ingress or Egress rules; policies that contain an Egress section are assumed to affect Egress, and all policies (whether or not they contain an Ingress section) are assumed to affect Ingress. If you want to write an egress-only policy, you must explicitly specify policyTypes [ \"Egress\" ]. Likewise, if you want to write a policy that specifies that no egress is allowed, you must specify a policyTypes value that include \"Egress\" (since such a policy would not include an Egress section and would otherwise default to just [ \"Ingress\" ]). This field is beta-level in 1.8",
+							Description: "policyTypes is a list of rule types that the NetworkPolicy relates to. Valid options are [\"Ingress\"], [\"Egress\"], or [\"Ingress\", \"Egress\"]. If this field is not specified, it will default based on the existence of ingress or egress rules; policies that contain an egress section are assumed to affect egress, and all policies (whether or not they contain an ingress section) are assumed to affect ingress. If you want to write an egress-only policy, you must explicitly specify policyTypes [ \"Egress\" ]. Likewise, if you want to write a policy that specifies that no egress is allowed, you must specify a policyTypes value that include \"Egress\" (since such a policy would not include an egress section and would otherwise default to just [ \"Ingress\" ]). This field is beta-level in 1.8",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36892,7 +36173,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyStatus(ref common.ReferenceCall
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "NetworkPolicyStatus describe the current state of the NetworkPolicy.",
+				Description: "NetworkPolicyStatus describes the current state of the NetworkPolicy.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"conditions": {
@@ -36907,7 +36188,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyStatus(ref common.ReferenceCall
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Conditions holds an array of metav1.Condition that describe the state of the NetworkPolicy. Current service state",
+							Description: "conditions holds an array of metav1.Condition that describe the state of the NetworkPolicy. Current service state",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -36936,14 +36217,14 @@ func schema_k8sio_api_networking_v1_ServiceBackendPort(ref common.ReferenceCallb
 				Properties: map[string]spec.Schema{
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Name is the name of the port on the Service. This is a mutually exclusive setting with \"Number\".",
+							Description: "name is the name of the port on the Service. This is a mutually exclusive setting with \"Number\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"number": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Number is the numerical port number (e.g. 80) on the Service. This is a mutually exclusive setting with \"Name\".",
+							Description: "number is the numerical port number (e.g. 80) on the Service. This is a mutually exclusive setting with \"Name\".",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -36984,7 +36265,7 @@ func schema_k8sio_api_networking_v1alpha1_ClusterCIDR(ref common.ReferenceCallba
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Spec is the desired state of the ClusterCIDR. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
+							Description: "spec is the desired state of the ClusterCIDR. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1alpha1.ClusterCIDRSpec"),
 						},
@@ -37027,7 +36308,7 @@ func schema_k8sio_api_networking_v1alpha1_ClusterCIDRList(ref common.ReferenceCa
 					},
 					"items": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Items is the list of ClusterCIDRs.",
+							Description: "items is the list of ClusterCIDRs.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -37057,13 +36338,13 @@ func schema_k8sio_api_networking_v1alpha1_ClusterCIDRSpec(ref common.ReferenceCa
 				Properties: map[string]spec.Schema{
 					"nodeSelector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NodeSelector defines which nodes the config is applicable to. An empty or nil NodeSelector selects all nodes. This field is immutable.",
+							Description: "nodeSelector defines which nodes the config is applicable to. An empty or nil nodeSelector selects all nodes. This field is immutable.",
 							Ref:         ref("k8s.io/api/core/v1.NodeSelector"),
 						},
 					},
 					"perNodeHostBits": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PerNodeHostBits defines the number of host bits to be configured per node. A subnet mask determines how much of the address is used for network bits and host bits. For example an IPv4 address of 192.168.0.0/24, splits the address into 24 bits for the network portion and 8 bits for the host portion. To allocate 256 IPs, set this field to 8 (a /24 mask for IPv4 or a /120 for IPv6). Minimum value is 4 (16 IPs). This field is immutable.",
+							Description: "perNodeHostBits defines the number of host bits to be configured per node. A subnet mask determines how much of the address is used for network bits and host bits. For example an IPv4 address of 192.168.0.0/24, splits the address into 24 bits for the network portion and 8 bits for the host portion. To allocate 256 IPs, set this field to 8 (a /24 mask for IPv4 or a /120 for IPv6). Minimum value is 4 (16 IPs). This field is immutable.",
 							Default:     0,
 							Type:        []string{"integer"},
 							Format:      "int32",
@@ -37071,7 +36352,7 @@ func schema_k8sio_api_networking_v1alpha1_ClusterCIDRSpec(ref common.ReferenceCa
 					},
 					"ipv4": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IPv4 defines an IPv4 IP block in CIDR notation(e.g. \"10.0.0.0/8\"). At least one of IPv4 and IPv6 must be specified. This field is immutable.",
+							Description: "ipv4 defines an IPv4 IP block in CIDR notation(e.g. \"10.0.0.0/8\"). At least one of ipv4 and ipv6 must be specified. This field is immutable.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -37079,7 +36360,7 @@ func schema_k8sio_api_networking_v1alpha1_ClusterCIDRSpec(ref common.ReferenceCa
 					},
 					"ipv6": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IPv6 defines an IPv6 IP block in CIDR notation(e.g. \"2001:db8::/64\"). At least one of IPv4 and IPv6 must be specified. This field is immutable.",
+							Description: "ipv6 defines an IPv6 IP block in CIDR notation(e.g. \"2001:db8::/64\"). At least one of ipv4 and ipv6 must be specified. This field is immutable.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -37103,21 +36384,21 @@ func schema_k8sio_api_networking_v1beta1_HTTPIngressPath(ref common.ReferenceCal
 				Properties: map[string]spec.Schema{
 					"path": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Path is matched against the path of an incoming request. Currently it can contain characters disallowed from the conventional \"path\" part of a URL as defined by RFC 3986. Paths must begin with a '/' and must be present when using PathType with value \"Exact\" or \"Prefix\".",
+							Description: "path is matched against the path of an incoming request. Currently it can contain characters disallowed from the conventional \"path\" part of a URL as defined by RFC 3986. Paths must begin with a '/' and must be present when using PathType with value \"Exact\" or \"Prefix\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"pathType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PathType determines the interpretation of the Path matching. PathType can be one of the following values: * Exact: Matches the URL path exactly. * Prefix: Matches based on a URL path prefix split by '/'. Matching is\n  done on a path element by element basis. A path element refers is the\n  list of labels in the path split by the '/' separator. A request is a\n  match for path p if every p is an element-wise prefix of p of the\n  request path. Note that if the last element of the path is a substring\n  of the last element in request path, it is not a match (e.g. /foo/bar\n  matches /foo/bar/baz, but does not match /foo/barbaz).\n* ImplementationSpecific: Interpretation of the Path matching is up to\n  the IngressClass. Implementations can treat this as a separate PathType\n  or treat it identically to Prefix or Exact path types.\nImplementations are required to support all path types. Defaults to ImplementationSpecific.",
+							Description: "pathType determines the interpretation of the path matching. PathType can be one of the following values: * Exact: Matches the URL path exactly. * Prefix: Matches based on a URL path prefix split by '/'. Matching is\n  done on a path element by element basis. A path element refers is the\n  list of labels in the path split by the '/' separator. A request is a\n  match for path p if every p is an element-wise prefix of p of the\n  request path. Note that if the last element of the path is a substring\n  of the last element in request path, it is not a match (e.g. /foo/bar\n  matches /foo/bar/baz, but does not match /foo/barbaz).\n* ImplementationSpecific: Interpretation of the Path matching is up to\n  the IngressClass. Implementations can treat this as a separate PathType\n  or treat it identically to Prefix or Exact path types.\nImplementations are required to support all path types. Defaults to ImplementationSpecific.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"backend": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Backend defines the referenced service endpoint to which the traffic will be forwarded to.",
+							Description: "backend defines the referenced service endpoint to which the traffic will be forwarded to.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1beta1.IngressBackend"),
 						},
@@ -37140,7 +36421,7 @@ func schema_k8sio_api_networking_v1beta1_HTTPIngressRuleValue(ref common.Referen
 				Properties: map[string]spec.Schema{
 					"paths": {
 						SchemaProps: spec.SchemaProps{
-							Description: "A collection of paths that map requests to backends.",
+							Description: "paths is a collection of paths that map requests to backends.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -37191,14 +36472,14 @@ func schema_k8sio_api_networking_v1beta1_Ingress(ref common.ReferenceCallback) c
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Spec is the desired state of the Ingress. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
+							Description: "spec is the desired state of the Ingress. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1beta1.IngressSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Status is the current state of the Ingress. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
+							Description: "status is the current state of the Ingress. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1beta1.IngressStatus"),
 						},
@@ -37220,21 +36501,21 @@ func schema_k8sio_api_networking_v1beta1_IngressBackend(ref common.ReferenceCall
 				Properties: map[string]spec.Schema{
 					"serviceName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Specifies the name of the referenced service.",
+							Description: "serviceName specifies the name of the referenced service.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"servicePort": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Specifies the port of the referenced service.",
+							Description: "servicePort Specifies the port of the referenced service.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
 						},
 					},
 					"resource": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Resource is an ObjectRef to another Kubernetes resource in the namespace of the Ingress object. If resource is specified, serviceName and servicePort must not be specified.",
+							Description: "resource is an ObjectRef to another Kubernetes resource in the namespace of the Ingress object. If resource is specified, serviceName and servicePort must not be specified.",
 							Ref:         ref("k8s.io/api/core/v1.TypedLocalObjectReference"),
 						},
 					},
@@ -37276,7 +36557,7 @@ func schema_k8sio_api_networking_v1beta1_IngressClass(ref common.ReferenceCallba
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Spec is the desired state of the IngressClass. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
+							Description: "spec is the desired state of the IngressClass. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1beta1.IngressClassSpec"),
 						},
@@ -37319,7 +36600,7 @@ func schema_k8sio_api_networking_v1beta1_IngressClassList(ref common.ReferenceCa
 					},
 					"items": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Items is the list of IngressClasses.",
+							Description: "items is the list of IngressClasses.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -37349,14 +36630,14 @@ func schema_k8sio_api_networking_v1beta1_IngressClassParametersReference(ref com
 				Properties: map[string]spec.Schema{
 					"apiGroup": {
 						SchemaProps: spec.SchemaProps{
-							Description: "APIGroup is the group for the resource being referenced. If APIGroup is not specified, the specified Kind must be in the core API group. For any other third-party types, APIGroup is required.",
+							Description: "apiGroup is the group for the resource being referenced. If APIGroup is not specified, the specified Kind must be in the core API group. For any other third-party types, APIGroup is required.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"kind": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Kind is the type of resource being referenced.",
+							Description: "kind is the type of resource being referenced.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -37364,7 +36645,7 @@ func schema_k8sio_api_networking_v1beta1_IngressClassParametersReference(ref com
 					},
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Name is the name of resource being referenced.",
+							Description: "name is the name of resource being referenced.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -37372,14 +36653,14 @@ func schema_k8sio_api_networking_v1beta1_IngressClassParametersReference(ref com
 					},
 					"scope": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Scope represents if this refers to a cluster or namespace scoped resource. This may be set to \"Cluster\" (default) or \"Namespace\".",
+							Description: "scope represents if this refers to a cluster or namespace scoped resource. This may be set to \"Cluster\" (default) or \"Namespace\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"namespace": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Namespace is the namespace of the resource being referenced. This field is required when scope is set to \"Namespace\" and must be unset when scope is set to \"Cluster\".",
+							Description: "namespace is the namespace of the resource being referenced. This field is required when scope is set to \"Namespace\" and must be unset when scope is set to \"Cluster\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -37400,14 +36681,14 @@ func schema_k8sio_api_networking_v1beta1_IngressClassSpec(ref common.ReferenceCa
 				Properties: map[string]spec.Schema{
 					"controller": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Controller refers to the name of the controller that should handle this class. This allows for different \"flavors\" that are controlled by the same controller. For example, you may have different Parameters for the same implementing controller. This should be specified as a domain-prefixed path no more than 250 characters in length, e.g. \"acme.io/ingress-controller\". This field is immutable.",
+							Description: "controller refers to the name of the controller that should handle this class. This allows for different \"flavors\" that are controlled by the same controller. For example, you may have different parameters for the same implementing controller. This should be specified as a domain-prefixed path no more than 250 characters in length, e.g. \"acme.io/ingress-controller\". This field is immutable.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"parameters": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Parameters is a link to a custom resource containing additional configuration for the controller. This is optional if the controller does not require extra parameters.",
+							Description: "parameters is a link to a custom resource containing additional configuration for the controller. This is optional if the controller does not require extra parameters.",
 							Ref:         ref("k8s.io/api/networking/v1beta1.IngressClassParametersReference"),
 						},
 					},
@@ -37449,7 +36730,7 @@ func schema_k8sio_api_networking_v1beta1_IngressList(ref common.ReferenceCallbac
 					},
 					"items": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Items is the list of Ingress.",
+							Description: "items is the list of Ingress.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -37479,14 +36760,14 @@ func schema_k8sio_api_networking_v1beta1_IngressLoadBalancerIngress(ref common.R
 				Properties: map[string]spec.Schema{
 					"ip": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IP is set for load-balancer ingress points that are IP based.",
+							Description: "ip is set for load-balancer ingress points that are IP based.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"hostname": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Hostname is set for load-balancer ingress points that are DNS based.",
+							Description: "hostname is set for load-balancer ingress points that are DNS based.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -37498,7 +36779,7 @@ func schema_k8sio_api_networking_v1beta1_IngressLoadBalancerIngress(ref common.R
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Ports provides information about the ports exposed by this LoadBalancer.",
+							Description: "ports provides information about the ports exposed by this LoadBalancer.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -37527,7 +36808,7 @@ func schema_k8sio_api_networking_v1beta1_IngressLoadBalancerStatus(ref common.Re
 				Properties: map[string]spec.Schema{
 					"ingress": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ingress is a list containing ingress points for the load-balancer.",
+							Description: "ingress is a list containing ingress points for the load-balancer.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -37556,7 +36837,7 @@ func schema_k8sio_api_networking_v1beta1_IngressPortStatus(ref common.ReferenceC
 				Properties: map[string]spec.Schema{
 					"port": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Port is the port number of the ingress port.",
+							Description: "port is the port number of the ingress port.",
 							Default:     0,
 							Type:        []string{"integer"},
 							Format:      "int32",
@@ -37564,7 +36845,7 @@ func schema_k8sio_api_networking_v1beta1_IngressPortStatus(ref common.ReferenceC
 					},
 					"protocol": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Protocol is the protocol of the ingress port. The supported values are: \"TCP\", \"UDP\", \"SCTP\"\n\nPossible enum values:\n - `\"SCTP\"` is the SCTP protocol.\n - `\"TCP\"` is the TCP protocol.\n - `\"UDP\"` is the UDP protocol.",
+							Description: "protocol is the protocol of the ingress port. The supported values are: \"TCP\", \"UDP\", \"SCTP\"\n\nPossible enum values:\n - `\"SCTP\"` is the SCTP protocol.\n - `\"TCP\"` is the TCP protocol.\n - `\"UDP\"` is the UDP protocol.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -37573,7 +36854,7 @@ func schema_k8sio_api_networking_v1beta1_IngressPortStatus(ref common.ReferenceC
 					},
 					"error": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Error is to record the problem with the service port The format of the error shall comply with the following rules: - built-in error values shall be specified in this file and those shall use\n  CamelCase names\n- cloud provider specific error values must have names that comply with the\n  format foo.example.com/CamelCase.",
+							Description: "error is to record the problem with the service port The format of the error shall comply with the following rules: - built-in error values shall be specified in this file and those shall use\n  CamelCase names\n- cloud provider specific error values must have names that comply with the\n  format foo.example.com/CamelCase.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -37594,7 +36875,7 @@ func schema_k8sio_api_networking_v1beta1_IngressRule(ref common.ReferenceCallbac
 				Properties: map[string]spec.Schema{
 					"host": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Host is the fully qualified domain name of a network host, as defined by RFC 3986. Note the following deviations from the \"host\" part of the URI as defined in RFC 3986: 1. IPs are not allowed. Currently an IngressRuleValue can only apply to\n   the IP in the Spec of the parent Ingress.\n2. The `:` delimiter is not respected because ports are not allowed.\n\t  Currently the port of an Ingress is implicitly :80 for http and\n\t  :443 for https.\nBoth these may change in the future. Incoming requests are matched against the host before the IngressRuleValue. If the host is unspecified, the Ingress routes all traffic based on the specified IngressRuleValue.\n\nHost can be \"precise\" which is a domain name without the terminating dot of a network host (e.g. \"foo.bar.com\") or \"wildcard\", which is a domain name prefixed with a single wildcard label (e.g. \"*.foo.com\"). The wildcard character '*' must appear by itself as the first DNS label and matches only a single label. You cannot have a wildcard label by itself (e.g. Host == \"*\"). Requests will be matched against the Host field in the following way: 1. If Host is precise, the request matches this rule if the http host header is equal to Host. 2. If Host is a wildcard, then the request matches this rule if the http host header is to equal to the suffix (removing the first label) of the wildcard rule.",
+							Description: "host is the fully qualified domain name of a network host, as defined by RFC 3986. Note the following deviations from the \"host\" part of the URI as defined in RFC 3986: 1. IPs are not allowed. Currently an IngressRuleValue can only apply to\n   the IP in the Spec of the parent Ingress.\n2. The `:` delimiter is not respected because ports are not allowed.\n\t  Currently the port of an Ingress is implicitly :80 for http and\n\t  :443 for https.\nBoth these may change in the future. Incoming requests are matched against the host before the IngressRuleValue. If the host is unspecified, the Ingress routes all traffic based on the specified IngressRuleValue.\n\nhost can be \"precise\" which is a domain name without the terminating dot of a network host (e.g. \"foo.bar.com\") or \"wildcard\", which is a domain name prefixed with a single wildcard label (e.g. \"*.foo.com\"). The wildcard character '*' must appear by itself as the first DNS label and matches only a single label. You cannot have a wildcard label by itself (e.g. Host == \"*\"). Requests will be matched against the Host field in the following way: 1. If Host is precise, the request matches this rule if the http host header is equal to Host. 2. If Host is a wildcard, then the request matches this rule if the http host header is to equal to the suffix (removing the first label) of the wildcard rule.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -37641,20 +36922,20 @@ func schema_k8sio_api_networking_v1beta1_IngressSpec(ref common.ReferenceCallbac
 				Properties: map[string]spec.Schema{
 					"ingressClassName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IngressClassName is the name of the IngressClass cluster resource. The associated IngressClass defines which controller will implement the resource. This replaces the deprecated `kubernetes.io/ingress.class` annotation. For backwards compatibility, when that annotation is set, it must be given precedence over this field. The controller may emit a warning if the field and annotation have different values. Implementations of this API should ignore Ingresses without a class specified. An IngressClass resource may be marked as default, which can be used to set a default value for this field. For more information, refer to the IngressClass documentation.",
+							Description: "ingressClassName is the name of the IngressClass cluster resource. The associated IngressClass defines which controller will implement the resource. This replaces the deprecated `kubernetes.io/ingress.class` annotation. For backwards compatibility, when that annotation is set, it must be given precedence over this field. The controller may emit a warning if the field and annotation have different values. Implementations of this API should ignore Ingresses without a class specified. An IngressClass resource may be marked as default, which can be used to set a default value for this field. For more information, refer to the IngressClass documentation.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"backend": {
 						SchemaProps: spec.SchemaProps{
-							Description: "A default backend capable of servicing requests that don't match any rule. At least one of 'backend' or 'rules' must be specified. This field is optional to allow the loadbalancer controller or defaulting logic to specify a global default.",
+							Description: "backend is the default backend capable of servicing requests that don't match any rule. At least one of 'backend' or 'rules' must be specified. This field is optional to allow the loadbalancer controller or defaulting logic to specify a global default.",
 							Ref:         ref("k8s.io/api/networking/v1beta1.IngressBackend"),
 						},
 					},
 					"tls": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TLS configuration. Currently the Ingress only supports a single TLS port, 443. If multiple members of this list specify different hosts, they will be multiplexed on the same port according to the hostname specified through the SNI TLS extension, if the ingress controller fulfilling the ingress supports SNI.",
+							Description: "tls represents the TLS configuration. Currently the Ingress only supports a single TLS port, 443. If multiple members of this list specify different hosts, they will be multiplexed on the same port according to the hostname specified through the SNI TLS extension, if the ingress controller fulfilling the ingress supports SNI.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -37668,7 +36949,7 @@ func schema_k8sio_api_networking_v1beta1_IngressSpec(ref common.ReferenceCallbac
 					},
 					"rules": {
 						SchemaProps: spec.SchemaProps{
-							Description: "A list of host rules used to configure the Ingress. If unspecified, or no rule matches, all traffic is sent to the default backend.",
+							Description: "rules is a list of host rules used to configure the Ingress. If unspecified, or no rule matches, all traffic is sent to the default backend.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -37692,12 +36973,12 @@ func schema_k8sio_api_networking_v1beta1_IngressStatus(ref common.ReferenceCallb
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "IngressStatus describe the current state of the Ingress.",
+				Description: "IngressStatus describes the current state of the Ingress.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"loadBalancer": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LoadBalancer contains the current status of the load-balancer.",
+							Description: "loadBalancer contains the current status of the load-balancer.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/networking/v1beta1.IngressLoadBalancerStatus"),
 						},
@@ -37719,7 +37000,7 @@ func schema_k8sio_api_networking_v1beta1_IngressTLS(ref common.ReferenceCallback
 				Properties: map[string]spec.Schema{
 					"hosts": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Hosts are a list of hosts included in the TLS certificate. The values in this list must match the name/s used in the tlsSecret. Defaults to the wildcard host setting for the loadbalancer controller fulfilling this Ingress, if left unspecified.",
+							Description: "hosts is a list of hosts included in the TLS certificate. The values in this list must match the name/s used in the tlsSecret. Defaults to the wildcard host setting for the loadbalancer controller fulfilling this Ingress, if left unspecified.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -37734,7 +37015,7 @@ func schema_k8sio_api_networking_v1beta1_IngressTLS(ref common.ReferenceCallback
 					},
 					"secretName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "SecretName is the name of the secret used to terminate TLS traffic on port 443. Field is left optional to allow TLS routing based on SNI hostname alone. If the SNI host in a listener conflicts with the \"Host\" header field used by an IngressRule, the SNI host is used for termination and value of the Host header is used for routing.",
+							Description: "secretName is the name of the secret used to terminate TLS traffic on port 443. Field is left optional to allow TLS routing based on SNI hostname alone. If the SNI host in a listener conflicts with the \"Host\" header field used by an IngressRule, the SNI host is used for termination and value of the Host header is used for routing.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -37754,7 +37035,7 @@ func schema_k8sio_api_node_v1_Overhead(ref common.ReferenceCallback) common.Open
 				Properties: map[string]spec.Schema{
 					"podFixed": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PodFixed represents the fixed resource overhead associated with running a pod.",
+							Description: "podFixed represents the fixed resource overhead associated with running a pod.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -37805,7 +37086,7 @@ func schema_k8sio_api_node_v1_RuntimeClass(ref common.ReferenceCallback) common.
 					},
 					"handler": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Handler specifies the underlying runtime and configuration that the CRI implementation will use to handle pods of this class. The possible values are specific to the node & CRI configuration.  It is assumed that all handlers are available on every node, and handlers of the same name are equivalent on every node. For example, a handler called \"runc\" might specify that the runc OCI runtime (using native Linux containers) will be used to run the containers in a pod. The Handler must be lowercase, conform to the DNS Label (RFC 1123) requirements, and is immutable.",
+							Description: "handler specifies the underlying runtime and configuration that the CRI implementation will use to handle pods of this class. The possible values are specific to the node & CRI configuration.  It is assumed that all handlers are available on every node, and handlers of the same name are equivalent on every node. For example, a handler called \"runc\" might specify that the runc OCI runtime (using native Linux containers) will be used to run the containers in a pod. The Handler must be lowercase, conform to the DNS Label (RFC 1123) requirements, and is immutable.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -37813,13 +37094,13 @@ func schema_k8sio_api_node_v1_RuntimeClass(ref common.ReferenceCallback) common.
 					},
 					"overhead": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Overhead represents the resource overhead associated with running a pod for a given RuntimeClass. For more details, see\n https://kubernetes.io/docs/concepts/scheduling-eviction/pod-overhead/",
+							Description: "overhead represents the resource overhead associated with running a pod for a given RuntimeClass. For more details, see\n https://kubernetes.io/docs/concepts/scheduling-eviction/pod-overhead/",
 							Ref:         ref("k8s.io/api/node/v1.Overhead"),
 						},
 					},
 					"scheduling": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Scheduling holds the scheduling constraints to ensure that pods running with this RuntimeClass are scheduled to nodes that support it. If scheduling is nil, this RuntimeClass is assumed to be supported by all nodes.",
+							Description: "scheduling holds the scheduling constraints to ensure that pods running with this RuntimeClass are scheduled to nodes that support it. If scheduling is nil, this RuntimeClass is assumed to be supported by all nodes.",
 							Ref:         ref("k8s.io/api/node/v1.Scheduling"),
 						},
 					},
@@ -37862,7 +37143,7 @@ func schema_k8sio_api_node_v1_RuntimeClassList(ref common.ReferenceCallback) com
 					},
 					"items": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Items is a list of schema objects.",
+							Description: "items is a list of schema objects.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -37947,7 +37228,7 @@ func schema_k8sio_api_node_v1alpha1_Overhead(ref common.ReferenceCallback) commo
 				Properties: map[string]spec.Schema{
 					"podFixed": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PodFixed represents the fixed resource overhead associated with running a pod.",
+							Description: "podFixed represents the fixed resource overhead associated with running a pod.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -37998,7 +37279,7 @@ func schema_k8sio_api_node_v1alpha1_RuntimeClass(ref common.ReferenceCallback) c
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Specification of the RuntimeClass More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
+							Description: "spec represents specification of the RuntimeClass More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/api/node/v1alpha1.RuntimeClassSpec"),
 						},
@@ -38042,7 +37323,7 @@ func schema_k8sio_api_node_v1alpha1_RuntimeClassList(ref common.ReferenceCallbac
 					},
 					"items": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Items is a list of schema objects.",
+							Description: "items is a list of schema objects.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -38072,7 +37353,7 @@ func schema_k8sio_api_node_v1alpha1_RuntimeClassSpec(ref common.ReferenceCallbac
 				Properties: map[string]spec.Schema{
 					"runtimeHandler": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RuntimeHandler specifies the underlying runtime and configuration that the CRI implementation will use to handle pods of this class. The possible values are specific to the node & CRI configuration.  It is assumed that all handlers are available on every node, and handlers of the same name are equivalent on every node. For example, a handler called \"runc\" might specify that the runc OCI runtime (using native Linux containers) will be used to run the containers in a pod. The RuntimeHandler must be lowercase, conform to the DNS Label (RFC 1123) requirements, and is immutable.",
+							Description: "runtimeHandler specifies the underlying runtime and configuration that the CRI implementation will use to handle pods of this class. The possible values are specific to the node & CRI configuration.  It is assumed that all handlers are available on every node, and handlers of the same name are equivalent on every node. For example, a handler called \"runc\" might specify that the runc OCI runtime (using native Linux containers) will be used to run the containers in a pod. The runtimeHandler must be lowercase, conform to the DNS Label (RFC 1123) requirements, and is immutable.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -38080,13 +37361,13 @@ func schema_k8sio_api_node_v1alpha1_RuntimeClassSpec(ref common.ReferenceCallbac
 					},
 					"overhead": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Overhead represents the resource overhead associated with running a pod for a given RuntimeClass. For more details, see https://git.k8s.io/enhancements/keps/sig-node/688-pod-overhead/README.md",
+							Description: "overhead represents the resource overhead associated with running a pod for a given RuntimeClass. For more details, see https://git.k8s.io/enhancements/keps/sig-node/688-pod-overhead/README.md",
 							Ref:         ref("k8s.io/api/node/v1alpha1.Overhead"),
 						},
 					},
 					"scheduling": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Scheduling holds the scheduling constraints to ensure that pods running with this RuntimeClass are scheduled to nodes that support it. If scheduling is nil, this RuntimeClass is assumed to be supported by all nodes.",
+							Description: "scheduling holds the scheduling constraints to ensure that pods running with this RuntimeClass are scheduled to nodes that support it. If scheduling is nil, this RuntimeClass is assumed to be supported by all nodes.",
 							Ref:         ref("k8s.io/api/node/v1alpha1.Scheduling"),
 						},
 					},
@@ -38163,7 +37444,7 @@ func schema_k8sio_api_node_v1beta1_Overhead(ref common.ReferenceCallback) common
 				Properties: map[string]spec.Schema{
 					"podFixed": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PodFixed represents the fixed resource overhead associated with running a pod.",
+							Description: "podFixed represents the fixed resource overhead associated with running a pod.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -38214,7 +37495,7 @@ func schema_k8sio_api_node_v1beta1_RuntimeClass(ref common.ReferenceCallback) co
 					},
 					"handler": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Handler specifies the underlying runtime and configuration that the CRI implementation will use to handle pods of this class. The possible values are specific to the node & CRI configuration.  It is assumed that all handlers are available on every node, and handlers of the same name are equivalent on every node. For example, a handler called \"runc\" might specify that the runc OCI runtime (using native Linux containers) will be used to run the containers in a pod. The Handler must be lowercase, conform to the DNS Label (RFC 1123) requirements, and is immutable.",
+							Description: "handler specifies the underlying runtime and configuration that the CRI implementation will use to handle pods of this class. The possible values are specific to the node & CRI configuration.  It is assumed that all handlers are available on every node, and handlers of the same name are equivalent on every node. For example, a handler called \"runc\" might specify that the runc OCI runtime (using native Linux containers) will be used to run the containers in a pod. The handler must be lowercase, conform to the DNS Label (RFC 1123) requirements, and is immutable.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -38222,13 +37503,13 @@ func schema_k8sio_api_node_v1beta1_RuntimeClass(ref common.ReferenceCallback) co
 					},
 					"overhead": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Overhead represents the resource overhead associated with running a pod for a given RuntimeClass. For more details, see https://git.k8s.io/enhancements/keps/sig-node/688-pod-overhead/README.md",
+							Description: "overhead represents the resource overhead associated with running a pod for a given RuntimeClass. For more details, see https://git.k8s.io/enhancements/keps/sig-node/688-pod-overhead/README.md",
 							Ref:         ref("k8s.io/api/node/v1beta1.Overhead"),
 						},
 					},
 					"scheduling": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Scheduling holds the scheduling constraints to ensure that pods running with this RuntimeClass are scheduled to nodes that support it. If scheduling is nil, this RuntimeClass is assumed to be supported by all nodes.",
+							Description: "scheduling holds the scheduling constraints to ensure that pods running with this RuntimeClass are scheduled to nodes that support it. If scheduling is nil, this RuntimeClass is assumed to be supported by all nodes.",
 							Ref:         ref("k8s.io/api/node/v1beta1.Scheduling"),
 						},
 					},
@@ -38271,7 +37552,7 @@ func schema_k8sio_api_node_v1beta1_RuntimeClassList(ref common.ReferenceCallback
 					},
 					"items": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Items is a list of schema objects.",
+							Description: "items is a list of schema objects.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
