@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -276,7 +277,7 @@ func setupTestCommon(t *testing.T, compiler ValidatorCompiler, shouldStartInform
 
 	// Override compiler used by controller for tests
 	controller = handler.evaluator.(*celAdmissionController)
-	controller.validatorCompiler = compiler
+	controller.policyController.ValidatorCompiler = compiler
 
 	t.Cleanup(func() {
 		testContextCancel()
@@ -369,8 +370,8 @@ func (c *celAdmissionController) getCurrentObject(obj runtime.Object) (runtime.O
 		return nil, err
 	}
 
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	c.policyController.mutex.RLock()
+	defer c.policyController.mutex.RUnlock()
 
 	switch obj.(type) {
 	case *unstructured.Unstructured:
@@ -380,7 +381,7 @@ func (c *celAdmissionController) getCurrentObject(obj runtime.Object) (runtime.O
 			Kind:       paramSourceGVK.Kind,
 		}
 		var paramInformer generic.Informer[*unstructured.Unstructured]
-		if paramInfo, ok := c.paramsCRDControllers[paramKind]; ok {
+		if paramInfo, ok := c.policyController.paramsCRDControllers[paramKind]; ok {
 			paramInformer = paramInfo.controller.Informer()
 		} else {
 			// Treat unknown CRD the same as not found
@@ -399,7 +400,7 @@ func (c *celAdmissionController) getCurrentObject(obj runtime.Object) (runtime.O
 		return item, nil
 	case *v1alpha1.ValidatingAdmissionPolicyBinding:
 		nn := getNamespaceName(accessor.GetNamespace(), accessor.GetName())
-		info, ok := c.bindingInfos[nn]
+		info, ok := c.policyController.bindingInfos[nn]
 		if !ok {
 			return nil, nil
 		}
@@ -407,7 +408,7 @@ func (c *celAdmissionController) getCurrentObject(obj runtime.Object) (runtime.O
 		return info.lastReconciledValue, nil
 	case *v1alpha1.ValidatingAdmissionPolicy:
 		nn := getNamespaceName(accessor.GetNamespace(), accessor.GetName())
-		info, ok := c.definitionInfo[nn]
+		info, ok := c.policyController.definitionInfo[nn]
 		if !ok {
 			return nil, nil
 		}
@@ -422,7 +423,15 @@ func (c *celAdmissionController) getCurrentObject(obj runtime.Object) (runtime.O
 // their gvk/name in the controller
 func waitForReconcile(ctx context.Context, controller *celAdmissionController, objects ...runtime.Object) error {
 	return wait.PollWithContext(ctx, 100*time.Millisecond, 1*time.Second, func(ctx context.Context) (done bool, err error) {
+		defer func() {
+			if done {
+				// force admission controller to refresh the information it
+				// uses for validation now that it is done in the background
+				controller.refreshPolicies()
+			}
+		}()
 		for _, obj := range objects {
+
 			objMeta, err := meta.Accessor(obj)
 			if err != nil {
 				return false, fmt.Errorf("error getting meta accessor for original %T object (%v): %w", obj, obj, err)
@@ -462,6 +471,14 @@ func waitForReconcile(ctx context.Context, controller *celAdmissionController, o
 // with the given GVKs and namespace/names
 func waitForReconcileDeletion(ctx context.Context, controller *celAdmissionController, objects ...runtime.Object) error {
 	return wait.PollWithContext(ctx, 200*time.Millisecond, 3*time.Hour, func(ctx context.Context) (done bool, err error) {
+		defer func() {
+			if done {
+				// force admission controller to refresh the information it
+				// uses for validation now that it is done in the background
+				controller.refreshPolicies()
+			}
+		}()
+
 		for _, obj := range objects {
 			currentValue, err := controller.getCurrentObject(obj)
 			if err != nil {
@@ -617,6 +634,12 @@ func TestBasicPolicyDefinitionFailure(t *testing.T) {
 	require.ErrorContains(t, err, `Denied`)
 }
 
+type validatorFunc func(a admission.Attributes, o admission.ObjectInterfaces, params runtime.Object, matchKind schema.GroupVersionKind) ([]policyDecision, error)
+
+func (f validatorFunc) Validate(a admission.Attributes, o admission.ObjectInterfaces, params runtime.Object, matchKind schema.GroupVersionKind) ([]policyDecision, error) {
+	return f(a, o, params, matchKind)
+}
+
 type testValidator struct {
 }
 
@@ -694,7 +717,6 @@ func TestDefinitionDoesntMatch(t *testing.T) {
 			attributeRecord(
 				nil, nonMatchingParams,
 				admission.Create), &admission.RuntimeObjectInterfaces{}))
-	require.Zero(t, numCompiles)
 	require.Empty(t, passedParams)
 
 	// Validate a matching input.
@@ -791,9 +813,6 @@ func TestReconfigureBinding(t *testing.T) {
 	// Expect `Compile` only called once
 	require.Equal(t, 1, numCompiles, "expect `Compile` to be called only once")
 
-	// Show Evaluator was called
-	//require.Len(t, passedParams, 1, "expect evaluator is called due to proper configuration")
-
 	// Update the tracker to point at different params
 	require.NoError(t, tracker.Update(bindingsGVR, denyBinding2, ""))
 
@@ -808,8 +827,6 @@ func TestReconfigureBinding(t *testing.T) {
 	)
 
 	require.ErrorContains(t, err, `failed to configure binding: replicas-test2.example.com not found`)
-	require.Equal(t, 1, numCompiles, "expect compile is not called when there is configuration error")
-	//require.Len(t, passedParams, 1, "expect evaluator was not called when there is configuration error")
 
 	// Add the missing params
 	require.NoError(t, paramTracker.Add(fakeParams2))
@@ -1064,4 +1081,131 @@ func TestEmptyParamSource(t *testing.T) {
 
 	require.ErrorContains(t, err, `Denied`)
 	require.Equal(t, 1, numCompiles)
+}
+
+// Shows what happens when multiple policies share one param type, then
+// one policy stops using the param. The expectation is the second policy
+// keeps behaving normally
+func TestMultiplePoliciesSharedParamType(t *testing.T) {
+	testContext, testContextCancel := context.WithCancel(context.Background())
+	defer testContextCancel()
+
+	compiler := &fakeCompiler{
+		// Match everything by default
+		DefaultMatch: true,
+	}
+	handler, paramTracker, tracker, controller := setupFakeTest(t, compiler)
+
+	// Use ConfigMap native-typed param
+	policy1 := *denyPolicy
+	policy1.Name = "denypolicy1.example.com"
+
+	policy2 := *denyPolicy
+	policy2.Name = "denypolicy2.example.com"
+
+	binding1 := *denyBinding
+	binding2 := *denyBinding
+
+	binding1.Name = "denybinding1.example.com"
+	binding1.Spec.PolicyName = policy1.Name
+	binding2.Name = "denybinding2.example.com"
+	binding2.Spec.PolicyName = policy2.Name
+
+	compiles1 := atomic.Int64{}
+	evaluations1 := atomic.Int64{}
+
+	compiles2 := atomic.Int64{}
+	evaluations2 := atomic.Int64{}
+
+	compiler.RegisterDefinition(&policy1, func(vap *v1alpha1.ValidatingAdmissionPolicy) Validator {
+		compiles1.Add(1)
+
+		return validatorFunc(func(a admission.Attributes, o admission.ObjectInterfaces, params runtime.Object, matchKind schema.GroupVersionKind) ([]policyDecision, error) {
+			evaluations1.Add(1)
+			return []policyDecision{
+				{
+					action: actionAdmit,
+				},
+			}, nil
+		})
+	}, nil)
+
+	compiler.RegisterDefinition(&policy2, func(vap *v1alpha1.ValidatingAdmissionPolicy) Validator {
+		compiles2.Add(1)
+
+		return validatorFunc(func(a admission.Attributes, o admission.ObjectInterfaces, params runtime.Object, matchKind schema.GroupVersionKind) ([]policyDecision, error) {
+			evaluations2.Add(1)
+			return []policyDecision{
+				{
+					action:  actionDeny,
+					message: "Policy2Denied",
+				},
+			}, nil
+		})
+	}, nil)
+
+	require.NoError(t, tracker.Create(definitionsGVR, &policy1, policy1.Namespace))
+	require.NoError(t, tracker.Create(bindingsGVR, &binding1, binding1.Namespace))
+	require.NoError(t, paramTracker.Add(fakeParams))
+
+	// Wait for controller to reconcile given objects
+	require.NoError(t,
+		waitForReconcile(
+			testContext, controller,
+			&binding1, &policy1, fakeParams))
+
+	// Make sure policy 1 is created and bound to the params type first
+	require.NoError(t, tracker.Create(definitionsGVR, &policy2, policy2.Namespace))
+	require.NoError(t, tracker.Create(bindingsGVR, &binding2, binding2.Namespace))
+
+	// Wait for controller to reconcile given objects
+	require.NoError(t,
+		waitForReconcile(
+			testContext, controller,
+			&binding1, &binding2, &policy1, &policy2, fakeParams))
+
+	err := handler.Validate(
+		testContext,
+		// Object is irrelevant/unchecked for this test. Just test that
+		// the evaluator is executed, and returns admit meaning the params
+		// passed was a configmap
+		attributeRecord(nil, fakeParams, admission.Create),
+		&admission.RuntimeObjectInterfaces{},
+	)
+
+	require.ErrorContains(t, err, `Denied`)
+	require.EqualValues(t, 1, compiles1.Load())
+	require.EqualValues(t, 1, evaluations1.Load())
+	require.EqualValues(t, 1, compiles2.Load())
+	require.EqualValues(t, 1, evaluations2.Load())
+
+	// Remove param type from policy1
+	// Show that policy2 evaluator is still being passed the configmaps
+	policy1.Spec.ParamKind = nil
+	policy1.ResourceVersion = "2"
+
+	binding1.Spec.ParamRef = nil
+	binding1.ResourceVersion = "2"
+
+	require.NoError(t, tracker.Update(definitionsGVR, &policy1, policy1.Namespace))
+	require.NoError(t, tracker.Update(bindingsGVR, &binding1, binding1.Namespace))
+	require.NoError(t,
+		waitForReconcile(
+			testContext, controller,
+			&binding1, &policy1))
+
+	err = handler.Validate(
+		testContext,
+		// Object is irrelevant/unchecked for this test. Just test that
+		// the evaluator is executed, and returns admit meaning the params
+		// passed was a configmap
+		attributeRecord(nil, fakeParams, admission.Create),
+		&admission.RuntimeObjectInterfaces{},
+	)
+
+	require.ErrorContains(t, err, `Policy2Denied`)
+	require.EqualValues(t, 2, compiles1.Load())
+	require.EqualValues(t, 2, evaluations1.Load())
+	require.EqualValues(t, 1, compiles2.Load())
+	require.EqualValues(t, 2, evaluations2.Load())
 }
