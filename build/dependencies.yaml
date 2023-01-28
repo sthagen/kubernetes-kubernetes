@@ -53,6 +53,13 @@ dependencies:
     - path: cluster/gce/gci/configure.sh
       match: DEFAULT_CRICTL_VERSION=
 
+  # protoc
+  - name: "protoc"
+    version: 3.19.4
+    refPaths:
+    - path: hack/lib/protoc.sh
+      match: PROTOC_VERSION=
+
   # etcd
   - name: "etcd"
     version: 3.5.6
@@ -73,7 +80,7 @@ dependencies:
       match: configs\[Etcd\] = Config{list\.GcEtcdRegistry, "etcd", "\d+\.\d+.\d+(-(alpha|beta|rc).\d+)?(-\d+)?"}
 
   - name: "etcd-image"
-    version: 3.5.6
+    version: 3.5.7
     refPaths:
     - path: cluster/images/etcd/Makefile
       match: BUNDLED_ETCD_VERSIONS\?|LATEST_ETCD_VERSION\?

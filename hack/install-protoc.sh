@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2018 The Kubernetes Authors.
+# Copyright 2023 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,16 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This script is convenience to download and install protoc in third_party.
+# Usage: `hack/install-protoc.sh`.
+
 set -o errexit
 set -o nounset
 set -o pipefail
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
-KUBE_KMS_V1BETA1="${KUBE_ROOT}/staging/src/k8s.io/kms/apis/v1beta1/"
-KUBE_KMS_V2ALPHA1="${KUBE_ROOT}/staging/src/k8s.io/kms/apis/v2alpha1/"
-KUBE_KMS_V2="${KUBE_ROOT}/staging/src/k8s.io/apiserver/pkg/storage/value/encrypt/envelope/kmsv2/v2alpha1/"
-
 source "${KUBE_ROOT}/hack/lib/protoc.sh"
-kube::protoc::generate_proto "${KUBE_KMS_V1BETA1}"
-kube::protoc::generate_proto "${KUBE_KMS_V2ALPHA1}"
-kube::protoc::generate_proto "${KUBE_KMS_V2}"
+
+kube::protoc::install
