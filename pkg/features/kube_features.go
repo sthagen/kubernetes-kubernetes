@@ -192,14 +192,6 @@ const (
 	// Normalize HttpGet URL and Header passing for lifecycle handlers with probers.
 	ConsistentHTTPGetHandlers featuregate.Feature = "ConsistentHTTPGetHandlers"
 
-	// owner: @jiahuif
-	// alpha: v1.21
-	// beta:  v1.22
-	// GA:    v1.24
-	//
-	// Enables Leader Migration for kube-controller-manager and cloud-controller-manager
-	ControllerManagerLeaderMigration featuregate.Feature = "ControllerManagerLeaderMigration"
-
 	// owner: @deejross, @soltysh
 	// kep: https://kep.k8s.io/3140
 	// alpha: v1.24
@@ -535,6 +527,7 @@ const (
 	// owner: @danwinship
 	// kep: http://kep.k8s.io/3453
 	// alpha: v1.26
+	// beta: v1.27
 	//
 	// Enables new performance-improving code in kube-proxy iptables mode
 	MinimizeIPTablesRestore featuregate.Feature = "MinimizeIPTablesRestore"
@@ -712,6 +705,13 @@ const (
 	// Subdivide the ClusterIP range for dynamic and static IP allocation.
 	ServiceIPStaticSubrange featuregate.Feature = "ServiceIPStaticSubrange"
 
+	// owner: @xuzhenglun
+	// kep: http://kep.k8s.io/3682
+	// alpha: v1.27
+	//
+	// Subdivide the NodePort range for dynamic and static port allocation.
+	ServiceNodePortStaticSubrange featuregate.Feature = "ServiceNodePortStaticSubrange"
+
 	// owner: @derekwaynecarr
 	// alpha: v1.20
 	// beta: v1.22
@@ -884,8 +884,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	ConsistentHTTPGetHandlers: {Default: true, PreRelease: featuregate.GA},
 
-	ControllerManagerLeaderMigration: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.26
-
 	CronJobTimeZone: {Default: true, PreRelease: featuregate.Beta},
 
 	DelegateFSGroupToCSIDriver: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.28
@@ -976,7 +974,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	MinDomainsInPodTopologySpread: {Default: true, PreRelease: featuregate.Beta},
 
-	MinimizeIPTablesRestore: {Default: false, PreRelease: featuregate.Alpha},
+	MinimizeIPTablesRestore: {Default: true, PreRelease: featuregate.Beta},
 
 	MixedProtocolLBService: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.28
 
@@ -1023,6 +1021,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	ServiceIPStaticSubrange: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.28
 
 	ServiceInternalTrafficPolicy: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.28
+
+	ServiceNodePortStaticSubrange: {Default: false, PreRelease: featuregate.Alpha},
 
 	SizeMemoryBackedVolumes: {Default: true, PreRelease: featuregate.Beta},
 

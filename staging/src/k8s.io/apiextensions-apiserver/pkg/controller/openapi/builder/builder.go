@@ -348,13 +348,13 @@ func (b *builder) buildRoute(root, path, httpMethod, actionVerb, operationVerb s
 	// Build option parameters
 	switch actionVerb {
 	case "get":
-		// TODO: CRD support for export is still under consideration
 		endpoints.AddObjectParams(b.ws, route, &metav1.GetOptions{})
 	case "list", "deletecollection":
 		endpoints.AddObjectParams(b.ws, route, &metav1.ListOptions{})
-	case "put", "patch":
-		// TODO: PatchOption added in feature branch but not in master yet
+	case "put":
 		endpoints.AddObjectParams(b.ws, route, &metav1.UpdateOptions{})
+	case "patch":
+		endpoints.AddObjectParams(b.ws, route, &metav1.PatchOptions{})
 	case "post":
 		endpoints.AddObjectParams(b.ws, route, &metav1.CreateOptions{})
 	case "delete":
@@ -493,7 +493,9 @@ func addTypeMetaProperties(s *spec.Schema, v2 bool) {
 func (b *builder) buildListSchema(v2 bool) *spec.Schema {
 	name := definitionPrefix + util.ToRESTFriendlyName(fmt.Sprintf("%s/%s/%s", b.group, b.version, b.kind))
 	doc := fmt.Sprintf("List of %s. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md", b.plural)
-	s := new(spec.Schema).WithDescription(fmt.Sprintf("%s is a list of %s", b.listKind, b.kind)).
+	s := new(spec.Schema).
+		Typed("object", "").
+		WithDescription(fmt.Sprintf("%s is a list of %s", b.listKind, b.kind)).
 		WithRequired("items").
 		SetProperty("items", *spec.ArrayProperty(spec.RefSchema(refForOpenAPIVersion(name, v2))).WithDescription(doc)).
 		SetProperty("metadata", *spec.RefSchema(refForOpenAPIVersion(listMetaSchemaRef, v2)).WithDescription(swaggerPartialObjectMetadataListDescriptions["metadata"]))

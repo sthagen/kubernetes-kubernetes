@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2023 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,11 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package equal
+package common
 
-import apiv1 "k8s.io/api/core/v1"
+// QuotaID is generic quota identifier.
+// Data type based on quotactl(2).
+type QuotaID int32
 
-// KubeletConfigOkEq returns true if the two conditions are semantically equivalent in the context of dynamic config
-func KubeletConfigOkEq(a, b *apiv1.NodeCondition) bool {
-	return a.Message == b.Message && a.Reason == b.Reason && a.Status == b.Status
-}
+const (
+	// UnknownQuotaID -- cannot determine whether a quota is in force
+	UnknownQuotaID QuotaID = -1
+	// BadQuotaID -- Invalid quota
+	BadQuotaID QuotaID = 0
+)

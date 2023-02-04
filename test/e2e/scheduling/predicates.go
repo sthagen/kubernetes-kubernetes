@@ -869,7 +869,7 @@ func patchPod(cs clientset.Interface, old, new *v1.Pod) (*v1.Pod, error) {
 	}
 	patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, &v1.Pod{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create merge patch for Pod %q: %v", old.Name, err)
+		return nil, fmt.Errorf("failed to create merge patch for Pod %q: %w", old.Name, err)
 	}
 	return cs.CoreV1().Pods(new.Namespace).Patch(context.TODO(), new.Name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
 }
@@ -952,12 +952,8 @@ func createPausePod(ctx context.Context, f *framework.Framework, conf pausePodCo
 }
 
 func runPausePod(ctx context.Context, f *framework.Framework, conf pausePodConfig) *v1.Pod {
-	return runPausePodWithTimeout(ctx, f, conf, framework.PollShortTimeout)
-}
-
-func runPausePodWithTimeout(ctx context.Context, f *framework.Framework, conf pausePodConfig, timeout time.Duration) *v1.Pod {
 	pod := createPausePod(ctx, f, conf)
-	framework.ExpectNoError(e2epod.WaitTimeoutForPodRunningInNamespace(ctx, f.ClientSet, pod.Name, pod.Namespace, timeout))
+	framework.ExpectNoError(e2epod.WaitTimeoutForPodRunningInNamespace(ctx, f.ClientSet, pod.Name, pod.Namespace, f.Timeouts.PodStartShort))
 	pod, err := f.ClientSet.CoreV1().Pods(pod.Namespace).Get(ctx, conf.Name, metav1.GetOptions{})
 	framework.ExpectNoError(err)
 	return pod
