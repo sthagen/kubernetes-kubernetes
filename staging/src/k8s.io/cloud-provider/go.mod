@@ -17,7 +17,7 @@ require (
 	k8s.io/component-helpers v0.0.0
 	k8s.io/controller-manager v0.0.0
 	k8s.io/klog/v2 v2.80.1
-	k8s.io/utils v0.0.0-20221107191617-1a15be271d1d
+	k8s.io/utils v0.0.0-20230209194617-a36077c30491
 )
 
 require (
@@ -37,6 +37,7 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/go-logr/zapr v1.2.3 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.1 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect

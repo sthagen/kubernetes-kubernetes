@@ -490,6 +490,7 @@ EOF
   local go_version
   IFS=" " read -ra go_version <<< "$(GOFLAGS='' go version)"
   local minimum_go_version
+  # TODO(cpanato): Need to switch this to 1.20 once we update images to newer go version
   minimum_go_version=go1.19
   if [[ "${minimum_go_version}" != $(echo -e "${minimum_go_version}\n${go_version[2]}" | sort -s -t. -k 1,1 -k 2,2n -k 3,3n | head -n1) && "${go_version[2]}" != "devel" ]]; then
     kube::log::usage_from_stdin <<EOF
@@ -773,15 +774,26 @@ kube::golang::build_binaries_for_platform() {
     kube::golang::build_some_binaries "${nonstatics[@]}"
   fi
 
+  # Workaround for https://github.com/kubernetes/kubernetes/issues/115675
+  local testgogcflags="${gogcflags}"
+  local testgoexperiment="${GOEXPERIMENT:-}"
+  if [[ "$(go version)" == *"go1.20"* && "${platform}" == "linux/arm" ]]; then
+    # work around https://github.com/golang/go/issues/58339 until fixed in go1.20.x
+    testgogcflags="${testgogcflags} -d=inlstaticinit=0"
+    # work around https://github.com/golang/go/issues/58425
+    testgoexperiment="nounified,${testgoexperiment}"
+    kube::log::info "Building test binaries with GOEXPERIMENT=${testgoexperiment} GCFLAGS=${testgogcflags} ASMFLAGS=${goasmflags} LDFLAGS=${goldflags}"
+  fi
+
   for test in "${tests[@]:+${tests[@]}}"; do
     local outfile testpkg
     outfile=$(kube::golang::outfile_for_binary "${test}" "${platform}")
     testpkg=$(dirname "${test}")
 
     mkdir -p "$(dirname "${outfile}")"
-    go test -c \
+    GOEXPERIMENT="${testgoexperiment}" go test -c \
       ${goflags:+"${goflags[@]}"} \
-      -gcflags="${gogcflags}" \
+      -gcflags="${testgogcflags}" \
       -asmflags="${goasmflags}" \
       -ldflags="${goldflags}" \
       -tags="${gotags:-}" \
