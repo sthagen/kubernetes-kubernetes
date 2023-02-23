@@ -96,8 +96,8 @@ var (
 			Help:           "KMS operation duration with gRPC error code status total.",
 			StabilityLevel: metrics.ALPHA,
 			// Use custom buckets to avoid the default buckets which are too small for KMS operations.
-			// Ranges from 1ms to 2m11s
-			Buckets: metrics.ExponentialBuckets(0.001, 2, 18),
+			// Start 0.1ms with the last bucket being [~52s, +Inf)
+			Buckets: metrics.ExponentialBuckets(0.0001, 2, 20),
 		},
 		[]string{"provider_name", "method_name", "grpc_status_code"},
 	)
@@ -141,6 +141,17 @@ var (
 			StabilityLevel: metrics.ALPHA,
 		},
 		[]string{"provider_name", "key_id_hash"},
+	)
+
+	InvalidKeyIDFromStatusTotal = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Namespace:      namespace,
+			Subsystem:      subsystem,
+			Name:           "invalid_key_id_from_status_total",
+			Help:           "Number of times an invalid keyID is returned by the Status RPC call split by error.",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"provider_name", "error"},
 	)
 )
 
@@ -186,6 +197,7 @@ func RegisterMetrics() {
 		legacyregistry.MustRegister(KeyIDHashTotal)
 		legacyregistry.MustRegister(KeyIDHashLastTimestampSeconds)
 		legacyregistry.MustRegister(KeyIDHashStatusLastTimestampSeconds)
+		legacyregistry.MustRegister(InvalidKeyIDFromStatusTotal)
 		legacyregistry.MustRegister(KMSOperationsLatencyMetric)
 	})
 }
@@ -207,6 +219,10 @@ func RecordKeyIDFromStatus(providerName, keyID string) {
 
 	keyIDHash := addLabelToCache(keyIDHashStatusLastTimestampSecondsMetricLabels, "", providerName, keyID)
 	KeyIDHashStatusLastTimestampSeconds.WithLabelValues(providerName, keyIDHash).SetToCurrentTime()
+}
+
+func RecordInvalidKeyIDFromStatus(providerName, errCode string) {
+	InvalidKeyIDFromStatusTotal.WithLabelValues(providerName, errCode).Inc()
 }
 
 func RecordArrival(transformationType string, start time.Time) {
