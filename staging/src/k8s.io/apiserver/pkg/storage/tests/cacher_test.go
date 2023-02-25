@@ -19,7 +19,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"reflect"
 	goruntime "runtime"
 	"strconv"
 	"sync"
@@ -37,7 +36,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/apis/example"
@@ -181,101 +179,6 @@ func TestList(t *testing.T) {
 	storagetesting.RunTestList(ctx, t, cacher, true)
 }
 
-// TODO(wojtek-t): We should extend the generic RunTestList test to cover the
-// scenarios that are not yet covered by it and get rid of this test.
-func TestListDeprecated(t *testing.T) {
-	server, etcdStorage := newEtcdTestStorage(t, etcd3testing.PathPrefix())
-	defer server.Terminate(t)
-	cacher, _, err := newTestCacher(etcdStorage)
-	if err != nil {
-		t.Fatalf("Couldn't create cacher: %v", err)
-	}
-	defer cacher.Stop()
-
-	podFoo := makeTestPod("foo")
-	podBar := makeTestPod("bar")
-	podBaz := makeTestPod("baz")
-
-	podFooPrime := makeTestPod("foo")
-	podFooPrime.Spec.NodeName = "fakeNode"
-
-	fooCreated := updatePod(t, etcdStorage, podFoo, nil)
-	_ = updatePod(t, etcdStorage, podBar, nil)
-	_ = updatePod(t, etcdStorage, podBaz, nil)
-
-	_ = updatePod(t, etcdStorage, podFooPrime, fooCreated)
-
-	// Create a pod in a namespace that contains "ns" as a prefix
-	// Make sure it is not returned in a watch of "ns"
-	podFooNS2 := makeTestPod("foo")
-	podFooNS2.Namespace += "2"
-	updatePod(t, etcdStorage, podFooNS2, nil)
-
-	deleted := example.Pod{}
-	if err := etcdStorage.Delete(context.TODO(), "pods/ns/bar", &deleted, nil, storage.ValidateAllObjectFunc, nil); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-
-	// We first List directly from etcd by passing empty resourceVersion,
-	// to get the current etcd resourceVersion.
-	rvResult := &example.PodList{}
-	options := storage.ListOptions{
-		Predicate: storage.Everything,
-		Recursive: true,
-	}
-	if err := cacher.GetList(context.TODO(), "pods/ns", options, rvResult); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	deletedPodRV := rvResult.ListMeta.ResourceVersion
-
-	result := &example.PodList{}
-	// We pass the current etcd ResourceVersion received from the above List() operation,
-	// since there is not easy way to get ResourceVersion of barPod deletion operation.
-	options = storage.ListOptions{
-		ResourceVersion: deletedPodRV,
-		Predicate:       storage.Everything,
-		Recursive:       true,
-	}
-	if err := cacher.GetList(context.TODO(), "pods/ns", options, result); err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	if result.ListMeta.ResourceVersion != deletedPodRV {
-		t.Errorf("Incorrect resource version: %v", result.ListMeta.ResourceVersion)
-	}
-	if len(result.Items) != 2 {
-		t.Errorf("Unexpected list result: %d", len(result.Items))
-	}
-	keys := sets.String{}
-	for _, item := range result.Items {
-		keys.Insert(item.Name)
-	}
-	if !keys.HasAll("foo", "baz") {
-		t.Errorf("Unexpected list result: %#v", result)
-	}
-	for _, item := range result.Items {
-		// unset fields that are set by the infrastructure
-		item.ResourceVersion = ""
-		item.CreationTimestamp = metav1.Time{}
-
-		if item.Namespace != "ns" {
-			t.Errorf("Unexpected namespace: %s", item.Namespace)
-		}
-
-		var expected *example.Pod
-		switch item.Name {
-		case "foo":
-			expected = podFooPrime
-		case "baz":
-			expected = podBaz
-		default:
-			t.Errorf("Unexpected item: %v", item)
-		}
-		if e, a := *expected, item; !reflect.DeepEqual(e, a) {
-			t.Errorf("Expected: %#v, got: %#v", e, a)
-		}
-	}
-}
-
 func verifyWatchEvent(t *testing.T, w watch.Interface, eventType watch.EventType, eventObject runtime.Object) {
 	_, _, line, _ := goruntime.Caller(1)
 	select {
@@ -298,23 +201,16 @@ func verifyWatchEvent(t *testing.T, w watch.Interface, eventType watch.EventType
 	}
 }
 
-type injectListError struct {
-	errors int
-	storage.Interface
-}
-
-func (self *injectListError) GetList(ctx context.Context, key string, opts storage.ListOptions, listObj runtime.Object) error {
-	if self.errors > 0 {
-		self.errors--
-		return fmt.Errorf("injected error")
-	}
-	return self.Interface.GetList(ctx, key, opts, listObj)
-}
-
 func TestWatch(t *testing.T) {
+	ctx, cacher, terminate := testSetup(t)
+	t.Cleanup(terminate)
+	storagetesting.RunTestWatch(ctx, t, cacher)
+}
+
+// TODO(wojtek-t): We should extend the generic RunTestWatch test to cover the
+// scenarios that are not yet covered by it and get rid of this test.
+func TestWatchDeprecated(t *testing.T) {
 	server, etcdStorage := newEtcdTestStorage(t, etcd3testing.PathPrefix())
-	// Inject one list error to make sure we test the relist case.
-	etcdStorage = &injectListError{errors: 1, Interface: etcdStorage}
 	defer server.Terminate(t)
 	fakeClock := testingclock.NewFakeClock(time.Now())
 	cacher, _, err := newTestCacherWithClock(etcdStorage, fakeClock)
@@ -884,8 +780,14 @@ func testSetup(t *testing.T, opts ...setupOption) (context.Context, *cacherstora
 	}
 
 	server, etcdStorage := newEtcdTestStorage(t, etcd3testing.PathPrefix())
+	// Inject one list error to make sure we test the relist case.
+	wrappedStorage := &storagetesting.StorageInjectingListErrors{
+		Interface: etcdStorage,
+		Errors:    1,
+	}
+
 	config := cacherstorage.Config{
-		Storage:        etcdStorage,
+		Storage:        wrappedStorage,
 		Versioner:      storage.APIObjectVersioner{},
 		GroupResource:  schema.GroupResource{Resource: "pods"},
 		ResourcePrefix: setupOpts.resourcePrefix,
@@ -904,6 +806,12 @@ func testSetup(t *testing.T, opts ...setupOption) (context.Context, *cacherstora
 	terminate := func() {
 		cacher.Stop()
 		server.Terminate(t)
+	}
+
+	// Since some tests depend on the fact that GetList shouldn't fail,
+	// we wait until the error from the underlying storage is consumed.
+	if err := wait.PollInfinite(100*time.Millisecond, wrappedStorage.ErrorsConsumed); err != nil {
+		t.Fatalf("Failed to inject list errors: %v", err)
 	}
 
 	return ctx, cacher, terminate
