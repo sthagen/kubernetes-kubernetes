@@ -298,6 +298,7 @@ const (
 	// kep: https://kep.k8s.io/2727
 	// alpha: v1.23
 	// beta: v1.24
+	// stable: v1.27
 	//
 	// Enables GRPC probe method for {Liveness,Readiness,Startup}Probe.
 	GRPCContainerProbe featuregate.Feature = "GRPCContainerProbe"
@@ -402,6 +403,7 @@ const (
 
 	// owner: @ahg
 	// beta: v1.23
+	// stable: v1.27
 	//
 	// Allow updating node scheduling directives in the pod template of jobs. Specifically,
 	// node affinity, selector and tolerations. This is allowed only for suspended jobs
@@ -845,6 +847,13 @@ const (
 	// instead of changing each file on the volumes recursively.
 	// Initial implementation focused on ReadWriteOncePod volumes.
 	SELinuxMountReadWriteOncePod featuregate.Feature = "SELinuxMountReadWriteOncePod"
+
+	// owner: @vinaykul
+	// kep: http://kep.k8s.io/1287
+	// alpha: v1.27
+	//
+	// Enables In-Place Pod Vertical Scaling
+	InPlacePodVerticalScaling featuregate.Feature = "InPlacePodVerticalScaling"
 )
 
 func init() {
@@ -926,7 +935,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	ExperimentalHostUserNamespaceDefaultingGate: {Default: false, PreRelease: featuregate.Beta},
 
-	GRPCContainerProbe: {Default: true, PreRelease: featuregate.Beta},
+	GRPCContainerProbe: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, //remove in 1.29
 
 	GracefulNodeShutdown: {Default: true, PreRelease: featuregate.Beta},
 
@@ -956,7 +965,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	JobPodFailurePolicy: {Default: true, PreRelease: featuregate.Beta},
 
-	JobMutableNodeSchedulingDirectives: {Default: true, PreRelease: featuregate.Beta},
+	JobMutableNodeSchedulingDirectives: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
 
 	JobReadyPods: {Default: true, PreRelease: featuregate.Beta},
 
@@ -1073,6 +1082,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	NodeInclusionPolicyInPodTopologySpread: {Default: true, PreRelease: featuregate.Beta},
 
 	SELinuxMountReadWriteOncePod: {Default: false, PreRelease: featuregate.Alpha},
+
+	InPlacePodVerticalScaling: {Default: false, PreRelease: featuregate.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

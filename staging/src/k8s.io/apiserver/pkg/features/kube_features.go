@@ -198,6 +198,19 @@ const (
 	//
 	// Enables support for watch bookmark events.
 	WatchBookmark featuregate.Feature = "WatchBookmark"
+
+	// owner: @vinaykul
+	// kep: http://kep.k8s.io/1287
+	// alpha: v1.27
+	//
+	// Enables In-Place Pod Vertical Scaling
+	InPlacePodVerticalScaling featuregate.Feature = "InPlacePodVerticalScaling"
+
+	// owner: @p0lyn0mial
+	// alpha: v1.27
+	//
+	// Allow the API server to stream individual items instead of chunking
+	WatchList featuregate.Feature = "WatchList"
 )
 
 func init() {
@@ -249,4 +262,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	StorageVersionHash: {Default: true, PreRelease: featuregate.Beta},
 
 	WatchBookmark: {Default: true, PreRelease: featuregate.GA, LockToDefault: true},
+
+	InPlacePodVerticalScaling: {Default: false, PreRelease: featuregate.Alpha},
+
+	WatchList: {Default: false, PreRelease: featuregate.Alpha},
 }

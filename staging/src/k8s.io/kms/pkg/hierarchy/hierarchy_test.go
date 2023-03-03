@@ -33,6 +33,11 @@ import (
 	testingclock "k8s.io/utils/clock/testing"
 )
 
+const (
+	testAnnotationKey        = "version.encryption.remote.io"
+	testAnnotationKeyVersion = "key-version.encryption.remote.io"
+)
+
 func TestCopyResponseAndAddLocalKEKAnnotation(t *testing.T) {
 	t.Parallel()
 	testCases := []struct {
@@ -60,14 +65,14 @@ func TestCopyResponseAndAddLocalKEKAnnotation(t *testing.T) {
 				Ciphertext: []byte("encryptedLocalKEK"),
 				KeyID:      "keyID",
 				Annotations: map[string][]byte{
-					"version.encryption.remote.io": []byte("1"),
+					testAnnotationKey: []byte("1"),
 				},
 			},
 			want: &service.EncryptResponse{
 				KeyID: "keyID",
 				Annotations: map[string][]byte{
-					"version.encryption.remote.io": []byte("1"),
-					referenceKEKAnnotationKey:      []byte("encryptedLocalKEK"),
+					testAnnotationKey:         []byte("1"),
+					referenceKEKAnnotationKey: []byte("encryptedLocalKEK"),
 				},
 			},
 		},
@@ -77,16 +82,16 @@ func TestCopyResponseAndAddLocalKEKAnnotation(t *testing.T) {
 				Ciphertext: []byte("encryptedLocalKEK"),
 				KeyID:      "keyID",
 				Annotations: map[string][]byte{
-					"version.encryption.remote.io":     []byte("1"),
-					"key-version.encryption.remote.io": []byte("2"),
+					testAnnotationKey:        []byte("1"),
+					testAnnotationKeyVersion: []byte("2"),
 				},
 			},
 			want: &service.EncryptResponse{
 				KeyID: "keyID",
 				Annotations: map[string][]byte{
-					"version.encryption.remote.io":     []byte("1"),
-					"key-version.encryption.remote.io": []byte("2"),
-					referenceKEKAnnotationKey:          []byte("encryptedLocalKEK"),
+					testAnnotationKey:         []byte("1"),
+					testAnnotationKeyVersion:  []byte("2"),
+					referenceKEKAnnotationKey: []byte("encryptedLocalKEK"),
 				},
 			},
 		},
@@ -131,11 +136,11 @@ func TestAnnotationsWithoutReferenceKeys(t *testing.T) {
 		{
 			name: "annotations contains 1 reference key and 1 other key",
 			input: map[string][]byte{
-				referenceKEKAnnotationKey:      []byte("encryptedLocalKEK"),
-				"version.encryption.remote.io": []byte("1"),
+				referenceKEKAnnotationKey: []byte("encryptedLocalKEK"),
+				testAnnotationKey:         []byte("1"),
 			},
 			want: map[string][]byte{
-				"version.encryption.remote.io": []byte("1"),
+				testAnnotationKey: []byte("1"),
 			},
 		},
 	}
@@ -177,8 +182,8 @@ func TestValidateRemoteKMSEncryptResponse(t *testing.T) {
 			name: "no annotation key contains reference suffix",
 			input: &service.EncryptResponse{
 				Annotations: map[string][]byte{
-					"version.encryption.remote.io":     []byte("1"),
-					"key-version.encryption.remote.io": []byte("2"),
+					testAnnotationKey:        []byte("1"),
+					testAnnotationKeyVersion: []byte("2"),
 				},
 			},
 			want: nil,
@@ -264,7 +269,7 @@ func (s *testRemoteService) Encrypt(ctx context.Context, uid string, plaintext [
 		KeyID:      s.keyID,
 		Ciphertext: []byte(base64.StdEncoding.EncodeToString(plaintext)),
 		Annotations: map[string][]byte{
-			"version.encryption.remote.io": []byte("1"),
+			testAnnotationKey: []byte("1"),
 		},
 	}, nil
 }
@@ -280,7 +285,7 @@ func (s *testRemoteService) Decrypt(ctx context.Context, uid string, req *servic
 	if len(req.Annotations) != 1 {
 		return nil, errors.New("invalid annotations")
 	}
-	if v, ok := req.Annotations["version.encryption.remote.io"]; !ok || string(v) != "1" {
+	if v, ok := req.Annotations[testAnnotationKey]; !ok || string(v) != "1" {
 		return nil, errors.New("invalid version in annotations")
 	}
 	return base64.StdEncoding.DecodeString(string(req.Ciphertext))
@@ -503,15 +508,20 @@ func TestRotationKeyUsage(t *testing.T) {
 			defer wg.Done()
 			resp, err := localKEKService.Encrypt(ctx, "test-uid", []byte(rand.String(32)))
 			if err != nil {
-				t.Fatalf("Encrypt() error = %v", err)
+				t.Errorf("Encrypt() error = %v", err)
+				return
 			}
 			if v, ok := resp.Annotations[referenceKEKAnnotationKey]; !ok || !bytes.Equal(v, encLocalKEK) {
-				t.Fatalf("Encrypt() annotations = %v, want %v", resp.Annotations, encLocalKEK)
+				t.Errorf("Encrypt() annotations = %v, want %v", resp.Annotations, encLocalKEK)
+				return
 			}
 			record.Store(resp, nil)
 		}()
 	}
 	wg.Wait()
+	if t.Failed() {
+		return
+	}
 
 	fakeClock.Step(30 * time.Second)
 	rotated := false
@@ -536,15 +546,20 @@ func TestRotationKeyUsage(t *testing.T) {
 			defer wg.Done()
 			resp, err := localKEKService.Encrypt(ctx, "test-uid", []byte(rand.String(32)))
 			if err != nil {
-				t.Fatalf("Encrypt() error = %v", err)
+				t.Errorf("Encrypt() error = %v", err)
+				return
 			}
 			if v, ok := resp.Annotations[referenceKEKAnnotationKey]; !ok || !bytes.Equal(v, lk.encKEK) {
-				t.Fatalf("Encrypt() annotations = %v, want %v", resp.Annotations, lk.encKEK)
+				t.Errorf("Encrypt() annotations = %v, want %v", resp.Annotations, lk.encKEK)
+				return
 			}
 			record.Store(resp, nil)
 		}()
 	}
 	wg.Wait()
+	if t.Failed() {
+		return
+	}
 
 	// check we can decrypt data encrypted with the old and new local KEKs
 	record.Range(func(key, _ any) bool {
@@ -586,15 +601,20 @@ func TestRotationKeyExpiry(t *testing.T) {
 			defer wg.Done()
 			resp, err := localKEKService.Encrypt(ctx, "test-uid", []byte("test-plaintext"))
 			if err != nil {
-				t.Fatalf("Encrypt() error = %v", err)
+				t.Errorf("Encrypt() error = %v", err)
+				return
 			}
 			if v, ok := resp.Annotations[referenceKEKAnnotationKey]; !ok || !bytes.Equal(v, encLocalKEK) {
-				t.Fatalf("Encrypt() annotations = %v, want %v", resp.Annotations, encLocalKEK)
+				t.Errorf("Encrypt() annotations = %v, want %v", resp.Annotations, encLocalKEK)
+				return
 			}
 			record.Store(resp, nil)
 		}()
 	}
 	wg.Wait()
+	if t.Failed() {
+		return
+	}
 
 	// check local KEK has only been used 3 times and still under the suggested usage
 	if lk.usage.Load() != 3 {
@@ -624,15 +644,20 @@ func TestRotationKeyExpiry(t *testing.T) {
 			defer wg.Done()
 			resp, err := localKEKService.Encrypt(ctx, "test-uid", []byte("test-plaintext"))
 			if err != nil {
-				t.Fatalf("Encrypt() error = %v", err)
+				t.Errorf("Encrypt() error = %v", err)
+				return
 			}
 			if v, ok := resp.Annotations[referenceKEKAnnotationKey]; !ok || !bytes.Equal(v, lk.encKEK) {
-				t.Fatalf("Encrypt() annotations = %v, want %v", resp.Annotations, lk.encKEK)
+				t.Errorf("Encrypt() annotations = %v, want %v", resp.Annotations, lk.encKEK)
+				return
 			}
 			record.Store(resp, nil)
 		}()
 	}
 	wg.Wait()
+	if t.Failed() {
+		return
+	}
 
 	// check we can decrypt data encrypted with the old and new local KEKs
 	record.Range(func(key, _ any) bool {
@@ -674,15 +699,20 @@ func TestRotationRemoteKeyIDChanged(t *testing.T) {
 			defer wg.Done()
 			resp, err := localKEKService.Encrypt(ctx, "test-uid", []byte("test-plaintext"))
 			if err != nil {
-				t.Fatalf("Encrypt() error = %v", err)
+				t.Errorf("Encrypt() error = %v", err)
+				return
 			}
 			if v, ok := resp.Annotations[referenceKEKAnnotationKey]; !ok || !bytes.Equal(v, encLocalKEK) {
-				t.Fatalf("Encrypt() annotations = %v, want %v", resp.Annotations, encLocalKEK)
+				t.Errorf("Encrypt() annotations = %v, want %v", resp.Annotations, encLocalKEK)
+				return
 			}
 			record.Store(resp, nil)
 		}()
 	}
 	wg.Wait()
+	if t.Failed() {
+		return
+	}
 
 	// check local KEK has only been used 3 times and still under the suggested usage
 	if lk.usage.Load() != 3 {
@@ -714,15 +744,20 @@ func TestRotationRemoteKeyIDChanged(t *testing.T) {
 			defer wg.Done()
 			resp, err := localKEKService.Encrypt(ctx, "test-uid", []byte("test-plaintext"))
 			if err != nil {
-				t.Fatalf("Encrypt() error = %v", err)
+				t.Errorf("Encrypt() error = %v", err)
+				return
 			}
 			if v, ok := resp.Annotations[referenceKEKAnnotationKey]; !ok || !bytes.Equal(v, lk.encKEK) {
-				t.Fatalf("Encrypt() annotations = %v, want %v", resp.Annotations, lk.encKEK)
+				t.Errorf("Encrypt() annotations = %v, want %v", resp.Annotations, lk.encKEK)
+				return
 			}
 			record.Store(resp, nil)
 		}()
 	}
 	wg.Wait()
+	if t.Failed() {
+		return
+	}
 
 	// check we can decrypt data encrypted with the old and new local KEKs
 	record.Range(func(key, _ any) bool {

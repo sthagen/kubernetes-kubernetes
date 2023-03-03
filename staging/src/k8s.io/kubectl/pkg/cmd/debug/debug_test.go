@@ -448,7 +448,7 @@ func TestGeneratePodCopyWithDebugContainer(t *testing.T) {
 						"test": "test",
 					},
 					ResourceVersion:   "1",
-					CreationTimestamp: metav1.Time{time.Now()},
+					CreationTimestamp: metav1.Time{Time: time.Now()},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -1601,6 +1601,12 @@ func TestGenerateNodeDebugPod(t *testing.T) {
 							ImagePullPolicy:          corev1.PullIfNotPresent,
 							TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 							VolumeMounts:             nil,
+							SecurityContext: &corev1.SecurityContext{
+								RunAsNonRoot: pointer.Bool(true),
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+							},
 						},
 					},
 					HostIPC:       false,
