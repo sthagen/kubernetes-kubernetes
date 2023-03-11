@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -36,6 +37,7 @@ import (
 	apimachineryvalidation "k8s.io/apimachinery/pkg/api/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	unversionedvalidation "k8s.io/apimachinery/pkg/apis/meta/v1/validation"
+	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -43,6 +45,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	schedulinghelper "k8s.io/component-helpers/scheduling/corev1"
+	kubeletapis "k8s.io/kubelet/pkg/apis"
 	apiservice "k8s.io/kubernetes/pkg/api/service"
 	"k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/core/helper"
@@ -1988,7 +1991,7 @@ func ValidatePersistentVolumeUpdate(newPv, oldPv *core.PersistentVolume, opts Pe
 
 	// Allow setting NodeAffinity if oldPv NodeAffinity was not set
 	if oldPv.Spec.NodeAffinity != nil {
-		allErrs = append(allErrs, ValidateImmutableField(newPv.Spec.NodeAffinity, oldPv.Spec.NodeAffinity, field.NewPath("nodeAffinity"))...)
+		allErrs = append(allErrs, validatePvNodeAffinity(newPv.Spec.NodeAffinity, oldPv.Spec.NodeAffinity, field.NewPath("nodeAffinity"))...)
 	}
 
 	return allErrs
@@ -3662,6 +3665,8 @@ type PodValidationOptions struct {
 	AllowExpandedDNSConfig bool
 	// Allow invalid topologySpreadConstraint labelSelector for backward compatibility
 	AllowInvalidTopologySpreadConstraintLabelSelector bool
+	// Allow node selector additions for gated pods.
+	AllowMutableNodeSelectorAndNodeAffinity bool
 }
 
 // validatePodMetadataAndSpec tests if required fields in the pod.metadata and pod.spec are set,
@@ -4668,6 +4673,39 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod, opts PodValidationOptions) fiel
 		mungedPodSpec.TerminationGracePeriodSeconds = oldPod.Spec.TerminationGracePeriodSeconds // +k8s:verify-mutation:reason=clone
 	}
 
+	// Handle validations specific to gated pods.
+	podIsGated := len(oldPod.Spec.SchedulingGates) > 0
+	if opts.AllowMutableNodeSelectorAndNodeAffinity && podIsGated {
+		// Additions to spec.nodeSelector are allowed (no deletions or mutations) for gated pods.
+		if !apiequality.Semantic.DeepEqual(mungedPodSpec.NodeSelector, oldPod.Spec.NodeSelector) {
+			allErrs = append(allErrs, validateNodeSelectorMutation(specPath.Child("nodeSelector"), mungedPodSpec.NodeSelector, oldPod.Spec.NodeSelector)...)
+			mungedPodSpec.NodeSelector = oldPod.Spec.NodeSelector // +k8s:verify-mutation:reason=clone
+		}
+
+		// Validate node affinity mutations.
+		var oldNodeAffinity *core.NodeAffinity
+		if oldPod.Spec.Affinity != nil {
+			oldNodeAffinity = oldPod.Spec.Affinity.NodeAffinity // +k8s:verify-mutation:reason=clone
+		}
+
+		var mungedNodeAffinity *core.NodeAffinity
+		if mungedPodSpec.Affinity != nil {
+			mungedNodeAffinity = mungedPodSpec.Affinity.NodeAffinity // +k8s:verify-mutation:reason=clone
+		}
+
+		if !apiequality.Semantic.DeepEqual(oldNodeAffinity, mungedNodeAffinity) {
+			allErrs = append(allErrs, validateNodeAffinityMutation(specPath.Child("affinity").Child("nodeAffinity"), mungedNodeAffinity, oldNodeAffinity)...)
+			switch {
+			case mungedPodSpec.Affinity == nil && oldNodeAffinity == nil:
+				// already effectively nil, no change needed
+			case mungedPodSpec.Affinity == nil && oldNodeAffinity != nil:
+				mungedPodSpec.Affinity = &core.Affinity{NodeAffinity: oldNodeAffinity} // +k8s:verify-mutation:reason=clone
+			default:
+				mungedPodSpec.Affinity.NodeAffinity = oldNodeAffinity // +k8s:verify-mutation:reason=clone
+			}
+		}
+	}
+
 	if !apiequality.Semantic.DeepEqual(mungedPodSpec, oldPod.Spec) {
 		// This diff isn't perfect, but it's a helluva lot better an "I'm not going to tell you what the difference is".
 		// TODO: Pinpoint the specific field that causes the invalid error after we have strategic merge diff
@@ -4678,7 +4716,6 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod, opts PodValidationOptions) fiel
 		}
 		allErrs = append(allErrs, errs)
 	}
-
 	return allErrs
 }
 
@@ -7252,4 +7289,116 @@ func ValidatePodAffinityTermSelector(podAffinityTerm core.PodAffinityTerm, allow
 	allErrs = append(allErrs, unversionedvalidation.ValidateLabelSelector(podAffinityTerm.LabelSelector, labelSelectorValidationOptions, fldPath.Child("labelSelector"))...)
 	allErrs = append(allErrs, unversionedvalidation.ValidateLabelSelector(podAffinityTerm.NamespaceSelector, labelSelectorValidationOptions, fldPath.Child("namespaceSelector"))...)
 	return allErrs
+}
+
+var betaToGALabel = map[string]string{
+	v1.LabelFailureDomainBetaZone:   v1.LabelTopologyZone,
+	v1.LabelFailureDomainBetaRegion: v1.LabelTopologyRegion,
+	kubeletapis.LabelOS:             v1.LabelOSStable,
+	kubeletapis.LabelArch:           v1.LabelArchStable,
+	v1.LabelInstanceType:            v1.LabelInstanceTypeStable,
+}
+
+var (
+	maskNodeSelectorLabelChangeEqualities     conversion.Equalities
+	initMaskNodeSelectorLabelChangeEqualities sync.Once
+)
+
+func getMaskNodeSelectorLabelChangeEqualities() conversion.Equalities {
+	initMaskNodeSelectorLabelChangeEqualities.Do(func() {
+		var eqs = apiequality.Semantic.Copy()
+		err := eqs.AddFunc(
+			func(newReq, oldReq core.NodeSelectorRequirement) bool {
+				// allow newReq to change to a GA key
+				if oldReq.Key != newReq.Key && betaToGALabel[oldReq.Key] == newReq.Key {
+					oldReq.Key = newReq.Key // +k8s:verify-mutation:reason=clone
+				}
+				return apiequality.Semantic.DeepEqual(newReq, oldReq)
+			},
+		)
+		if err != nil {
+			panic(fmt.Errorf("failed to instantiate semantic equalities: %w", err))
+		}
+		maskNodeSelectorLabelChangeEqualities = eqs
+	})
+	return maskNodeSelectorLabelChangeEqualities
+}
+
+func validatePvNodeAffinity(newPvNodeAffinity, oldPvNodeAffinity *core.VolumeNodeAffinity, fldPath *field.Path) field.ErrorList {
+	var allErrs field.ErrorList
+	if !getMaskNodeSelectorLabelChangeEqualities().DeepEqual(newPvNodeAffinity, oldPvNodeAffinity) {
+		allErrs = append(allErrs, field.Invalid(fldPath, newPvNodeAffinity, fieldImmutableErrorMsg+", except for updating from beta label to GA"))
+	}
+	return allErrs
+}
+
+func validateNodeSelectorMutation(fldPath *field.Path, newNodeSelector, oldNodeSelector map[string]string) field.ErrorList {
+	var allErrs field.ErrorList
+
+	// Validate no existing node selectors were deleted or mutated.
+	for k, v1 := range oldNodeSelector {
+		if v2, ok := newNodeSelector[k]; !ok || v1 != v2 {
+			allErrs = append(allErrs, field.Invalid(fldPath, newNodeSelector, "only additions to spec.nodeSelector are allowed (no mutations or deletions)"))
+			return allErrs
+		}
+	}
+	return allErrs
+}
+
+func validateNodeAffinityMutation(nodeAffinityPath *field.Path, newNodeAffinity, oldNodeAffinity *core.NodeAffinity) field.ErrorList {
+	var allErrs field.ErrorList
+	// If old node affinity was nil, anything can be set.
+	if oldNodeAffinity == nil || oldNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
+		return allErrs
+	}
+
+	oldTerms := oldNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
+	var newTerms []core.NodeSelectorTerm
+	if newNodeAffinity != nil && newNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
+		newTerms = newNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
+	}
+
+	// If there are no old terms, we can set the new terms to anything.
+	// If there are old terms, we cannot add any new ones.
+	if len(oldTerms) > 0 && len(oldTerms) != len(newTerms) {
+		return append(allErrs, field.Invalid(nodeAffinityPath.Child("requiredDuringSchedulingIgnoredDuringExecution").Child("nodeSelectorTerms"), newTerms, "no additions/deletions to non-empty NodeSelectorTerms list are allowed"))
+	}
+
+	// For requiredDuringSchedulingIgnoredDuringExecution, if old NodeSelectorTerms
+	// was empty, anything can be set. If non-empty, only additions of NodeSelectorRequirements
+	// to matchExpressions or fieldExpressions are allowed.
+	for i := range oldTerms {
+		if !validateNodeSelectorTermHasOnlyAdditions(newTerms[i], oldTerms[i]) {
+			allErrs = append(allErrs, field.Invalid(nodeAffinityPath.Child("requiredDuringSchedulingIgnoredDuringExecution").Child("nodeSelectorTerms").Index(i), newTerms[i], "only additions are allowed (no mutations or deletions)"))
+		}
+	}
+	return allErrs
+}
+
+func validateNodeSelectorTermHasOnlyAdditions(newTerm, oldTerm core.NodeSelectorTerm) bool {
+	if len(oldTerm.MatchExpressions) == 0 && len(oldTerm.MatchFields) == 0 {
+		if len(newTerm.MatchExpressions) > 0 || len(newTerm.MatchFields) > 0 {
+			return false
+		}
+	}
+
+	// Validate MatchExpressions only has additions (no deletions or mutations)
+	if l := len(oldTerm.MatchExpressions); l > 0 {
+		if len(newTerm.MatchExpressions) < l {
+			return false
+		}
+		if !apiequality.Semantic.DeepEqual(newTerm.MatchExpressions[:l], oldTerm.MatchExpressions) {
+			return false
+		}
+	}
+	// Validate MatchFields only has additions (no deletions or mutations)
+	if l := len(oldTerm.MatchFields); l > 0 {
+		if len(newTerm.MatchFields) < l {
+			return false
+		}
+		if !apiequality.Semantic.DeepEqual(newTerm.MatchFields[:l], oldTerm.MatchFields) {
+			return false
+		}
+	}
+	return true
 }

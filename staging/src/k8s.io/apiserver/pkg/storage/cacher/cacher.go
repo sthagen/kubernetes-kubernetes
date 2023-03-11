@@ -415,6 +415,9 @@ func NewCacherFromConfig(config Config) (*Cacher, error) {
 	// We don't want to terminate all watchers as recreating all watchers puts high load on api-server.
 	// In most of the cases, leader is reelected within few cycles.
 	reflector.MaxInternalErrorRetryDuration = time.Second * 30
+	// since the watch-list is provided by the watch cache instruct
+	// the reflector to issue a regular LIST against the store
+	reflector.UseWatchList = false
 
 	cacher.watchCache = watchCache
 	cacher.reflector = reflector
@@ -516,7 +519,7 @@ func (c *Cacher) Watch(ctx context.Context, key string, opts storage.ListOptions
 	if opts.SendInitialEvents == nil && opts.ResourceVersion == "" {
 		return c.storage.Watch(ctx, key, opts)
 	}
-	watchRV, err := c.versioner.ParseResourceVersion(opts.ResourceVersion)
+	requestedWatchRV, err := c.versioner.ParseResourceVersion(opts.ResourceVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -557,13 +560,13 @@ func (c *Cacher) Watch(ctx context.Context, key string, opts storage.ListOptions
 	chanSize := c.watchCache.suggestedWatchChannelSize(c.indexedTrigger != nil, triggerSupported)
 
 	// Determine a function that computes the bookmarkAfterResourceVersion
-	bookmarkAfterResourceVersionFn, err := c.getBookmarkAfterResourceVersionLockedFunc(ctx, watchRV, opts)
+	bookmarkAfterResourceVersionFn, err := c.getBookmarkAfterResourceVersionLockedFunc(ctx, requestedWatchRV, opts)
 	if err != nil {
 		return newErrWatcher(err), nil
 	}
 
 	// Determine a function that computes the watchRV we should start from
-	startWatchResourceVersionFn, err := c.getStartResourceVersionForWatchLockedFunc(ctx, watchRV, opts)
+	startWatchResourceVersionFn, err := c.getStartResourceVersionForWatchLockedFunc(ctx, requestedWatchRV, opts)
 	if err != nil {
 		return newErrWatcher(err), nil
 	}
@@ -595,8 +598,17 @@ func (c *Cacher) Watch(ctx context.Context, key string, opts storage.ListOptions
 	// underlying watchCache is calling processEvent under its lock.
 	c.watchCache.RLock()
 	defer c.watchCache.RUnlock()
-	watchRV = startWatchResourceVersionFn()
-	cacheInterval, err := c.watchCache.getAllEventsSinceLocked(watchRV)
+	forceAllEvents, err := c.waitUntilWatchCacheFreshAndForceAllEvents(ctx, requestedWatchRV, opts)
+	if err != nil {
+		return newErrWatcher(err), nil
+	}
+	startWatchRV := startWatchResourceVersionFn()
+	var cacheInterval *watchCacheInterval
+	if forceAllEvents {
+		cacheInterval, err = c.watchCache.getIntervalFromStoreLocked()
+	} else {
+		cacheInterval, err = c.watchCache.getAllEventsSinceLocked(startWatchRV)
+	}
 	if err != nil {
 		// To match the uncached watch implementation, once we have passed authn/authz/admission,
 		// and successfully parsed a resource version, other errors must fail with a watch event of type ERROR,
@@ -620,7 +632,7 @@ func (c *Cacher) Watch(ctx context.Context, key string, opts storage.ListOptions
 		c.watcherIdx++
 	}()
 
-	go watcher.processInterval(ctx, cacheInterval, watchRV)
+	go watcher.processInterval(ctx, cacheInterval, startWatchRV)
 	return watcher, nil
 }
 
@@ -1263,6 +1275,19 @@ func (c *Cacher) getCommonResourceVersionLockedFunc(ctx context.Context, parsedW
 	default:
 		return func() uint64 { return parsedWatchResourceVersion }, nil
 	}
+}
+
+// waitUntilWatchCacheFreshAndForceAllEvents waits until cache is at least
+// as fresh as given requestedWatchRV if sendInitialEvents was requested.
+// Additionally, it instructs the caller whether it should ask for
+// all events from the cache (full state) or not.
+func (c *Cacher) waitUntilWatchCacheFreshAndForceAllEvents(ctx context.Context, requestedWatchRV uint64, opts storage.ListOptions) (bool, error) {
+	if opts.SendInitialEvents != nil && *opts.SendInitialEvents == true {
+		err := c.watchCache.waitUntilFreshAndBlock(ctx, requestedWatchRV)
+		defer c.watchCache.RUnlock()
+		return err == nil, err
+	}
+	return false, nil
 }
 
 // cacherListerWatcher opaques storage.Interface to expose cache.ListerWatcher.

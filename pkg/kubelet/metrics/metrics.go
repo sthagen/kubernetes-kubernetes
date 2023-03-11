@@ -43,6 +43,9 @@ const (
 	PLEGDiscardEventsKey               = "pleg_discard_events"
 	PLEGRelistIntervalKey              = "pleg_relist_interval_seconds"
 	PLEGLastSeenKey                    = "pleg_last_seen_seconds"
+	EventedPLEGConnErrKey              = "evented_pleg_connection_error_count"
+	EventedPLEGConnKey                 = "evented_pleg_connection_success_count"
+	EventedPLEGConnLatencyKey          = "evented_pleg_connection_latency_seconds"
 	EvictionsKey                       = "evictions"
 	EvictionStatsAgeKey                = "eviction_stats_age_seconds"
 	PreemptionsKey                     = "preemptions"
@@ -55,6 +58,12 @@ const (
 	VolumeStatsHealthStatusAbnormalKey = "volume_stats_health_status_abnormal"
 	RunningPodsKey                     = "running_pods"
 	RunningContainersKey               = "running_containers"
+	DesiredPodCountKey                 = "desired_pods"
+	ActivePodCountKey                  = "active_pods"
+	MirrorPodCountKey                  = "mirror_pods"
+	WorkingPodCountKey                 = "working_pods"
+	OrphanedRuntimePodTotalKey         = "orphaned_runtime_pods_total"
+	RestartedPodTotalKey               = "restarted_pods_total"
 
 	// Metrics keys of remote runtime operations
 	RuntimeOperationsKey         = "runtime_operations_total"
@@ -95,6 +104,10 @@ const (
 	TopologyManagerAdmissionRequestsTotalKey = "topology_manager_admission_requests_total"
 	TopologyManagerAdmissionErrorsTotalKey   = "topology_manager_admission_errors_total"
 	TopologyManagerAdmissionDurationKey      = "topology_manager_admission_duration_ms"
+
+	// Metrics to track orphan pod cleanup
+	orphanPodCleanedVolumesKey       = "orphan_pod_cleaned_volumes"
+	orphanPodCleanedVolumesErrorsKey = "orphan_pod_cleaned_volumes_errors"
 
 	// Values used in metric labels
 	Container          = "container"
@@ -240,6 +253,41 @@ var (
 			StabilityLevel: metrics.ALPHA,
 		},
 	)
+
+	// EventedPLEGConnErr is a Counter that tracks the number of errors encountered during
+	// the establishment of streaming connection with the CRI runtime.
+	EventedPLEGConnErr = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           EventedPLEGConnErrKey,
+			Help:           "The number of errors encountered during the establishment of streaming connection with the CRI runtime.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	// EventedPLEGConn is a Counter that tracks the number of times a streaming client
+	// was obtained to receive CRI Events.
+	EventedPLEGConn = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           EventedPLEGConnKey,
+			Help:           "The number of times a streaming client was obtained to receive CRI Events.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	// EventedPLEGConnLatency is a Histogram that tracks the latency of streaming connection
+	// with the CRI runtime, measured in seconds.
+	EventedPLEGConnLatency = metrics.NewHistogram(
+		&metrics.HistogramOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           EventedPLEGConnLatencyKey,
+			Help:           "The latency of streaming connection with the CRI runtime, measured in seconds.",
+			Buckets:        metrics.DefBuckets,
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
 	// RuntimeOperations is a Counter that tracks the cumulative number of remote runtime operations.
 	// Broken down by operation type.
 	RuntimeOperations = metrics.NewCounterVec(
@@ -438,6 +486,64 @@ var (
 		},
 		[]string{"container_state"},
 	)
+	// DesiredPodCount tracks the count of pods the Kubelet thinks it should be running
+	DesiredPodCount = metrics.NewGaugeVec(
+		&metrics.GaugeOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           DesiredPodCountKey,
+			Help:           "The number of pods the kubelet is being instructed to run. static is true if the pod is not from the apiserver.",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"static"},
+	)
+	// ActivePodCount tracks the count of pods the Kubelet considers as active when deciding to admit a new pod
+	ActivePodCount = metrics.NewGaugeVec(
+		&metrics.GaugeOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           ActivePodCountKey,
+			Help:           "The number of pods the kubelet considers active and which are being considered when admitting new pods. static is true if the pod is not from the apiserver.",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"static"},
+	)
+	// MirrorPodCount tracks the number of mirror pods the Kubelet should have created for static pods
+	MirrorPodCount = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           MirrorPodCountKey,
+			Help:           "The number of mirror pods the kubelet will try to create (one per admitted static pod)",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+	// WorkingPodCount tracks the count of pods in each lifecycle phase, whether they are static pods, and whether they are desired, orphaned, or runtime_only
+	WorkingPodCount = metrics.NewGaugeVec(
+		&metrics.GaugeOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           WorkingPodCountKey,
+			Help:           "Number of pods the kubelet is actually running, broken down by lifecycle phase, whether the pod is desired, orphaned, or runtime only (also orphaned), and whether the pod is static. An orphaned pod has been removed from local configuration or force deleted in the API and consumes resources that are not otherwise visible.",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"lifecycle", "config", "static"},
+	)
+	// OrphanedRuntimePodTotal is incremented every time a pod is detected in the runtime without being known to the pod worker first
+	OrphanedRuntimePodTotal = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           OrphanedRuntimePodTotalKey,
+			Help:           "Number of pods that have been detected in the container runtime without being already known to the pod worker. This typically indicates the kubelet was restarted while a pod was force deleted in the API or in the local configuration, which is unusual.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+	// RestartedPodTotal is incremented every time a pod with the same UID is deleted and recreated
+	RestartedPodTotal = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           RestartedPodTotalKey,
+			Help:           "Number of pods that have been restarted because they were deleted and recreated with the same UID while the kubelet was watching them (common for static pods, extremely uncommon for API pods)",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"static"},
+	)
 	// StartedPodsTotal is a counter that tracks pod sandbox creation operations
 	StartedPodsTotal = metrics.NewCounter(
 		&metrics.CounterOpts{
@@ -585,6 +691,25 @@ var (
 			StabilityLevel: metrics.ALPHA,
 		},
 	)
+
+	// OrphanPodCleanedVolumes is number of orphaned Pods that times that removeOrphanedPodVolumeDirs was called during the last sweep.
+	OrphanPodCleanedVolumes = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           orphanPodCleanedVolumesKey,
+			Help:           "The total number of orphaned Pods whose volumes were cleaned in the last periodic sweep.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+	// OrphanPodCleanedVolumes is number of times that removeOrphanedPodVolumeDirs failed.
+	OrphanPodCleanedVolumesErrors = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           orphanPodCleanedVolumesErrorsKey,
+			Help:           "The number of orphaned Pods whose volumes failed to be cleaned in the last periodic sweep.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
 )
 
 var registerMetrics sync.Once
@@ -605,6 +730,9 @@ func Register(collectors ...metrics.StableCollector) {
 		legacyregistry.MustRegister(PLEGDiscardEvents)
 		legacyregistry.MustRegister(PLEGRelistInterval)
 		legacyregistry.MustRegister(PLEGLastSeen)
+		legacyregistry.MustRegister(EventedPLEGConnErr)
+		legacyregistry.MustRegister(EventedPLEGConn)
+		legacyregistry.MustRegister(EventedPLEGConnLatency)
 		legacyregistry.MustRegister(RuntimeOperations)
 		legacyregistry.MustRegister(RuntimeOperationsDuration)
 		legacyregistry.MustRegister(RuntimeOperationsErrors)
@@ -615,6 +743,12 @@ func Register(collectors ...metrics.StableCollector) {
 		legacyregistry.MustRegister(DevicePluginAllocationDuration)
 		legacyregistry.MustRegister(RunningContainerCount)
 		legacyregistry.MustRegister(RunningPodCount)
+		legacyregistry.MustRegister(DesiredPodCount)
+		legacyregistry.MustRegister(ActivePodCount)
+		legacyregistry.MustRegister(MirrorPodCount)
+		legacyregistry.MustRegister(WorkingPodCount)
+		legacyregistry.MustRegister(OrphanedRuntimePodTotal)
+		legacyregistry.MustRegister(RestartedPodTotal)
 		legacyregistry.MustRegister(ManagedEphemeralContainers)
 		if utilfeature.DefaultFeatureGate.Enabled(features.KubeletPodResources) {
 			legacyregistry.MustRegister(PodResourcesEndpointRequestsTotalCount)
@@ -639,6 +773,8 @@ func Register(collectors ...metrics.StableCollector) {
 		legacyregistry.MustRegister(TopologyManagerAdmissionRequestsTotal)
 		legacyregistry.MustRegister(TopologyManagerAdmissionErrorsTotal)
 		legacyregistry.MustRegister(TopologyManagerAdmissionDuration)
+		legacyregistry.MustRegister(OrphanPodCleanedVolumes)
+		legacyregistry.MustRegister(OrphanPodCleanedVolumesErrors)
 
 		for _, collector := range collectors {
 			legacyregistry.CustomMustRegister(collector)

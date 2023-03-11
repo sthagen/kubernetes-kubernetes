@@ -74,6 +74,7 @@ const (
 
 	// owner: @dashpole
 	// alpha: v1.22
+	// beta: v1.27
 	//
 	// Add support for distributed tracing in the API Server
 	APIServerTracing featuregate.Feature = "APIServerTracing"
@@ -221,7 +222,7 @@ func init() {
 // To add a new feature, define a key for it above and add it here. The features will be
 // available throughout Kubernetes binaries.
 var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	AggregatedDiscoveryEndpoint: {Default: false, PreRelease: featuregate.Alpha},
+	AggregatedDiscoveryEndpoint: {Default: true, PreRelease: featuregate.Beta},
 
 	APIListChunking: {Default: true, PreRelease: featuregate.Beta},
 
@@ -231,7 +232,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	APIServerIdentity: {Default: true, PreRelease: featuregate.Beta},
 
-	APIServerTracing: {Default: false, PreRelease: featuregate.Alpha},
+	APIServerTracing: {Default: true, PreRelease: featuregate.Beta},
 
 	AdvancedAuditing: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.28
 
@@ -247,7 +248,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	OpenAPIEnums: {Default: true, PreRelease: featuregate.Beta},
 
-	OpenAPIV3: {Default: true, PreRelease: featuregate.Beta},
+	OpenAPIV3: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
 
 	RemainingItemCount: {Default: true, PreRelease: featuregate.Beta},
 
