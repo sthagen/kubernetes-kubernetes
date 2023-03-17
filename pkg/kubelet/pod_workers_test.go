@@ -56,6 +56,7 @@ type fakePodWorkers struct {
 	terminating           map[types.UID]bool
 	terminated            map[types.UID]bool
 	terminationRequested  map[types.UID]bool
+	finished              map[types.UID]bool
 	removeRuntime         map[types.UID]bool
 	removeContent         map[types.UID]bool
 	terminatingStaticPods map[string]bool
@@ -104,6 +105,11 @@ func (f *fakePodWorkers) CouldHaveRunningContainers(uid types.UID) bool {
 	f.statusLock.Lock()
 	defer f.statusLock.Unlock()
 	return f.running[uid]
+}
+func (f *fakePodWorkers) ShouldPodBeFinished(uid types.UID) bool {
+	f.statusLock.Lock()
+	defer f.statusLock.Unlock()
+	return f.finished[uid]
 }
 func (f *fakePodWorkers) IsPodTerminationRequested(uid types.UID) bool {
 	f.statusLock.Lock()
@@ -1637,7 +1643,8 @@ func TestSyncKnownPods(t *testing.T) {
 	// verify workers that are not terminated stay open even if config no longer
 	// sees them
 	podWorkers.SyncKnownPods(nil)
-	if len(podWorkers.podUpdates) != 2 {
+	drainAllWorkers(podWorkers)
+	if len(podWorkers.podUpdates) != 0 {
 		t.Errorf("Incorrect number of open channels %v", len(podWorkers.podUpdates))
 	}
 	if len(podWorkers.podSyncStatuses) != 2 {

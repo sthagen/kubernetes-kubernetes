@@ -23,7 +23,6 @@ readonly KUBE_GOPATH="${KUBE_OUTPUT}/go"
 # The server platform we are building on.
 readonly KUBE_SUPPORTED_SERVER_PLATFORMS=(
   linux/amd64
-  linux/arm
   linux/arm64
   linux/s390x
   linux/ppc64le
@@ -32,7 +31,6 @@ readonly KUBE_SUPPORTED_SERVER_PLATFORMS=(
 # The node platforms we build for
 readonly KUBE_SUPPORTED_NODE_PLATFORMS=(
   linux/amd64
-  linux/arm
   linux/arm64
   linux/s390x
   linux/ppc64le
@@ -59,7 +57,6 @@ readonly KUBE_SUPPORTED_CLIENT_PLATFORMS=(
 # Not all client platforms need these tests
 readonly KUBE_SUPPORTED_TEST_PLATFORMS=(
   linux/amd64
-  linux/arm
   linux/arm64
   linux/s390x
   linux/ppc64le
@@ -251,6 +248,8 @@ kube::golang::setup_platforms() {
   fi
 }
 
+kube::log::status "WARNING: linux/arm will no longer be built/shipped by default, please build it explicitly if needed."
+kube::log::status "         support for linux/arm will be removed in a subsequent release."
 kube::golang::setup_platforms
 
 # The set of client targets that we are building for all platforms
@@ -325,6 +324,7 @@ readonly KUBE_ALL_TARGETS=(
 readonly KUBE_ALL_BINARIES=("${KUBE_ALL_TARGETS[@]##*/}")
 
 readonly KUBE_STATIC_LIBRARIES=(
+  apiextensions-apiserver
   kube-aggregator
   kube-apiserver
   kube-controller-manager
@@ -774,26 +774,15 @@ kube::golang::build_binaries_for_platform() {
     kube::golang::build_some_binaries "${nonstatics[@]}"
   fi
 
-  # Workaround for https://github.com/kubernetes/kubernetes/issues/115675
-  local testgogcflags="${gogcflags}"
-  local testgoexperiment="${GOEXPERIMENT:-}"
-  if [[ "$(go version)" == *"go1.20"* && "${platform}" == "linux/arm" ]]; then
-    # work around https://github.com/golang/go/issues/58339 until fixed in go1.20.x
-    testgogcflags="${testgogcflags} -d=inlstaticinit=0"
-    # work around https://github.com/golang/go/issues/58425
-    testgoexperiment="nounified,${testgoexperiment}"
-    kube::log::info "Building test binaries with GOEXPERIMENT=${testgoexperiment} GCFLAGS=${testgogcflags} ASMFLAGS=${goasmflags} LDFLAGS=${goldflags}"
-  fi
-
   for test in "${tests[@]:+${tests[@]}}"; do
     local outfile testpkg
     outfile=$(kube::golang::outfile_for_binary "${test}" "${platform}")
     testpkg=$(dirname "${test}")
 
     mkdir -p "$(dirname "${outfile}")"
-    GOEXPERIMENT="${testgoexperiment}" go test -c \
+    go test -c \
       ${goflags:+"${goflags[@]}"} \
-      -gcflags="${testgogcflags}" \
+      -gcflags="${gogcflags}" \
       -asmflags="${goasmflags}" \
       -ldflags="${goldflags}" \
       -tags="${gotags:-}" \
