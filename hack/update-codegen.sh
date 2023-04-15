@@ -35,7 +35,7 @@ UPDATE_API_KNOWN_VIOLATIONS="${UPDATE_API_KNOWN_VIOLATIONS:-}"
 
 OUT_DIR="_output"
 PRJ_SRC_PATH="k8s.io/kubernetes"
-BOILERPLATE_FILENAME="vendor/k8s.io/code-generator/hack/boilerplate.go.txt"
+BOILERPLATE_FILENAME="hack/boilerplate/boilerplate.generatego.txt"
 APPLYCONFIG_PKG="k8s.io/client-go/applyconfigurations"
 
 # Any time we call sort, we want it in the same locale.
@@ -128,6 +128,70 @@ function codegen::protobuf() {
     else
       kube::log::status "protoc ${PROTOC_VERSION} not found (can install with hack/install-protoc.sh); generating containerized..."
       build/run.sh hack/update-generated-protobuf-dockerized.sh "${apis[@]}"
+    fi
+}
+
+# Deep-copy generation
+#
+# Any package that wants deep-copy functions generated must include a
+# comment-tag in column 0 of one file of the form:
+#     // +k8s:deepcopy-gen=<VALUE>
+#
+# The <VALUE> may be one of:
+#     generate: generate deep-copy functions into the package
+#     register: generate deep-copy functions and register them with a
+#               scheme
+function codegen::deepcopy() {
+    # Build the tool.
+    GO111MODULE=on GOPROXY=off go install \
+        k8s.io/code-generator/cmd/deepcopy-gen
+
+    # The result file, in each pkg, of deep-copy generation.
+    local output_base="${GENERATED_FILE_PREFIX}deepcopy"
+
+    # The tool used to generate deep copies.
+    local gen_deepcopy_bin
+    gen_deepcopy_bin="$(kube::util::find-binary "deepcopy-gen")"
+
+    # Find all the directories that request deep-copy generation.
+    if [[ "${DBG_CODEGEN}" == 1 ]]; then
+        kube::log::status "DBG: finding all +k8s:deepcopy-gen tags"
+    fi
+    local tag_dirs=()
+    kube::util::read-array tag_dirs < <( \
+        grep -l --null '+k8s:deepcopy-gen=' "${ALL_K8S_TAG_FILES[@]}" \
+            | xargs -0 -n1 dirname \
+            | sort -u)
+    if [[ "${DBG_CODEGEN}" == 1 ]]; then
+        kube::log::status "DBG: found ${#tag_dirs[@]} +k8s:deepcopy-gen tagged dirs"
+    fi
+
+    local tag_pkgs=()
+    for dir in "${tag_dirs[@]}"; do
+        tag_pkgs+=("${PRJ_SRC_PATH}/$dir")
+    done
+
+    kube::log::status "Generating deepcopy code for ${#tag_pkgs[@]} targets"
+    if [[ "${DBG_CODEGEN}" == 1 ]]; then
+        kube::log::status "DBG: running ${gen_deepcopy_bin} for:"
+        for dir in "${tag_dirs[@]}"; do
+            kube::log::status "DBG:     $dir"
+        done
+    fi
+
+    git_find -z ':(glob)**'/"${output_base}.go" | xargs -0 rm -f
+
+    ./hack/run-in-gopath.sh "${gen_deepcopy_bin}" \
+        --v "${KUBE_VERBOSE}" \
+        --logtostderr \
+        -h "${BOILERPLATE_FILENAME}" \
+        -O "${output_base}" \
+        --bounding-dirs "${PRJ_SRC_PATH},k8s.io/api" \
+        $(printf -- " -i %s" "${tag_pkgs[@]}") \
+        "$@"
+
+    if [[ "${DBG_CODEGEN}" == 1 ]]; then
+        kube::log::status "Generated deepcopy code"
     fi
 }
 
@@ -260,70 +324,6 @@ function codegen::prerelease() {
 
     if [[ "${DBG_CODEGEN}" == 1 ]]; then
         kube::log::status "Generated prerelease-lifecycle code"
-    fi
-}
-
-# Deep-copy generation
-#
-# Any package that wants deep-copy functions generated must include a
-# comment-tag in column 0 of one file of the form:
-#     // +k8s:deepcopy-gen=<VALUE>
-#
-# The <VALUE> may be one of:
-#     generate: generate deep-copy functions into the package
-#     register: generate deep-copy functions and register them with a
-#               scheme
-function codegen::deepcopy() {
-    # Build the tool.
-    GO111MODULE=on GOPROXY=off go install \
-        k8s.io/code-generator/cmd/deepcopy-gen
-
-    # The result file, in each pkg, of deep-copy generation.
-    local output_base="${GENERATED_FILE_PREFIX}deepcopy"
-
-    # The tool used to generate deep copies.
-    local gen_deepcopy_bin
-    gen_deepcopy_bin="$(kube::util::find-binary "deepcopy-gen")"
-
-    # Find all the directories that request deep-copy generation.
-    if [[ "${DBG_CODEGEN}" == 1 ]]; then
-        kube::log::status "DBG: finding all +k8s:deepcopy-gen tags"
-    fi
-    local tag_dirs=()
-    kube::util::read-array tag_dirs < <( \
-        grep -l --null '+k8s:deepcopy-gen=' "${ALL_K8S_TAG_FILES[@]}" \
-            | xargs -0 -n1 dirname \
-            | sort -u)
-    if [[ "${DBG_CODEGEN}" == 1 ]]; then
-        kube::log::status "DBG: found ${#tag_dirs[@]} +k8s:deepcopy-gen tagged dirs"
-    fi
-
-    local tag_pkgs=()
-    for dir in "${tag_dirs[@]}"; do
-        tag_pkgs+=("${PRJ_SRC_PATH}/$dir")
-    done
-
-    kube::log::status "Generating deepcopy code for ${#tag_pkgs[@]} targets"
-    if [[ "${DBG_CODEGEN}" == 1 ]]; then
-        kube::log::status "DBG: running ${gen_deepcopy_bin} for:"
-        for dir in "${tag_dirs[@]}"; do
-            kube::log::status "DBG:     $dir"
-        done
-    fi
-
-    git_find -z ':(glob)**'/"${output_base}.go" | xargs -0 rm -f
-
-    ./hack/run-in-gopath.sh "${gen_deepcopy_bin}" \
-        --v "${KUBE_VERBOSE}" \
-        --logtostderr \
-        -h "${BOILERPLATE_FILENAME}" \
-        -O "${output_base}" \
-        --bounding-dirs "${PRJ_SRC_PATH},k8s.io/api" \
-        $(printf -- " -i %s" "${tag_pkgs[@]}") \
-        "$@"
-
-    if [[ "${DBG_CODEGEN}" == 1 ]]; then
-        kube::log::status "Generated deepcopy code"
     fi
 }
 
@@ -546,7 +546,7 @@ function indirect_array() {
 function codegen::openapi() {
     # Build the tool.
     GO111MODULE=on GOPROXY=off go install \
-        k8s.io/kube-openapi/cmd/openapi-gen
+        k8s.io/code-generator/cmd/openapi-gen
 
     # The result file, in each pkg, of open-api generation.
     local output_base="${GENERATED_FILE_PREFIX}openapi"
@@ -725,10 +725,11 @@ function codegen::applyconfigs() {
         done
     fi
 
-    git_grep -l --null \
+    (git_grep -l --null \
         -e '^// Code generated by applyconfiguration-gen. DO NOT EDIT.$' \
         -- \
         ':(glob)staging/src/k8s.io/client-go/**/*.go' \
+        || true) \
         | xargs -0 rm -f
 
     "${applyconfigurationgen}" \
@@ -777,10 +778,11 @@ function codegen::clients() {
         done
     fi
 
-    git_grep -l --null \
+    (git_grep -l --null \
         -e '^// Code generated by client-gen. DO NOT EDIT.$' \
         -- \
         ':(glob)staging/src/k8s.io/client-go/**/*.go' \
+        || true) \
         | xargs -0 rm -f
 
     "${clientgen}" \
@@ -820,10 +822,11 @@ function codegen::listers() {
         done
     fi
 
-    git_grep -l --null \
+    (git_grep -l --null \
         -e '^// Code generated by lister-gen. DO NOT EDIT.$' \
         -- \
         ':(glob)staging/src/k8s.io/client-go/**/*.go' \
+        || true) \
         | xargs -0 rm -f
 
     "${listergen}" \
@@ -860,10 +863,11 @@ function codegen::informers() {
         done
     fi
 
-    git_grep -l --null \
+    (git_grep -l --null \
         -e '^// Code generated by informer-gen. DO NOT EDIT.$' \
         -- \
         ':(glob)staging/src/k8s.io/client-go/**/*.go' \
+        || true) \
         | xargs -0 rm -f
 
     "${informergen}" \
@@ -881,21 +885,31 @@ function codegen::informers() {
     fi
 }
 
+function indent() {
+    while read -r X; do
+        echo "    ${X}"
+    done
+}
+
 function codegen::subprojects() {
     # Call generation on sub-projects.
-    # TODO(thockin): make these take a list of codegens and flags
     local subs=(
-        vendor/k8s.io/code-generator/hack/update-codegen.sh
-        vendor/k8s.io/kube-aggregator/hack/update-codegen.sh
-        vendor/k8s.io/sample-apiserver/hack/update-codegen.sh
-        vendor/k8s.io/sample-controller/hack/update-codegen.sh
-        vendor/k8s.io/apiextensions-apiserver/hack/update-codegen.sh
-        vendor/k8s.io/metrics/hack/update-codegen.sh
-        vendor/k8s.io/apiextensions-apiserver/examples/client-go/hack/update-codegen.sh
+        vendor/k8s.io/code-generator/examples
+        vendor/k8s.io/kube-aggregator
+        vendor/k8s.io/sample-apiserver
+        vendor/k8s.io/sample-controller
+        vendor/k8s.io/apiextensions-apiserver
+        vendor/k8s.io/metrics
+        vendor/k8s.io/apiextensions-apiserver/examples/client-go
     )
 
-    for s in "${subs[@]}"; do 
-        CODEGEN_PKG=./vendor/k8s.io/code-generator "$s"
+    local codegen
+    codegen="$(pwd)/vendor/k8s.io/code-generator"
+    for sub in "${subs[@]}"; do
+        kube::log::status "Generating code for subproject ${sub}"
+        pushd "${sub}" >/dev/null
+        CODEGEN_PKG="${codegen}" ./hack/update-codegen.sh > >(indent) 2> >(indent >&2)
+        popd >/dev/null
     done
 }
 
@@ -927,7 +941,7 @@ function codegen::protobindings() {
     fi
 
     for api in "${apis[@]}"; do
-        git ls-files -z -cmo --exclude-standard ":(glob)${api}"/'**/api.pb.go' \
+        git_find -z ":(glob)${api}"/'**/api.pb.go' \
             | xargs -0 rm -f
     done
 

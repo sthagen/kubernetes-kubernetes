@@ -29,16 +29,15 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/google/go-cmp/cmp"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	"k8s.io/component-helpers/storage/ephemeral"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 	"k8s.io/klog/v2"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
@@ -513,11 +512,6 @@ func (kl *Kubelet) GenerateRunContainerOptions(ctx context.Context, pod *v1.Pod,
 		} else {
 			opts.PodContainerDir = p
 		}
-	}
-
-	// only do this check if the experimental behavior is enabled, otherwise allow it to default to false
-	if kl.experimentalHostUserNamespaceDefaulting {
-		opts.EnableHostUserNamespace = kl.enableHostUserNamespace(ctx, pod)
 	}
 
 	return opts, cleanupAction, nil
@@ -1034,14 +1028,6 @@ func (kl *Kubelet) HandlePodCleanups(ctx context.Context) error {
 	}
 
 	allPods, mirrorPods := kl.podManager.GetPodsAndMirrorPods()
-	activePods := kl.filterOutInactivePods(allPods)
-	allRegularPods, allStaticPods := splitPodsByStatic(allPods)
-	activeRegularPods, activeStaticPods := splitPodsByStatic(activePods)
-	metrics.DesiredPodCount.WithLabelValues("").Set(float64(len(allRegularPods)))
-	metrics.DesiredPodCount.WithLabelValues("true").Set(float64(len(allStaticPods)))
-	metrics.ActivePodCount.WithLabelValues("").Set(float64(len(activeRegularPods)))
-	metrics.ActivePodCount.WithLabelValues("true").Set(float64(len(activeStaticPods)))
-	metrics.MirrorPodCount.Set(float64(len(mirrorPods)))
 
 	// Pod phase progresses monotonically. Once a pod has reached a final state,
 	// it should never leave regardless of the restart policy. The statuses
@@ -1138,6 +1124,17 @@ func (kl *Kubelet) HandlePodCleanups(ctx context.Context) error {
 	// pod worker)
 	klog.V(3).InfoS("Clean up orphaned mirror pods")
 	kl.deleteOrphanedMirrorPods()
+
+	// After pruning pod workers for terminated pods get the list of active pods for
+	// metrics and to determine restarts.
+	activePods := kl.filterOutInactivePods(allPods)
+	allRegularPods, allStaticPods := splitPodsByStatic(allPods)
+	activeRegularPods, activeStaticPods := splitPodsByStatic(activePods)
+	metrics.DesiredPodCount.WithLabelValues("").Set(float64(len(allRegularPods)))
+	metrics.DesiredPodCount.WithLabelValues("true").Set(float64(len(allStaticPods)))
+	metrics.ActivePodCount.WithLabelValues("").Set(float64(len(activeRegularPods)))
+	metrics.ActivePodCount.WithLabelValues("true").Set(float64(len(activeStaticPods)))
+	metrics.MirrorPodCount.Set(float64(len(mirrorPods)))
 
 	// At this point, the pod worker is aware of which pods are not desired (SyncKnownPods).
 	// We now look through the set of active pods for those that the pod worker is not aware of
@@ -1503,7 +1500,7 @@ func (kl *Kubelet) determinePodResizeStatus(pod *v1.Pod, podStatus *v1.PodStatus
 	specStatusDiffer := false
 	for _, c := range pod.Spec.Containers {
 		if cs, ok := podutil.GetContainerStatus(podStatus.ContainerStatuses, c.Name); ok {
-			if cs.Resources != nil && diff.ObjectDiff(c.Resources, *cs.Resources) != "" {
+			if cs.Resources != nil && !cmp.Equal(c.Resources, *cs.Resources) {
 				specStatusDiffer = true
 				break
 			}
@@ -2165,83 +2162,4 @@ func (kl *Kubelet) cleanupOrphanedPodCgroups(pcm cm.PodContainerManager, cgroupP
 		// again try to delete these unwanted pod cgroups
 		go pcm.Destroy(val)
 	}
-}
-
-// enableHostUserNamespace determines if the host user namespace should be used by the container runtime.
-// Returns true if the pod is using a host pid, pic, or network namespace, the pod is using a non-namespaced
-// capability, the pod contains a privileged container, or the pod has a host path volume.
-//
-// NOTE: when if a container shares any namespace with another container it must also share the user namespace
-// or it will not have the correct capabilities in the namespace.  This means that host user namespace
-// is enabled per pod, not per container.
-func (kl *Kubelet) enableHostUserNamespace(ctx context.Context, pod *v1.Pod) bool {
-	if kubecontainer.HasPrivilegedContainer(pod) || hasHostNamespace(pod) ||
-		hasHostVolume(pod) || hasNonNamespacedCapability(pod) || kl.hasHostMountPVC(ctx, pod) {
-		return true
-	}
-	return false
-}
-
-// hasNonNamespacedCapability returns true if MKNOD, SYS_TIME, or SYS_MODULE is requested for any container.
-func hasNonNamespacedCapability(pod *v1.Pod) bool {
-	for _, c := range pod.Spec.Containers {
-		if c.SecurityContext != nil && c.SecurityContext.Capabilities != nil {
-			for _, cap := range c.SecurityContext.Capabilities.Add {
-				if cap == "MKNOD" || cap == "SYS_TIME" || cap == "SYS_MODULE" {
-					return true
-				}
-			}
-		}
-	}
-
-	return false
-}
-
-// hasHostVolume returns true if the pod spec has a HostPath volume.
-func hasHostVolume(pod *v1.Pod) bool {
-	for _, v := range pod.Spec.Volumes {
-		if v.HostPath != nil {
-			return true
-		}
-	}
-	return false
-}
-
-// hasHostNamespace returns true if hostIPC, hostNetwork, or hostPID are set to true.
-func hasHostNamespace(pod *v1.Pod) bool {
-	if pod.Spec.SecurityContext == nil {
-		return false
-	}
-	return pod.Spec.HostIPC || pod.Spec.HostNetwork || pod.Spec.HostPID
-}
-
-// hasHostMountPVC returns true if a PVC is referencing a HostPath volume.
-func (kl *Kubelet) hasHostMountPVC(ctx context.Context, pod *v1.Pod) bool {
-	for _, volume := range pod.Spec.Volumes {
-		pvcName := ""
-		switch {
-		case volume.PersistentVolumeClaim != nil:
-			pvcName = volume.PersistentVolumeClaim.ClaimName
-		case volume.Ephemeral != nil:
-			pvcName = ephemeral.VolumeClaimName(pod, &volume)
-		default:
-			continue
-		}
-		pvc, err := kl.kubeClient.CoreV1().PersistentVolumeClaims(pod.Namespace).Get(ctx, pvcName, metav1.GetOptions{})
-		if err != nil {
-			klog.InfoS("Unable to retrieve pvc", "pvc", klog.KRef(pod.Namespace, pvcName), "err", err)
-			continue
-		}
-		if pvc != nil {
-			referencedVolume, err := kl.kubeClient.CoreV1().PersistentVolumes().Get(ctx, pvc.Spec.VolumeName, metav1.GetOptions{})
-			if err != nil {
-				klog.InfoS("Unable to retrieve pv", "pvName", pvc.Spec.VolumeName, "err", err)
-				continue
-			}
-			if referencedVolume != nil && referencedVolume.Spec.HostPath != nil {
-				return true
-			}
-		}
-	}
-	return false
 }

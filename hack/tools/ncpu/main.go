@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors.
+Copyright 2023 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,16 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package diff
+package main
 
 import (
-	"testing"
+	"fmt"
+	"runtime"
+
+	"go.uber.org/automaxprocs/maxprocs"
 )
 
-func TestStringDiff(t *testing.T) {
-	diff := StringDiff("aaabb", "aaacc")
-	expect := "aaa\n\nA: bb\n\nB: cc\n\n"
-	if diff != expect {
-		t.Errorf("diff returned %v", diff)
-	}
+func main() {
+	maxprocs.Set()
+	fmt.Print(runtime.GOMAXPROCS(0))
 }

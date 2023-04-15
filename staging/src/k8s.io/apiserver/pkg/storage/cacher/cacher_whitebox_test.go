@@ -18,6 +18,7 @@ package cacher
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"reflect"
@@ -114,11 +115,22 @@ func newTestCacher(s storage.Interface) (*Cacher, storage.Versioner, error) {
 		GroupResource:  schema.GroupResource{Resource: "pods"},
 		ResourcePrefix: prefix,
 		KeyFunc:        func(obj runtime.Object) (string, error) { return storage.NamespaceKeyFunc(prefix, obj) },
-		GetAttrsFunc:   storage.DefaultNamespaceScopedAttr,
-		NewFunc:        func() runtime.Object { return &example.Pod{} },
-		NewListFunc:    func() runtime.Object { return &example.PodList{} },
-		Codec:          codecs.LegacyCodec(examplev1.SchemeGroupVersion),
-		Clock:          clock.RealClock{},
+		GetAttrsFunc: func(obj runtime.Object) (labels.Set, fields.Set, error) {
+			pod, ok := obj.(*example.Pod)
+			if !ok {
+				return storage.DefaultNamespaceScopedAttr(obj)
+			}
+			labelsSet, fieldsSet, err := storage.DefaultNamespaceScopedAttr(obj)
+			if err != nil {
+				return nil, nil, err
+			}
+			fieldsSet["spec.nodeName"] = pod.Spec.NodeName
+			return labelsSet, fieldsSet, nil
+		},
+		NewFunc:     func() runtime.Object { return &example.Pod{} },
+		NewListFunc: func() runtime.Object { return &example.PodList{} },
+		Codec:       codecs.LegacyCodec(examplev1.SchemeGroupVersion),
+		Clock:       clock.RealClock{},
 	}
 	cacher, err := NewCacherFromConfig(config)
 	return cacher, testVersioner{}, err
@@ -1811,6 +1823,7 @@ func TestGetCurrentResourceVersionFromStorage(t *testing.T) {
 }
 
 func TestWaitUntilWatchCacheFreshAndForceAllEvents(t *testing.T) {
+	defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.WatchList, true)()
 	backingStorage := &dummyStorage{}
 	cacher, _, err := newTestCacher(backingStorage)
 	if err != nil {
@@ -1818,15 +1831,143 @@ func TestWaitUntilWatchCacheFreshAndForceAllEvents(t *testing.T) {
 	}
 	defer cacher.Stop()
 
-	forceAllEvents, err := cacher.waitUntilWatchCacheFreshAndForceAllEvents(context.TODO(), 105, storage.ListOptions{SendInitialEvents: pointer.Bool(true)})
-	require.NotNil(t, err, "the target method should return non nil error")
-	require.Equal(t, err.Error(), "Timeout: Too large resource version: 105, current: 100")
-	require.False(t, forceAllEvents, "the target method after returning an error should NOT instruct the caller to ask for all events in the cache (full state)")
+	opts := storage.ListOptions{
+		Predicate:         storage.Everything,
+		SendInitialEvents: pointer.Bool(true),
+		ResourceVersion:   "105",
+	}
+	opts.Predicate.AllowWatchBookmarks = true
+
+	w, err := cacher.Watch(context.Background(), "pods/ns", opts)
+	require.NoError(t, err, "failed to create watch: %v")
+	defer w.Stop()
+	verifyEvents(t, w, []watch.Event{
+		{
+			Type: watch.Error,
+			Object: &metav1.Status{
+				Status:  metav1.StatusFailure,
+				Message: storage.NewTooLargeResourceVersionError(105, 100, resourceVersionTooHighRetrySeconds).Error(),
+				Details: storage.NewTooLargeResourceVersionError(105, 100, resourceVersionTooHighRetrySeconds).(*apierrors.StatusError).Status().Details,
+				Reason:  metav1.StatusReasonTimeout,
+				Code:    504,
+			},
+		},
+	}, true)
 
 	go func() {
 		cacher.watchCache.Add(makeTestPodDetails("pod1", 105, "node1", map[string]string{"label": "value1"}))
 	}()
-	forceAllEvents, err = cacher.waitUntilWatchCacheFreshAndForceAllEvents(context.TODO(), 105, storage.ListOptions{SendInitialEvents: pointer.Bool(true)})
-	require.NoError(t, err)
-	require.True(t, forceAllEvents, "the target method should instruct the caller to ask for all events in the cache (full state)")
+	w, err = cacher.Watch(context.Background(), "pods/ns", opts)
+	require.NoError(t, err, "failed to create watch: %v")
+	defer w.Stop()
+	verifyEvents(t, w, []watch.Event{
+		{
+			Type:   watch.Added,
+			Object: makeTestPodDetails("pod1", 105, "node1", map[string]string{"label": "value1"}),
+		},
+	}, true)
+}
+
+type fakeStorage struct {
+	pods []example.Pod
+	storage.Interface
+}
+
+func newObjectStorage(fakePods []example.Pod) *fakeStorage {
+	return &fakeStorage{
+		pods: fakePods,
+	}
+}
+
+func (m fakeStorage) GetList(ctx context.Context, key string, opts storage.ListOptions, listObj runtime.Object) error {
+	podList := listObj.(*example.PodList)
+	podList.ListMeta = metav1.ListMeta{ResourceVersion: "12345"}
+	podList.Items = m.pods
+	return nil
+}
+func (m fakeStorage) Watch(_ context.Context, _ string, _ storage.ListOptions) (watch.Interface, error) {
+	return newDummyWatch(), nil
+}
+
+func BenchmarkCacher_GetList(b *testing.B) {
+	testCases := []struct {
+		totalObjectNum  int
+		expectObjectNum int
+	}{
+		{
+			totalObjectNum:  5000,
+			expectObjectNum: 50,
+		},
+		{
+			totalObjectNum:  5000,
+			expectObjectNum: 500,
+		},
+		{
+			totalObjectNum:  5000,
+			expectObjectNum: 1000,
+		},
+		{
+			totalObjectNum:  5000,
+			expectObjectNum: 2500,
+		},
+		{
+			totalObjectNum:  5000,
+			expectObjectNum: 5000,
+		},
+	}
+	for _, tc := range testCases {
+		b.Run(
+			fmt.Sprintf("totalObjectNum=%d, expectObjectNum=%d", tc.totalObjectNum, tc.expectObjectNum),
+			func(b *testing.B) {
+				// create sample pods
+				fakePods := make([]example.Pod, tc.totalObjectNum, tc.totalObjectNum)
+				for i := range fakePods {
+					fakePods[i].Namespace = "default"
+					fakePods[i].Name = fmt.Sprintf("pod-%d", i)
+					fakePods[i].ResourceVersion = strconv.Itoa(i)
+					if i%(tc.totalObjectNum/tc.expectObjectNum) == 0 {
+						fakePods[i].Spec.NodeName = "node-0"
+					}
+					data := make([]byte, 1024*2, 1024*2) // 2k labels
+					rand.Read(data)
+					fakePods[i].Spec.NodeSelector = map[string]string{
+						"key": string(data),
+					}
+				}
+
+				// build test cacher
+				cacher, _, err := newTestCacher(newObjectStorage(fakePods))
+				if err != nil {
+					b.Fatalf("new cacher: %v", err)
+				}
+				defer cacher.Stop()
+
+				// prepare result and pred
+				parsedField, err := fields.ParseSelector("spec.nodeName=node-0")
+				if err != nil {
+					b.Fatalf("parse selector: %v", err)
+				}
+				pred := storage.SelectionPredicate{
+					Label: labels.Everything(),
+					Field: parsedField,
+				}
+
+				// now we start benchmarking
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					result := &example.PodList{}
+					err = cacher.GetList(context.TODO(), "pods", storage.ListOptions{
+						Predicate:       pred,
+						Recursive:       true,
+						ResourceVersion: "12345",
+					}, result)
+					if err != nil {
+						b.Fatalf("GetList cache: %v", err)
+					}
+					if len(result.Items) != tc.expectObjectNum {
+						b.Fatalf("expect %d but got %d", tc.expectObjectNum, len(result.Items))
+					}
+				}
+			})
+	}
 }

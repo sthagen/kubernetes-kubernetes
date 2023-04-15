@@ -19979,7 +19979,7 @@ func schema_k8sio_api_core_v1_HTTPHeader(ref common.ReferenceCallback) common.Op
 				Properties: map[string]spec.Schema{
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The header field name",
+							Description: "The header field name. This will be canonicalized upon output, so case-variant names will be understood as the same header.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -27057,7 +27057,7 @@ func schema_k8sio_api_core_v1_ServiceSpec(ref common.ReferenceCallback) common.O
 					},
 					"loadBalancerIP": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Only applies to Service Type: LoadBalancer. This feature depends on whether the underlying cloud-provider supports specifying the loadBalancerIP when a load balancer is created. This field will be ignored if the cloud-provider does not support the feature. Deprecated: This field was under-specified and its meaning varies across implementations, and it cannot support dual-stack. As of Kubernetes v1.24, users are encouraged to use implementation-specific annotations when available. This field may be removed in a future API version.",
+							Description: "Only applies to Service Type: LoadBalancer. This feature depends on whether the underlying cloud-provider supports specifying the loadBalancerIP when a load balancer is created. This field will be ignored if the cloud-provider does not support the feature. Deprecated: This field was under-specified and its meaning varies across implementations. Using it is non-portable and it may not support dual-stack. Users are encouraged to use implementation-specific annotations when available.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -58160,7 +58160,7 @@ func schema_k8sio_kubelet_config_v1beta1_KubeletConfiguration(ref common.Referen
 					},
 					"tlsCipherSuites": {
 						SchemaProps: spec.SchemaProps{
-							Description: "tlsCipherSuites is the list of allowed cipher suites for the server. Values are from tls package constants (https://golang.org/pkg/crypto/tls/#pkg-constants). Default: nil",
+							Description: "tlsCipherSuites is the list of allowed cipher suites for the server. Note that TLS 1.3 ciphersuites are not configurable. Values are from tls package constants (https://golang.org/pkg/crypto/tls/#pkg-constants). Default: nil",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

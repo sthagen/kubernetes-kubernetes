@@ -5,9 +5,8 @@ module k8s.io/apiserver
 go 1.20
 
 require (
-	github.com/coreos/go-oidc v2.1.0+incompatible
-	github.com/coreos/go-systemd/v22 v22.4.0
-	github.com/davecgh/go-spew v1.1.1
+	github.com/coreos/go-oidc v2.2.1+incompatible
+	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/emicklei/go-restful/v3 v3.9.0
 	github.com/evanphx/json-patch v4.12.0+incompatible
 	github.com/fsnotify/fsnotify v1.6.0
@@ -20,7 +19,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	go.etcd.io/etcd/api/v3 v3.5.7
 	go.etcd.io/etcd/client/pkg/v3 v3.5.7
 	go.etcd.io/etcd/client/v3 v3.5.7
@@ -32,7 +31,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.10.0
 	go.opentelemetry.io/otel/trace v1.10.0
 	go.uber.org/zap v1.19.0
-	golang.org/x/crypto v0.1.0
+	golang.org/x/crypto v0.6.0
 	golang.org/x/net v0.8.0
 	golang.org/x/sync v0.1.0
 	golang.org/x/sys v0.6.0
@@ -50,7 +49,7 @@ require (
 	k8s.io/kms v0.0.0
 	k8s.io/kube-openapi v0.0.0-20230308215209-15aac26d736a
 	k8s.io/utils v0.0.0-20230209194617-a36077c30491
-	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.1.1
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.1.2
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3
 	sigs.k8s.io/yaml v1.3.0
@@ -65,7 +64,8 @@ require (
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
-	github.com/coreos/go-semver v0.3.0 // indirect
+	github.com/coreos/go-semver v0.3.1 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/felixge/httpsnoop v1.0.3 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
@@ -73,7 +73,7 @@ require (
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.1 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
-	github.com/golang-jwt/jwt/v4 v4.4.2 // indirect
+	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/btree v1.0.1 // indirect
