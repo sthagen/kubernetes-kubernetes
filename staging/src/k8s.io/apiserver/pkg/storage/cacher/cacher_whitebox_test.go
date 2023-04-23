@@ -686,7 +686,9 @@ func TestCacherNoLeakWithMultipleWatchers(t *testing.T) {
 			case <-stopCh:
 				return
 			default:
-				cacher.bookmarkWatchers.popExpiredWatchers()
+				cacher.Lock()
+				cacher.bookmarkWatchers.popExpiredWatchersThreadUnsafe()
+				cacher.Unlock()
 			}
 		}
 	}()
@@ -700,9 +702,9 @@ func TestCacherNoLeakWithMultipleWatchers(t *testing.T) {
 
 	// wait out the expiration period and pop expired watchers
 	time.Sleep(2 * time.Second)
-	cacher.bookmarkWatchers.popExpiredWatchers()
-	cacher.bookmarkWatchers.lock.Lock()
-	defer cacher.bookmarkWatchers.lock.Unlock()
+	cacher.Lock()
+	defer cacher.Unlock()
+	cacher.bookmarkWatchers.popExpiredWatchersThreadUnsafe()
 	if len(cacher.bookmarkWatchers.watchersBuckets) != 0 {
 		numWatchers := 0
 		for bucketID, v := range cacher.bookmarkWatchers.watchersBuckets {
@@ -1970,4 +1972,60 @@ func BenchmarkCacher_GetList(b *testing.B) {
 				}
 			})
 	}
+}
+
+// TestDoNotPopExpiredWatchersWhenNoEventsSeen makes sure that
+// a bookmark event will be delivered after the cacher has seen an event.
+// Previously the watchers have been removed from the "want bookmark" queue.
+func TestDoNotPopExpiredWatchersWhenNoEventsSeen(t *testing.T) {
+	defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.WatchList, true)()
+	backingStorage := &dummyStorage{}
+	cacher, _, err := newTestCacher(backingStorage)
+	if err != nil {
+		t.Fatalf("Couldn't create cacher: %v", err)
+	}
+	defer cacher.Stop()
+
+	// wait until cacher is initialized.
+	if err := cacher.ready.wait(context.Background()); err != nil {
+		t.Fatalf("unexpected error waiting for the cache to be ready")
+	}
+
+	pred := storage.Everything
+	pred.AllowWatchBookmarks = true
+	opts := storage.ListOptions{
+		Predicate:         pred,
+		SendInitialEvents: pointer.Bool(true),
+	}
+	w, err := cacher.Watch(context.Background(), "pods/ns", opts)
+	require.NoError(t, err, "failed to create watch: %v")
+	defer w.Stop()
+
+	// Ensure that popExpiredWatchers is called to ensure that our watch isn't removed from bookmarkWatchers.
+	// We do that every ~1s, so waiting 2 seconds seems enough.
+	time.Sleep(2 * time.Second)
+
+	// Send an event to ensure that lastProcessedResourceVersion in Cacher will change to non-zero value.
+	makePod := func(rv uint64) *example.Pod {
+		return &example.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            fmt.Sprintf("pod-%d", rv),
+				Namespace:       "ns",
+				ResourceVersion: fmt.Sprintf("%d", rv),
+				Annotations:     map[string]string{},
+			},
+		}
+	}
+	err = cacher.watchCache.Add(makePod(102))
+	require.NoError(t, err)
+
+	verifyEvents(t, w, []watch.Event{
+		{Type: watch.Added, Object: makePod(102)},
+		{Type: watch.Bookmark, Object: &example.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				ResourceVersion: "102",
+				Annotations:     map[string]string{"k8s.io/initial-events-end": "true"},
+			},
+		}},
+	}, true)
 }
