@@ -83,7 +83,7 @@ endif
 # This option is for running docker manifest command
 export DOCKER_CLI_EXPERIMENTAL := enabled
 # golang version should match the golang version of the official build from https://github.com/etcd-io/etcd/releases.
-GOLANG_VERSION := 1.19.8
+GOLANG_VERSION := 1.19.9
 GOARM?=7
 TEMP_DIR:=$(shell mktemp -d)
 
@@ -180,9 +180,9 @@ else
 
 	# Add this ENV variable in order to workaround an unsupported arch blocker
 	# On arm (which is 32-bit), it can't handle >1GB data in-memory
-	ifeq ($(ARCH),arm)
+        ifeq ($(ARCH),arm)
 		cd $(TEMP_DIR) && echo "ENV ETCD_UNSUPPORTED_ARCH=$(ARCH)" >> $(DOCKERFILE)
-	endif
+        endif
 endif
 
 	docker run --rm --privileged multiarch/qemu-user-static:$(QEMUVERSION) --reset -p yes

@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Kubernetes Authors.
+Copyright 2023 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,22 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package library
+package metrics
 
 import (
-	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/ext"
-	"github.com/google/cel-go/interpreter"
+	"testing"
+
+	"k8s.io/kubernetes/test/integration/framework"
 )
 
-// ExtensionLibs declares the set of CEL extension libraries available everywhere CEL is used in Kubernetes.
-var ExtensionLibs = append(k8sExtensionLibs, ext.Strings())
-
-var k8sExtensionLibs = []cel.EnvOption{
-	URLs(),
-	Regex(),
-	Lists(),
-	Authz(),
+func TestMain(m *testing.M) {
+	framework.EtcdMain(m.Run)
 }
-
-var ExtensionLibRegexOptimizations = []*interpreter.RegexOptimization{FindRegexOptimization, FindAllRegexOptimization}

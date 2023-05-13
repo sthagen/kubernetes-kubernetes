@@ -23,7 +23,7 @@ set -ex
 set -o pipefail
 
 tag="$1"
-containerd="containerd-1.6.0-830-g34d078e99" # from https://github.com/kind-ci/containerd-nightlies/releases
+containerd="containerd-1.7.0-79-g2503bef58" # from https://github.com/kind-ci/containerd-nightlies/releases
 
 tmpdir="$(mktemp -d)"
 cleanup() {
@@ -31,9 +31,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
+goarch=$(go env GOARCH)
+
 kind build node-image --image "$tag" "$(pwd)"
-curl -L --silent https://github.com/kind-ci/containerd-nightlies/releases/download/$containerd/$containerd-linux-amd64.tar.gz | tar -C "$tmpdir" -vzxf -
-curl -L --silent https://github.com/kind-ci/containerd-nightlies/releases/download/$containerd/runc.amd64 >"$tmpdir/runc"
+curl -L --silent https://github.com/kind-ci/containerd-nightlies/releases/download/$containerd/$containerd-linux-"$goarch".tar.gz | tar -C "$tmpdir" -vzxf -
+curl -L --silent https://github.com/kind-ci/containerd-nightlies/releases/download/$containerd/runc."$goarch" >"$tmpdir/runc"
 
 cat >"$tmpdir/Dockerfile" <<EOF
 FROM $tag
