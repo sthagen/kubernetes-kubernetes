@@ -417,9 +417,10 @@ const (
 	// All the node components such as CRI need to be running in the same user namespace.
 	KubeletInUserNamespace featuregate.Feature = "KubeletInUserNamespace"
 
-	// owner: @dashpole
+	// owner: @dashpole, @ffromani (only for GA graduation)
 	// alpha: v1.13
 	// beta: v1.15
+	// GA: v1.28
 	//
 	// Enables the kubelet's pod resources grpc endpoint
 	KubeletPodResources featuregate.Feature = "KubeletPodResources"
@@ -465,6 +466,13 @@ const (
 	//
 	// Enables tracking of secret-based service account tokens usage.
 	LegacyServiceAccountTokenTracking featuregate.Feature = "LegacyServiceAccountTokenTracking"
+
+	// owner: @yt2985
+	// kep: http://kep.k8s.io/2800
+	// alpha: v1.28
+	//
+	// Enables cleaning up of secret-based service account tokens.
+	LegacyServiceAccountTokenCleanUp featuregate.Feature = "LegacyServiceAccountTokenCleanUp"
 
 	// owner: @RobertKrawitz
 	// alpha: v1.15
@@ -948,7 +956,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	KubeletInUserNamespace: {Default: false, PreRelease: featuregate.Alpha},
 
-	KubeletPodResources: {Default: true, PreRelease: featuregate.Beta},
+	KubeletPodResources: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // GA in 1.28, remove in 1.30
 
 	KubeletPodResourcesDynamicResources: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -961,6 +969,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	LegacyServiceAccountTokenNoAutoGeneration: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
 
 	LegacyServiceAccountTokenTracking: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.30
+
+	LegacyServiceAccountTokenCleanUp: {Default: false, PreRelease: featuregate.Alpha},
 
 	LocalStorageCapacityIsolationFSQuotaMonitoring: {Default: false, PreRelease: featuregate.Alpha},
 
