@@ -440,7 +440,14 @@ func (jm *Controller) updateJob(old, cur interface{}) {
 	if err != nil {
 		return
 	}
-	jm.enqueueController(curJob, true)
+	if curJob.Generation == oldJob.Generation {
+		// Delay the Job sync when no generation change to batch Job status updates,
+		// typically triggered by pod events.
+		jm.enqueueControllerPodUpdate(curJob, true)
+	} else {
+		// Trigger immediate sync when spec is changed.
+		jm.enqueueController(curJob, true)
+	}
 	// check if need to add a new rsync for ActiveDeadlineSeconds
 	if curJob.Status.StartTime != nil {
 		curADS := curJob.Spec.ActiveDeadlineSeconds
@@ -762,7 +769,7 @@ func (jm *Controller) syncJob(ctx context.Context, key string) (rErr error) {
 		job.Status.StartTime = &now
 	}
 
-	newBackoffInfo := jm.backoffRecordStore.newBackoffRecord(jm.clock, key, newSucceededPods, newFailedPods)
+	newBackoffInfo := jm.backoffRecordStore.newBackoffRecord(key, newSucceededPods, newFailedPods)
 
 	var manageJobErr error
 	var finishedCondition *batch.JobCondition

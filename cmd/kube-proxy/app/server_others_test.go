@@ -34,16 +34,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
-	netutils "k8s.io/utils/net"
-	"k8s.io/utils/pointer"
-
 	clientsetfake "k8s.io/client-go/kubernetes/fake"
 	clientgotesting "k8s.io/client-go/testing"
-
 	proxyconfigapi "k8s.io/kubernetes/pkg/proxy/apis/config"
 	proxyutiliptables "k8s.io/kubernetes/pkg/proxy/util/iptables"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 	utiliptablestest "k8s.io/kubernetes/pkg/util/iptables/testing"
+	netutils "k8s.io/utils/net"
+	"k8s.io/utils/pointer"
 )
 
 func Test_platformApplyDefaults(t *testing.T) {
@@ -106,111 +104,6 @@ func Test_platformApplyDefaults(t *testing.T) {
 				t.Fatalf("expected detect-local: %s, but got: %s", tc.expectedDetectLocal, config.DetectLocalMode)
 			}
 		})
-	}
-}
-
-func Test_detectNodeIP(t *testing.T) {
-	cases := []struct {
-		name        string
-		nodeInfo    *v1.Node
-		hostname    string
-		bindAddress string
-		expectedIP  net.IP
-	}{
-		{
-			name:        "Bind address IPv4 unicast address and no Node object",
-			nodeInfo:    makeNodeWithAddresses("", "", ""),
-			hostname:    "fakeHost",
-			bindAddress: "10.0.0.1",
-			expectedIP:  netutils.ParseIPSloppy("10.0.0.1"),
-		},
-		{
-			name:        "Bind address IPv6 unicast address and no Node object",
-			nodeInfo:    makeNodeWithAddresses("", "", ""),
-			hostname:    "fakeHost",
-			bindAddress: "fd00:4321::2",
-			expectedIP:  netutils.ParseIPSloppy("fd00:4321::2"),
-		},
-		{
-			name:        "No Valid IP found",
-			nodeInfo:    makeNodeWithAddresses("", "", ""),
-			hostname:    "fakeHost",
-			bindAddress: "",
-			expectedIP:  netutils.ParseIPSloppy("127.0.0.1"),
-		},
-		// Disabled because the GetNodeIP method has a backoff retry mechanism
-		// and the test takes more than 30 seconds
-		// ok  	k8s.io/kubernetes/cmd/kube-proxy/app	34.136s
-		// {
-		//	name:        "No Valid IP found and unspecified bind address",
-		//	nodeInfo:    makeNodeWithAddresses("", "", ""),
-		//	hostname:    "fakeHost",
-		//	bindAddress: "0.0.0.0",
-		//	expectedIP:  net.IP{127,0,0,1),
-		// },
-		{
-			name:        "Bind address 0.0.0.0 and node with IPv4 InternalIP set",
-			nodeInfo:    makeNodeWithAddresses("fakeHost", "192.168.1.1", "90.90.90.90"),
-			hostname:    "fakeHost",
-			bindAddress: "0.0.0.0",
-			expectedIP:  netutils.ParseIPSloppy("192.168.1.1"),
-		},
-		{
-			name:        "Bind address :: and node with IPv4 InternalIP set",
-			nodeInfo:    makeNodeWithAddresses("fakeHost", "192.168.1.1", "90.90.90.90"),
-			hostname:    "fakeHost",
-			bindAddress: "::",
-			expectedIP:  netutils.ParseIPSloppy("192.168.1.1"),
-		},
-		{
-			name:        "Bind address 0.0.0.0 and node with IPv6 InternalIP set",
-			nodeInfo:    makeNodeWithAddresses("fakeHost", "fd00:1234::1", "2001:db8::2"),
-			hostname:    "fakeHost",
-			bindAddress: "0.0.0.0",
-			expectedIP:  netutils.ParseIPSloppy("fd00:1234::1"),
-		},
-		{
-			name:        "Bind address :: and node with IPv6 InternalIP set",
-			nodeInfo:    makeNodeWithAddresses("fakeHost", "fd00:1234::1", "2001:db8::2"),
-			hostname:    "fakeHost",
-			bindAddress: "::",
-			expectedIP:  netutils.ParseIPSloppy("fd00:1234::1"),
-		},
-		{
-			name:        "Bind address 0.0.0.0 and node with only IPv4 ExternalIP set",
-			nodeInfo:    makeNodeWithAddresses("fakeHost", "", "90.90.90.90"),
-			hostname:    "fakeHost",
-			bindAddress: "0.0.0.0",
-			expectedIP:  netutils.ParseIPSloppy("90.90.90.90"),
-		},
-		{
-			name:        "Bind address :: and node with only IPv4 ExternalIP set",
-			nodeInfo:    makeNodeWithAddresses("fakeHost", "", "90.90.90.90"),
-			hostname:    "fakeHost",
-			bindAddress: "::",
-			expectedIP:  netutils.ParseIPSloppy("90.90.90.90"),
-		},
-		{
-			name:        "Bind address 0.0.0.0 and node with only IPv6 ExternalIP set",
-			nodeInfo:    makeNodeWithAddresses("fakeHost", "", "2001:db8::2"),
-			hostname:    "fakeHost",
-			bindAddress: "0.0.0.0",
-			expectedIP:  netutils.ParseIPSloppy("2001:db8::2"),
-		},
-		{
-			name:        "Bind address :: and node with only IPv6 ExternalIP set",
-			nodeInfo:    makeNodeWithAddresses("fakeHost", "", "2001:db8::2"),
-			hostname:    "fakeHost",
-			bindAddress: "::",
-			expectedIP:  netutils.ParseIPSloppy("2001:db8::2"),
-		},
-	}
-	for _, c := range cases {
-		client := clientsetfake.NewSimpleClientset(c.nodeInfo)
-		ip := detectNodeIP(client, c.hostname, c.bindAddress)
-		if !ip.Equal(c.expectedIP) {
-			t.Errorf("Case[%s] Expected IP %q got %q", c.name, c.expectedIP, ip)
-		}
 	}
 }
 
@@ -504,35 +397,6 @@ func Test_getDualStackLocalDetectorTuple(t *testing.T) {
 	}
 }
 
-func makeNodeWithAddresses(name, internal, external string) *v1.Node {
-	if name == "" {
-		return &v1.Node{}
-	}
-
-	node := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Status: v1.NodeStatus{
-			Addresses: []v1.NodeAddress{},
-		},
-	}
-
-	if internal != "" {
-		node.Status.Addresses = append(node.Status.Addresses,
-			v1.NodeAddress{Type: v1.NodeInternalIP, Address: internal},
-		)
-	}
-
-	if external != "" {
-		node.Status.Addresses = append(node.Status.Addresses,
-			v1.NodeAddress{Type: v1.NodeExternalIP, Address: external},
-		)
-	}
-
-	return node
-}
-
 func makeNodeWithPodCIDRs(cidrs ...string) *v1.Node {
 	if len(cidrs) == 0 {
 		return &v1.Node{}
@@ -779,5 +643,56 @@ func TestGetConntrackMax(t *testing.T) {
 		} else if x != tc.expected {
 			t.Errorf("[%d] expected %d, got %d", i, tc.expected, x)
 		}
+	}
+}
+
+func TestProxyServer_createProxier(t *testing.T) {
+	tests := []struct {
+		name         string
+		node         *v1.Node
+		config       *proxyconfigapi.KubeProxyConfiguration
+		wantPodCIDRs []string
+	}{
+		{
+			name:         "LocalModeNodeCIDR store the node PodCIDRs obtained",
+			node:         makeNodeWithPodCIDRs("10.0.0.0/24"),
+			config:       &proxyconfigapi.KubeProxyConfiguration{DetectLocalMode: proxyconfigapi.LocalModeNodeCIDR},
+			wantPodCIDRs: []string{"10.0.0.0/24"},
+		},
+		{
+			name:         "LocalModeNodeCIDR store the node PodCIDRs obtained dual stack",
+			node:         makeNodeWithPodCIDRs("10.0.0.0/24", "2001:db2:1/64"),
+			config:       &proxyconfigapi.KubeProxyConfiguration{DetectLocalMode: proxyconfigapi.LocalModeNodeCIDR},
+			wantPodCIDRs: []string{"10.0.0.0/24", "2001:db2:1/64"},
+		},
+		{
+			name:   "LocalModeClusterCIDR does not get the node PodCIDRs",
+			node:   makeNodeWithPodCIDRs("10.0.0.0/24", "2001:db2:1/64"),
+			config: &proxyconfigapi.KubeProxyConfiguration{DetectLocalMode: proxyconfigapi.LocalModeClusterCIDR},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := clientsetfake.NewSimpleClientset(tt.node)
+			s := &ProxyServer{
+				Config:   tt.config,
+				Client:   client,
+				Hostname: "nodename",
+				NodeIPs: map[v1.IPFamily]net.IP{
+					v1.IPv4Protocol: netutils.ParseIPSloppy("127.0.0.1"),
+					v1.IPv6Protocol: net.IPv6zero,
+				},
+			}
+			_, err := s.createProxier(tt.config)
+			// TODO: mock the exec.Interface to not fail probing iptables
+			if (err != nil) && !strings.Contains(err.Error(), "iptables is not supported for primary IP family") {
+				t.Errorf("ProxyServer.createProxier() error = %v", err)
+				return
+			}
+			if !reflect.DeepEqual(s.podCIDRs, tt.wantPodCIDRs) {
+				t.Errorf("Expected PodCIDRs %v got %v", tt.wantPodCIDRs, s.podCIDRs)
+			}
+
+		})
 	}
 }
