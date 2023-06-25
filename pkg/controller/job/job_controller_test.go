@@ -64,6 +64,10 @@ import (
 var realClock = &clock.RealClock{}
 var alwaysReady = func() bool { return true }
 
+const fastSyncJobBatchPeriod = 10 * time.Millisecond
+const fastJobApiBackoff = 10 * time.Millisecond
+const fastRequeue = 10 * time.Millisecond
+
 // testFinishedAt represents time one second later than unix epoch
 // this will be used in various test cases where we don't want back-off to kick in
 var testFinishedAt = metav1.NewTime((time.Time{}).Add(time.Second))
@@ -853,10 +857,6 @@ func TestControllerSyncJob(t *testing.T) {
 			if tc.podControllerError != nil {
 				if err == nil {
 					t.Error("Syncing jobs expected to return error on podControl exception")
-				}
-			} else if tc.expectedCondition == nil && (hasValidFailingPods(tc.podsWithIndexes, int(tc.completions)) || (tc.completionMode != batch.IndexedCompletion && tc.failedPods > 0)) {
-				if err == nil {
-					t.Error("Syncing jobs expected to return error when there are new failed pods and Job didn't finish")
 				}
 			} else if tc.podLimit != 0 && fakePodControl.CreateCallCount > tc.podLimit {
 				if err == nil {
@@ -1704,7 +1704,6 @@ func TestSyncJobPastDeadline(t *testing.T) {
 		failedPods    int
 
 		// expectations
-		expectedForGetKey       bool
 		expectedDeletions       int32
 		expectedActive          int32
 		expectedSucceeded       int32
@@ -1719,7 +1718,6 @@ func TestSyncJobPastDeadline(t *testing.T) {
 			startTime:               15,
 			backoffLimit:            6,
 			activePods:              1,
-			expectedForGetKey:       false,
 			expectedDeletions:       1,
 			expectedFailed:          1,
 			expectedCondition:       batch.JobFailed,
@@ -1733,7 +1731,6 @@ func TestSyncJobPastDeadline(t *testing.T) {
 			backoffLimit:            6,
 			activePods:              1,
 			succeededPods:           1,
-			expectedForGetKey:       true,
 			expectedDeletions:       1,
 			expectedSucceeded:       1,
 			expectedFailed:          1,
@@ -1746,7 +1743,6 @@ func TestSyncJobPastDeadline(t *testing.T) {
 			activeDeadlineSeconds:   10,
 			startTime:               10,
 			backoffLimit:            6,
-			expectedForGetKey:       false,
 			expectedCondition:       batch.JobFailed,
 			expectedConditionReason: "DeadlineExceeded",
 		},
@@ -1756,7 +1752,6 @@ func TestSyncJobPastDeadline(t *testing.T) {
 			activeDeadlineSeconds:   1,
 			startTime:               10,
 			failedPods:              1,
-			expectedForGetKey:       false,
 			expectedFailed:          1,
 			expectedCondition:       batch.JobFailed,
 			expectedConditionReason: "BackoffLimitExceeded",
@@ -1768,7 +1763,6 @@ func TestSyncJobPastDeadline(t *testing.T) {
 			activeDeadlineSeconds:   10,
 			startTime:               15,
 			backoffLimit:            6,
-			expectedForGetKey:       true,
 			expectedCondition:       batch.JobSuspended,
 			expectedConditionReason: "JobSuspended",
 		},
@@ -3106,25 +3100,27 @@ func TestSyncJobWithJobPodFailurePolicy(t *testing.T) {
 func TestSyncJobUpdateRequeue(t *testing.T) {
 	_, ctx := ktesting.NewTestContext(t)
 	clientset := clientset.NewForConfigOrDie(&restclient.Config{Host: "", ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Group: "", Version: "v1"}}})
-	defer func() { DefaultJobApiBackOff = 1 * time.Second }()
-	DefaultJobApiBackOff = time.Duration(0) // overwrite the default value for testing
 	cases := map[string]struct {
-		updateErr               error
-		wantRequeuedImmediately bool
+		updateErr    error
+		wantRequeued bool
 	}{
-		"no error": {},
+		"no error": {
+			wantRequeued: false,
+		},
 		"generic error": {
-			updateErr:               fmt.Errorf("update error"),
-			wantRequeuedImmediately: true,
+			updateErr:    fmt.Errorf("update error"),
+			wantRequeued: true,
 		},
 		"conflict error": {
-			updateErr:               apierrors.NewConflict(schema.GroupResource{}, "", nil),
-			wantRequeuedImmediately: true,
+			updateErr:    apierrors.NewConflict(schema.GroupResource{}, "", nil),
+			wantRequeued: true,
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			manager, sharedInformerFactory := newControllerFromClient(ctx, clientset, controller.NoResyncPeriodFunc)
+			t.Cleanup(setDurationDuringTest(&DefaultJobApiBackOff, fastJobApiBackoff))
+			fakeClient := clocktesting.NewFakeClock(time.Now())
+			manager, sharedInformerFactory := newControllerFromClientWithClock(ctx, clientset, controller.NoResyncPeriodFunc, fakeClient)
 			fakePodControl := controller.FakePodControl{}
 			manager.podControl = &fakePodControl
 			manager.podStoreSynced = alwaysReady
@@ -3136,17 +3132,16 @@ func TestSyncJobUpdateRequeue(t *testing.T) {
 			sharedInformerFactory.Batch().V1().Jobs().Informer().GetIndexer().Add(job)
 			manager.queue.Add(testutil.GetKey(job, t))
 			manager.processNextWorkItem(context.TODO())
-			// With DefaultJobApiBackOff=0, the queueing is synchronous.
-			requeued := manager.queue.Len() > 0
-			if requeued != tc.wantRequeuedImmediately {
-				t.Errorf("Unexpected requeue, got %t, want %t", requeued, tc.wantRequeuedImmediately)
-			}
-			if requeued {
-				key, _ := manager.queue.Get()
-				expectedKey := testutil.GetKey(job, t)
-				if key != expectedKey {
-					t.Errorf("Expected requeue of job with key %s got %s", expectedKey, key)
-				}
+			if tc.wantRequeued {
+				verifyEmptyQueueAndAwaitForQueueLen(ctx, t, manager, 1)
+			} else {
+				// We advance the clock to make sure there are not items awaiting
+				// to be added into the queue. We also sleep a little to give the
+				// delaying queue time to move the potential items from pre-queue
+				// into the queue asynchronously.
+				manager.clock.Sleep(fastJobApiBackoff)
+				time.Sleep(time.Millisecond)
+				verifyEmptyQueue(ctx, t, manager)
 			}
 		})
 	}
@@ -3381,15 +3376,15 @@ func TestGetPodsForJob(t *testing.T) {
 }
 
 func TestAddPod(t *testing.T) {
+	t.Cleanup(setDurationDuringTest(&syncJobBatchPeriod, fastSyncJobBatchPeriod))
 	_, ctx := ktesting.NewTestContext(t)
 	logger := klog.FromContext(ctx)
 
 	clientset := clientset.NewForConfigOrDie(&restclient.Config{Host: "", ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Group: "", Version: "v1"}}})
-	jm, informer := newControllerFromClient(ctx, clientset, controller.NoResyncPeriodFunc)
+	fakeClock := clocktesting.NewFakeClock(time.Now())
+	jm, informer := newControllerFromClientWithClock(ctx, clientset, controller.NoResyncPeriodFunc, fakeClock)
 	jm.podStoreSynced = alwaysReady
 	jm.jobStoreSynced = alwaysReady
-	// Disable batching of pod updates.
-	jm.syncJobBatchPeriod = 0
 
 	job1 := newJob(1, 1, 6, batch.NonIndexedCompletion)
 	job1.Name = "job1"
@@ -3404,9 +3399,7 @@ func TestAddPod(t *testing.T) {
 	informer.Core().V1().Pods().Informer().GetIndexer().Add(pod2)
 
 	jm.addPod(logger, pod1)
-	if got, want := jm.queue.Len(), 1; got != want {
-		t.Fatalf("queue.Len() = %v, want %v", got, want)
-	}
+	verifyEmptyQueueAndAwaitForQueueLen(ctx, t, jm, 1)
 	key, done := jm.queue.Get()
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for pod %v", pod1.Name)
@@ -3417,9 +3410,7 @@ func TestAddPod(t *testing.T) {
 	}
 
 	jm.addPod(logger, pod2)
-	if got, want := jm.queue.Len(), 1; got != want {
-		t.Fatalf("queue.Len() = %v, want %v", got, want)
-	}
+	verifyEmptyQueueAndAwaitForQueueLen(ctx, t, jm, 1)
 	key, done = jm.queue.Get()
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for pod %v", pod2.Name)
@@ -3431,13 +3422,13 @@ func TestAddPod(t *testing.T) {
 }
 
 func TestAddPodOrphan(t *testing.T) {
+	t.Cleanup(setDurationDuringTest(&syncJobBatchPeriod, fastSyncJobBatchPeriod))
 	logger, ctx := ktesting.NewTestContext(t)
 	clientset := clientset.NewForConfigOrDie(&restclient.Config{Host: "", ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Group: "", Version: "v1"}}})
-	jm, informer := newControllerFromClient(ctx, clientset, controller.NoResyncPeriodFunc)
+	fakeClock := clocktesting.NewFakeClock(time.Now())
+	jm, informer := newControllerFromClientWithClock(ctx, clientset, controller.NoResyncPeriodFunc, fakeClock)
 	jm.podStoreSynced = alwaysReady
 	jm.jobStoreSynced = alwaysReady
-	// Disable batching of pod updates.
-	jm.syncJobBatchPeriod = 0
 
 	job1 := newJob(1, 1, 6, batch.NonIndexedCompletion)
 	job1.Name = "job1"
@@ -3456,20 +3447,18 @@ func TestAddPodOrphan(t *testing.T) {
 	informer.Core().V1().Pods().Informer().GetIndexer().Add(pod1)
 
 	jm.addPod(logger, pod1)
-	if got, want := jm.queue.Len(), 2; got != want {
-		t.Fatalf("queue.Len() = %v, want %v", got, want)
-	}
+	verifyEmptyQueueAndAwaitForQueueLen(ctx, t, jm, 2)
 }
 
 func TestUpdatePod(t *testing.T) {
+	t.Cleanup(setDurationDuringTest(&syncJobBatchPeriod, fastSyncJobBatchPeriod))
 	_, ctx := ktesting.NewTestContext(t)
 	logger := klog.FromContext(ctx)
 	clientset := clientset.NewForConfigOrDie(&restclient.Config{Host: "", ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Group: "", Version: "v1"}}})
-	jm, informer := newControllerFromClient(ctx, clientset, controller.NoResyncPeriodFunc)
+	fakeClock := clocktesting.NewFakeClock(time.Now())
+	jm, informer := newControllerFromClientWithClock(ctx, clientset, controller.NoResyncPeriodFunc, fakeClock)
 	jm.podStoreSynced = alwaysReady
 	jm.jobStoreSynced = alwaysReady
-	// Disable batching of pod updates.
-	jm.syncJobBatchPeriod = 0
 
 	job1 := newJob(1, 1, 6, batch.NonIndexedCompletion)
 	job1.Name = "job1"
@@ -3486,9 +3475,7 @@ func TestUpdatePod(t *testing.T) {
 	prev := *pod1
 	bumpResourceVersion(pod1)
 	jm.updatePod(logger, &prev, pod1)
-	if got, want := jm.queue.Len(), 1; got != want {
-		t.Fatalf("queue.Len() = %v, want %v", got, want)
-	}
+	verifyEmptyQueueAndAwaitForQueueLen(ctx, t, jm, 1)
 	key, done := jm.queue.Get()
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for pod %v", pod1.Name)
@@ -3501,9 +3488,7 @@ func TestUpdatePod(t *testing.T) {
 	prev = *pod2
 	bumpResourceVersion(pod2)
 	jm.updatePod(logger, &prev, pod2)
-	if got, want := jm.queue.Len(), 1; got != want {
-		t.Fatalf("queue.Len() = %v, want %v", got, want)
-	}
+	verifyEmptyQueueAndAwaitForQueueLen(ctx, t, jm, 1)
 	key, done = jm.queue.Get()
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for pod %v", pod2.Name)
@@ -3515,13 +3500,13 @@ func TestUpdatePod(t *testing.T) {
 }
 
 func TestUpdatePodOrphanWithNewLabels(t *testing.T) {
+	t.Cleanup(setDurationDuringTest(&syncJobBatchPeriod, fastSyncJobBatchPeriod))
 	logger, ctx := ktesting.NewTestContext(t)
 	clientset := clientset.NewForConfigOrDie(&restclient.Config{Host: "", ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Group: "", Version: "v1"}}})
-	jm, informer := newControllerFromClient(ctx, clientset, controller.NoResyncPeriodFunc)
+	fakeClock := clocktesting.NewFakeClock(time.Now())
+	jm, informer := newControllerFromClientWithClock(ctx, clientset, controller.NoResyncPeriodFunc, fakeClock)
 	jm.podStoreSynced = alwaysReady
 	jm.jobStoreSynced = alwaysReady
-	// Disable batching of pod updates.
-	jm.syncJobBatchPeriod = 0
 
 	job1 := newJob(1, 1, 6, batch.NonIndexedCompletion)
 	job1.Name = "job1"
@@ -3539,20 +3524,18 @@ func TestUpdatePodOrphanWithNewLabels(t *testing.T) {
 	prev.Labels = map[string]string{"foo2": "bar2"}
 	bumpResourceVersion(pod1)
 	jm.updatePod(logger, &prev, pod1)
-	if got, want := jm.queue.Len(), 2; got != want {
-		t.Fatalf("queue.Len() = %v, want %v", got, want)
-	}
+	verifyEmptyQueueAndAwaitForQueueLen(ctx, t, jm, 2)
 }
 
 func TestUpdatePodChangeControllerRef(t *testing.T) {
+	t.Cleanup(setDurationDuringTest(&syncJobBatchPeriod, fastSyncJobBatchPeriod))
 	_, ctx := ktesting.NewTestContext(t)
 	logger := klog.FromContext(ctx)
 	clientset := clientset.NewForConfigOrDie(&restclient.Config{Host: "", ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Group: "", Version: "v1"}}})
-	jm, informer := newControllerFromClient(ctx, clientset, controller.NoResyncPeriodFunc)
+	fakeClock := clocktesting.NewFakeClock(time.Now())
+	jm, informer := newControllerFromClientWithClock(ctx, clientset, controller.NoResyncPeriodFunc, fakeClock)
 	jm.podStoreSynced = alwaysReady
 	jm.jobStoreSynced = alwaysReady
-	// Disable batching of pod updates.
-	jm.syncJobBatchPeriod = 0
 
 	job1 := newJob(1, 1, 6, batch.NonIndexedCompletion)
 	job1.Name = "job1"
@@ -3569,20 +3552,18 @@ func TestUpdatePodChangeControllerRef(t *testing.T) {
 	prev.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(job2, controllerKind)}
 	bumpResourceVersion(pod1)
 	jm.updatePod(logger, &prev, pod1)
-	if got, want := jm.queue.Len(), 2; got != want {
-		t.Fatalf("queue.Len() = %v, want %v", got, want)
-	}
+	verifyEmptyQueueAndAwaitForQueueLen(ctx, t, jm, 2)
 }
 
 func TestUpdatePodRelease(t *testing.T) {
+	t.Cleanup(setDurationDuringTest(&syncJobBatchPeriod, fastSyncJobBatchPeriod))
 	_, ctx := ktesting.NewTestContext(t)
 	logger := klog.FromContext(ctx)
 	clientset := clientset.NewForConfigOrDie(&restclient.Config{Host: "", ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Group: "", Version: "v1"}}})
-	jm, informer := newControllerFromClient(ctx, clientset, controller.NoResyncPeriodFunc)
+	fakeClock := clocktesting.NewFakeClock(time.Now())
+	jm, informer := newControllerFromClientWithClock(ctx, clientset, controller.NoResyncPeriodFunc, fakeClock)
 	jm.podStoreSynced = alwaysReady
 	jm.jobStoreSynced = alwaysReady
-	// Disable batching of pod updates.
-	jm.syncJobBatchPeriod = 0
 
 	job1 := newJob(1, 1, 6, batch.NonIndexedCompletion)
 	job1.Name = "job1"
@@ -3599,19 +3580,17 @@ func TestUpdatePodRelease(t *testing.T) {
 	pod1.OwnerReferences = nil
 	bumpResourceVersion(pod1)
 	jm.updatePod(logger, &prev, pod1)
-	if got, want := jm.queue.Len(), 2; got != want {
-		t.Fatalf("queue.Len() = %v, want %v", got, want)
-	}
+	verifyEmptyQueueAndAwaitForQueueLen(ctx, t, jm, 2)
 }
 
 func TestDeletePod(t *testing.T) {
+	t.Cleanup(setDurationDuringTest(&syncJobBatchPeriod, fastSyncJobBatchPeriod))
 	logger, ctx := ktesting.NewTestContext(t)
 	clientset := clientset.NewForConfigOrDie(&restclient.Config{Host: "", ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Group: "", Version: "v1"}}})
-	jm, informer := newControllerFromClient(ctx, clientset, controller.NoResyncPeriodFunc)
+	fakeClock := clocktesting.NewFakeClock(time.Now())
+	jm, informer := newControllerFromClientWithClock(ctx, clientset, controller.NoResyncPeriodFunc, fakeClock)
 	jm.podStoreSynced = alwaysReady
 	jm.jobStoreSynced = alwaysReady
-	// Disable batching of pod updates.
-	jm.syncJobBatchPeriod = 0
 
 	job1 := newJob(1, 1, 6, batch.NonIndexedCompletion)
 	job1.Name = "job1"
@@ -3626,9 +3605,7 @@ func TestDeletePod(t *testing.T) {
 	informer.Core().V1().Pods().Informer().GetIndexer().Add(pod2)
 
 	jm.deletePod(logger, pod1, true)
-	if got, want := jm.queue.Len(), 1; got != want {
-		t.Fatalf("queue.Len() = %v, want %v", got, want)
-	}
+	verifyEmptyQueueAndAwaitForQueueLen(ctx, t, jm, 1)
 	key, done := jm.queue.Get()
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for pod %v", pod1.Name)
@@ -3639,9 +3616,7 @@ func TestDeletePod(t *testing.T) {
 	}
 
 	jm.deletePod(logger, pod2, true)
-	if got, want := jm.queue.Len(), 1; got != want {
-		t.Fatalf("queue.Len() = %v, want %v", got, want)
-	}
+	verifyEmptyQueueAndAwaitForQueueLen(ctx, t, jm, 1)
 	key, done = jm.queue.Get()
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for pod %v", pod2.Name)
@@ -3653,13 +3628,13 @@ func TestDeletePod(t *testing.T) {
 }
 
 func TestDeletePodOrphan(t *testing.T) {
+	// Disable batching of pod updates to show it does not get requeued at all
+	t.Cleanup(setDurationDuringTest(&syncJobBatchPeriod, 0))
 	logger, ctx := ktesting.NewTestContext(t)
 	clientset := clientset.NewForConfigOrDie(&restclient.Config{Host: "", ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Group: "", Version: "v1"}}})
 	jm, informer := newControllerFromClient(ctx, clientset, controller.NoResyncPeriodFunc)
 	jm.podStoreSynced = alwaysReady
 	jm.jobStoreSynced = alwaysReady
-	// Disable batching of pod updates.
-	jm.syncJobBatchPeriod = 0
 
 	job1 := newJob(1, 1, 6, batch.NonIndexedCompletion)
 	job1.Name = "job1"
@@ -3898,81 +3873,39 @@ func bumpResourceVersion(obj metav1.Object) {
 	obj.SetResourceVersion(strconv.FormatInt(ver+1, 10))
 }
 
-type pods struct {
-	pending int
-	active  int
-	succeed int
-	failed  int
-}
-
-func TestJobBackoffReset(t *testing.T) {
+func TestJobApiBackoffReset(t *testing.T) {
+	t.Cleanup(setDurationDuringTest(&DefaultJobApiBackOff, fastJobApiBackoff))
 	_, ctx := ktesting.NewTestContext(t)
-	testCases := map[string]struct {
-		// job setup
-		parallelism  int32
-		completions  int32
-		backoffLimit int32
 
-		// pod setup - each row is additive!
-		pods []pods
-	}{
-		"parallelism=1": {
-			1, 2, 1,
-			[]pods{
-				{0, 1, 0, 1},
-				{0, 0, 1, 0},
-			},
-		},
-		"parallelism=2 (just failure)": {
-			2, 2, 1,
-			[]pods{
-				{0, 2, 0, 1},
-				{0, 0, 1, 0},
-			},
-		},
+	clientset := clientset.NewForConfigOrDie(&restclient.Config{Host: "", ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Group: "", Version: "v1"}}})
+	fakeClock := clocktesting.NewFakeClock(time.Now())
+	manager, sharedInformerFactory := newControllerFromClientWithClock(ctx, clientset, controller.NoResyncPeriodFunc, fakeClock)
+	fakePodControl := controller.FakePodControl{}
+	manager.podControl = &fakePodControl
+	manager.podStoreSynced = alwaysReady
+	manager.jobStoreSynced = alwaysReady
+	manager.updateStatusHandler = func(ctx context.Context, job *batch.Job) (*batch.Job, error) {
+		return job, nil
 	}
 
-	for name, tc := range testCases {
-		clientset := clientset.NewForConfigOrDie(&restclient.Config{Host: "", ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Group: "", Version: "v1"}}})
-		defer func() { DefaultJobApiBackOff = 1 * time.Second }()
-		DefaultJobApiBackOff = time.Duration(0) // overwrite the default value for testing
-		manager, sharedInformerFactory := newControllerFromClient(ctx, clientset, controller.NoResyncPeriodFunc)
-		fakePodControl := controller.FakePodControl{}
-		manager.podControl = &fakePodControl
-		manager.podStoreSynced = alwaysReady
-		manager.jobStoreSynced = alwaysReady
-		var actual *batch.Job
-		manager.updateStatusHandler = func(ctx context.Context, job *batch.Job) (*batch.Job, error) {
-			actual = job
-			return job, nil
-		}
+	job := newJob(1, 1, 2, batch.NonIndexedCompletion)
+	key := testutil.GetKey(job, t)
+	sharedInformerFactory.Batch().V1().Jobs().Informer().GetIndexer().Add(job)
 
-		// job & pods setup
-		job := newJob(tc.parallelism, tc.completions, tc.backoffLimit, batch.NonIndexedCompletion)
-		key := testutil.GetKey(job, t)
-		sharedInformerFactory.Batch().V1().Jobs().Informer().GetIndexer().Add(job)
-		podIndexer := sharedInformerFactory.Core().V1().Pods().Informer().GetIndexer()
-
-		setPodsStatuses(podIndexer, job, tc.pods[0].pending, tc.pods[0].active, tc.pods[0].succeed, tc.pods[0].failed, 0)
-		manager.queue.Add(key)
-		manager.processNextWorkItem(context.TODO())
-		retries := manager.queue.NumRequeues(key)
-		if retries != 1 {
-			t.Errorf("%s: expected exactly 1 retry, got %d", name, retries)
-		}
-
-		job = actual
-		sharedInformerFactory.Batch().V1().Jobs().Informer().GetIndexer().Replace([]interface{}{actual}, actual.ResourceVersion)
-		setPodsStatuses(podIndexer, job, tc.pods[1].pending, tc.pods[1].active, tc.pods[1].succeed, tc.pods[1].failed, 0)
-		manager.processNextWorkItem(context.TODO())
-		retries = manager.queue.NumRequeues(key)
-		if retries != 0 {
-			t.Errorf("%s: expected exactly 0 retries, got %d", name, retries)
-		}
-		if getCondition(actual, batch.JobFailed, v1.ConditionTrue, "BackoffLimitExceeded") {
-			t.Errorf("%s: unexpected job failure", name)
-		}
+	// error returned make the key requeued
+	fakePodControl.Err = errors.New("Controller error")
+	manager.queue.Add(key)
+	manager.processNextWorkItem(context.TODO())
+	retries := manager.queue.NumRequeues(key)
+	if retries != 1 {
+		t.Fatalf("%s: expected exactly 1 retry, got %d", job.Name, retries)
 	}
+
+	// the queue is emptied on success
+	fakePodControl.Err = nil
+	manager.clock.Sleep(fastJobApiBackoff)
+	manager.processNextWorkItem(context.TODO())
+	verifyEmptyQueue(ctx, t, manager)
 }
 
 var _ workqueue.RateLimitingInterface = &fakeRateLimitingQueue{}
@@ -4066,7 +3999,6 @@ func TestJobBackoffForOnFailure(t *testing.T) {
 		suspend      bool
 
 		// pod setup
-		jobKeyForget  bool
 		restartCounts []int32
 		podPhase      v1.PodPhase
 
@@ -4078,57 +4010,57 @@ func TestJobBackoffForOnFailure(t *testing.T) {
 		expectedConditionReason string
 	}{
 		"backoffLimit 0 should have 1 pod active": {
-			1, 1, 0, false,
+			1, 1, 0,
 			false, []int32{0}, v1.PodRunning,
 			1, 0, 0, nil, "",
 		},
 		"backoffLimit 1 with restartCount 0 should have 1 pod active": {
-			1, 1, 1, false,
+			1, 1, 1,
 			false, []int32{0}, v1.PodRunning,
 			1, 0, 0, nil, "",
 		},
 		"backoffLimit 1 with restartCount 1 and podRunning should have 0 pod active": {
-			1, 1, 1, false,
+			1, 1, 1,
 			false, []int32{1}, v1.PodRunning,
 			0, 0, 1, &jobConditionFailed, "BackoffLimitExceeded",
 		},
 		"backoffLimit 1 with restartCount 1 and podPending should have 0 pod active": {
-			1, 1, 1, false,
+			1, 1, 1,
 			false, []int32{1}, v1.PodPending,
 			0, 0, 1, &jobConditionFailed, "BackoffLimitExceeded",
 		},
 		"too many job failures with podRunning - single pod": {
-			1, 5, 2, false,
+			1, 5, 2,
 			false, []int32{2}, v1.PodRunning,
 			0, 0, 1, &jobConditionFailed, "BackoffLimitExceeded",
 		},
 		"too many job failures with podPending - single pod": {
-			1, 5, 2, false,
+			1, 5, 2,
 			false, []int32{2}, v1.PodPending,
 			0, 0, 1, &jobConditionFailed, "BackoffLimitExceeded",
 		},
 		"too many job failures with podRunning - multiple pods": {
-			2, 5, 2, false,
+			2, 5, 2,
 			false, []int32{1, 1}, v1.PodRunning,
 			0, 0, 2, &jobConditionFailed, "BackoffLimitExceeded",
 		},
 		"too many job failures with podPending - multiple pods": {
-			2, 5, 2, false,
+			2, 5, 2,
 			false, []int32{1, 1}, v1.PodPending,
 			0, 0, 2, &jobConditionFailed, "BackoffLimitExceeded",
 		},
 		"not enough failures": {
-			2, 5, 3, false,
+			2, 5, 3,
 			false, []int32{1, 1}, v1.PodRunning,
 			2, 0, 0, nil, "",
 		},
 		"suspending a job": {
-			2, 4, 6, true,
+			2, 4, 6,
 			true, []int32{1, 1}, v1.PodRunning,
 			0, 0, 0, &jobConditionSuspended, "JobSuspended",
 		},
 		"finshed job": {
-			2, 4, 6, true,
+			2, 4, 6,
 			true, []int32{1, 1, 2, 0}, v1.PodSucceeded,
 			0, 4, 0, &jobConditionComplete, "",
 		},
@@ -4200,8 +4132,6 @@ func TestJobBackoffOnRestartPolicyNever(t *testing.T) {
 		failedPods      int
 
 		// expectations
-		isExpectingAnError      bool
-		jobKeyForget            bool
 		expectedActive          int32
 		expectedSucceeded       int32
 		expectedFailed          int32
@@ -4211,27 +4141,27 @@ func TestJobBackoffOnRestartPolicyNever(t *testing.T) {
 		"not enough failures with backoffLimit 0 - single pod": {
 			1, 1, 0,
 			v1.PodRunning, 1, 0,
-			false, false, 1, 0, 0, nil, "",
+			1, 0, 0, nil, "",
 		},
 		"not enough failures with backoffLimit 1 - single pod": {
 			1, 1, 1,
 			"", 0, 1,
-			true, false, 1, 0, 1, nil, "",
+			1, 0, 1, nil, "",
 		},
 		"too many failures with backoffLimit 1 - single pod": {
 			1, 1, 1,
 			"", 0, 2,
-			false, false, 0, 0, 2, &jobConditionFailed, "BackoffLimitExceeded",
+			0, 0, 2, &jobConditionFailed, "BackoffLimitExceeded",
 		},
 		"not enough failures with backoffLimit 6 - multiple pods": {
 			2, 2, 6,
 			v1.PodRunning, 1, 6,
-			true, false, 2, 0, 6, nil, "",
+			2, 0, 6, nil, "",
 		},
 		"too many failures with backoffLimit 6 - multiple pods": {
 			2, 2, 6,
 			"", 0, 7,
-			false, false, 0, 0, 7, &jobConditionFailed, "BackoffLimitExceeded",
+			0, 0, 7, &jobConditionFailed, "BackoffLimitExceeded",
 		},
 	}
 
@@ -4267,9 +4197,8 @@ func TestJobBackoffOnRestartPolicyNever(t *testing.T) {
 
 			// run
 			err := manager.syncJob(context.TODO(), testutil.GetKey(job, t))
-
-			if (err != nil) != tc.isExpectingAnError {
-				t.Errorf("unexpected error syncing job. Got %#v, isExpectingAnError: %v\n", err, tc.isExpectingAnError)
+			if err != nil {
+				t.Fatalf("unexpected error syncing job: %#v\n", err)
 			}
 			// validate status
 			if actual.Status.Active != tc.expectedActive {
@@ -4490,21 +4419,31 @@ func checkJobCompletionEnvVariable(t *testing.T, spec *v1.PodSpec) {
 	}
 }
 
-// hasValidFailingPods checks if there exists failed pods with valid index.
-func hasValidFailingPods(status []indexPhase, completions int) bool {
-	for _, s := range status {
-		ix, err := strconv.Atoi(s.Index)
-		if err != nil {
-			continue
+func verifyEmptyQueueAndAwaitForQueueLen(ctx context.Context, t *testing.T, jm *Controller, wantQueueLen int) {
+	t.Helper()
+	verifyEmptyQueue(ctx, t, jm)
+	awaitForQueueLen(ctx, t, jm, wantQueueLen)
+}
+
+func awaitForQueueLen(ctx context.Context, t *testing.T, jm *Controller, wantQueueLen int) {
+	t.Helper()
+	verifyEmptyQueue(ctx, t, jm)
+	if err := wait.PollUntilContextTimeout(ctx, fastRequeue, time.Second, true, func(ctx context.Context) (bool, error) {
+		if requeued := jm.queue.Len() == wantQueueLen; requeued {
+			return true, nil
 		}
-		if ix < 0 || ix >= completions {
-			continue
-		}
-		if s.Phase == v1.PodFailed {
-			return true
-		}
+		jm.clock.Sleep(fastRequeue)
+		return false, nil
+	}); err != nil {
+		t.Errorf("Failed to await for expected queue.Len(). want %v, got: %v", wantQueueLen, jm.queue.Len())
 	}
-	return false
+}
+
+func verifyEmptyQueue(ctx context.Context, t *testing.T, jm *Controller) {
+	t.Helper()
+	if jm.queue.Len() > 0 {
+		t.Errorf("Unexpected queue.Len(). Want: %d, got: %d", 0, jm.queue.Len())
+	}
 }
 
 type podBuilder struct {
@@ -4587,4 +4526,12 @@ func (pb podBuilder) trackingFinalizer() podBuilder {
 func (pb podBuilder) deletionTimestamp() podBuilder {
 	pb.DeletionTimestamp = &metav1.Time{}
 	return pb
+}
+
+func setDurationDuringTest(val *time.Duration, newVal time.Duration) func() {
+	origVal := *val
+	*val = newVal
+	return func() {
+		*val = origVal
+	}
 }
