@@ -20,12 +20,13 @@ import (
 	apiextensionsapiserver "k8s.io/apiextensions-apiserver/pkg/apiserver"
 	"k8s.io/apiserver/pkg/util/webhook"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
+	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
 	"k8s.io/kubernetes/pkg/controlplane"
 	"k8s.io/kubernetes/pkg/controlplane/apiserver"
 )
 
 type Config struct {
-	Options completedServerRunOptions
+	Options options.CompletedOptions
 
 	Aggregator    *aggregatorapiserver.Config
 	ControlPlane  *controlplane.Config
@@ -38,7 +39,7 @@ type ExtraConfig struct {
 }
 
 type completedConfig struct {
-	Options completedServerRunOptions
+	Options options.CompletedOptions
 
 	Aggregator    aggregatorapiserver.CompletedConfig
 	ControlPlane  controlplane.CompletedConfig
@@ -65,7 +66,7 @@ func (c *Config) Complete() (CompletedConfig, error) {
 }
 
 // NewConfig creates all the resources for running kube-apiserver, but runs none of them.
-func NewConfig(opts completedServerRunOptions) (*Config, error) {
+func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	c := &Config{
 		Options: opts,
 	}
@@ -76,14 +77,14 @@ func NewConfig(opts completedServerRunOptions) (*Config, error) {
 	}
 	c.ControlPlane = controlPlane
 
-	apiExtensions, err := apiserver.CreateAPIExtensionsConfig(*controlPlane.GenericConfig, controlPlane.ExtraConfig.VersionedInformers, pluginInitializer, opts.ServerRunOptions, opts.MasterCount,
+	apiExtensions, err := apiserver.CreateAPIExtensionsConfig(*controlPlane.GenericConfig, controlPlane.ExtraConfig.VersionedInformers, pluginInitializer, opts.CompletedOptions, opts.MasterCount,
 		serviceResolver, webhook.NewDefaultAuthenticationInfoResolverWrapper(controlPlane.ExtraConfig.ProxyTransport, controlPlane.GenericConfig.EgressSelector, controlPlane.GenericConfig.LoopbackClientConfig, controlPlane.GenericConfig.TracerProvider))
 	if err != nil {
 		return nil, err
 	}
 	c.ApiExtensions = apiExtensions
 
-	aggregator, err := createAggregatorConfig(*controlPlane.GenericConfig, opts.ServerRunOptions, controlPlane.ExtraConfig.VersionedInformers, serviceResolver, controlPlane.ExtraConfig.ProxyTransport, pluginInitializer)
+	aggregator, err := createAggregatorConfig(*controlPlane.GenericConfig, opts.CompletedOptions, controlPlane.ExtraConfig.VersionedInformers, serviceResolver, controlPlane.ExtraConfig.ProxyTransport, pluginInitializer)
 	if err != nil {
 		return nil, err
 	}

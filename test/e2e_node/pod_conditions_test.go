@@ -45,7 +45,7 @@ import (
 
 var _ = SIGDescribe("Pod conditions managed by Kubelet", func() {
 	f := framework.NewDefaultFramework("pod-conditions")
-	f.NamespacePodSecurityEnforceLevel = admissionapi.LevelBaseline
+	f.NamespacePodSecurityLevel = admissionapi.LevelBaseline
 
 	ginkgo.Context("including PodReadyToStartContainers condition [Serial] [Feature:PodReadyToStartContainersCondition]", func() {
 		tempSetCurrentKubeletConfig(f, func(ctx context.Context, initialConfig *kubeletconfig.KubeletConfiguration) {
@@ -57,6 +57,7 @@ var _ = SIGDescribe("Pod conditions managed by Kubelet", func() {
 		ginkgo.It("a pod with init containers should report all conditions set in expected order after the pod is up", runPodReadyConditionsTest(f, true, true))
 		ginkgo.It("a pod failing to mount volumes and without init containers should report scheduled and initialized conditions set", runPodFailingConditionsTest(f, false, true))
 		ginkgo.It("a pod failing to mount volumes and with init containers should report just the scheduled condition set", runPodFailingConditionsTest(f, true, true))
+		cleanupPods(f)
 	})
 
 	ginkgo.Context("without PodReadyToStartContainersCondition condition", func() {
@@ -64,6 +65,7 @@ var _ = SIGDescribe("Pod conditions managed by Kubelet", func() {
 		ginkgo.It("a pod with init containers should report all conditions set in expected order after the pod is up", runPodReadyConditionsTest(f, true, false))
 		ginkgo.It("a pod failing to mount volumes and without init containers should report scheduled and initialized conditions set", runPodFailingConditionsTest(f, false, false))
 		ginkgo.It("a pod failing to mount volumes and with init containers should report just the scheduled condition set", runPodFailingConditionsTest(f, true, false))
+		cleanupPods(f)
 	})
 })
 

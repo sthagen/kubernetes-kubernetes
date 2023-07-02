@@ -55,17 +55,17 @@ var _ = ginkgo.Describe("[sig-node] DRA [Feature:DynamicResourceAllocation]", fu
 
 	// The driver containers have to run with sufficient privileges to
 	// modify /var/lib/kubelet/plugins.
-	f.NamespacePodSecurityEnforceLevel = admissionapi.LevelPrivileged
+	f.NamespacePodSecurityLevel = admissionapi.LevelPrivileged
 
 	ginkgo.Context("kubelet", func() {
 		nodes := NewNodes(f, 1, 1)
 		driver := NewDriver(f, nodes, networkResources) // All tests get their own driver instance.
 		b := newBuilder(f, driver)
+
 		ginkgo.It("registers plugin", func() {
 			ginkgo.By("the driver is running")
 		})
 
-		// This test does not pass at the moment because kubelet doesn't retry.
 		ginkgo.It("must retry NodePrepareResource", func(ctx context.Context) {
 			// We have exactly one host.
 			m := MethodInstance{driver.Nodenames()[0], NodePrepareResourceMethod}
@@ -95,6 +95,7 @@ var _ = ginkgo.Describe("[sig-node] DRA [Feature:DynamicResourceAllocation]", fu
 				framework.Fail("NodePrepareResource should have been called again")
 			}
 		})
+
 		ginkgo.It("must not run a pod if a claim is not reserved for it", func(ctx context.Context) {
 			parameters := b.parameters()
 			claim := b.externalClaim(resourcev1alpha2.AllocationModeImmediate)
@@ -118,6 +119,7 @@ var _ = ginkgo.Describe("[sig-node] DRA [Feature:DynamicResourceAllocation]", fu
 				return nil
 			}, 20*time.Second, 200*time.Millisecond).Should(gomega.BeNil())
 		})
+
 		ginkgo.It("must unprepare resources for force-deleted pod", func(ctx context.Context) {
 			parameters := b.parameters()
 			claim := b.externalClaim(resourcev1alpha2.AllocationModeImmediate)
@@ -138,6 +140,19 @@ var _ = ginkgo.Describe("[sig-node] DRA [Feature:DynamicResourceAllocation]", fu
 			for host, plugin := range b.driver.Nodes {
 				ginkgo.By(fmt.Sprintf("waiting for resources on %s to be unprepared", host))
 				gomega.Eventually(plugin.GetPreparedResources).WithTimeout(time.Minute).Should(gomega.BeEmpty(), "prepared claims on host %s", host)
+			}
+		})
+
+		ginkgo.It("must skip NodePrepareResource if not used by any container", func(ctx context.Context) {
+			parameters := b.parameters()
+			pod, template := b.podInline(resourcev1alpha2.AllocationModeWaitForFirstConsumer)
+			for i := range pod.Spec.Containers {
+				pod.Spec.Containers[i].Resources.Claims = nil
+			}
+			b.create(ctx, parameters, pod, template)
+			framework.ExpectNoError(e2epod.WaitForPodRunningInNamespace(ctx, f.ClientSet, pod), "start pod")
+			for host, plugin := range b.driver.Nodes {
+				gomega.Expect(plugin.GetPreparedResources()).Should(gomega.BeEmpty(), "not claims should be prepared on host %s while pod is running", host)
 			}
 		})
 	})
@@ -238,6 +253,27 @@ var _ = ginkgo.Describe("[sig-node] DRA [Feature:DynamicResourceAllocation]", fu
 
 		ginkgo.Context("with immediate allocation", func() {
 			claimTests(resourcev1alpha2.AllocationModeImmediate)
+		})
+
+		ginkgo.It("must deallocate after use when using delayed allocation", func(ctx context.Context) {
+			parameters := b.parameters()
+			pod := b.podExternal()
+			claim := b.externalClaim(resourcev1alpha2.AllocationModeWaitForFirstConsumer)
+			b.create(ctx, parameters, claim, pod)
+
+			gomega.Eventually(ctx, func(ctx context.Context) (*resourcev1alpha2.ResourceClaim, error) {
+				return b.f.ClientSet.ResourceV1alpha2().ResourceClaims(b.f.Namespace.Name).Get(ctx, claim.Name, metav1.GetOptions{})
+			}).WithTimeout(f.Timeouts.PodDelete).ShouldNot(gomega.HaveField("Status.Allocation", (*resourcev1alpha2.AllocationResult)(nil)))
+
+			b.testPod(ctx, f.ClientSet, pod)
+
+			ginkgo.By(fmt.Sprintf("deleting pod %s", klog.KObj(pod)))
+			framework.ExpectNoError(b.f.ClientSet.CoreV1().Pods(b.f.Namespace.Name).Delete(ctx, pod.Name, metav1.DeleteOptions{}))
+
+			ginkgo.By("waiting for claim to get deallocated")
+			gomega.Eventually(ctx, func(ctx context.Context) (*resourcev1alpha2.ResourceClaim, error) {
+				return b.f.ClientSet.ResourceV1alpha2().ResourceClaims(b.f.Namespace.Name).Get(ctx, claim.Name, metav1.GetOptions{})
+			}).WithTimeout(f.Timeouts.PodDelete).Should(gomega.HaveField("Status.Allocation", (*resourcev1alpha2.AllocationResult)(nil)))
 		})
 	})
 

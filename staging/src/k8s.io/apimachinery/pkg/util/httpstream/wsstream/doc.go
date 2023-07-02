@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package gcepd contains the internal representation of GCE PersistentDisk
-// volumes.
-package gcepd // import "k8s.io/kubernetes/pkg/volume/gcepd"
+// Package wsstream contains utilities for streaming content over WebSockets.
+// The Conn type allows callers to multiplex multiple read/write channels over
+// a single websocket. The Reader type allows an io.Reader to be copied over
+// a websocket channel as binary content.
+package wsstream // import "k8s.io/apimachinery/pkg/util/httpstream/wsstream"
