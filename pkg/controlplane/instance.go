@@ -80,6 +80,7 @@ import (
 	"k8s.io/kubernetes/pkg/controlplane/apiserver/options"
 	"k8s.io/kubernetes/pkg/controlplane/controller/apiserverleasegc"
 	"k8s.io/kubernetes/pkg/controlplane/controller/clusterauthenticationtrust"
+	"k8s.io/kubernetes/pkg/controlplane/controller/kubernetesservice"
 	"k8s.io/kubernetes/pkg/controlplane/controller/legacytokentracking"
 	"k8s.io/kubernetes/pkg/controlplane/controller/systemnamespaces"
 	"k8s.io/kubernetes/pkg/controlplane/reconcilers"
@@ -574,21 +575,23 @@ func labelAPIServerHeartbeatFunc(identity string) lease.ProcessLeaseFunc {
 // InstallLegacyAPI will install the legacy APIs for the restStorageProviders if they are enabled.
 func (m *Instance) InstallLegacyAPI(c *completedConfig, restOptionsGetter generic.RESTOptionsGetter) error {
 	legacyRESTStorageProvider := corerest.LegacyRESTStorageProvider{
-		StorageFactory:              c.ExtraConfig.StorageFactory,
-		ProxyTransport:              c.ExtraConfig.ProxyTransport,
-		KubeletClientConfig:         c.ExtraConfig.KubeletClientConfig,
-		EventTTL:                    c.ExtraConfig.EventTTL,
-		ServiceIPRange:              c.ExtraConfig.ServiceIPRange,
-		SecondaryServiceIPRange:     c.ExtraConfig.SecondaryServiceIPRange,
-		ServiceNodePortRange:        c.ExtraConfig.ServiceNodePortRange,
-		LoopbackClientConfig:        c.GenericConfig.LoopbackClientConfig,
-		ServiceAccountIssuer:        c.ExtraConfig.ServiceAccountIssuer,
-		ExtendExpiration:            c.ExtraConfig.ExtendExpiration,
-		ServiceAccountMaxExpiration: c.ExtraConfig.ServiceAccountMaxExpiration,
-		APIAudiences:                c.GenericConfig.Authentication.APIAudiences,
-		Informers:                   c.ExtraConfig.VersionedInformers,
+		GenericLegacyRESTStorageProvider: corerest.GenericLegacyRESTStorageProvider{
+			StorageFactory:              c.ExtraConfig.StorageFactory,
+			EventTTL:                    c.ExtraConfig.EventTTL,
+			LoopbackClientConfig:        c.GenericConfig.LoopbackClientConfig,
+			ServiceAccountIssuer:        c.ExtraConfig.ServiceAccountIssuer,
+			ExtendExpiration:            c.ExtraConfig.ExtendExpiration,
+			ServiceAccountMaxExpiration: c.ExtraConfig.ServiceAccountMaxExpiration,
+			APIAudiences:                c.GenericConfig.Authentication.APIAudiences,
+			Informers:                   c.ExtraConfig.VersionedInformers,
+		},
+		ProxyTransport:          c.ExtraConfig.ProxyTransport,
+		KubeletClientConfig:     c.ExtraConfig.KubeletClientConfig,
+		ServiceIPRange:          c.ExtraConfig.ServiceIPRange,
+		SecondaryServiceIPRange: c.ExtraConfig.SecondaryServiceIPRange,
+		ServiceNodePortRange:    c.ExtraConfig.ServiceNodePortRange,
 	}
-	legacyRESTStorage, apiGroupInfo, err := legacyRESTStorageProvider.NewLegacyRESTStorage(c.ExtraConfig.APIResourceConfigSource, restOptionsGetter)
+	rangeRegistries, apiGroupInfo, err := legacyRESTStorageProvider.NewLegacyRESTStorage(c.ExtraConfig.APIResourceConfigSource, restOptionsGetter)
 	if err != nil {
 		return fmt.Errorf("error building core storage: %v", err)
 	}
@@ -605,17 +608,55 @@ func (m *Instance) InstallLegacyAPI(c *completedConfig, restOptionsGetter generi
 		return nil
 	})
 
-	bootstrapController, err := c.NewBootstrapController(legacyRESTStorage, client)
+	kubenetesserviceConfig, err := c.newKubernetesServiceControllerConfig(client)
+	if err != nil {
+		return err
+	}
+	bootstrapController, err := kubernetesservice.New(*kubenetesserviceConfig, rangeRegistries)
 	if err != nil {
 		return fmt.Errorf("error creating bootstrap controller: %v", err)
 	}
-	m.GenericAPIServer.AddPostStartHookOrDie(controllerName, bootstrapController.PostStartHook)
-	m.GenericAPIServer.AddPreShutdownHookOrDie(controllerName, bootstrapController.PreShutdownHook)
+	m.GenericAPIServer.AddPostStartHookOrDie(controllerName, func(genericapiserver.PostStartHookContext) error { bootstrapController.Start(); return nil })
+	m.GenericAPIServer.AddPreShutdownHookOrDie(controllerName, func() error { bootstrapController.Stop(); return nil })
 
 	if err := m.GenericAPIServer.InstallLegacyAPIGroup(genericapiserver.DefaultLegacyAPIPrefix, &apiGroupInfo); err != nil {
 		return fmt.Errorf("error in registering group versions: %v", err)
 	}
 	return nil
+}
+
+// newKubernetesServiceControllerConfig returns a configuration for the kubernetes service controller.
+func (c completedConfig) newKubernetesServiceControllerConfig(client kubernetes.Interface) (*kubernetesservice.Config, error) {
+	_, publicServicePort, err := c.GenericConfig.SecureServing.HostPort()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get listener address: %w", err)
+	}
+
+	return &kubernetesservice.Config{
+		Client:    client,
+		Informers: c.ExtraConfig.VersionedInformers,
+		KubernetesService: kubernetesservice.KubernetesService{
+			PublicIP: c.GenericConfig.PublicAddress,
+
+			EndpointReconciler: c.ExtraConfig.EndpointReconcilerConfig.Reconciler,
+			EndpointInterval:   c.ExtraConfig.EndpointReconcilerConfig.Interval,
+
+			ServiceIP:                 c.ExtraConfig.APIServerServiceIP,
+			ServicePort:               c.ExtraConfig.APIServerServicePort,
+			PublicServicePort:         publicServicePort,
+			KubernetesServiceNodePort: c.ExtraConfig.KubernetesServiceNodePort,
+		},
+		ClusterIP: kubernetesservice.ClusterIP{
+			ServiceClusterIPRange:          c.ExtraConfig.ServiceIPRange,
+			SecondaryServiceClusterIPRange: c.ExtraConfig.SecondaryServiceIPRange,
+
+			ServiceClusterIPInterval: c.ExtraConfig.RepairServicesInterval,
+		},
+		NodePort: kubernetesservice.NodePort{
+			ServiceNodePortRange:    c.ExtraConfig.ServiceNodePortRange,
+			ServiceNodePortInterval: c.ExtraConfig.RepairServicesInterval,
+		},
+	}, nil
 }
 
 // RESTStorageProvider is a factory type for REST storage.
