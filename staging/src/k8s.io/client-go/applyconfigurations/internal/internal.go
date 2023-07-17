@@ -464,6 +464,14 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             namedType: io.k8s.api.admissionregistration.v1alpha1.Validation
           elementRelationship: atomic
+    - name: variables
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.api.admissionregistration.v1alpha1.Variable
+          elementRelationship: associative
+          keys:
+          - name
 - name: io.k8s.api.admissionregistration.v1alpha1.ValidatingAdmissionPolicyStatus
   map:
     fields:
@@ -497,6 +505,17 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: reason
       type:
         scalar: string
+- name: io.k8s.api.admissionregistration.v1alpha1.Variable
+  map:
+    fields:
+    - name: expression
+      type:
+        scalar: string
+      default: ""
+    - name: name
+      type:
+        scalar: string
+      default: ""
 - name: io.k8s.api.admissionregistration.v1beta1.MatchCondition
   map:
     fields:
@@ -5065,6 +5084,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: ip
       type:
         scalar: string
+- name: io.k8s.api.core.v1.HostIP
+  map:
+    fields:
+    - name: ip
+      type:
+        scalar: string
 - name: io.k8s.api.core.v1.HostPathVolumeSource
   map:
     fields:
@@ -6114,6 +6139,16 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         namedType: io.k8s.api.core.v1.ClaimSource
       default: {}
+- name: io.k8s.api.core.v1.PodResourceClaimStatus
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: resourceClaimName
+      type:
+        scalar: string
 - name: io.k8s.api.core.v1.PodSchedulingGate
   map:
     fields:
@@ -6363,6 +6398,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: hostIP
       type:
         scalar: string
+    - name: hostIPs
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.api.core.v1.HostIP
+          elementRelationship: atomic
     - name: initContainerStatuses
       type:
         list:
@@ -6398,6 +6439,14 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: resize
       type:
         scalar: string
+    - name: resourceClaimStatuses
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.api.core.v1.PodResourceClaimStatus
+          elementRelationship: associative
+          keys:
+          - name
     - name: startTime
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Time
@@ -8543,6 +8592,15 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: maxUnavailable
       type:
         namedType: io.k8s.apimachinery.pkg.util.intstr.IntOrString
+- name: io.k8s.api.flowcontrol.v1alpha1.ExemptPriorityLevelConfiguration
+  map:
+    fields:
+    - name: lendablePercent
+      type:
+        scalar: numeric
+    - name: nominalConcurrencyShares
+      type:
+        scalar: numeric
 - name: io.k8s.api.flowcontrol.v1alpha1.FlowDistinguisherMethod
   map:
     fields:
@@ -8746,6 +8804,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: io.k8s.api.flowcontrol.v1alpha1.PriorityLevelConfigurationSpec
   map:
     fields:
+    - name: exempt
+      type:
+        namedType: io.k8s.api.flowcontrol.v1alpha1.ExemptPriorityLevelConfiguration
     - name: limited
       type:
         namedType: io.k8s.api.flowcontrol.v1alpha1.LimitedPriorityLevelConfiguration
@@ -8756,6 +8817,8 @@ var schemaYAML = typed.YAMLObject(`types:
     unions:
     - discriminator: type
       fields:
+      - fieldName: exempt
+        discriminatorValue: Exempt
       - fieldName: limited
         discriminatorValue: Limited
 - name: io.k8s.api.flowcontrol.v1alpha1.PriorityLevelConfigurationStatus
@@ -8857,6 +8920,15 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
       default: ""
+- name: io.k8s.api.flowcontrol.v1beta1.ExemptPriorityLevelConfiguration
+  map:
+    fields:
+    - name: lendablePercent
+      type:
+        scalar: numeric
+    - name: nominalConcurrencyShares
+      type:
+        scalar: numeric
 - name: io.k8s.api.flowcontrol.v1beta1.FlowDistinguisherMethod
   map:
     fields:
@@ -9060,6 +9132,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: io.k8s.api.flowcontrol.v1beta1.PriorityLevelConfigurationSpec
   map:
     fields:
+    - name: exempt
+      type:
+        namedType: io.k8s.api.flowcontrol.v1beta1.ExemptPriorityLevelConfiguration
     - name: limited
       type:
         namedType: io.k8s.api.flowcontrol.v1beta1.LimitedPriorityLevelConfiguration
@@ -9070,6 +9145,8 @@ var schemaYAML = typed.YAMLObject(`types:
     unions:
     - discriminator: type
       fields:
+      - fieldName: exempt
+        discriminatorValue: Exempt
       - fieldName: limited
         discriminatorValue: Limited
 - name: io.k8s.api.flowcontrol.v1beta1.PriorityLevelConfigurationStatus
@@ -9171,6 +9248,15 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
       default: ""
+- name: io.k8s.api.flowcontrol.v1beta2.ExemptPriorityLevelConfiguration
+  map:
+    fields:
+    - name: lendablePercent
+      type:
+        scalar: numeric
+    - name: nominalConcurrencyShares
+      type:
+        scalar: numeric
 - name: io.k8s.api.flowcontrol.v1beta2.FlowDistinguisherMethod
   map:
     fields:
@@ -9374,6 +9460,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: io.k8s.api.flowcontrol.v1beta2.PriorityLevelConfigurationSpec
   map:
     fields:
+    - name: exempt
+      type:
+        namedType: io.k8s.api.flowcontrol.v1beta2.ExemptPriorityLevelConfiguration
     - name: limited
       type:
         namedType: io.k8s.api.flowcontrol.v1beta2.LimitedPriorityLevelConfiguration
@@ -9384,6 +9473,8 @@ var schemaYAML = typed.YAMLObject(`types:
     unions:
     - discriminator: type
       fields:
+      - fieldName: exempt
+        discriminatorValue: Exempt
       - fieldName: limited
         discriminatorValue: Limited
 - name: io.k8s.api.flowcontrol.v1beta2.PriorityLevelConfigurationStatus
@@ -9485,6 +9576,15 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
       default: ""
+- name: io.k8s.api.flowcontrol.v1beta3.ExemptPriorityLevelConfiguration
+  map:
+    fields:
+    - name: lendablePercent
+      type:
+        scalar: numeric
+    - name: nominalConcurrencyShares
+      type:
+        scalar: numeric
 - name: io.k8s.api.flowcontrol.v1beta3.FlowDistinguisherMethod
   map:
     fields:
@@ -9688,6 +9788,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: io.k8s.api.flowcontrol.v1beta3.PriorityLevelConfigurationSpec
   map:
     fields:
+    - name: exempt
+      type:
+        namedType: io.k8s.api.flowcontrol.v1beta3.ExemptPriorityLevelConfiguration
     - name: limited
       type:
         namedType: io.k8s.api.flowcontrol.v1beta3.LimitedPriorityLevelConfiguration
@@ -9698,6 +9801,8 @@ var schemaYAML = typed.YAMLObject(`types:
     unions:
     - discriminator: type
       fields:
+      - fieldName: exempt
+        discriminatorValue: Exempt
       - fieldName: limited
         discriminatorValue: Limited
 - name: io.k8s.api.flowcontrol.v1beta3.PriorityLevelConfigurationStatus

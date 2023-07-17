@@ -160,15 +160,72 @@ var (
 		},
 	)
 
-	// IptablesRulesTotal is the number of iptables rules that the iptables proxy installs.
+	// IptablesRulesTotal is the total number of iptables rules that the iptables
+	// proxy has installed.
 	IptablesRulesTotal = metrics.NewGaugeVec(
 		&metrics.GaugeOpts{
 			Subsystem:      kubeProxySubsystem,
 			Name:           "sync_proxy_rules_iptables_total",
-			Help:           "Number of proxy iptables rules programmed",
+			Help:           "Total number of iptables rules owned by kube-proxy",
 			StabilityLevel: metrics.ALPHA,
 		},
 		[]string{"table"},
+	)
+
+	// IptablesRulesLastSync is the number of iptables rules that the iptables proxy
+	// updated in the last sync.
+	IptablesRulesLastSync = metrics.NewGaugeVec(
+		&metrics.GaugeOpts{
+			Subsystem:      kubeProxySubsystem,
+			Name:           "sync_proxy_rules_iptables_last",
+			Help:           "Number of iptables rules written by kube-proxy in last sync",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"table"},
+	)
+
+	// ProxyHealthz200Total is the number of returned HTTP Status 200 for each
+	// healthz probe.
+	ProxyHealthz200Total = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      kubeProxySubsystem,
+			Name:           "proxy_healthz_200_total",
+			Help:           "Cumulative proxy healthz HTTP status 200",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	// ProxyHealthz503Total is the number of returned HTTP Status 503 for each
+	// healthz probe.
+	ProxyHealthz503Total = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      kubeProxySubsystem,
+			Name:           "proxy_healthz_503_total",
+			Help:           "Cumulative proxy healthz HTTP status 503",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	// ProxyLivez200Total is the number of returned HTTP Status 200 for each
+	// livez probe.
+	ProxyLivez200Total = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      kubeProxySubsystem,
+			Name:           "proxy_livez_200_total",
+			Help:           "Cumulative proxy livez HTTP status 200",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	// ProxyLivez503Total is the number of returned HTTP Status 503 for each
+	// livez probe.
+	ProxyLivez503Total = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      kubeProxySubsystem,
+			Name:           "proxy_livez_503_total",
+			Help:           "Cumulative proxy livez HTTP status 503",
+			StabilityLevel: metrics.ALPHA,
+		},
 	)
 
 	// SyncProxyRulesLastQueuedTimestamp is the last time a proxy sync was
@@ -212,10 +269,16 @@ func RegisterMetrics() {
 		legacyregistry.MustRegister(ServiceChangesPending)
 		legacyregistry.MustRegister(ServiceChangesTotal)
 		legacyregistry.MustRegister(IptablesRulesTotal)
+		legacyregistry.MustRegister(IptablesRulesLastSync)
 		legacyregistry.MustRegister(IptablesRestoreFailuresTotal)
 		legacyregistry.MustRegister(IptablesPartialRestoreFailuresTotal)
 		legacyregistry.MustRegister(SyncProxyRulesLastQueuedTimestamp)
 		legacyregistry.MustRegister(SyncProxyRulesNoLocalEndpointsTotal)
+		legacyregistry.MustRegister(ProxyHealthz200Total)
+		legacyregistry.MustRegister(ProxyHealthz503Total)
+		legacyregistry.MustRegister(ProxyLivez200Total)
+		legacyregistry.MustRegister(ProxyLivez503Total)
+
 	})
 }
 

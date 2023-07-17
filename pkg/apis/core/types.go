@@ -3210,20 +3210,30 @@ type ClaimSource struct {
 	//
 	// The template will be used to create a new ResourceClaim, which will
 	// be bound to this pod. When this pod is deleted, the ResourceClaim
-	// will also be deleted. The name of the ResourceClaim will be <pod
-	// name>-<resource name>, where <resource name> is the
-	// PodResourceClaim.Name. Pod validation will reject the pod if the
-	// concatenated name is not valid for a ResourceClaim (e.g. too long).
-	//
-	// An existing ResourceClaim with that name that is not owned by the
-	// pod will not be used for the pod to avoid using an unrelated
-	// resource by mistake. Scheduling and pod startup are then blocked
-	// until the unrelated ResourceClaim is removed.
+	// will also be deleted. The pod name and resource name, along with a
+	// generated component, will be used to form a unique name for the
+	// ResourceClaim, which will be recorded in pod.status.resourceClaimStatuses.
 	//
 	// This field is immutable and no changes will be made to the
 	// corresponding ResourceClaim by the control plane after creating the
 	// ResourceClaim.
 	ResourceClaimTemplateName *string
+}
+
+// PodResourceClaimStatus is stored in the PodStatus for each PodResourceClaim
+// which references a ResourceClaimTemplate. It stores the generated name for
+// the corresponding ResourceClaim.
+type PodResourceClaimStatus struct {
+	// Name uniquely identifies this resource claim inside the pod.
+	// This must match the name of an entry in pod.spec.resourceClaims,
+	// which implies that the string must be a DNS_LABEL.
+	Name string
+
+	// ResourceClaimName is the name of the ResourceClaim that was
+	// generated for the Pod in the namespace of the Pod. It this is
+	// unset, then generating a ResourceClaim was not necessary. The
+	// pod.spec.resourceClaims entry can be ignored in this case.
+	ResourceClaimName *string
 }
 
 // OSName is the set of OS'es that can be used in OS.
@@ -3472,12 +3482,15 @@ type PodDNSConfigOption struct {
 	Value *string
 }
 
-// PodIP represents the IP address of a pod.
-// IP address information. Each entry includes:
-//
-//	IP: An IP address allocated to the pod. Routable at least within
-//	    the cluster.
+// PodIP represents a single IP address allocated to the pod.
 type PodIP struct {
+	// IP is the IP address assigned to the pod
+	IP string
+}
+
+// HostIP represents a single IP address allocated to the host.
+type HostIP struct {
+	// IP is the IP address assigned to the host
 	IP string
 }
 
@@ -3627,8 +3640,20 @@ type PodStatus struct {
 	// give the resources on this node to a higher priority pod that is created after preemption.
 	// +optional
 	NominatedNodeName string
+
+	// HostIP holds the IP address of the host to which the pod is assigned. Empty if the pod has not started yet.
+	// A pod can be assigned to a node that has a problem in kubelet which in turns mean that HostIP will
+	// not be updated even if there is a node is assigned to pod
 	// +optional
 	HostIP string
+
+	// HostIPs holds the IP addresses allocated to the host. If this field is specified, the first entry must
+	// match the hostIP field. This list is empty if the pod has not started yet.
+	// A pod can be assigned to a node that has a problem in kubelet which in turns means that HostIPs will
+	// not be updated even if there is a node is assigned to this pod.
+	// match the hostIP field. This list is empty if no IPs have been allocated yet.
+	// +optional
+	HostIPs []HostIP
 
 	// PodIPs holds all of the known IP addresses allocated to the pod. Pods may be assigned AT MOST
 	// one value for each of IPv4 and IPv6.
@@ -3661,6 +3686,11 @@ type PodStatus struct {
 	// +featureGate=InPlacePodVerticalScaling
 	// +optional
 	Resize PodResizeStatus
+
+	// Status of resource claims.
+	// +featureGate=DynamicResourceAllocation
+	// +optional
+	ResourceClaimStatuses []PodResourceClaimStatus
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -4225,6 +4255,8 @@ type ServicePort struct {
 	//
 	// * Kubernetes-defined prefixed names:
 	//   * 'kubernetes.io/h2c' - HTTP/2 over cleartext as described in https://www.rfc-editor.org/rfc/rfc7540
+	//   * 'kubernetes.io/ws'  - WebSocket over cleartext as described in https://www.rfc-editor.org/rfc/rfc6455
+	//   * 'kubernetes.io/wss' - WebSocket over TLS as described in https://www.rfc-editor.org/rfc/rfc6455
 	//
 	// * Other protocols should use implementation-defined prefixed names such as
 	// mycompany.com/my-custom-protocol.
@@ -4379,10 +4411,19 @@ type EndpointPort struct {
 	Protocol Protocol
 
 	// The application protocol for this port.
+	// This is used as a hint for implementations to offer richer behavior for protocols that they understand.
 	// This field follows standard Kubernetes label syntax.
-	// Un-prefixed names are reserved for IANA standard service names (as per
+	// Valid values are either:
+	//
+	// * Un-prefixed protocol names - reserved for IANA standard service names (as per
 	// RFC-6335 and https://www.iana.org/assignments/service-names).
-	// Non-standard protocols should use prefixed names such as
+	//
+	// * Kubernetes-defined prefixed names:
+	//   * 'kubernetes.io/h2c' - HTTP/2 over cleartext as described in https://www.rfc-editor.org/rfc/rfc7540
+	//   * 'kubernetes.io/ws'  - WebSocket over cleartext as described in https://www.rfc-editor.org/rfc/rfc6455
+	//   * 'kubernetes.io/wss' - WebSocket over TLS as described in https://www.rfc-editor.org/rfc/rfc6455
+	//
+	// * Other protocols should use implementation-defined prefixed names such as
 	// mycompany.com/my-custom-protocol.
 	// +optional
 	AppProtocol *string

@@ -144,6 +144,7 @@ const (
 
 	// owner: @humblec
 	// alpha: v1.23
+	// deprecated: v1.28
 	//
 	// Enables the RBD in-tree driver to RBD CSI Driver  migration feature.
 	CSIMigrationRBD featuregate.Feature = "CSIMigrationRBD"
@@ -353,6 +354,7 @@ const (
 
 	// owner: @humblec
 	// alpha: v1.23
+	// deprecated: v1.28
 	//
 	// Disables the RBD in-tree driver.
 	InTreePluginRBDUnregister featuregate.Feature = "InTreePluginRBDUnregister"
@@ -448,6 +450,14 @@ const (
 	//
 	// Add support for distributed tracing in the kubelet
 	KubeletTracing featuregate.Feature = "KubeletTracing"
+
+	// owner: @alexanderConstantinescu
+	// kep: http://kep.k8s.io/3836
+	// alpha: v1.28
+	//
+	// Implement connection draining for terminating nodes for
+	// `externalTrafficPolicy: Cluster` services.
+	KubeProxyDrainingTerminatingNodes featuregate.Feature = "KubeProxyDrainingTerminatingNodes"
 
 	// owner: @zshihang
 	// kep: https://kep.k8s.io/2800
@@ -561,6 +571,7 @@ const (
 	// kep: https://kep.k8s.io/2268
 	// alpha: v1.24
 	// beta: v1.26
+	// GA: v1.28
 	//
 	// Allow pods to failover to a different node in case of non graceful node shutdown
 	NodeOutOfServiceVolumeDetach featuregate.Feature = "NodeOutOfServiceVolumeDetach"
@@ -603,12 +614,26 @@ const (
 	// the pod is being deleted due to a disruption.
 	PodDisruptionConditions featuregate.Feature = "PodDisruptionConditions"
 
+	// owner: @danielvegamyhre
+	// kep: https://kep.k8s.io/4017
+	// beta: v1.28
+	//
+	// Set pod completion index as a pod label for Indexed Jobs.
+	PodIndexLabel featuregate.Feature = "PodIndexLabel"
+
 	// owner: @ddebroy
 	// alpha: v1.25
 	//
 	// Enables reporting of PodReadyToStartContainersCondition condition in pod status after pod
 	// sandbox creation and network configuration completes successfully
 	PodReadyToStartContainersCondition featuregate.Feature = "PodReadyToStartContainersCondition"
+
+	// owner: @wzshiming
+	// kep: http://kep.k8s.io/2681
+	// alpha: v1.28
+	//
+	// Adds pod.status.hostIPs and downward API
+	PodHostIPs featuregate.Feature = "PodHostIPs"
 
 	// owner: @Huang-Wei
 	// kep: https://kep.k8s.io/3521
@@ -618,9 +643,10 @@ const (
 	// Enable users to specify when a Pod is ready for scheduling.
 	PodSchedulingReadiness featuregate.Feature = "PodSchedulingReadiness"
 
-	// owner: @ehashman
+	// owner: @rphillips
 	// alpha: v1.21
 	// beta: v1.22
+	// ga: v1.28
 	//
 	// Allows user to override pod-level terminationGracePeriod for probes
 	ProbeTerminationGracePeriod featuregate.Feature = "ProbeTerminationGracePeriod"
@@ -688,6 +714,14 @@ const (
 	// spec.parallelism. Specifically, spec.completions is mutable iff spec.completions
 	// equals to spec.parallelism before and after the update.
 	ElasticIndexedJob featuregate.Feature = "ElasticIndexedJob"
+
+	// owner: @sanposhiho
+	// kep: http://kep.k8s.io/3063
+	// beta: v1.28
+	//
+	// Enables the scheduler's enhancement called QueueingHints,
+	// which benefits to reduce the useless requeueing.
+	SchedulerQueueingHints featuregate.Feature = "SchedulerQueueingHints"
 
 	// owner: @saschagrunert
 	// kep: https://kep.k8s.io/2413
@@ -890,7 +924,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	CSIMigrationPortworx: {Default: false, PreRelease: featuregate.Beta}, // Off by default (requires Portworx CSI driver)
 
-	CSIMigrationRBD: {Default: false, PreRelease: featuregate.Alpha}, // Off by default (requires RBD CSI driver)
+	CSIMigrationRBD: {Default: false, PreRelease: featuregate.Deprecated}, //  deprecated in 1.28, remove in 1.31
 
 	CSIMigrationvSphere: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
 
@@ -950,7 +984,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	InTreePluginPortworxUnregister: {Default: false, PreRelease: featuregate.Alpha},
 
-	InTreePluginRBDUnregister: {Default: false, PreRelease: featuregate.Alpha},
+	InTreePluginRBDUnregister: {Default: false, PreRelease: featuregate.Deprecated}, // deprecated in 1.28, remove in 1.31
 
 	InTreePluginvSphereUnregister: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -975,6 +1009,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	KubeletPodResourcesGetAllocatable: {Default: true, PreRelease: featuregate.Beta},
 
 	KubeletTracing: {Default: true, PreRelease: featuregate.Beta},
+
+	KubeProxyDrainingTerminatingNodes: {Default: false, PreRelease: featuregate.Alpha},
 
 	LegacyServiceAccountTokenNoAutoGeneration: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
 
@@ -1002,11 +1038,11 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	MultiCIDRServiceAllocator: {Default: false, PreRelease: featuregate.Alpha},
 
-	NewVolumeManagerReconstruction: {Default: false, PreRelease: featuregate.Beta}, // disabled for https://github.com/kubernetes/kubernetes/issues/117745
+	NewVolumeManagerReconstruction: {Default: true, PreRelease: featuregate.Beta},
 
 	NodeLogQuery: {Default: false, PreRelease: featuregate.Alpha},
 
-	NodeOutOfServiceVolumeDetach: {Default: true, PreRelease: featuregate.Beta},
+	NodeOutOfServiceVolumeDetach: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.31
 
 	NodeSwap: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -1020,9 +1056,11 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	PodReadyToStartContainersCondition: {Default: false, PreRelease: featuregate.Alpha},
 
+	PodHostIPs: {Default: false, PreRelease: featuregate.Alpha},
+
 	PodSchedulingReadiness: {Default: true, PreRelease: featuregate.Beta},
 
-	ProbeTerminationGracePeriod: {Default: true, PreRelease: featuregate.Beta}, // Default to true in beta 1.25
+	ProbeTerminationGracePeriod: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
 
 	ProcMountType: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -1039,6 +1077,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	RotateKubeletServerCertificate: {Default: true, PreRelease: featuregate.Beta},
 
 	ElasticIndexedJob: {Default: true, PreRelease: featuregate.Beta},
+
+	SchedulerQueueingHints: {Default: true, PreRelease: featuregate.Beta},
 
 	SeccompDefault: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
 
@@ -1062,9 +1102,9 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	TopologyManagerPolicyAlphaOptions: {Default: false, PreRelease: featuregate.Alpha},
 
-	TopologyManagerPolicyBetaOptions: {Default: false, PreRelease: featuregate.Beta},
+	TopologyManagerPolicyBetaOptions: {Default: true, PreRelease: featuregate.Beta},
 
-	TopologyManagerPolicyOptions: {Default: false, PreRelease: featuregate.Alpha},
+	TopologyManagerPolicyOptions: {Default: true, PreRelease: featuregate.Beta},
 
 	VolumeCapacityPriority: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -1078,9 +1118,11 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	NodeInclusionPolicyInPodTopologySpread: {Default: true, PreRelease: featuregate.Beta},
 
-	SELinuxMountReadWriteOncePod: {Default: false, PreRelease: featuregate.Beta}, // disabled for https://github.com/kubernetes/kubernetes/issues/117745
+	SELinuxMountReadWriteOncePod: {Default: true, PreRelease: featuregate.Beta},
 
 	InPlacePodVerticalScaling: {Default: false, PreRelease: featuregate.Alpha},
+
+	PodIndexLabel: {Default: true, PreRelease: featuregate.Beta},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

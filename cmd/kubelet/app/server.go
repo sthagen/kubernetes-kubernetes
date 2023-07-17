@@ -27,7 +27,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -743,18 +742,18 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 					ReservedSystemCPUs:       reservedSystemCPUs,
 					HardEvictionThresholds:   hardEvictionThresholds,
 				},
-				QOSReserved:                              *experimentalQOSReserved,
-				CPUManagerPolicy:                         s.CPUManagerPolicy,
-				CPUManagerPolicyOptions:                  cpuManagerPolicyOptions,
-				CPUManagerReconcilePeriod:                s.CPUManagerReconcilePeriod.Duration,
-				ExperimentalMemoryManagerPolicy:          s.MemoryManagerPolicy,
-				ExperimentalMemoryManagerReservedMemory:  s.ReservedMemory,
-				PodPidsLimit:                             s.PodPidsLimit,
-				EnforceCPULimits:                         s.CPUCFSQuota,
-				CPUCFSQuotaPeriod:                        s.CPUCFSQuotaPeriod.Duration,
-				TopologyManagerPolicy:                    s.TopologyManagerPolicy,
-				TopologyManagerScope:                     s.TopologyManagerScope,
-				ExperimentalTopologyManagerPolicyOptions: topologyManagerPolicyOptions,
+				QOSReserved:                             *experimentalQOSReserved,
+				CPUManagerPolicy:                        s.CPUManagerPolicy,
+				CPUManagerPolicyOptions:                 cpuManagerPolicyOptions,
+				CPUManagerReconcilePeriod:               s.CPUManagerReconcilePeriod.Duration,
+				ExperimentalMemoryManagerPolicy:         s.MemoryManagerPolicy,
+				ExperimentalMemoryManagerReservedMemory: s.ReservedMemory,
+				PodPidsLimit:                            s.PodPidsLimit,
+				EnforceCPULimits:                        s.CPUCFSQuota,
+				CPUCFSQuotaPeriod:                       s.CPUCFSQuotaPeriod.Duration,
+				TopologyManagerPolicy:                   s.TopologyManagerPolicy,
+				TopologyManagerScope:                    s.TopologyManagerScope,
+				TopologyManagerPolicyOptions:            topologyManagerPolicyOptions,
 			},
 			s.FailSwapOn,
 			kubeDeps.Recorder,
@@ -1011,8 +1010,8 @@ func getNodeName(cloud cloudprovider.Interface, hostname string) (types.NodeName
 // certificate and key file are generated. Returns a configured server.TLSOptions object.
 func InitializeTLS(kf *options.KubeletFlags, kc *kubeletconfiginternal.KubeletConfiguration) (*server.TLSOptions, error) {
 	if !kc.ServerTLSBootstrap && kc.TLSCertFile == "" && kc.TLSPrivateKeyFile == "" {
-		kc.TLSCertFile = path.Join(kf.CertDirectory, "kubelet.crt")
-		kc.TLSPrivateKeyFile = path.Join(kf.CertDirectory, "kubelet.key")
+		kc.TLSCertFile = filepath.Join(kf.CertDirectory, "kubelet.crt")
+		kc.TLSPrivateKeyFile = filepath.Join(kf.CertDirectory, "kubelet.key")
 
 		canReadCertAndKey, err := certutil.CanReadCertAndKey(kc.TLSCertFile, kc.TLSPrivateKeyFile)
 		if err != nil {

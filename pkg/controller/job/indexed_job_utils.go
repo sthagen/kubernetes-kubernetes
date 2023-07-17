@@ -26,8 +26,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/storage/names"
+	"k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/controller"
+	"k8s.io/kubernetes/pkg/features"
 )
 
 const (
@@ -190,19 +192,19 @@ func succeededIndexesFromString(logger klog.Logger, completedIndexes string, com
 
 // firstPendingIndexes returns `count` indexes less than `completions` that are
 // not covered by `activePods` or `succeededIndexes`.
-func firstPendingIndexes(activePods []*v1.Pod, succeededIndexes orderedIntervals, count, completions int) []int {
+func firstPendingIndexes(jobCtx *syncJobCtx, count, completions int) []int {
 	if count == 0 {
 		return nil
 	}
 	active := sets.New[int]()
-	for _, p := range activePods {
+	for _, p := range jobCtx.activePods {
 		ix := getCompletionIndex(p.Annotations)
 		if ix != unknownCompletionIndex {
 			active.Insert(ix)
 		}
 	}
 	result := make([]int, 0, count)
-	nonPending := succeededIndexes.withOrderedIndexes(sets.List(active))
+	nonPending := jobCtx.succeededIndexes.withOrderedIndexes(sets.List(active))
 	// The following algorithm is bounded by len(nonPending) and count.
 	candidate := 0
 	for _, sInterval := range nonPending {
@@ -294,11 +296,17 @@ func addCompletionIndexEnvVariable(container *v1.Container) {
 			return
 		}
 	}
+	var fieldPath string
+	if feature.DefaultFeatureGate.Enabled(features.PodIndexLabel) {
+		fieldPath = fmt.Sprintf("metadata.labels['%s']", batch.JobCompletionIndexAnnotation)
+	} else {
+		fieldPath = fmt.Sprintf("metadata.annotations['%s']", batch.JobCompletionIndexAnnotation)
+	}
 	container.Env = append(container.Env, v1.EnvVar{
 		Name: completionIndexEnvName,
 		ValueFrom: &v1.EnvVarSource{
 			FieldRef: &v1.ObjectFieldSelector{
-				FieldPath: fmt.Sprintf("metadata.annotations['%s']", batch.JobCompletionIndexAnnotation),
+				FieldPath: fieldPath,
 			},
 		},
 	})
@@ -309,6 +317,14 @@ func addCompletionIndexAnnotation(template *v1.PodTemplateSpec, index int) {
 		template.Annotations = make(map[string]string, 1)
 	}
 	template.Annotations[batch.JobCompletionIndexAnnotation] = strconv.Itoa(index)
+}
+
+func addCompletionIndexLabel(template *v1.PodTemplateSpec, index int) {
+	if template.Labels == nil {
+		template.Labels = make(map[string]string, 1)
+	}
+	// For consistency, we use the annotation batch.kubernetes.io/job-completion-index for the corresponding label as well.
+	template.Labels[batch.JobCompletionIndexAnnotation] = strconv.Itoa(index)
 }
 
 func podGenerateNameWithIndex(jobName string, index int) string {

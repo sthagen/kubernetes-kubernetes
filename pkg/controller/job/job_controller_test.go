@@ -274,7 +274,8 @@ func TestControllerSyncJob(t *testing.T) {
 		expectedPodPatches      int
 
 		// features
-		jobReadyPodsEnabled bool
+		jobReadyPodsEnabled   bool
+		podIndexLabelDisabled bool
 	}{
 		"job start": {
 			parallelism:       2,
@@ -781,11 +782,23 @@ func TestControllerSyncJob(t *testing.T) {
 			expectedActive:     2,
 			expectedPodPatches: 2,
 		},
+		"indexed job with podIndexLabel feature disabled": {
+			parallelism:            2,
+			completions:            5,
+			backoffLimit:           6,
+			completionMode:         batch.IndexedCompletion,
+			expectedCreations:      2,
+			expectedActive:         2,
+			expectedCreatedIndexes: sets.New(0, 1),
+			podIndexLabelDisabled:  true,
+		},
 	}
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
+			logger, _ := ktesting.NewTestContext(t)
 			defer featuregatetesting.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, features.JobReadyPods, tc.jobReadyPodsEnabled)()
+			defer featuregatetesting.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, features.PodIndexLabel, !tc.podIndexLabelDisabled)()
 
 			// job manager setup
 			clientSet := clientset.NewForConfigOrDie(&restclient.Config{Host: "", ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Group: "", Version: "v1"}}})
@@ -828,9 +841,9 @@ func TestControllerSyncJob(t *testing.T) {
 				manager.podBackoffStore.updateBackoffRecord(*tc.backoffRecord)
 			}
 			if tc.fakeExpectationAtCreation < 0 {
-				manager.expectations.ExpectDeletions(key, int(-tc.fakeExpectationAtCreation))
+				manager.expectations.ExpectDeletions(logger, key, int(-tc.fakeExpectationAtCreation))
 			} else if tc.fakeExpectationAtCreation > 0 {
-				manager.expectations.ExpectCreations(key, int(tc.fakeExpectationAtCreation))
+				manager.expectations.ExpectCreations(logger, key, int(tc.fakeExpectationAtCreation))
 			}
 			if tc.wasSuspended {
 				job.Status.Conditions = append(job.Status.Conditions, *newCondition(batch.JobSuspended, v1.ConditionTrue, "JobSuspended", "Job suspended", realClock.Now()))
@@ -870,7 +883,7 @@ func TestControllerSyncJob(t *testing.T) {
 				t.Errorf("Unexpected number of creates.  Expected %d, saw %d\n", tc.expectedCreations, len(fakePodControl.Templates))
 			}
 			if tc.completionMode == batch.IndexedCompletion {
-				checkIndexedJobPods(t, &fakePodControl, tc.expectedCreatedIndexes, job.Name)
+				checkIndexedJobPods(t, &fakePodControl, tc.expectedCreatedIndexes, job.Name, tc.podIndexLabelDisabled)
 			} else {
 				for _, p := range fakePodControl.Templates {
 					// Fake pod control doesn't add generate name from the owner reference.
@@ -957,11 +970,14 @@ func TestControllerSyncJob(t *testing.T) {
 	}
 }
 
-func checkIndexedJobPods(t *testing.T, control *controller.FakePodControl, wantIndexes sets.Set[int], jobName string) {
+func checkIndexedJobPods(t *testing.T, control *controller.FakePodControl, wantIndexes sets.Set[int], jobName string, podIndexLabelDisabled bool) {
 	t.Helper()
 	gotIndexes := sets.New[int]()
 	for _, p := range control.Templates {
-		checkJobCompletionEnvVariable(t, &p.Spec)
+		checkJobCompletionEnvVariable(t, &p.Spec, podIndexLabelDisabled)
+		if !podIndexLabelDisabled {
+			checkJobCompletionLabel(t, &p)
+		}
 		ix := getCompletionIndex(p.Annotations)
 		if ix == -1 {
 			t.Errorf("Created pod %s didn't have completion index", p.Name)
@@ -1079,7 +1095,8 @@ func TestGetNewFinshedPods(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			uncounted := newUncountedTerminatedPods(*tc.job.Status.UncountedTerminatedPods)
-			succeededPods, failedPods := getNewFinishedPods(&tc.job, tc.pods, uncounted, tc.expectedRmFinalizers)
+			jobCtx := &syncJobCtx{job: &tc.job, pods: tc.pods, uncounted: uncounted, expectedRmFinalizers: tc.expectedRmFinalizers}
+			succeededPods, failedPods := getNewFinishedPods(jobCtx)
 			succeeded := int32(len(succeededPods)) + tc.job.Status.Succeeded + int32(len(uncounted.succeeded))
 			failed := int32(len(failedPods)) + tc.job.Status.Failed + int32(len(uncounted.failed))
 			if succeeded != tc.wantSucceeded {
@@ -1654,7 +1671,16 @@ func TestTrackJobStatusAndRemoveFinalizers(t *testing.T) {
 			if isIndexedJob(job) {
 				succeededIndexes = succeededIndexesFromString(logger, job.Status.CompletedIndexes, int(*job.Spec.Completions))
 			}
-			err := manager.trackJobStatusAndRemoveFinalizers(context.TODO(), job, tc.pods, succeededIndexes, *uncounted, tc.expectedRmFinalizers, tc.finishedCond, tc.needsFlush, backoffRecord{})
+			jobCtx := &syncJobCtx{
+				job:                  job,
+				pods:                 tc.pods,
+				succeededIndexes:     succeededIndexes,
+				uncounted:            uncounted,
+				expectedRmFinalizers: tc.expectedRmFinalizers,
+				finishedCondition:    tc.finishedCond,
+				newBackoffRecord:     backoffRecord{},
+			}
+			err := manager.trackJobStatusAndRemoveFinalizers(ctx, jobCtx, tc.needsFlush)
 			if !errors.Is(err, tc.wantErr) {
 				t.Errorf("Got error %v, want %v", err, tc.wantErr)
 			}
@@ -3663,7 +3689,7 @@ type FakeJobExpectations struct {
 	expSatisfied func()
 }
 
-func (fe FakeJobExpectations) SatisfiedExpectations(controllerKey string) bool {
+func (fe FakeJobExpectations) SatisfiedExpectations(logger klog.Logger, controllerKey string) bool {
 	fe.expSatisfied()
 	return fe.satisfied
 }
@@ -4395,14 +4421,28 @@ func TestFinalizersRemovedExpectations(t *testing.T) {
 	}
 }
 
-func checkJobCompletionEnvVariable(t *testing.T, spec *v1.PodSpec) {
+func checkJobCompletionLabel(t *testing.T, p *v1.PodTemplateSpec) {
 	t.Helper()
+	labels := p.GetLabels()
+	if labels == nil || labels[batch.JobCompletionIndexAnnotation] == "" {
+		t.Errorf("missing expected pod label %s", batch.JobCompletionIndexAnnotation)
+	}
+}
+
+func checkJobCompletionEnvVariable(t *testing.T, spec *v1.PodSpec, podIndexLabelDisabled bool) {
+	t.Helper()
+	var fieldPath string
+	if podIndexLabelDisabled {
+		fieldPath = fmt.Sprintf("metadata.annotations['%s']", batch.JobCompletionIndexAnnotation)
+	} else {
+		fieldPath = fmt.Sprintf("metadata.labels['%s']", batch.JobCompletionIndexAnnotation)
+	}
 	want := []v1.EnvVar{
 		{
 			Name: "JOB_COMPLETION_INDEX",
 			ValueFrom: &v1.EnvVarSource{
 				FieldRef: &v1.ObjectFieldSelector{
-					FieldPath: fmt.Sprintf("metadata.annotations['%s']", batch.JobCompletionIndexAnnotation),
+					FieldPath: fieldPath,
 				},
 			},
 		},

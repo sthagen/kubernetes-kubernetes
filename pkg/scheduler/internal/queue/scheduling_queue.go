@@ -389,7 +389,7 @@ func (p *PriorityQueue) isPodWorthRequeuing(logger klog.Logger, pInfo *framework
 				continue
 			}
 
-			switch h := hintfn.QueueingHintFn(pod, oldObj, newObj); h {
+			switch h := hintfn.QueueingHintFn(logger, pod, oldObj, newObj); h {
 			case framework.QueueSkip:
 				continue
 			case framework.QueueImmediately:
@@ -689,13 +689,17 @@ func (p *PriorityQueue) Pop() (*framework.QueuedPodInfo, error) {
 }
 
 // isPodUpdated checks if the pod is updated in a way that it may have become
-// schedulable. It drops status of the pod and compares it with old version.
+// schedulable. It drops status of the pod and compares it with old version,
+// except for pod.status.resourceClaimStatuses: changing that may have an
+// effect on scheduling.
 func isPodUpdated(oldPod, newPod *v1.Pod) bool {
 	strip := func(pod *v1.Pod) *v1.Pod {
 		p := pod.DeepCopy()
 		p.ResourceVersion = ""
 		p.Generation = 0
-		p.Status = v1.PodStatus{}
+		p.Status = v1.PodStatus{
+			ResourceClaimStatuses: pod.Status.ResourceClaimStatuses,
+		}
 		p.ManagedFields = nil
 		p.Finalizers = nil
 		return p
