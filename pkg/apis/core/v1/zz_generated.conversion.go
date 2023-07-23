@@ -4478,6 +4478,7 @@ func Convert_core_List_To_v1_List(in *core.List, out *v1.List, s conversion.Scop
 func autoConvert_v1_LoadBalancerIngress_To_core_LoadBalancerIngress(in *v1.LoadBalancerIngress, out *core.LoadBalancerIngress, s conversion.Scope) error {
 	out.IP = in.IP
 	out.Hostname = in.Hostname
+	out.IPMode = (*core.LoadBalancerIPMode)(unsafe.Pointer(in.IPMode))
 	out.Ports = *(*[]core.PortStatus)(unsafe.Pointer(&in.Ports))
 	return nil
 }
@@ -4490,6 +4491,7 @@ func Convert_v1_LoadBalancerIngress_To_core_LoadBalancerIngress(in *v1.LoadBalan
 func autoConvert_core_LoadBalancerIngress_To_v1_LoadBalancerIngress(in *core.LoadBalancerIngress, out *v1.LoadBalancerIngress, s conversion.Scope) error {
 	out.IP = in.IP
 	out.Hostname = in.Hostname
+	out.IPMode = (*v1.LoadBalancerIPMode)(unsafe.Pointer(in.IPMode))
 	out.Ports = *(*[]v1.PortStatus)(unsafe.Pointer(&in.Ports))
 	return nil
 }
@@ -5362,7 +5364,7 @@ func autoConvert_v1_PersistentVolumeClaimStatus_To_core_PersistentVolumeClaimSta
 	out.Capacity = *(*core.ResourceList)(unsafe.Pointer(&in.Capacity))
 	out.Conditions = *(*[]core.PersistentVolumeClaimCondition)(unsafe.Pointer(&in.Conditions))
 	out.AllocatedResources = *(*core.ResourceList)(unsafe.Pointer(&in.AllocatedResources))
-	out.ResizeStatus = (*core.PersistentVolumeClaimResizeStatus)(unsafe.Pointer(in.ResizeStatus))
+	out.AllocatedResourceStatuses = *(*map[core.ResourceName]core.ClaimResourceStatus)(unsafe.Pointer(&in.AllocatedResourceStatuses))
 	return nil
 }
 
@@ -5377,7 +5379,7 @@ func autoConvert_core_PersistentVolumeClaimStatus_To_v1_PersistentVolumeClaimSta
 	out.Capacity = *(*v1.ResourceList)(unsafe.Pointer(&in.Capacity))
 	out.Conditions = *(*[]v1.PersistentVolumeClaimCondition)(unsafe.Pointer(&in.Conditions))
 	out.AllocatedResources = *(*v1.ResourceList)(unsafe.Pointer(&in.AllocatedResources))
-	out.ResizeStatus = (*v1.PersistentVolumeClaimResizeStatus)(unsafe.Pointer(in.ResizeStatus))
+	out.AllocatedResourceStatuses = *(*map[v1.ResourceName]v1.ClaimResourceStatus)(unsafe.Pointer(&in.AllocatedResourceStatuses))
 	return nil
 }
 
@@ -5572,6 +5574,7 @@ func autoConvert_v1_PersistentVolumeStatus_To_core_PersistentVolumeStatus(in *v1
 	out.Phase = core.PersistentVolumePhase(in.Phase)
 	out.Message = in.Message
 	out.Reason = in.Reason
+	out.LastPhaseTransitionTime = (*metav1.Time)(unsafe.Pointer(in.LastPhaseTransitionTime))
 	return nil
 }
 
@@ -5584,6 +5587,7 @@ func autoConvert_core_PersistentVolumeStatus_To_v1_PersistentVolumeStatus(in *co
 	out.Phase = v1.PersistentVolumePhase(in.Phase)
 	out.Message = in.Message
 	out.Reason = in.Reason
+	out.LastPhaseTransitionTime = (*metav1.Time)(unsafe.Pointer(in.LastPhaseTransitionTime))
 	return nil
 }
 

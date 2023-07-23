@@ -370,6 +370,7 @@ var iptablesJumpChains = []iptablesJumpChain{
 	{utiliptables.TableFilter, kubeProxyFirewallChain, utiliptables.ChainForward, "kubernetes load balancer firewall", []string{"-m", "conntrack", "--ctstate", "NEW"}},
 	{utiliptables.TableNAT, kubeServicesChain, utiliptables.ChainOutput, "kubernetes service portals", nil},
 	{utiliptables.TableNAT, kubeServicesChain, utiliptables.ChainPrerouting, "kubernetes service portals", nil},
+	{utiliptables.TableNAT, kubePostroutingChain, utiliptables.ChainPostrouting, "kubernetes postrouting rules", nil},
 }
 
 // Duplicates of chains created in pkg/kubelet/kubelet_network_linux.go; we create these
@@ -377,10 +378,6 @@ var iptablesJumpChains = []iptablesJumpChain{
 var iptablesKubeletJumpChains = []iptablesJumpChain{
 	{utiliptables.TableFilter, kubeletFirewallChain, utiliptables.ChainInput, "", nil},
 	{utiliptables.TableFilter, kubeletFirewallChain, utiliptables.ChainOutput, "", nil},
-
-	// Move this to iptablesJumpChains once IPTablesOwnershipCleanup is GA and kubelet
-	// no longer creates this chain,
-	{utiliptables.TableNAT, kubePostroutingChain, utiliptables.ChainPostrouting, "kubernetes postrouting rules", nil},
 }
 
 // When chains get removed from iptablesJumpChains, add them here so they get cleaned up
@@ -868,11 +865,6 @@ func (proxier *Proxier) syncProxyRules() {
 	// this so that it is easier to flush and change, for example if the mark
 	// value should ever change.
 
-	// NOTE: kubelet creates identical copies of these rules. If you want to change
-	// these rules in the future, you MUST do so in a way that will interoperate
-	// correctly with skewed versions of the rules created by kubelet. (Remove this
-	// comment once IPTablesOwnershipCleanup is GA.)
-
 	proxier.natRules.Write(
 		"-A", string(kubePostroutingChain),
 		"-m", "mark", "!", "--mark", fmt.Sprintf("%s/%s", proxier.masqueradeMark, proxier.masqueradeMark),
@@ -1032,7 +1024,7 @@ func (proxier *Proxier) syncProxyRules() {
 		// create a firewall chain.
 		loadBalancerTrafficChain := externalTrafficChain
 		fwChain := svcInfo.firewallChainName
-		usesFWChain := hasEndpoints && len(svcInfo.LoadBalancerIPStrings()) > 0 && len(svcInfo.LoadBalancerSourceRanges()) > 0
+		usesFWChain := hasEndpoints && len(svcInfo.LoadBalancerVIPStrings()) > 0 && len(svcInfo.LoadBalancerSourceRanges()) > 0
 		if usesFWChain {
 			activeNATChains[fwChain] = true
 			loadBalancerTrafficChain = fwChain
@@ -1124,7 +1116,7 @@ func (proxier *Proxier) syncProxyRules() {
 		}
 
 		// Capture load-balancer ingress.
-		for _, lbip := range svcInfo.LoadBalancerIPStrings() {
+		for _, lbip := range svcInfo.LoadBalancerVIPStrings() {
 			if hasEndpoints {
 				natRules.Write(
 					"-A", string(kubeServicesChain),
@@ -1149,7 +1141,7 @@ func (proxier *Proxier) syncProxyRules() {
 			// Either no endpoints at all (REJECT) or no endpoints for
 			// external traffic (DROP anything that didn't get short-circuited
 			// by the EXT chain.)
-			for _, lbip := range svcInfo.LoadBalancerIPStrings() {
+			for _, lbip := range svcInfo.LoadBalancerVIPStrings() {
 				filterRules.Write(
 					"-A", string(kubeExternalServicesChain),
 					"-m", "comment", "--comment", externalTrafficFilterComment,
@@ -1327,7 +1319,7 @@ func (proxier *Proxier) syncProxyRules() {
 			// will loop back with the source IP set to the VIP.  We
 			// need the following rules to allow requests from this node.
 			if allowFromNode {
-				for _, lbip := range svcInfo.LoadBalancerIPStrings() {
+				for _, lbip := range svcInfo.LoadBalancerVIPStrings() {
 					natRules.Write(
 						args,
 						"-s", lbip,

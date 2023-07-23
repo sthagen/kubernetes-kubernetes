@@ -2046,6 +2046,11 @@ func ValidationOptionsForPersistentVolumeClaim(pvc, oldPvc *core.PersistentVolum
 		// If the old object allowed "ReadWriteOncePod", continue to allow it in the new object
 		opts.AllowReadWriteOncePod = true
 	}
+
+	if helper.ClaimContainsAllocatedResources(oldPvc) ||
+		helper.ClaimContainsAllocatedResourceStatus(oldPvc) {
+		opts.EnableRecoverFromExpansionFailure = true
+	}
 	return opts
 }
 
@@ -2294,12 +2299,29 @@ func validateStorageClassUpgradeFromNil(oldAnnotations map[string]string, oldScN
 		(!oldAnnotationExist || *newScName == oldAnnotation) /* condition 3 */
 }
 
-var resizeStatusSet = sets.NewString(string(core.PersistentVolumeClaimNoExpansionInProgress),
-	string(core.PersistentVolumeClaimControllerExpansionInProgress),
-	string(core.PersistentVolumeClaimControllerExpansionFailed),
-	string(core.PersistentVolumeClaimNodeExpansionPending),
-	string(core.PersistentVolumeClaimNodeExpansionInProgress),
-	string(core.PersistentVolumeClaimNodeExpansionFailed))
+func validatePersistentVolumeClaimResourceKey(value string, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	for _, msg := range validation.IsQualifiedName(value) {
+		allErrs = append(allErrs, field.Invalid(fldPath, value, msg))
+	}
+	if len(allErrs) != 0 {
+		return allErrs
+	}
+	// For native resource names such as - either unprefixed names or with kubernetes.io prefix,
+	// only allowed value is storage
+	if helper.IsNativeResource(core.ResourceName(value)) {
+		if core.ResourceName(value) != core.ResourceStorage {
+			return append(allErrs, field.NotSupported(fldPath, value, []string{string(core.ResourceStorage)}))
+		}
+	}
+	return allErrs
+}
+
+var resizeStatusSet = sets.NewString(string(core.PersistentVolumeClaimControllerResizeInProgress),
+	string(core.PersistentVolumeClaimControllerResizeFailed),
+	string(core.PersistentVolumeClaimNodeResizePending),
+	string(core.PersistentVolumeClaimNodeResizeInProgress),
+	string(core.PersistentVolumeClaimNodeResizeFailed))
 
 // ValidatePersistentVolumeClaimStatusUpdate validates an update to status of a PersistentVolumeClaim
 func ValidatePersistentVolumeClaimStatusUpdate(newPvc, oldPvc *core.PersistentVolumeClaim, validationOpts PersistentVolumeClaimSpecValidationOptions) field.ErrorList {
@@ -2316,19 +2338,26 @@ func ValidatePersistentVolumeClaimStatusUpdate(newPvc, oldPvc *core.PersistentVo
 		allErrs = append(allErrs, validateBasicResource(qty, capPath.Key(string(r)))...)
 	}
 	if validationOpts.EnableRecoverFromExpansionFailure {
-		resizeStatusPath := field.NewPath("status", "resizeStatus")
-		if newPvc.Status.ResizeStatus != nil {
-			resizeStatus := *newPvc.Status.ResizeStatus
-			if !resizeStatusSet.Has(string(resizeStatus)) {
-				allErrs = append(allErrs, field.NotSupported(resizeStatusPath, resizeStatus, resizeStatusSet.List()))
+		resizeStatusPath := field.NewPath("status", "allocatedResourceStatus")
+		if newPvc.Status.AllocatedResourceStatuses != nil {
+			resizeStatus := newPvc.Status.AllocatedResourceStatuses
+			for k, v := range resizeStatus {
+				if errs := validatePersistentVolumeClaimResourceKey(k.String(), resizeStatusPath); len(errs) > 0 {
+					allErrs = append(allErrs, errs...)
+				}
+				if !resizeStatusSet.Has(string(v)) {
+					allErrs = append(allErrs, field.NotSupported(resizeStatusPath, k, resizeStatusSet.List()))
+					continue
+				}
 			}
 		}
 		allocPath := field.NewPath("status", "allocatedResources")
 		for r, qty := range newPvc.Status.AllocatedResources {
-			if r != core.ResourceStorage {
-				allErrs = append(allErrs, field.NotSupported(allocPath, r, []string{string(core.ResourceStorage)}))
+			if errs := validatePersistentVolumeClaimResourceKey(r.String(), allocPath); len(errs) > 0 {
+				allErrs = append(allErrs, errs...)
 				continue
 			}
+
 			if errs := validateBasicResource(qty, allocPath.Key(string(r))); len(errs) > 0 {
 				allErrs = append(allErrs, errs...)
 			} else {
@@ -2830,6 +2859,45 @@ func validatePodResourceClaimSource(claimSource core.ClaimSource, fldPath *field
 	return allErrs
 }
 
+func validateLivenessProbe(probe *core.Probe, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if probe == nil {
+		return allErrs
+	}
+	allErrs = append(allErrs, validateProbe(probe, fldPath)...)
+	if probe.SuccessThreshold != 1 {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("successThreshold"), probe.SuccessThreshold, "must be 1"))
+	}
+	return allErrs
+}
+
+func validateReadinessProbe(probe *core.Probe, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if probe == nil {
+		return allErrs
+	}
+	allErrs = append(allErrs, validateProbe(probe, fldPath)...)
+	if probe.TerminationGracePeriodSeconds != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("terminationGracePeriodSeconds"), probe.TerminationGracePeriodSeconds, "must not be set for readinessProbes"))
+	}
+	return allErrs
+}
+
+func validateStartupProbe(probe *core.Probe, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if probe == nil {
+		return allErrs
+	}
+	allErrs = append(allErrs, validateProbe(probe, fldPath)...)
+	if probe.SuccessThreshold != 1 {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("successThreshold"), probe.SuccessThreshold, "must be 1"))
+	}
+	return allErrs
+}
+
 func validateProbe(probe *core.Probe, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
@@ -3216,36 +3284,26 @@ func validateInitContainers(containers []core.Container, regularContainers []cor
 
 		switch {
 		case restartAlways:
-			// TODO: Allow restartable init containers to have a lifecycle hook.
 			if ctr.Lifecycle != nil {
-				allErrs = append(allErrs, field.Forbidden(idxPath.Child("lifecycle"), "may not be set for init containers"))
+				allErrs = append(allErrs, validateLifecycle(ctr.Lifecycle, idxPath.Child("lifecycle"))...)
 			}
-			// TODO: Allow restartable init containers to have a liveness probe.
-			if ctr.LivenessProbe != nil {
-				allErrs = append(allErrs, field.Forbidden(idxPath.Child("livenessProbe"), "may not be set for init containers"))
-			}
-			// TODO: Allow restartable init containers to have a readiness probe.
-			if ctr.ReadinessProbe != nil {
-				allErrs = append(allErrs, field.Forbidden(idxPath.Child("readinessProbe"), "may not be set for init containers"))
-			}
-			allErrs = append(allErrs, validateProbe(ctr.StartupProbe, idxPath.Child("startupProbe"))...)
-			if ctr.StartupProbe != nil && ctr.StartupProbe.SuccessThreshold != 1 {
-				allErrs = append(allErrs, field.Invalid(idxPath.Child("startupProbe", "successThreshold"), ctr.StartupProbe.SuccessThreshold, "must be 1"))
-			}
+			allErrs = append(allErrs, validateLivenessProbe(ctr.LivenessProbe, idxPath.Child("livenessProbe"))...)
+			allErrs = append(allErrs, validateReadinessProbe(ctr.ReadinessProbe, idxPath.Child("readinessProbe"))...)
+			allErrs = append(allErrs, validateStartupProbe(ctr.StartupProbe, idxPath.Child("startupProbe"))...)
 
 		default:
 			// These fields are disallowed for init containers.
 			if ctr.Lifecycle != nil {
-				allErrs = append(allErrs, field.Forbidden(idxPath.Child("lifecycle"), "may not be set for init containers"))
+				allErrs = append(allErrs, field.Forbidden(idxPath.Child("lifecycle"), "may not be set for init containers without restartPolicy=Always"))
 			}
 			if ctr.LivenessProbe != nil {
-				allErrs = append(allErrs, field.Forbidden(idxPath.Child("livenessProbe"), "may not be set for init containers"))
+				allErrs = append(allErrs, field.Forbidden(idxPath.Child("livenessProbe"), "may not be set for init containers without restartPolicy=Always"))
 			}
 			if ctr.ReadinessProbe != nil {
-				allErrs = append(allErrs, field.Forbidden(idxPath.Child("readinessProbe"), "may not be set for init containers"))
+				allErrs = append(allErrs, field.Forbidden(idxPath.Child("readinessProbe"), "may not be set for init containers without restartPolicy=Always"))
 			}
 			if ctr.StartupProbe != nil {
-				allErrs = append(allErrs, field.Forbidden(idxPath.Child("startupProbe"), "may not be set for init containers"))
+				allErrs = append(allErrs, field.Forbidden(idxPath.Child("startupProbe"), "may not be set for init containers without restartPolicy=Always"))
 			}
 		}
 
@@ -3354,23 +3412,16 @@ func validateContainers(containers []core.Container, volumes map[string]core.Vol
 			allNames.Insert(ctr.Name)
 		}
 
-		// These fields are only allowed for regular containers, so only check supported values here.
-		// Init and ephemeral container validation will return field.Forbidden() for these paths.
+		// These fields are allowed for regular containers and restartable init
+		// containers.
+		// Regular init container and ephemeral container validation will return
+		// field.Forbidden() for these paths.
 		if ctr.Lifecycle != nil {
 			allErrs = append(allErrs, validateLifecycle(ctr.Lifecycle, path.Child("lifecycle"))...)
 		}
-		allErrs = append(allErrs, validateProbe(ctr.LivenessProbe, path.Child("livenessProbe"))...)
-		if ctr.LivenessProbe != nil && ctr.LivenessProbe.SuccessThreshold != 1 {
-			allErrs = append(allErrs, field.Invalid(path.Child("livenessProbe", "successThreshold"), ctr.LivenessProbe.SuccessThreshold, "must be 1"))
-		}
-		allErrs = append(allErrs, validateProbe(ctr.ReadinessProbe, path.Child("readinessProbe"))...)
-		if ctr.ReadinessProbe != nil && ctr.ReadinessProbe.TerminationGracePeriodSeconds != nil {
-			allErrs = append(allErrs, field.Invalid(path.Child("readinessProbe", "terminationGracePeriodSeconds"), ctr.ReadinessProbe.TerminationGracePeriodSeconds, "must not be set for readinessProbes"))
-		}
-		allErrs = append(allErrs, validateProbe(ctr.StartupProbe, path.Child("startupProbe"))...)
-		if ctr.StartupProbe != nil && ctr.StartupProbe.SuccessThreshold != 1 {
-			allErrs = append(allErrs, field.Invalid(path.Child("startupProbe", "successThreshold"), ctr.StartupProbe.SuccessThreshold, "must be 1"))
-		}
+		allErrs = append(allErrs, validateLivenessProbe(ctr.LivenessProbe, path.Child("livenessProbe"))...)
+		allErrs = append(allErrs, validateReadinessProbe(ctr.ReadinessProbe, path.Child("readinessProbe"))...)
+		allErrs = append(allErrs, validateStartupProbe(ctr.StartupProbe, path.Child("startupProbe"))...)
 
 		// These fields are disallowed for regular containers
 		if ctr.RestartPolicy != nil {
@@ -6997,6 +7048,10 @@ func ValidatePodLogOptions(opts *core.PodLogOptions) field.ErrorList {
 	return allErrs
 }
 
+var (
+	supportedLoadBalancerIPMode = sets.NewString(string(core.LoadBalancerIPModeVIP), string(core.LoadBalancerIPModeProxy))
+)
+
 // ValidateLoadBalancerStatus validates required fields on a LoadBalancerStatus
 func ValidateLoadBalancerStatus(status *core.LoadBalancerStatus, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
@@ -7007,6 +7062,17 @@ func ValidateLoadBalancerStatus(status *core.LoadBalancerStatus, fldPath *field.
 				allErrs = append(allErrs, field.Invalid(idxPath.Child("ip"), ingress.IP, "must be a valid IP address"))
 			}
 		}
+
+		if utilfeature.DefaultFeatureGate.Enabled(features.LoadBalancerIPMode) && ingress.IPMode == nil {
+			if len(ingress.IP) > 0 {
+				allErrs = append(allErrs, field.Required(idxPath.Child("ipMode"), "must be specified when `ip` is set"))
+			}
+		} else if ingress.IPMode != nil && len(ingress.IP) == 0 {
+			allErrs = append(allErrs, field.Forbidden(idxPath.Child("ipMode"), "may not be specified when `ip` is not set"))
+		} else if ingress.IPMode != nil && !supportedLoadBalancerIPMode.Has(string(*ingress.IPMode)) {
+			allErrs = append(allErrs, field.NotSupported(idxPath.Child("ipMode"), ingress.IPMode, supportedLoadBalancerIPMode.List()))
+		}
+
 		if len(ingress.Hostname) > 0 {
 			for _, msg := range validation.IsDNS1123Subdomain(ingress.Hostname) {
 				allErrs = append(allErrs, field.Invalid(idxPath.Child("hostname"), ingress.Hostname, msg))

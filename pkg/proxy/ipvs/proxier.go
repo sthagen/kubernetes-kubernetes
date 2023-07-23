@@ -1172,7 +1172,7 @@ func (proxier *Proxier) syncProxyRules() {
 		}
 
 		// Capture load-balancer ingress.
-		for _, ingress := range svcInfo.LoadBalancerIPStrings() {
+		for _, ingress := range svcInfo.LoadBalancerVIPStrings() {
 			// ipset call
 			entry = &utilipset.Entry{
 				IP:       ingress,
@@ -1692,11 +1692,6 @@ func (proxier *Proxier) writeIptablesRules() {
 	// Install the kubernetes-specific postrouting rules. We use a whole chain for
 	// this so that it is easier to flush and change, for example if the mark
 	// value should ever change.
-
-	// NOTE: kubelet creates identical copies of these rules. If you want to change
-	// these rules in the future, you MUST do so in a way that will interoperate
-	// correctly with skewed versions of the rules created by kubelet. (Remove this
-	// comment once IPTablesOwnershipCleanup is GA.)
 
 	proxier.natRules.Write(
 		"-A", string(kubePostroutingChain),

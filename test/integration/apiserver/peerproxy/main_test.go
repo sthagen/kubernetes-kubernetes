@@ -1,8 +1,5 @@
-//go:build linux
-// +build linux
-
 /*
-Copyright 2016 The Kubernetes Authors.
+Copyright 2023 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,30 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package kubelet
+package peerproxy
 
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"k8s.io/kubernetes/test/integration/framework"
 )
 
-func TestGetIPTablesMark(t *testing.T) {
-	tests := []struct {
-		bit    int
-		expect string
-	}{
-		{
-			14,
-			"0x00004000",
-		},
-		{
-			15,
-			"0x00008000",
-		},
-	}
-	for _, tc := range tests {
-		res := getIPTablesMark(tc.bit)
-		assert.Equal(t, tc.expect, res, "input %d", tc.bit)
-	}
+func TestMain(m *testing.M) {
+	framework.EtcdMain(m.Run)
 }
