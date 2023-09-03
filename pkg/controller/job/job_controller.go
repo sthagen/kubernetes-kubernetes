@@ -165,8 +165,8 @@ func newControllerWithClock(ctx context.Context, podInformer coreinformers.PodIn
 		},
 		expectations:          controller.NewControllerExpectations(),
 		finalizerExpectations: newUIDTrackingExpectations(),
-		queue:                 workqueue.NewRateLimitingQueueWithDelayingInterface(workqueue.NewDelayingQueueWithCustomClock(clock, "job"), workqueue.NewItemExponentialFailureRateLimiter(DefaultJobApiBackOff, MaxJobApiBackOff)),
-		orphanQueue:           workqueue.NewRateLimitingQueueWithDelayingInterface(workqueue.NewDelayingQueueWithCustomClock(clock, "job_orphan_pod"), workqueue.NewItemExponentialFailureRateLimiter(DefaultJobApiBackOff, MaxJobApiBackOff)),
+		queue:                 workqueue.NewRateLimitingQueueWithConfig(workqueue.NewItemExponentialFailureRateLimiter(DefaultJobApiBackOff, MaxJobApiBackOff), workqueue.RateLimitingQueueConfig{Name: "job", Clock: clock}),
+		orphanQueue:           workqueue.NewRateLimitingQueueWithConfig(workqueue.NewItemExponentialFailureRateLimiter(DefaultJobApiBackOff, MaxJobApiBackOff), workqueue.RateLimitingQueueConfig{Name: "job_orphan_pod", Clock: clock}),
 		broadcaster:           eventBroadcaster,
 		recorder:              eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "job-controller"}),
 		clock:                 clock,
@@ -603,7 +603,7 @@ func (jm *Controller) orphanWorker(ctx context.Context) {
 	}
 }
 
-func (jm Controller) processNextOrphanPod(ctx context.Context) bool {
+func (jm *Controller) processNextOrphanPod(ctx context.Context) bool {
 	key, quit := jm.orphanQueue.Get()
 	if quit {
 		return false
@@ -621,7 +621,7 @@ func (jm Controller) processNextOrphanPod(ctx context.Context) bool {
 }
 
 // syncOrphanPod removes the tracking finalizer from an orphan pod if found.
-func (jm Controller) syncOrphanPod(ctx context.Context, key string) error {
+func (jm *Controller) syncOrphanPod(ctx context.Context, key string) error {
 	startTime := jm.clock.Now()
 	logger := klog.FromContext(ctx)
 	defer func() {
@@ -1462,7 +1462,7 @@ func (jm *Controller) manageJob(ctx context.Context, job *batch.Job, jobCtx *syn
 
 	var terminating int32 = 0
 	if onlyReplaceFailedPods(jobCtx.job) {
-		// For PodFailurePolicy specified but PodRecreationPolicy disabled
+		// For PodFailurePolicy specified but PodReplacementPolicy disabled
 		// we still need to count terminating pods for replica counts
 		// But we will not allow updates to status.
 		if jobCtx.terminating == nil {
@@ -1870,8 +1870,8 @@ func countReadyPods(pods []*v1.Pod) int32 {
 	return cnt
 }
 
-// This checks if we should apply PodRecreationPolicy.
-// PodRecreationPolicy controls when we recreate pods if they are marked as terminating
+// This checks if we should apply PodReplacementPolicy.
+// PodReplacementPolicy controls when we recreate pods if they are marked as terminating
 // Failed means that we recreate only once the pod has terminated.
 func onlyReplaceFailedPods(job *batch.Job) bool {
 	if feature.DefaultFeatureGate.Enabled(features.JobPodReplacementPolicy) && *job.Spec.PodReplacementPolicy == batch.Failed {
