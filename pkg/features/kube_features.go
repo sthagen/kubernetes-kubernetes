@@ -232,14 +232,6 @@ const (
 	// Disable in-tree functionality in kubelet to authenticate to cloud provider container registries for image pull credentials.
 	DisableKubeletCloudCredentialProviders featuregate.Feature = "DisableKubeletCloudCredentialProviders"
 
-	// owner: @derekwaynecarr
-	// alpha: v1.20
-	// beta: v1.21 (off by default until 1.22)
-	// ga: v1.27
-	//
-	// Enables usage of hugepages-<size> in downward API.
-	DownwardAPIHugePages featuregate.Feature = "DownwardAPIHugePages"
-
 	// owner: @pohly
 	// kep: http://kep.k8s.io/3063
 	// alpha: v1.26
@@ -636,6 +628,13 @@ const (
 	// Adds pod.status.hostIPs and downward API
 	PodHostIPs featuregate.Feature = "PodHostIPs"
 
+	// owner: @AxeZhan
+	// kep: http://kep.k8s.io/3960
+	// alpha: v1.29
+	//
+	// Enables SleepAction in container lifecycle hooks
+	PodLifecycleSleepAction featuregate.Feature = "PodLifecycleSleepAction"
+
 	// owner: @Huang-Wei
 	// kep: https://kep.k8s.io/3521
 	// alpha: v1.26
@@ -643,14 +642,6 @@ const (
 	//
 	// Enable users to specify when a Pod is ready for scheduling.
 	PodSchedulingReadiness featuregate.Feature = "PodSchedulingReadiness"
-
-	// owner: @rphillips
-	// alpha: v1.21
-	// beta: v1.22
-	// ga: v1.28
-	//
-	// Allows user to override pod-level terminationGracePeriod for probes
-	ProbeTerminationGracePeriod featuregate.Feature = "ProbeTerminationGracePeriod"
 
 	// owner: @jessfraz
 	// alpha: v1.12
@@ -957,8 +948,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	DevicePluginCDIDevices: {Default: false, PreRelease: featuregate.Alpha},
 
-	DownwardAPIHugePages: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in v1.29
-
 	DynamicResourceAllocation: {Default: false, PreRelease: featuregate.Alpha},
 
 	EventedPLEG: {Default: false, PreRelease: featuregate.Beta}, // off by default, requires CRI Runtime support
@@ -1063,9 +1052,9 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	PodHostIPs: {Default: false, PreRelease: featuregate.Alpha},
 
-	PodSchedulingReadiness: {Default: true, PreRelease: featuregate.Beta},
+	PodLifecycleSleepAction: {Default: false, PreRelease: featuregate.Alpha},
 
-	ProbeTerminationGracePeriod: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
+	PodSchedulingReadiness: {Default: true, PreRelease: featuregate.Beta},
 
 	ProcMountType: {Default: false, PreRelease: featuregate.Alpha},
 
