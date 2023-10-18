@@ -152,11 +152,11 @@ type syncJobCtx struct {
 
 // NewController creates a new Job controller that keeps the relevant pods
 // in sync with their corresponding Job objects.
-func NewController(ctx context.Context, podInformer coreinformers.PodInformer, jobInformer batchinformers.JobInformer, kubeClient clientset.Interface) *Controller {
+func NewController(ctx context.Context, podInformer coreinformers.PodInformer, jobInformer batchinformers.JobInformer, kubeClient clientset.Interface) (*Controller, error) {
 	return newControllerWithClock(ctx, podInformer, jobInformer, kubeClient, &clock.RealClock{})
 }
 
-func newControllerWithClock(ctx context.Context, podInformer coreinformers.PodInformer, jobInformer batchinformers.JobInformer, kubeClient clientset.Interface, clock clock.WithTicker) *Controller {
+func newControllerWithClock(ctx context.Context, podInformer coreinformers.PodInformer, jobInformer batchinformers.JobInformer, kubeClient clientset.Interface, clock clock.WithTicker) (*Controller, error) {
 	eventBroadcaster := record.NewBroadcaster()
 	logger := klog.FromContext(ctx)
 
@@ -176,7 +176,7 @@ func newControllerWithClock(ctx context.Context, podInformer coreinformers.PodIn
 		podBackoffStore:       newBackoffStore(),
 	}
 
-	jobInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	if _, err := jobInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			jm.enqueueSyncJobImmediately(logger, obj)
 		},
@@ -186,11 +186,13 @@ func newControllerWithClock(ctx context.Context, podInformer coreinformers.PodIn
 		DeleteFunc: func(obj interface{}) {
 			jm.deleteJob(logger, obj)
 		},
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("adding Job event handler: %w", err)
+	}
 	jm.jobLister = jobInformer.Lister()
 	jm.jobStoreSynced = jobInformer.Informer().HasSynced
 
-	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	if _, err := podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			jm.addPod(logger, obj)
 		},
@@ -200,7 +202,9 @@ func newControllerWithClock(ctx context.Context, podInformer coreinformers.PodIn
 		DeleteFunc: func(obj interface{}) {
 			jm.deletePod(logger, obj, true)
 		},
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("adding Pod event handler: %w", err)
+	}
 	jm.podStore = podInformer.Lister()
 	jm.podStoreSynced = podInformer.Informer().HasSynced
 
@@ -210,7 +214,7 @@ func newControllerWithClock(ctx context.Context, podInformer coreinformers.PodIn
 
 	metrics.Register()
 
-	return jm
+	return jm, nil
 }
 
 // Run the main goroutine responsible for watching and syncing jobs.
@@ -1490,7 +1494,7 @@ func (jm *Controller) manageJob(ctx context.Context, job *batch.Job, jobCtx *syn
 		}
 	}
 
-	rmAtLeast := active + terminating - wantActive
+	rmAtLeast := active - wantActive
 	if rmAtLeast < 0 {
 		rmAtLeast = 0
 	}
@@ -1871,7 +1875,10 @@ func countReadyPods(pods []*v1.Pod) int32 {
 // PodReplacementPolicy controls when we recreate pods if they are marked as terminating
 // Failed means that we recreate only once the pod has terminated.
 func onlyReplaceFailedPods(job *batch.Job) bool {
-	if feature.DefaultFeatureGate.Enabled(features.JobPodReplacementPolicy) && *job.Spec.PodReplacementPolicy == batch.Failed {
+	// We check both PodReplacementPolicy for nil and failed
+	// because it is possible that  `PodReplacementPolicy` is not defaulted,
+	// when the `JobPodReplacementPolicy` feature gate is disabled for API server.
+	if feature.DefaultFeatureGate.Enabled(features.JobPodReplacementPolicy) && job.Spec.PodReplacementPolicy != nil && *job.Spec.PodReplacementPolicy == batch.Failed {
 		return true
 	}
 	return feature.DefaultFeatureGate.Enabled(features.JobPodFailurePolicy) && job.Spec.PodFailurePolicy != nil

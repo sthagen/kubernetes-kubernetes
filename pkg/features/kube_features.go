@@ -142,7 +142,8 @@ const (
 	// owner: @mfordjody
 	// alpha: v1.26
 	//
-	// Skip validation Enable in next version
+	// Bypasses obsolete validation that GCP volumes are read-only when used in
+	// Deployments.
 	SkipReadOnlyValidationGCE featuregate.Feature = "SkipReadOnlyValidationGCE"
 
 	// owner: @trierra
@@ -778,14 +779,6 @@ const (
 	// Enables topology aware hints for EndpointSlices
 	TopologyAwareHints featuregate.Feature = "TopologyAwareHints"
 
-	// owner: @lmdaly, @swatisehgal (for GA graduation)
-	// alpha: v1.16
-	// beta: v1.18
-	// GA: v1.27
-	//
-	// Enable resource managers to make NUMA aligned decisions
-	TopologyManager featuregate.Feature = "TopologyManager"
-
 	// owner: @PiotrProkop
 	// kep: https://kep.k8s.io/3545
 	// alpha: v1.26
@@ -930,7 +923,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	CSIVolumeHealth: {Default: false, PreRelease: featuregate.Alpha},
 
-	SkipReadOnlyValidationGCE: {Default: false, PreRelease: featuregate.Alpha},
+	SkipReadOnlyValidationGCE: {Default: true, PreRelease: featuregate.Deprecated}, // remove in 1.31
 
 	CloudControllerManagerWebhook: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -1090,8 +1083,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	TopologyAwareHints: {Default: true, PreRelease: featuregate.Beta},
 
-	TopologyManager: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // GA in 1.27; remove in 1.29
-
 	TopologyManagerPolicyAlphaOptions: {Default: false, PreRelease: featuregate.Alpha},
 
 	TopologyManagerPolicyBetaOptions: {Default: true, PreRelease: featuregate.Beta},
@@ -1144,6 +1135,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	genericfeatures.ServerSideApply: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
 
 	genericfeatures.ServerSideFieldValidation: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
+
+	genericfeatures.StructuredAuthorizationConfiguration: {Default: false, PreRelease: featuregate.Alpha},
 
 	genericfeatures.UnauthenticatedHTTP2DOSMitigation: {Default: true, PreRelease: featuregate.Beta},
 
