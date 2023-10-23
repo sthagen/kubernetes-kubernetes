@@ -370,6 +370,7 @@ const (
 	// owner: @mimowo
 	// kep: https://kep.k8s.io/3850
 	// alpha: v1.28
+	// beta: v1.29
 	//
 	// Allows users to specify counting of failed pods per index.
 	JobBackoffLimitPerIndex featuregate.Feature = "JobBackoffLimitPerIndex"
@@ -487,6 +488,13 @@ const (
 	//
 	// Enables scaling down replicas via logarithmic comparison of creation/ready timestamps
 	LogarithmicScaleDown featuregate.Feature = "LogarithmicScaleDown"
+
+	// owner: @sanposhiho
+	// kep: https://kep.k8s.io/3633
+	// alpha: v1.29
+	//
+	// Enables the MatchLabelKeys and MismatchLabelKeys in PodAffinity and PodAntiAffinity.
+	MatchLabelKeysInPodAffinity featuregate.Feature = "MatchLabelKeysInPodAffinity"
 
 	// owner: @denkensk
 	// kep: https://kep.k8s.io/3243
@@ -969,7 +977,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	IPTablesOwnershipCleanup: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.30
 
-	JobBackoffLimitPerIndex: {Default: false, PreRelease: featuregate.Alpha},
+	JobBackoffLimitPerIndex: {Default: true, PreRelease: featuregate.Beta},
 
 	JobPodFailurePolicy: {Default: true, PreRelease: featuregate.Beta},
 
@@ -1000,6 +1008,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	LocalStorageCapacityIsolationFSQuotaMonitoring: {Default: false, PreRelease: featuregate.Alpha},
 
 	LogarithmicScaleDown: {Default: true, PreRelease: featuregate.Beta},
+
+	MatchLabelKeysInPodAffinity: {Default: false, PreRelease: featuregate.Alpha},
 
 	MatchLabelKeysInPodTopologySpread: {Default: true, PreRelease: featuregate.Beta},
 
