@@ -179,6 +179,14 @@ const (
 	// Enables kubelet to detect CSI volume condition and send the event of the abnormal volume to the corresponding pod that is using it.
 	CSIVolumeHealth featuregate.Feature = "CSIVolumeHealth"
 
+	// owner: @seans3
+	// kep: http://kep.k8s.io/4006
+	// alpha: v1.29
+	//
+	// Enables StreamTranslator proxy to handle WebSockets upgrade requests for the
+	// version of the RemoteCommand subprotocol that supports the "close" signal.
+	TranslateStreamCloseWebsocketRequests featuregate.Feature = "TranslateStreamCloseWebsocketRequests"
+
 	// owner: @nckturner
 	// kep:  http://kep.k8s.io/2699
 	// alpha: v1.27
@@ -633,7 +641,6 @@ const (
 	// owner: @wzshiming
 	// kep: http://kep.k8s.io/2681
 	// alpha: v1.28
-	// beta: v1.29
 	//
 	// Adds pod.status.hostIPs and downward API
 	PodHostIPs featuregate.Feature = "PodHostIPs"
@@ -679,6 +686,7 @@ const (
 	// kep: https://kep.k8s.io/2485
 	// alpha: v1.22
 	// beta: v1.27
+	// GA: v1.29
 	//
 	// Enables usage of the ReadWriteOncePod PersistentVolume access mode.
 	ReadWriteOncePod featuregate.Feature = "ReadWriteOncePod"
@@ -925,6 +933,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	SkipReadOnlyValidationGCE: {Default: true, PreRelease: featuregate.Deprecated}, // remove in 1.31
 
+	TranslateStreamCloseWebsocketRequests: {Default: false, PreRelease: featuregate.Alpha},
+
 	CloudControllerManagerWebhook: {Default: false, PreRelease: featuregate.Alpha},
 
 	ContainerCheckpoint: {Default: false, PreRelease: featuregate.Alpha},
@@ -1045,7 +1055,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	PodReadyToStartContainersCondition: {Default: true, PreRelease: featuregate.Beta},
 
-	PodHostIPs: {Default: true, PreRelease: featuregate.Beta},
+	PodHostIPs: {Default: false, PreRelease: featuregate.Alpha},
 
 	PodLifecycleSleepAction: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -1057,7 +1067,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	QOSReserved: {Default: false, PreRelease: featuregate.Alpha},
 
-	ReadWriteOncePod: {Default: true, PreRelease: featuregate.Beta},
+	ReadWriteOncePod: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.31
 
 	RecoverVolumeExpansionFailure: {Default: false, PreRelease: featuregate.Alpha},
 
