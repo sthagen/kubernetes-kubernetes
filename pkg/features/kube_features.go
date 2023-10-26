@@ -159,12 +159,6 @@ const (
 	// Enables the RBD in-tree driver to RBD CSI Driver  migration feature.
 	CSIMigrationRBD featuregate.Feature = "CSIMigrationRBD"
 
-	// owner: @divyenpatel
-	// beta: v1.19 (requires: vSphere vCenter/ESXi Version: 7.0u2, HW Version: VM version 15)
-	// GA: 1.26
-	// Enables the vSphere in-tree driver to vSphere CSI Driver migration feature.
-	CSIMigrationvSphere featuregate.Feature = "CSIMigrationvSphere"
-
 	// owner: @humblec, @zhucan
 	// kep: https://kep.k8s.io/3171
 	// alpha: v1.25
@@ -223,6 +217,7 @@ const (
 	// owner: @elezar
 	// kep: http://kep.k8s.io/4009
 	// alpha: v1.28
+	// beta: v1.29
 	//
 	// Add support for CDI Device IDs in the Device Plugin API.
 	DevicePluginCDIDevices featuregate.Feature = "DevicePluginCDIDevices"
@@ -882,6 +877,13 @@ const (
 	// alpha: v1.29
 	// LoadBalancerIPMode enables the IPMode field in the LoadBalancerIngress status of a Service
 	LoadBalancerIPMode featuregate.Feature = "LoadBalancerIPMode"
+
+	// owner: @haircommander
+	// kep: http://kep.k8s.io/4210
+	// alpha: v1.29
+	// ImageMaximumGCAge enables the Kubelet configuration field of the same name, allowing an admin
+	// to specify the age after which an image will be garbage collected.
+	ImageMaximumGCAge featuregate.Feature = "ImageMaximumGCAge"
 )
 
 func init() {
@@ -925,8 +927,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	CSIMigrationRBD: {Default: false, PreRelease: featuregate.Deprecated}, //  deprecated in 1.28, remove in 1.31
 
-	CSIMigrationvSphere: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
-
 	CSINodeExpandSecret: {Default: true, PreRelease: featuregate.Beta},
 
 	CSIVolumeHealth: {Default: false, PreRelease: featuregate.Alpha},
@@ -949,7 +949,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	DisableKubeletCloudCredentialProviders: {Default: true, PreRelease: featuregate.Beta},
 
-	DevicePluginCDIDevices: {Default: false, PreRelease: featuregate.Alpha},
+	DevicePluginCDIDevices: {Default: true, PreRelease: featuregate.Beta},
 
 	DynamicResourceAllocation: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -1121,6 +1121,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	LoadBalancerIPMode: {Default: false, PreRelease: featuregate.Alpha},
 
+	ImageMaximumGCAge: {Default: false, PreRelease: featuregate.Alpha},
+
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
 
@@ -1139,8 +1141,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	genericfeatures.CustomResourceValidationExpressions: {Default: true, PreRelease: featuregate.Beta},
 
 	genericfeatures.OpenAPIEnums: {Default: true, PreRelease: featuregate.Beta},
-
-	genericfeatures.OpenAPIV3: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
 
 	genericfeatures.ServerSideApply: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
 

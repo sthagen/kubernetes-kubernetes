@@ -36,6 +36,7 @@ import (
 	libcontaineruserns "github.com/opencontainers/runc/libcontainer/userns"
 	"github.com/opencontainers/selinux/go-selinux"
 	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
 	"go.opentelemetry.io/otel/trace"
 	"k8s.io/client-go/informers"
 
@@ -422,6 +423,12 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		MinAge:               kubeCfg.ImageMinimumGCAge.Duration,
 		HighThresholdPercent: int(kubeCfg.ImageGCHighThresholdPercent),
 		LowThresholdPercent:  int(kubeCfg.ImageGCLowThresholdPercent),
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.ImageMaximumGCAge) {
+		imageGCPolicy.MaxAge = kubeCfg.ImageMaximumGCAge.Duration
+	} else if kubeCfg.ImageMaximumGCAge.Duration != 0 {
+		klog.InfoS("ImageMaximumGCAge flag enabled, but corresponding feature gate is not enabled. Ignoring flag.")
 	}
 
 	enforceNodeAllocatable := kubeCfg.EnforceNodeAllocatable
@@ -1694,11 +1701,11 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 // Callers should not write an event if this operation returns an error.
 func (kl *Kubelet) SyncPod(ctx context.Context, updateType kubetypes.SyncPodType, pod, mirrorPod *v1.Pod, podStatus *kubecontainer.PodStatus) (isTerminal bool, err error) {
 	ctx, otelSpan := kl.tracer.Start(ctx, "syncPod", trace.WithAttributes(
-		attribute.String("k8s.pod.uid", string(pod.UID)),
+		semconv.K8SPodUIDKey.String(string(pod.UID)),
 		attribute.String("k8s.pod", klog.KObj(pod).String()),
-		attribute.String("k8s.pod.name", pod.Name),
+		semconv.K8SPodNameKey.String(pod.Name),
 		attribute.String("k8s.pod.update_type", updateType.String()),
-		attribute.String("k8s.namespace.name", pod.Namespace),
+		semconv.K8SNamespaceNameKey.String(pod.Namespace),
 	))
 	klog.V(4).InfoS("SyncPod enter", "pod", klog.KObj(pod), "podUID", pod.UID)
 	defer func() {
@@ -1979,10 +1986,10 @@ func (kl *Kubelet) SyncTerminatingPod(_ context.Context, pod *v1.Pod, podStatus 
 	// TODO(#113606): connect this with the incoming context parameter, which comes from the pod worker.
 	// Currently, using that context causes test failures.
 	ctx, otelSpan := kl.tracer.Start(context.Background(), "syncTerminatingPod", trace.WithAttributes(
-		attribute.String("k8s.pod.uid", string(pod.UID)),
+		semconv.K8SPodUIDKey.String(string(pod.UID)),
 		attribute.String("k8s.pod", klog.KObj(pod).String()),
-		attribute.String("k8s.pod.name", pod.Name),
-		attribute.String("k8s.namespace.name", pod.Namespace),
+		semconv.K8SPodNameKey.String(pod.Name),
+		semconv.K8SNamespaceNameKey.String(pod.Namespace),
 	))
 	defer otelSpan.End()
 	klog.V(4).InfoS("SyncTerminatingPod enter", "pod", klog.KObj(pod), "podUID", pod.UID)
@@ -2114,10 +2121,10 @@ func (kl *Kubelet) SyncTerminatingRuntimePod(_ context.Context, runningPod *kube
 // kubelet restarts in the middle of the action.
 func (kl *Kubelet) SyncTerminatedPod(ctx context.Context, pod *v1.Pod, podStatus *kubecontainer.PodStatus) error {
 	ctx, otelSpan := kl.tracer.Start(ctx, "syncTerminatedPod", trace.WithAttributes(
-		attribute.String("k8s.pod.uid", string(pod.UID)),
+		semconv.K8SPodUIDKey.String(string(pod.UID)),
 		attribute.String("k8s.pod", klog.KObj(pod).String()),
-		attribute.String("k8s.pod.name", pod.Name),
-		attribute.String("k8s.namespace.name", pod.Namespace),
+		semconv.K8SPodNameKey.String(pod.Name),
+		semconv.K8SNamespaceNameKey.String(pod.Namespace),
 	))
 	defer otelSpan.End()
 	klog.V(4).InfoS("SyncTerminatedPod enter", "pod", klog.KObj(pod), "podUID", pod.UID)
