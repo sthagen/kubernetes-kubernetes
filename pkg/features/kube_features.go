@@ -475,6 +475,7 @@ const (
 	// owner: @yt2985
 	// kep: http://kep.k8s.io/2800
 	// alpha: v1.28
+	// beta: v1.29
 	//
 	// Enables cleaning up of secret-based service account tokens.
 	LegacyServiceAccountTokenCleanUp featuregate.Feature = "LegacyServiceAccountTokenCleanUp"
@@ -885,6 +886,18 @@ const (
 	// ImageMaximumGCAge enables the Kubelet configuration field of the same name, allowing an admin
 	// to specify the age after which an image will be garbage collected.
 	ImageMaximumGCAge featuregate.Feature = "ImageMaximumGCAge"
+
+	// owner: @saschagrunert
+	// alpha: v1.28
+	//
+	// Enables user namespace support for Pod Security Standards. Enabling this
+	// feature will modify all Pod Security Standard rules to allow setting:
+	// spec[.*].securityContext.[runAsNonRoot,runAsUser]
+	// This feature gate should only be enabled if all nodes in the cluster
+	// support the user namespace feature and have it enabled. The feature gate
+	// will not graduate or be enabled by default in future Kubernetes
+	// releases.
+	UserNamespacesPodSecurityStandards featuregate.Feature = "UserNamespacesPodSecurityStandards"
 )
 
 func init() {
@@ -1014,7 +1027,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	LegacyServiceAccountTokenTracking: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.30
 
-	LegacyServiceAccountTokenCleanUp: {Default: false, PreRelease: featuregate.Alpha},
+	LegacyServiceAccountTokenCleanUp: {Default: true, PreRelease: featuregate.Beta},
 
 	LocalStorageCapacityIsolationFSQuotaMonitoring: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -1046,7 +1059,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	PDBUnhealthyPodEvictionPolicy: {Default: true, PreRelease: featuregate.Beta},
 
-	PersistentVolumeLastPhaseTransitionTime: {Default: false, PreRelease: featuregate.Alpha},
+	PersistentVolumeLastPhaseTransitionTime: {Default: true, PreRelease: featuregate.Beta},
 
 	PodAndContainerStatsFromCRI: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -1123,6 +1136,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	LoadBalancerIPMode: {Default: false, PreRelease: featuregate.Alpha},
 
 	ImageMaximumGCAge: {Default: false, PreRelease: featuregate.Alpha},
+
+	UserNamespacesPodSecurityStandards: {Default: false, PreRelease: featuregate.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
