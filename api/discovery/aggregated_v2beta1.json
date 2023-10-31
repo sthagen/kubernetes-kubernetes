@@ -1156,6 +1156,35 @@
             }
           ],
           "version": "v1"
+        },
+        {
+          "freshness": "Current",
+          "resources": [
+            {
+              "resource": "volumeattributesclasses",
+              "responseKind": {
+                "group": "",
+                "kind": "VolumeAttributesClass",
+                "version": ""
+              },
+              "scope": "Cluster",
+              "shortNames": [
+                "vac"
+              ],
+              "singularResource": "volumeattributesclass",
+              "verbs": [
+                "create",
+                "delete",
+                "deletecollection",
+                "get",
+                "list",
+                "patch",
+                "update",
+                "watch"
+              ]
+            }
+          ],
+          "version": "v1alpha1"
         }
       ]
     },
@@ -1554,6 +1583,82 @@
         "name": "flowcontrol.apiserver.k8s.io"
       },
       "versions": [
+        {
+          "freshness": "Current",
+          "resources": [
+            {
+              "resource": "flowschemas",
+              "responseKind": {
+                "group": "",
+                "kind": "FlowSchema",
+                "version": ""
+              },
+              "scope": "Cluster",
+              "singularResource": "flowschema",
+              "subresources": [
+                {
+                  "responseKind": {
+                    "group": "",
+                    "kind": "FlowSchema",
+                    "version": ""
+                  },
+                  "subresource": "status",
+                  "verbs": [
+                    "get",
+                    "patch",
+                    "update"
+                  ]
+                }
+              ],
+              "verbs": [
+                "create",
+                "delete",
+                "deletecollection",
+                "get",
+                "list",
+                "patch",
+                "update",
+                "watch"
+              ]
+            },
+            {
+              "resource": "prioritylevelconfigurations",
+              "responseKind": {
+                "group": "",
+                "kind": "PriorityLevelConfiguration",
+                "version": ""
+              },
+              "scope": "Cluster",
+              "singularResource": "prioritylevelconfiguration",
+              "subresources": [
+                {
+                  "responseKind": {
+                    "group": "",
+                    "kind": "PriorityLevelConfiguration",
+                    "version": ""
+                  },
+                  "subresource": "status",
+                  "verbs": [
+                    "get",
+                    "patch",
+                    "update"
+                  ]
+                }
+              ],
+              "verbs": [
+                "create",
+                "delete",
+                "deletecollection",
+                "get",
+                "list",
+                "patch",
+                "update",
+                "watch"
+              ]
+            }
+          ],
+          "version": "v1"
+        },
         {
           "freshness": "Current",
           "resources": [

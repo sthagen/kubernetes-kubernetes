@@ -627,16 +627,12 @@ func (s *store) GetList(ctx context.Context, key string, opts storage.ListOption
 		limitOption = &options[len(options)-1]
 	}
 
-	newItemFunc := getNewItemFunc(listObj, v)
-
-	var fromRV *uint64
-	if len(opts.ResourceVersion) > 0 {
-		parsedRV, err := s.versioner.ParseResourceVersion(opts.ResourceVersion)
-		if err != nil {
-			return apierrors.NewBadRequest(fmt.Sprintf("invalid resource version: %v", err))
-		}
-		fromRV = &parsedRV
+	if opts.Recursive {
+		rangeEnd := clientv3.GetPrefixRangeEnd(keyPrefix)
+		options = append(options, clientv3.WithRange(rangeEnd))
 	}
+
+	newItemFunc := getNewItemFunc(listObj, v)
 
 	var continueRV, withRev int64
 	var continueKey string
@@ -657,28 +653,26 @@ func (s *store) GetList(ctx context.Context, key string, opts storage.ListOption
 		if continueRV > 0 {
 			withRev = continueRV
 		}
-	default:
-		if fromRV != nil {
-			switch opts.ResourceVersionMatch {
-			case metav1.ResourceVersionMatchNotOlderThan:
-				// The not older than constraint is checked after we get a response from etcd,
-				// and returnedRV is then set to the revision we get from the etcd response.
-			case metav1.ResourceVersionMatchExact:
-				withRev = int64(*fromRV)
-			case "": // legacy case
-				if opts.Recursive && opts.Predicate.Limit > 0 && *fromRV > 0 {
-					withRev = int64(*fromRV)
-				}
-			default:
-				return fmt.Errorf("unknown ResourceVersionMatch value: %v", opts.ResourceVersionMatch)
+	case len(opts.ResourceVersion) > 0:
+		parsedRV, err := s.versioner.ParseResourceVersion(opts.ResourceVersion)
+		if err != nil {
+			return apierrors.NewBadRequest(fmt.Sprintf("invalid resource version: %v", err))
+		}
+		switch opts.ResourceVersionMatch {
+		case metav1.ResourceVersionMatchNotOlderThan:
+			// The not older than constraint is checked after we get a response from etcd,
+			// and returnedRV is then set to the revision we get from the etcd response.
+		case metav1.ResourceVersionMatchExact:
+			withRev = int64(parsedRV)
+		case "": // legacy case
+			if opts.Recursive && opts.Predicate.Limit > 0 && parsedRV > 0 {
+				withRev = int64(parsedRV)
 			}
+		default:
+			return fmt.Errorf("unknown ResourceVersionMatch value: %v", opts.ResourceVersionMatch)
 		}
 	}
 
-	if opts.Recursive {
-		rangeEnd := clientv3.GetPrefixRangeEnd(keyPrefix)
-		options = append(options, clientv3.WithRange(rangeEnd))
-	}
 	if withRev != 0 {
 		options = append(options, clientv3.WithRev(withRev))
 	}
@@ -717,6 +711,11 @@ func (s *store) GetList(ctx context.Context, key string, opts storage.ListOption
 		if len(getResp.Kvs) == 0 && getResp.More {
 			return fmt.Errorf("no results were found, but etcd indicated there were more values remaining")
 		}
+		// indicate to the client which resource version was returned, and use the same resource version for subsequent requests.
+		if withRev == 0 {
+			withRev = getResp.Header.Revision
+			options = append(options, clientv3.WithRev(withRev))
+		}
 
 		// avoid small allocations for the result slice, since this can be called in many
 		// different contexts and we don't know how significantly the result will be filtered
@@ -737,14 +736,6 @@ func (s *store) GetList(ctx context.Context, key string, opts storage.ListOption
 			data, _, err := s.transformer.TransformFromStorage(ctx, kv.Value, authenticatedDataString(kv.Key))
 			if err != nil {
 				return storage.NewInternalErrorf("unable to transform key %q: %v", kv.Key, err)
-			}
-
-			// Check if the request has already timed out before decode object
-			select {
-			case <-ctx.Done():
-				// parent context is canceled or timed out, no point in continuing
-				return storage.NewTimeoutError(string(kv.Key), "request did not complete within requested timeout")
-			default:
 			}
 
 			if err := appendListItem(v, data, uint64(kv.ModRevision), opts.Predicate, s.codec, s.versioner, newItemFunc); err != nil {
@@ -776,14 +767,6 @@ func (s *store) GetList(ctx context.Context, key string, opts storage.ListOption
 			*limitOption = clientv3.WithLimit(limit)
 		}
 		preparedKey = string(lastKey) + "\x00"
-		if withRev == 0 {
-			withRev = getResp.Header.Revision
-			options = append(options, clientv3.WithRev(withRev))
-		}
-	}
-	// indicate to the client which resource version was returned
-	if withRev == 0 {
-		withRev = getResp.Header.Revision
 	}
 
 	if v.IsNil() {

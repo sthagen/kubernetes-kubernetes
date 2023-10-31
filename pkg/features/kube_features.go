@@ -236,6 +236,12 @@ const (
 	// Disable in-tree functionality in kubelet to authenticate to cloud provider container registries for image pull credentials.
 	DisableKubeletCloudCredentialProviders featuregate.Feature = "DisableKubeletCloudCredentialProviders"
 
+	// owner: @HirazawaUi
+	// kep: http://kep.k8s.io/4004
+	// alpha: v1.29
+	// DisableNodeKubeProxyVersion disable the status.nodeInfo.kubeProxyVersion field of v1.Node
+	DisableNodeKubeProxyVersion featuregate.Feature = "DisableNodeKubeProxyVersion"
+
 	// owner: @pohly
 	// kep: http://kep.k8s.io/3063
 	// alpha: v1.26
@@ -736,6 +742,36 @@ const (
 	// Decouples Taint Eviction Controller, performing taint-based Pod eviction, from Node Lifecycle Controller.
 	SeparateTaintEvictionController featuregate.Feature = "SeparateTaintEvictionController"
 
+	// owner: @munnerz
+	// kep: http://kep.k8s.io/4193
+	// alpha: v1.29
+	//
+	// Controls whether JTIs (UUIDs) are embedded into generated service account tokens, and whether these JTIs are
+	// recorded into the audit log for future requests made by these tokens.
+	ServiceAccountTokenJTI featuregate.Feature = "ServiceAccountTokenJTI"
+
+	// owner: @munnerz
+	// kep: http://kep.k8s.io/4193
+	// alpha: v1.29
+	//
+	// Controls whether the apiserver supports binding service account tokens to Node objects.
+	ServiceAccountTokenNodeBinding featuregate.Feature = "ServiceAccountTokenNodeBinding"
+
+	// owner: @munnerz
+	// kep: http://kep.k8s.io/4193
+	// alpha: v1.29
+	//
+	// Controls whether the apiserver will validate Node claims in service account tokens.
+	ServiceAccountTokenNodeBindingValidation featuregate.Feature = "ServiceAccountTokenNodeBindingValidation"
+
+	// owner: @munnerz
+	// kep: http://kep.k8s.io/4193
+	// alpha: v1.29
+	//
+	// Controls whether the apiserver embeds the node name and uid for the associated node when issuing
+	// service account tokens bound to Pod objects.
+	ServiceAccountTokenPodNodeInfo featuregate.Feature = "ServiceAccountTokenPodNodeInfo"
+
 	// owner: @xuzhenglun
 	// kep: http://kep.k8s.io/3682
 	// alpha: v1.27
@@ -831,6 +867,13 @@ const (
 	//
 	// Enables user namespace support for stateless pods.
 	UserNamespacesSupport featuregate.Feature = "UserNamespacesSupport"
+
+	// owner: @mattcarry, @sunnylovestiramisu
+	// kep: https://kep.k8s.io/3751
+	// alpha: v1.29
+	//
+	// Enables user specified volume attributes for persistent volumes, like iops and throughput.
+	VolumeAttributesClass featuregate.Feature = "VolumeAttributesClass"
 
 	// owner: @cofyc
 	// alpha: v1.21
@@ -970,6 +1013,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	DisableKubeletCloudCredentialProviders: {Default: true, PreRelease: featuregate.Beta},
 
+	DisableNodeKubeProxyVersion: {Default: false, PreRelease: featuregate.Alpha},
+
 	DevicePluginCDIDevices: {Default: true, PreRelease: featuregate.Beta},
 
 	DynamicResourceAllocation: {Default: false, PreRelease: featuregate.Alpha},
@@ -1102,6 +1147,14 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	SeparateTaintEvictionController: {Default: true, PreRelease: featuregate.Beta},
 
+	ServiceAccountTokenJTI: {Default: false, PreRelease: featuregate.Alpha},
+
+	ServiceAccountTokenPodNodeInfo: {Default: false, PreRelease: featuregate.Alpha},
+
+	ServiceAccountTokenNodeBinding: {Default: false, PreRelease: featuregate.Alpha},
+
+	ServiceAccountTokenNodeBindingValidation: {Default: false, PreRelease: featuregate.Alpha},
+
 	ServiceNodePortStaticSubrange: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // GA in 1.29; remove in 1.31
 
 	SidecarContainers: {Default: false, PreRelease: featuregate.Alpha},
@@ -1123,6 +1176,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	TopologyManagerPolicyOptions: {Default: true, PreRelease: featuregate.Beta},
 
 	UnknownVersionInteroperabilityProxy: {Default: false, PreRelease: featuregate.Alpha},
+
+	VolumeAttributesClass: {Default: false, PreRelease: featuregate.Alpha},
 
 	VolumeCapacityPriority: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -1157,7 +1212,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	genericfeatures.APIListChunking: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.32
 
-	genericfeatures.APIPriorityAndFairness: {Default: true, PreRelease: featuregate.Beta},
+	genericfeatures.APIPriorityAndFairness: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.31
 
 	genericfeatures.APIResponseCompression: {Default: true, PreRelease: featuregate.Beta},
 
@@ -1180,6 +1235,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	genericfeatures.StructuredAuthorizationConfiguration: {Default: false, PreRelease: featuregate.Alpha},
 
 	genericfeatures.UnauthenticatedHTTP2DOSMitigation: {Default: true, PreRelease: featuregate.Beta},
+
+	genericfeatures.ZeroLimitedNominalConcurrencyShares: {Default: false, PreRelease: featuregate.Beta},
 
 	// inherited features from apiextensions-apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
