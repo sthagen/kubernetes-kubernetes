@@ -163,7 +163,7 @@ const (
 	// kep: https://kep.k8s.io/3171
 	// alpha: v1.25
 	// beta: v1.27
-	//
+	// GA: v1.29
 	// Enables SecretRef field in CSI NodeExpandVolume request.
 	CSINodeExpandSecret featuregate.Feature = "CSINodeExpandSecret"
 
@@ -564,6 +564,13 @@ const (
 	// Robust VolumeManager reconstruction after kubelet restart.
 	NewVolumeManagerReconstruction featuregate.Feature = "NewVolumeManagerReconstruction"
 
+	// owner: @danwinship
+	// kep: https://kep.k8s.io/3866
+	// alpha: v1.29
+	//
+	// Allows running kube-proxy with `--mode nftables`.
+	NFTablesProxyMode featuregate.Feature = "NFTablesProxyMode"
+
 	// owner: @aravindhp @LorbusChris
 	// kep: http://kep.k8s.io/2271
 	// alpha: v1.27
@@ -644,6 +651,7 @@ const (
 	// owner: @wzshiming
 	// kep: http://kep.k8s.io/2681
 	// alpha: v1.28
+	// beta: v1.29
 	//
 	// Adds pod.status.hostIPs and downward API
 	PodHostIPs featuregate.Feature = "PodHostIPs"
@@ -709,6 +717,13 @@ const (
 	// Request API instead of generating one self signed and auto rotates the
 	// certificate as expiration approaches.
 	RotateKubeletServerCertificate featuregate.Feature = "RotateKubeletServerCertificate"
+
+	// owner: @kiashok
+	// kep: https://kep.k8s.io/4216
+	// alpha: v1.29
+	//
+	// Adds support to pull images based on the runtime class specified.
+	RuntimeClassInImageCriAPI featuregate.Feature = "RuntimeClassInImageCriApi"
 
 	// owner: @danielvegamyhre
 	// kep: https://kep.k8s.io/2413
@@ -991,7 +1006,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	CSIMigrationRBD: {Default: false, PreRelease: featuregate.Deprecated}, //  deprecated in 1.28, remove in 1.31
 
-	CSINodeExpandSecret: {Default: true, PreRelease: featuregate.Beta},
+	CSINodeExpandSecret: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.31
 
 	CSIVolumeHealth: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -1103,6 +1118,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	NewVolumeManagerReconstruction: {Default: true, PreRelease: featuregate.Beta},
 
+	NFTablesProxyMode: {Default: false, PreRelease: featuregate.Alpha},
+
 	NodeLogQuery: {Default: false, PreRelease: featuregate.Alpha},
 
 	NodeOutOfServiceVolumeDetach: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.31
@@ -1121,7 +1138,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	PodReadyToStartContainersCondition: {Default: true, PreRelease: featuregate.Beta},
 
-	PodHostIPs: {Default: false, PreRelease: featuregate.Alpha},
+	PodHostIPs: {Default: true, PreRelease: featuregate.Beta},
 
 	PodLifecycleSleepAction: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -1138,6 +1155,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	RecoverVolumeExpansionFailure: {Default: false, PreRelease: featuregate.Alpha},
 
 	RotateKubeletServerCertificate: {Default: true, PreRelease: featuregate.Beta},
+
+	RuntimeClassInImageCriAPI: {Default: false, PreRelease: featuregate.Alpha},
 
 	ElasticIndexedJob: {Default: true, PreRelease: featuregate.Beta},
 
@@ -1157,7 +1176,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	ServiceNodePortStaticSubrange: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // GA in 1.29; remove in 1.31
 
-	SidecarContainers: {Default: false, PreRelease: featuregate.Alpha},
+	SidecarContainers: {Default: true, PreRelease: featuregate.Beta},
 
 	SizeMemoryBackedVolumes: {Default: true, PreRelease: featuregate.Beta},
 
