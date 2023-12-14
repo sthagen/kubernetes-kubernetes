@@ -975,6 +975,12 @@ const (
 	// will not graduate or be enabled by default in future Kubernetes
 	// releases.
 	UserNamespacesPodSecurityStandards featuregate.Feature = "UserNamespacesPodSecurityStandards"
+
+	// owner: @ahutsunshine
+	// beta: v1.29
+	//
+	// Allows namespace indexer for namespace scope resources in apiserver cache to accelerate list operations.
+	StorageNamespaceIndex featuregate.Feature = "StorageNamespaceIndex"
 )
 
 func init() {
@@ -1267,6 +1273,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	genericfeatures.ServerSideFieldValidation: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.29
 
+	genericfeatures.StructuredAuthenticationConfiguration: {Default: false, PreRelease: featuregate.Alpha},
+
 	genericfeatures.StructuredAuthorizationConfiguration: {Default: false, PreRelease: featuregate.Alpha},
 
 	genericfeatures.UnauthenticatedHTTP2DOSMitigation: {Default: true, PreRelease: featuregate.Beta},
@@ -1281,4 +1289,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	// features that enable backwards compatibility but are scheduled to be removed
 	// ...
 	HPAScaleToZero: {Default: false, PreRelease: featuregate.Alpha},
+
+	StorageNamespaceIndex: {Default: true, PreRelease: featuregate.Beta},
 }
