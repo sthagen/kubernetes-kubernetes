@@ -282,13 +282,6 @@ const (
 	// Enables apiserver and kubelet to allow up to 32 DNSSearchPaths and up to 2048 DNSSearchListChars.
 	ExpandedDNSConfig featuregate.Feature = "ExpandedDNSConfig"
 
-	// owner: @pweil-
-	// alpha: v1.5
-	// deprecated: v1.28
-	//
-	// This flag used to be needed for dockershim CRI and currently does nothing.
-	ExperimentalHostUserNamespaceDefaultingGate featuregate.Feature = "ExperimentalHostUserNamespaceDefaulting"
-
 	// owner: @bobbypage
 	// alpha: v1.20
 	// beta:  v1.21
@@ -372,15 +365,6 @@ const (
 	//
 	// Disables the vSphere in-tree driver.
 	InTreePluginvSphereUnregister featuregate.Feature = "InTreePluginvSphereUnregister"
-
-	// owner: @danwinship
-	// kep: https://kep.k8s.io/3178
-	// alpha: v1.25
-	// beta: v1.27
-	// stable: v1.28
-	//
-	// Causes kubelet to no longer create legacy IPTables rules
-	IPTablesOwnershipCleanup featuregate.Feature = "IPTablesOwnershipCleanup"
 
 	// owner: @mimowo
 	// kep: https://kep.k8s.io/3850
@@ -554,14 +538,6 @@ const (
 	// Enable MinDomains in Pod Topology Spread.
 	MinDomainsInPodTopologySpread featuregate.Feature = "MinDomainsInPodTopologySpread"
 
-	// owner: @danwinship
-	// kep: http://kep.k8s.io/3453
-	// alpha: v1.26
-	// beta: v1.27
-	//
-	// Enables new performance-improving code in kube-proxy iptables mode
-	MinimizeIPTablesRestore featuregate.Feature = "MinimizeIPTablesRestore"
-
 	// owner: @aojea
 	// kep: https://kep.k8s.io/1880
 	// alpha: v1.27
@@ -688,15 +664,6 @@ const (
 	//
 	// Enables control over ProcMountType for containers.
 	ProcMountType featuregate.Feature = "ProcMountType"
-
-	// owner: @andrewsykim
-	// kep: https://kep.k8s.io/1669
-	// alpha: v1.22
-	// beta: v1.26
-	// GA: v1.28
-	//
-	// Enable kube-proxy to handle terminating ednpoints when externalTrafficPolicy=Local
-	ProxyTerminatingEndpoints featuregate.Feature = "ProxyTerminatingEndpoints"
 
 	// owner: @sjenning
 	// alpha: v1.11
@@ -1060,8 +1027,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	ExpandedDNSConfig: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.30
 
-	ExperimentalHostUserNamespaceDefaultingGate: {Default: false, PreRelease: featuregate.Deprecated, LockToDefault: true}, // remove in 1.30
-
 	GracefulNodeShutdown: {Default: true, PreRelease: featuregate.Beta},
 
 	GracefulNodeShutdownBasedOnPodPriority: {Default: true, PreRelease: featuregate.Beta},
@@ -1085,8 +1050,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	InTreePluginRBDUnregister: {Default: false, PreRelease: featuregate.Deprecated}, // deprecated in 1.28, remove in 1.31
 
 	InTreePluginvSphereUnregister: {Default: false, PreRelease: featuregate.Alpha},
-
-	IPTablesOwnershipCleanup: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.30
 
 	JobBackoffLimitPerIndex: {Default: true, PreRelease: featuregate.Beta},
 
@@ -1134,8 +1097,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	MinDomainsInPodTopologySpread: {Default: true, PreRelease: featuregate.Beta},
 
-	MinimizeIPTablesRestore: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.30
-
 	MultiCIDRServiceAllocator: {Default: false, PreRelease: featuregate.Alpha},
 
 	NewVolumeManagerReconstruction: {Default: true, PreRelease: featuregate.Beta},
@@ -1167,8 +1128,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	PodSchedulingReadiness: {Default: true, PreRelease: featuregate.Beta},
 
 	ProcMountType: {Default: false, PreRelease: featuregate.Alpha},
-
-	ProxyTerminatingEndpoints: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.30
 
 	QOSReserved: {Default: false, PreRelease: featuregate.Alpha},
 
