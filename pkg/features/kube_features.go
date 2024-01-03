@@ -409,14 +409,6 @@ const (
 	// All the node components such as CRI need to be running in the same user namespace.
 	KubeletInUserNamespace featuregate.Feature = "KubeletInUserNamespace"
 
-	// owner: @dashpole, @ffromani (only for GA graduation)
-	// alpha: v1.13
-	// beta: v1.15
-	// GA: v1.28
-	//
-	// Enables the kubelet's pod resources grpc endpoint
-	KubeletPodResources featuregate.Feature = "KubeletPodResources"
-
 	// owner: @moshe010
 	// alpha: v1.27
 	//
@@ -457,14 +449,6 @@ const (
 	// Implement connection draining for terminating nodes for
 	// `externalTrafficPolicy: Cluster` services.
 	KubeProxyDrainingTerminatingNodes featuregate.Feature = "KubeProxyDrainingTerminatingNodes"
-
-	// owner: @zshihang
-	// kep: http://kep.k8s.io/2800
-	// alpha: v1.26
-	// beta: v1.27
-	//
-	// Enables tracking of secret-based service account tokens usage.
-	LegacyServiceAccountTokenTracking featuregate.Feature = "LegacyServiceAccountTokenTracking"
 
 	// owner: @yt2985
 	// kep: http://kep.k8s.io/2800
@@ -1053,8 +1037,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	KubeletInUserNamespace: {Default: false, PreRelease: featuregate.Alpha},
 
-	KubeletPodResources: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // GA in 1.28, remove in 1.30
-
 	KubeletPodResourcesDynamicResources: {Default: false, PreRelease: featuregate.Alpha},
 
 	KubeletPodResourcesGet: {Default: false, PreRelease: featuregate.Alpha},
@@ -1066,8 +1048,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	KubeletTracing: {Default: true, PreRelease: featuregate.Beta},
 
 	KubeProxyDrainingTerminatingNodes: {Default: false, PreRelease: featuregate.Alpha},
-
-	LegacyServiceAccountTokenTracking: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.30
 
 	LegacyServiceAccountTokenCleanUp: {Default: true, PreRelease: featuregate.Beta},
 
