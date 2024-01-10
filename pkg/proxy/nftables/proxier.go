@@ -55,7 +55,6 @@ import (
 	proxyutiliptables "k8s.io/kubernetes/pkg/proxy/util/iptables"
 	"k8s.io/kubernetes/pkg/util/async"
 	utilexec "k8s.io/utils/exec"
-	netutils "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 )
 
@@ -328,9 +327,10 @@ type nftablesBaseChain struct {
 var nftablesBaseChains = []nftablesBaseChain{
 	// We want our filtering rules to operate on pre-DNAT dest IPs, so our filter
 	// chains have to run before DNAT.
-	{"filter-input", knftables.FilterType, knftables.InputHook, knftables.DNATPriority + "-1"},
-	{"filter-forward", knftables.FilterType, knftables.ForwardHook, knftables.DNATPriority + "-1"},
-	{"filter-output", knftables.FilterType, knftables.OutputHook, knftables.DNATPriority + "-1"},
+	{"filter-prerouting", knftables.FilterType, knftables.PreroutingHook, knftables.DNATPriority + "-10"},
+	{"filter-input", knftables.FilterType, knftables.InputHook, knftables.DNATPriority + "-10"},
+	{"filter-forward", knftables.FilterType, knftables.ForwardHook, knftables.DNATPriority + "-10"},
+	{"filter-output", knftables.FilterType, knftables.OutputHook, knftables.DNATPriority + "-10"},
 	{"nat-prerouting", knftables.NATType, knftables.PreroutingHook, knftables.DNATPriority},
 	{"nat-output", knftables.NATType, knftables.OutputHook, knftables.DNATPriority},
 	{"nat-postrouting", knftables.NATType, knftables.PostroutingHook, knftables.SNATPriority},
@@ -346,15 +346,17 @@ type nftablesJumpChain struct {
 }
 
 var nftablesJumpChains = []nftablesJumpChain{
+	// We can't jump to kubeEndpointsCheckChain from filter-prerouting like
+	// kubeFirewallCheckChain because reject action is only valid in chains using the
+	// input, forward or output hooks.
 	{kubeEndpointsCheckChain, "filter-input", "ct state new"},
 	{kubeEndpointsCheckChain, "filter-forward", "ct state new"},
 	{kubeEndpointsCheckChain, "filter-output", "ct state new"},
 
 	{kubeForwardChain, "filter-forward", ""},
 
-	{kubeFirewallCheckChain, "filter-input", "ct state new"},
+	{kubeFirewallCheckChain, "filter-prerouting", "ct state new"},
 	{kubeFirewallCheckChain, "filter-output", "ct state new"},
-	{kubeFirewallCheckChain, "filter-forward", "ct state new"},
 
 	{kubeServicesChain, "nat-output", ""},
 	{kubeServicesChain, "nat-prerouting", ""},
@@ -1153,14 +1155,14 @@ func (proxier *Proxier) syncProxyRules() {
 		}
 
 		// Capture externalIPs.
-		for _, externalIP := range svcInfo.ExternalIPStrings() {
+		for _, externalIP := range svcInfo.ExternalIPs() {
 			if hasEndpoints {
 				// Send traffic bound for external IPs to the "external
 				// destinations" chain.
 				tx.Add(&knftables.Element{
 					Map: kubeServiceIPsMap,
 					Key: []string{
-						externalIP,
+						externalIP.String(),
 						protocol,
 						strconv.Itoa(svcInfo.Port()),
 					},
@@ -1176,7 +1178,7 @@ func (proxier *Proxier) syncProxyRules() {
 				tx.Add(&knftables.Element{
 					Map: kubeNoEndpointServicesMap,
 					Key: []string{
-						externalIP,
+						externalIP.String(),
 						protocol,
 						strconv.Itoa(svcInfo.Port()),
 					},
@@ -1188,21 +1190,17 @@ func (proxier *Proxier) syncProxyRules() {
 			}
 		}
 
-		usesFWChain := len(svcInfo.LoadBalancerVIPStrings()) > 0 && len(svcInfo.LoadBalancerSourceRanges()) > 0
+		usesFWChain := len(svcInfo.LoadBalancerVIPs()) > 0 && len(svcInfo.LoadBalancerSourceRanges()) > 0
 		fwChain := svcInfo.firewallChainName
 		if usesFWChain {
 			ensureChain(fwChain, tx, activeChains)
 			var sources []string
 			allowFromNode := false
-			for _, src := range svcInfo.LoadBalancerSourceRanges() {
-				_, cidr, _ := netutils.ParseCIDRSloppy(src)
-				if cidr == nil {
-					continue
-				}
+			for _, cidr := range svcInfo.LoadBalancerSourceRanges() {
 				if len(sources) > 0 {
 					sources = append(sources, ",")
 				}
-				sources = append(sources, src)
+				sources = append(sources, cidr.String())
 				if cidr.Contains(proxier.nodeIP) {
 					allowFromNode = true
 				}
@@ -1213,8 +1211,8 @@ func (proxier *Proxier) syncProxyRules() {
 			// will loop back with the source IP set to the VIP.  We
 			// need the following rules to allow requests from this node.
 			if allowFromNode {
-				for _, lbip := range svcInfo.LoadBalancerVIPStrings() {
-					sources = append(sources, ",", lbip)
+				for _, lbip := range svcInfo.LoadBalancerVIPs() {
+					sources = append(sources, ",", lbip.String())
 				}
 			}
 			tx.Add(&knftables.Rule{
@@ -1227,12 +1225,12 @@ func (proxier *Proxier) syncProxyRules() {
 		}
 
 		// Capture load-balancer ingress.
-		for _, lbip := range svcInfo.LoadBalancerVIPStrings() {
+		for _, lbip := range svcInfo.LoadBalancerVIPs() {
 			if hasEndpoints {
 				tx.Add(&knftables.Element{
 					Map: kubeServiceIPsMap,
 					Key: []string{
-						lbip,
+						lbip.String(),
 						protocol,
 						strconv.Itoa(svcInfo.Port()),
 					},
@@ -1246,7 +1244,7 @@ func (proxier *Proxier) syncProxyRules() {
 				tx.Add(&knftables.Element{
 					Map: kubeFirewallIPsMap,
 					Key: []string{
-						lbip,
+						lbip.String(),
 						protocol,
 						strconv.Itoa(svcInfo.Port()),
 					},
@@ -1261,11 +1259,11 @@ func (proxier *Proxier) syncProxyRules() {
 			// Either no endpoints at all (REJECT) or no endpoints for
 			// external traffic (DROP anything that didn't get short-circuited
 			// by the EXT chain.)
-			for _, lbip := range svcInfo.LoadBalancerVIPStrings() {
+			for _, lbip := range svcInfo.LoadBalancerVIPs() {
 				tx.Add(&knftables.Element{
 					Map: kubeNoEndpointServicesMap,
 					Key: []string{
-						lbip,
+						lbip.String(),
 						protocol,
 						strconv.Itoa(svcInfo.Port()),
 					},
