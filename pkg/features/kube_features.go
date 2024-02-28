@@ -165,14 +165,6 @@ const (
 	// Enables kubelet to detect CSI volume condition and send the event of the abnormal volume to the corresponding pod that is using it.
 	CSIVolumeHealth featuregate.Feature = "CSIVolumeHealth"
 
-	// owner: @seans3
-	// kep: http://kep.k8s.io/4006
-	// alpha: v1.29
-	//
-	// Enables StreamTranslator proxy to handle WebSockets upgrade requests for the
-	// version of the RemoteCommand subprotocol that supports the "close" signal.
-	TranslateStreamCloseWebsocketRequests featuregate.Feature = "TranslateStreamCloseWebsocketRequests"
-
 	// owner: @nckturner
 	// kep:  http://kep.k8s.io/2699
 	// alpha: v1.27
@@ -808,6 +800,14 @@ const (
 	// Allow the usage of options to fine-tune the topology manager policies.
 	TopologyManagerPolicyOptions featuregate.Feature = "TopologyManagerPolicyOptions"
 
+	// owner: @seans3
+	// kep: http://kep.k8s.io/4006
+	// beta: v1.30
+	//
+	// Enables StreamTranslator proxy to handle WebSockets upgrade requests for the
+	// version of the RemoteCommand subprotocol that supports the "close" signal.
+	TranslateStreamCloseWebsocketRequests featuregate.Feature = "TranslateStreamCloseWebsocketRequests"
+
 	// owner: @richabanker
 	// alpha: v1.28
 	//
@@ -887,6 +887,7 @@ const (
 	// owner: @haircommander
 	// kep: http://kep.k8s.io/4210
 	// alpha: v1.29
+	// beta: v1.30
 	// ImageMaximumGCAge enables the Kubelet configuration field of the same name, allowing an admin
 	// to specify the age after which an image will be garbage collected.
 	ImageMaximumGCAge featuregate.Feature = "ImageMaximumGCAge"
@@ -971,8 +972,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	SkipReadOnlyValidationGCE: {Default: true, PreRelease: featuregate.Deprecated}, // remove in 1.31
 
-	TranslateStreamCloseWebsocketRequests: {Default: false, PreRelease: featuregate.Alpha},
-
 	CloudControllerManagerWebhook: {Default: false, PreRelease: featuregate.Alpha},
 
 	ContainerCheckpoint: {Default: false, PreRelease: featuregate.Alpha},
@@ -1006,6 +1005,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	HPAContainerMetrics: {Default: true, PreRelease: featuregate.Beta},
 
 	HonorPVReclaimPolicy: {Default: false, PreRelease: featuregate.Alpha},
+
+	ImageMaximumGCAge: {Default: true, PreRelease: featuregate.Beta},
 
 	InTreePluginAWSUnregister: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -1139,6 +1140,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	TopologyManagerPolicyOptions: {Default: true, PreRelease: featuregate.Beta},
 
+	TranslateStreamCloseWebsocketRequests: {Default: true, PreRelease: featuregate.Beta},
+
 	UnknownVersionInteroperabilityProxy: {Default: false, PreRelease: featuregate.Alpha},
 
 	VolumeAttributesClass: {Default: false, PreRelease: featuregate.Alpha},
@@ -1162,8 +1165,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	PodIndexLabel: {Default: true, PreRelease: featuregate.Beta},
 
 	LoadBalancerIPMode: {Default: true, PreRelease: featuregate.Beta},
-
-	ImageMaximumGCAge: {Default: false, PreRelease: featuregate.Alpha},
 
 	UserNamespacesPodSecurityStandards: {Default: false, PreRelease: featuregate.Alpha},
 
