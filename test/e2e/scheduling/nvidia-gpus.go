@@ -107,25 +107,38 @@ func logOSImages(ctx context.Context, f *framework.Framework) {
 	}
 }
 
+func isControlPlaneNode(node v1.Node) bool {
+	_, isControlPlane := node.Labels["node-role.kubernetes.io/control-plane"]
+	if isControlPlane {
+		framework.Logf("Node: %q is a control-plane node (label)", node.Name)
+		return true
+	}
+
+	for _, taint := range node.Spec.Taints {
+		if taint.Key == "node-role.kubernetes.io/control-plane" {
+			framework.Logf("Node: %q is a control-plane node (taint)", node.Name)
+			return true
+		}
+	}
+	framework.Logf("Node: %q is NOT a control-plane node", node.Name)
+	return false
+}
+
 func areGPUsAvailableOnAllSchedulableNodes(ctx context.Context, f *framework.Framework) bool {
 	framework.Logf("Getting list of Nodes from API server")
 	nodeList, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	framework.ExpectNoError(err, "getting node list")
 	for _, node := range nodeList.Items {
-		if node.Spec.Unschedulable {
+		if node.Spec.Unschedulable || isControlPlaneNode(node) {
 			continue
 		}
-		_, isControlPlane := node.Labels["node-role.kubernetes.io/control-plane"]
-		if isControlPlane {
-			continue
-		}
-		framework.Logf("gpuResourceName %s", gpuResourceName)
+
 		if val, ok := node.Status.Capacity[gpuResourceName]; !ok || val.Value() == 0 {
 			framework.Logf("Nvidia GPUs not available on Node: %q", node.Name)
 			return false
 		}
 	}
-	framework.Logf("Nvidia GPUs exist on all schedulable nodes")
+	framework.Logf("Nvidia GPUs exist on all schedulable worker nodes")
 	return true
 }
 
@@ -147,14 +160,12 @@ func SetupNVIDIAGPUNode(ctx context.Context, f *framework.Framework, setupResour
 
 	var err error
 	var ds *appsv1.DaemonSet
-	dsNamespace := f.Namespace.Name
 	dsYamlURLFromEnv := os.Getenv("NVIDIA_DRIVER_INSTALLER_DAEMONSET")
 	if dsYamlURLFromEnv != "" {
 		// Using DaemonSet from remote URL
 		framework.Logf("Using remote nvidia-driver-installer daemonset manifest from %v", dsYamlURLFromEnv)
 		ds, err = e2emanifest.DaemonSetFromURL(ctx, dsYamlURLFromEnv)
 		framework.ExpectNoError(err, "failed get remote")
-		dsNamespace = ds.Namespace
 	} else {
 		// Using default local DaemonSet
 		framework.Logf("Using default local nvidia-driver-installer daemonset manifest.")
@@ -164,11 +175,13 @@ func SetupNVIDIAGPUNode(ctx context.Context, f *framework.Framework, setupResour
 		framework.ExpectNoError(err, "failed to parse local manifest for nvidia-driver-installer daemonset")
 	}
 	gpuResourceName = e2egpu.NVIDIAGPUResourceName
-	_, err = f.ClientSet.AppsV1().DaemonSets(dsNamespace).Create(ctx, ds, metav1.CreateOptions{})
+	ds.Namespace = f.Namespace.Name
+
+	_, err = f.ClientSet.AppsV1().DaemonSets(ds.Namespace).Create(ctx, ds, metav1.CreateOptions{})
 	framework.ExpectNoError(err, "failed to create nvidia-driver-installer daemonset")
 	framework.Logf("Successfully created daemonset to install Nvidia drivers.")
 
-	pods, err := e2eresource.WaitForControlledPods(ctx, f.ClientSet, dsNamespace, ds.Name, extensionsinternal.Kind("DaemonSet"))
+	pods, err := e2eresource.WaitForControlledPods(ctx, f.ClientSet, ds.Namespace, ds.Name, extensionsinternal.Kind("DaemonSet"))
 	framework.ExpectNoError(err, "failed to get pods controlled by the nvidia-driver-installer daemonset")
 
 	devicepluginPods, err := e2eresource.WaitForControlledPods(ctx, f.ClientSet, "kube-system", "nvidia-gpu-device-plugin", extensionsinternal.Kind("DaemonSet"))
