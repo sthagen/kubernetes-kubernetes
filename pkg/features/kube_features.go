@@ -975,6 +975,13 @@ const (
 	// Speed up container startup by mounting volumes with the correct SELinux label
 	// instead of changing each file on the volumes recursively.
 	SELinuxMount featuregate.Feature = "SELinuxMount"
+
+	// owner: @AkihiroSuda
+	// kep: https://kep.k8s.io/3857
+	// alpha: v1.30
+	//
+	// Allows recursive read-only mounts.
+	RecursiveReadOnlyMounts featuregate.Feature = "RecursiveReadOnlyMounts"
 )
 
 func init() {
@@ -1290,7 +1297,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	genericfeatures.StorageVersionHash: {Default: true, PreRelease: featuregate.Beta},
 
-	genericfeatures.StructuredAuthenticationConfiguration: {Default: false, PreRelease: featuregate.Alpha},
+	genericfeatures.StructuredAuthenticationConfiguration: {Default: true, PreRelease: featuregate.Beta},
 
 	genericfeatures.StructuredAuthorizationConfiguration: {Default: true, PreRelease: featuregate.Beta},
 
@@ -1316,4 +1323,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	HPAScaleToZero: {Default: false, PreRelease: featuregate.Alpha},
 
 	StorageNamespaceIndex: {Default: true, PreRelease: featuregate.Beta},
+
+	RecursiveReadOnlyMounts: {Default: false, PreRelease: featuregate.Alpha},
 }
