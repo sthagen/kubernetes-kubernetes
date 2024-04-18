@@ -45,7 +45,6 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	admissionapi "k8s.io/pod-security-admission/api"
-	utilpointer "k8s.io/utils/pointer"
 	"k8s.io/utils/ptr"
 )
 
@@ -128,8 +127,25 @@ var _ = framework.SIGDescribe("node")("DRA", feature.DynamicResourceAllocation, 
 				// arbitrary types we can simply fake somthing here.
 				claim := b.externalClaim(resourcev1alpha2.AllocationModeWaitForFirstConsumer)
 				b.create(ctx, claim)
+
 				claim, err := f.ClientSet.ResourceV1alpha2().ResourceClaims(f.Namespace.Name).Get(ctx, claim.Name, metav1.GetOptions{})
 				framework.ExpectNoError(err, "get claim")
+
+				claim.Finalizers = append(claim.Finalizers, "e2e.test/delete-protection")
+				claim, err = f.ClientSet.ResourceV1alpha2().ResourceClaims(f.Namespace.Name).Update(ctx, claim, metav1.UpdateOptions{})
+				framework.ExpectNoError(err, "add claim finalizer")
+
+				ginkgo.DeferCleanup(func(ctx context.Context) {
+					claim.Status.Allocation = nil
+					claim.Status.ReservedFor = nil
+					claim, err = f.ClientSet.ResourceV1alpha2().ResourceClaims(f.Namespace.Name).UpdateStatus(ctx, claim, metav1.UpdateOptions{})
+					framework.ExpectNoError(err, "update claim")
+
+					claim.Finalizers = nil
+					_, err = f.ClientSet.ResourceV1alpha2().ResourceClaims(f.Namespace.Name).Update(ctx, claim, metav1.UpdateOptions{})
+					framework.ExpectNoError(err, "remove claim finalizer")
+				})
+
 				claim.Status.Allocation = &resourcev1alpha2.AllocationResult{}
 				claim.Status.DriverName = driver.Name
 				claim.Status.ReservedFor = append(claim.Status.ReservedFor, resourcev1alpha2.ResourceClaimConsumerReference{
@@ -138,7 +154,7 @@ var _ = framework.SIGDescribe("node")("DRA", feature.DynamicResourceAllocation, 
 					Name:     "thing",
 					UID:      "12345",
 				})
-				_, err = f.ClientSet.ResourceV1alpha2().ResourceClaims(f.Namespace.Name).UpdateStatus(ctx, claim, metav1.UpdateOptions{})
+				claim, err = f.ClientSet.ResourceV1alpha2().ResourceClaims(f.Namespace.Name).UpdateStatus(ctx, claim, metav1.UpdateOptions{})
 				framework.ExpectNoError(err, "update claim")
 
 				pod := b.podExternal()
@@ -481,14 +497,7 @@ var _ = framework.SIGDescribe("node")("DRA", feature.DynamicResourceAllocation, 
 			objects = append(objects, template, pod)
 			b.create(ctx, objects...)
 
-			// There's no way to be sure that the scheduler has checked the pod.
-			// But if we sleep for a short while, it's likely and if there are any
-			// bugs that prevent the scheduler from handling creation of the class,
-			// those bugs should show up as test flakes.
-			//
-			// TODO (https://github.com/kubernetes/kubernetes/issues/123805): check the Schedulable condition instead of
-			// sleeping.
-			time.Sleep(time.Second)
+			framework.ExpectNoError(e2epod.WaitForPodNameUnschedulableInNamespace(ctx, f.ClientSet, pod.Name, pod.Namespace))
 
 			class.UID = ""
 			class.ResourceVersion = ""
@@ -525,11 +534,7 @@ var _ = framework.SIGDescribe("node")("DRA", feature.DynamicResourceAllocation, 
 			objects = append(objects, template, pod)
 			b.create(ctx, objects...)
 
-			// There's no way to be sure that the scheduler has checked the pod.
-			// But if we sleep for a short while, it's likely and if there are any
-			// bugs that prevent the scheduler from handling updates of the class,
-			// those bugs should show up as test flakes.
-			time.Sleep(time.Second)
+			framework.ExpectNoError(e2epod.WaitForPodNameUnschedulableInNamespace(ctx, f.ClientSet, pod.Name, pod.Namespace))
 
 			// Unblock the pod.
 			class.SuitableNodes = nil
@@ -925,7 +930,7 @@ var _ = framework.SIGDescribe("node")("DRA", feature.DynamicResourceAllocation, 
 							"NodeName":   gomega.Equal(nodeName),
 							"DriverName": gomega.Equal(driver.Name),
 							"ResourceModel": gomega.Equal(resourcev1alpha2.ResourceModel{NamedResources: &resourcev1alpha2.NamedResourcesResources{
-								Instances: []resourcev1alpha2.NamedResourcesInstance{{Name: "instance-0"}},
+								Instances: []resourcev1alpha2.NamedResourcesInstance{{Name: "instance-00"}},
 							}}),
 						}),
 					)
@@ -1422,7 +1427,7 @@ func (b *builder) podInline(allocationMode resourcev1alpha2.AllocationMode) (*v1
 		{
 			Name: podClaimName,
 			Source: v1.ClaimSource{
-				ResourceClaimTemplateName: utilpointer.String(pod.Name),
+				ResourceClaimTemplateName: ptr.To(pod.Name),
 			},
 		},
 	}
