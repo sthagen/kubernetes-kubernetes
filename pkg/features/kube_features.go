@@ -192,6 +192,7 @@ const (
 	// owner: @andrewsykim
 	// alpha: v1.22
 	// beta: v1.29
+	// GA: v1.31
 	//
 	// Disable any functionality in kube-apiserver, kube-controller-manager and kubelet related to the `--cloud-provider` component flag.
 	DisableCloudProviders featuregate.Feature = "DisableCloudProviders"
@@ -1023,9 +1024,9 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	CronJobsScheduledAnnotation: {Default: true, PreRelease: featuregate.Beta},
 
-	DisableCloudProviders: {Default: true, PreRelease: featuregate.Beta},
+	DisableCloudProviders: {Default: true, PreRelease: featuregate.GA, LockToDefault: true},
 
-	DisableKubeletCloudCredentialProviders: {Default: true, PreRelease: featuregate.Beta},
+	DisableKubeletCloudCredentialProviders: {Default: true, PreRelease: featuregate.GA, LockToDefault: true},
 
 	DisableNodeKubeProxyVersion: {Default: false, PreRelease: featuregate.Alpha},
 
@@ -1037,7 +1038,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	ExecProbeTimeout: {Default: true, PreRelease: featuregate.GA}, // lock to default and remove after v1.22 based on KEP #1972 update
 
-	RetryGenerateName: {Default: false, PreRelease: featuregate.Alpha},
+	RetryGenerateName: {Default: true, PreRelease: featuregate.Beta},
 
 	GracefulNodeShutdown: {Default: true, PreRelease: featuregate.Beta},
 
