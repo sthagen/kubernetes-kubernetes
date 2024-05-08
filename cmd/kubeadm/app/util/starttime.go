@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors.
+Copyright 2024 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,20 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package job
+// Package util contains kubeadm utilities.
+package util
 
 import (
-	batch "k8s.io/api/batch/v1"
-	"k8s.io/api/core/v1"
+	"time"
 )
 
-// IsJobFinished checks whether the given Job has finished execution.
-// It does not discriminate between successful and failed terminations.
-func IsJobFinished(j *batch.Job) bool {
-	for _, c := range j.Status.Conditions {
-		if (c.Type == batch.JobComplete || c.Type == batch.JobFailed) && c.Status == v1.ConditionTrue {
-			return true
-		}
-	}
-	return false
+// startTime is a variable that represents the start time of the kubeadm process.
+// It can be used to consistently use the same start time instead of calling time.Now()
+// in multiple locations and ending up with minor time deviations.
+var startTime time.Time
+
+func init() {
+	startTime = time.Now()
+}
+
+// StartTimeUTC returns startTime with its location set to UTC.
+func StartTimeUTC() time.Time {
+	return startTime.UTC()
 }

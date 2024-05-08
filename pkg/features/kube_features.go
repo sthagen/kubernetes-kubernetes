@@ -207,6 +207,7 @@ const (
 	// owner: @HirazawaUi
 	// kep: http://kep.k8s.io/4004
 	// alpha: v1.29
+	// beta: v1.31
 	// DisableNodeKubeProxyVersion disable the status.nodeInfo.kubeProxyVersion field of v1.Node
 	DisableNodeKubeProxyVersion featuregate.Feature = "DisableNodeKubeProxyVersion"
 
@@ -739,15 +740,6 @@ const (
 	// service account tokens bound to Pod objects.
 	ServiceAccountTokenPodNodeInfo featuregate.Feature = "ServiceAccountTokenPodNodeInfo"
 
-	// owner: @xuzhenglun
-	// kep: http://kep.k8s.io/3682
-	// alpha: v1.27
-	// beta: v1.28
-	// stable: v1.29
-	//
-	// Subdivide the NodePort range for dynamic and static port allocation.
-	ServiceNodePortStaticSubrange featuregate.Feature = "ServiceNodePortStaticSubrange"
-
 	// owner: @gauravkghildiyal @robscott
 	// kep: https://kep.k8s.io/4444
 	// alpha: v1.30
@@ -1028,7 +1020,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	DisableKubeletCloudCredentialProviders: {Default: true, PreRelease: featuregate.GA, LockToDefault: true},
 
-	DisableNodeKubeProxyVersion: {Default: false, PreRelease: featuregate.Alpha},
+	DisableNodeKubeProxyVersion: {Default: true, PreRelease: featuregate.Beta},
 
 	DevicePluginCDIDevices: {Default: true, PreRelease: featuregate.Beta},
 
@@ -1170,8 +1162,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	ServiceAccountTokenNodeBindingValidation: {Default: true, PreRelease: featuregate.Beta},
 
-	ServiceNodePortStaticSubrange: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // GA in 1.29; remove in 1.31
-
 	ServiceTrafficDistribution: {Default: false, PreRelease: featuregate.Alpha},
 
 	SidecarContainers: {Default: true, PreRelease: featuregate.Beta},
@@ -1292,7 +1282,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	apiextensionsfeatures.CRDValidationRatcheting: {Default: true, PreRelease: featuregate.Beta},
 
-	apiextensionsfeatures.CustomResourceFieldSelectors: {Default: false, PreRelease: featuregate.Alpha},
+	apiextensionsfeatures.CustomResourceFieldSelectors: {Default: true, PreRelease: featuregate.Beta},
 
 	// features that enable backwards compatibility but are scheduled to be removed
 	// ...
