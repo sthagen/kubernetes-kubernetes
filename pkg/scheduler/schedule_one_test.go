@@ -778,7 +778,9 @@ func TestSchedulerScheduleOne(t *testing.T) {
 				registerPluginFuncs,
 				testSchedulerName,
 				frameworkruntime.WithClientSet(client),
-				frameworkruntime.WithEventRecorder(eventBroadcaster.NewRecorder(scheme.Scheme, testSchedulerName)))
+				frameworkruntime.WithEventRecorder(eventBroadcaster.NewRecorder(scheme.Scheme, testSchedulerName)),
+				frameworkruntime.WithWaitingPods(frameworkruntime.NewWaitingPodsMap()),
+			)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -2431,6 +2433,33 @@ func TestSchedulerSchedulePod(t *testing.T) {
 			// since this case has no score plugin, we'll only try to find one node in Filter stage
 			wantEvaluatedNodes: ptr.To[int32](1),
 		},
+		{
+			name: "test prefilter plugin returned an invalid node",
+			registerPlugins: []tf.RegisterPluginFunc{
+				tf.RegisterQueueSortPlugin(queuesort.Name, queuesort.New),
+				tf.RegisterPreFilterPlugin(
+					"FakePreFilter",
+					tf.NewFakePreFilterPlugin("FakePreFilter", &framework.PreFilterResult{
+						NodeNames: sets.New("invalid-node"),
+					}, nil),
+				),
+				tf.RegisterFilterPlugin("TrueFilter", tf.NewTrueFilterPlugin),
+				tf.RegisterBindPlugin(defaultbinder.Name, defaultbinder.New),
+			},
+			nodes:     []string{"1", "2"},
+			pod:       st.MakePod().Name("test-prefilter").UID("test-prefilter").Obj(),
+			wantNodes: nil,
+			wErr: &framework.FitError{
+				Pod:         st.MakePod().Name("test-prefilter").UID("test-prefilter").Obj(),
+				NumAllNodes: 2,
+				Diagnosis: framework.Diagnosis{
+					NodeToStatusMap: framework.NodeToStatusMap{
+						"1": framework.NewStatus(framework.UnschedulableAndUnresolvable, "node is filtered out by the prefilter result"),
+						"2": framework.NewStatus(framework.UnschedulableAndUnresolvable, "node is filtered out by the prefilter result"),
+					},
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -3539,6 +3568,7 @@ func setupTestScheduler(ctx context.Context, t *testing.T, queuedPodStore *clien
 		informerFactory = informers.NewSharedInformerFactory(clientsetfake.NewSimpleClientset(), 0)
 	}
 	schedulingQueue := internalqueue.NewTestQueueWithInformerFactory(ctx, nil, informerFactory)
+	waitingPods := frameworkruntime.NewWaitingPodsMap()
 
 	fwk, _ := tf.NewFramework(
 		ctx,
@@ -3548,6 +3578,7 @@ func setupTestScheduler(ctx context.Context, t *testing.T, queuedPodStore *clien
 		frameworkruntime.WithEventRecorder(recorder),
 		frameworkruntime.WithInformerFactory(informerFactory),
 		frameworkruntime.WithPodNominator(internalqueue.NewPodNominator(informerFactory.Core().V1().Pods().Lister())),
+		frameworkruntime.WithWaitingPods(waitingPods),
 	)
 
 	errChan := make(chan error, 1)
