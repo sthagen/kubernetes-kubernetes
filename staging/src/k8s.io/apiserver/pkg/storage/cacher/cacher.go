@@ -908,7 +908,23 @@ func (c *Cacher) dispatchEvents() {
 	bookmarkTimer := c.clock.NewTimer(wait.Jitter(time.Second, 0.25))
 	defer bookmarkTimer.Stop()
 
+	// The internal informer populates the RV as soon as it conducts
+	// The first successful sync with the underlying store.
+	// The cache must wait until this first sync is completed to be deemed ready.
+	// Since we cannot send a bookmark when the lastProcessedResourceVersion is 0,
+	// we poll aggressively for the first RV before entering the dispatch loop.
 	lastProcessedResourceVersion := uint64(0)
+	if err := wait.PollUntilContextCancel(wait.ContextForChannel(c.stopCh), 10*time.Millisecond, true, func(_ context.Context) (bool, error) {
+		if rv := c.watchCache.getResourceVersion(); rv != 0 {
+			lastProcessedResourceVersion = rv
+			return true, nil
+		}
+		return false, nil
+	}); err != nil {
+		// given the function above never returns error,
+		// the non-empty error means that the stopCh was closed
+		return
+	}
 	for {
 		select {
 		case event, ok := <-c.incoming:
@@ -932,29 +948,6 @@ func (c *Cacher) dispatchEvents() {
 			metrics.EventsCounter.WithLabelValues(c.groupResource.String()).Inc()
 		case <-bookmarkTimer.C():
 			bookmarkTimer.Reset(wait.Jitter(time.Second, 0.25))
-			// Never send a bookmark event if we did not see an event here, this is fine
-			// because we don't provide any guarantees on sending bookmarks.
-			//
-			// Just pop closed watchers and requeue others if needed.
-			//
-			// TODO(#115478): rework the following logic
-			//  in a way that would allow more
-			//  efficient cleanup of closed watchers
-			if lastProcessedResourceVersion == 0 {
-				func() {
-					c.Lock()
-					defer c.Unlock()
-					for _, watchers := range c.bookmarkWatchers.popExpiredWatchersThreadUnsafe() {
-						for _, watcher := range watchers {
-							if watcher.stopped {
-								continue
-							}
-							c.bookmarkWatchers.addWatcherThreadUnsafe(watcher)
-						}
-					}
-				}()
-				continue
-			}
 			bookmarkEvent := &watchCacheEvent{
 				Type:            watch.Bookmark,
 				Object:          c.newFunc(),
@@ -1303,9 +1296,14 @@ func (c *Cacher) getWatchCacheResourceVersion(ctx context.Context, parsedWatchRe
 // can wait for events without unnecessary blocking.
 func (c *Cacher) waitUntilWatchCacheFreshAndForceAllEvents(ctx context.Context, requestedWatchRV uint64, opts storage.ListOptions) error {
 	if opts.SendInitialEvents != nil && *opts.SendInitialEvents {
-		// TODO(p0lyn0mial): adapt the following logic once
-		//   https://github.com/kubernetes/kubernetes/pull/123264 merges
-		if utilfeature.DefaultFeatureGate.Enabled(features.ConsistentListFromCache) && c.watchCache.notFresh(requestedWatchRV) {
+		// Here be dragons:
+		// Since the etcd feature checker needs to check all members
+		// to determine whether a given feature is supported,
+		// we may receive a positive response even if the feature is not supported.
+		//
+		// In this very rare scenario, the worst case will be that this
+		// request will wait for 3 seconds before it fails.
+		if etcdfeature.DefaultFeatureSupportChecker.Supports(storage.RequestWatchProgress) && c.watchCache.notFresh(requestedWatchRV) {
 			c.watchCache.waitingUntilFresh.Add()
 			defer c.watchCache.waitingUntilFresh.Remove()
 		}
