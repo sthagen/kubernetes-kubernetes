@@ -249,17 +249,14 @@ func TestAppendixA(t *testing.T) {
 		{
 			example: hex("f7"),
 			reject:  "only simple values false, true, and null have a clear analog",
-			fixme:   "the undefined simple value should not successfully decode as nil",
 		},
 		{
 			example: hex("f0"),
 			reject:  "only simple values false, true, and null have a clear analog",
-			fixme:   "simple values other than false, true, and null should be rejected",
 		},
 		{
 			example: hex("f8ff"),
 			reject:  "only simple values false, true, and null have a clear analog",
-			fixme:   "simple values other than false, true, and null should be rejected",
 		},
 		{
 			example: hex("c074323031332d30332d32315432303a30343a30305a"),
@@ -289,11 +286,11 @@ func TestAppendixA(t *testing.T) {
 			},
 		},
 		{
-			example: hex("d74401020304"),
-			decoded: "\x01\x02\x03\x04",
-			encoded: hex("4401020304"),
+			example: hex("d74401020304"), // 23(h'01020304')
+			decoded: "01020304",
+			encoded: hex("483031303230333034"), // '01020304'
 			reasons: []string{
-				reasonTagIgnored,
+				"decoding a byte string enclosed in an expected later encoding tag into an interface{} value automatically converts to the specified encoding for JSON interoperability",
 			},
 		},
 		{

@@ -163,6 +163,46 @@ func TestDecode(t *testing.T) {
 			want:          "",
 			assertOnError: assertNilError,
 		},
+		{
+			name:          "byte string into []byte assumes base64",
+			in:            []byte("\x48AQIDBA=="), // 'AQIDBA=='
+			into:          []byte{},
+			want:          []byte{0x01, 0x02, 0x03, 0x04},
+			assertOnError: assertNilError,
+		},
+		{
+			name:          "byte string into []byte errors on invalid base64",
+			in:            hex("41ff"), // h'ff'
+			into:          []byte{},
+			assertOnError: assertErrorMessage("cbor: failed to decode base64 from byte string: illegal base64 data at input byte 0"),
+		},
+		{
+			name:          "empty byte string into []byte assumes base64",
+			in:            hex("40"), // ''
+			into:          []byte{},
+			want:          []byte{},
+			assertOnError: assertNilError,
+		},
+		{
+			name:          "byte string with expected encoding tag into []byte does not convert",
+			in:            hex("d64401020304"), // 22(h'01020304')
+			into:          []byte{},
+			want:          []byte{0x01, 0x02, 0x03, 0x04},
+			assertOnError: assertNilError,
+		},
+		{
+			name:          "byte string with expected encoding tag into string converts",
+			in:            hex("d64401020304"), // 22(h'01020304')
+			into:          "",
+			want:          "AQIDBA==",
+			assertOnError: assertNilError,
+		},
+		{
+			name:          "byte string with expected encoding tag into interface{} converts",
+			in:            hex("d64401020304"), // 22(h'01020304')
+			want:          "AQIDBA==",
+			assertOnError: assertNilError,
+		},
 	})
 
 	group(t, "text string", []test{
@@ -585,13 +625,11 @@ func TestDecode(t *testing.T) {
 		{
 			name: "simple value 23",
 			in:   hex("f7"), // undefined
-			assertOnError: func(t *testing.T, e error) {
-				// TODO: Once this can pass, make the assertion stronger.
-				if e == nil {
-					t.Error("expected non-nil error")
+			assertOnError: assertOnConcreteError(func(t *testing.T, e *cbor.UnacceptableDataItemError) {
+				if diff := cmp.Diff(&cbor.UnacceptableDataItemError{CBORType: "primitives", Message: "simple value 23 is not recognized"}, e); diff != "" {
+					t.Errorf("unexpected error diff:\n%s", diff)
 				}
-			},
-			fixme: "cbor simple value 23 (\"undefined\") should not be accepted",
+			}),
 		},
 	}, func() (generated []test) {
 		// Generate test cases for all simple values (0 to 255) because the number of possible simple values is fixed and small.
@@ -619,13 +657,11 @@ func TestDecode(t *testing.T) {
 				})
 			default:
 				// reject all unrecognized simple values
-				each.assertOnError = func(t *testing.T, e error) {
-					// TODO: Once this can pass, make the assertion stronger.
-					if e == nil {
-						t.Error("expected non-nil error")
+				each.assertOnError = assertOnConcreteError(func(t *testing.T, e *cbor.UnacceptableDataItemError) {
+					if diff := cmp.Diff(&cbor.UnacceptableDataItemError{CBORType: "primitives", Message: fmt.Sprintf("simple value %d is not recognized", i)}, e); diff != "" {
+						t.Errorf("unexpected error diff:\n%s", diff)
 					}
-				}
-				each.fixme = "unrecognized simple values should be rejected"
+				})
 			}
 			generated = append(generated, each)
 		}

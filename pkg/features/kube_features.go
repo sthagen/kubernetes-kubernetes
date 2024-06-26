@@ -526,6 +526,7 @@ const (
 	// kep: http://kep.k8s.io/3018
 	// alpha: v1.26
 	// beta: v1.27
+	// GA: v1.31
 	//
 	// Enables PDBUnhealthyPodEvictionPolicy for PodDisruptionBudgets
 	PDBUnhealthyPodEvictionPolicy featuregate.Feature = "PDBUnhealthyPodEvictionPolicy"
@@ -946,6 +947,7 @@ const (
 
 func init() {
 	runtime.Must(utilfeature.DefaultMutableFeatureGate.Add(defaultKubernetesFeatureGates))
+	runtime.Must(utilfeature.DefaultMutableFeatureGate.AddVersioned(defaultVersionedKubernetesFeatureGates))
 
 	// Register all client-go features with kube's feature gate instance and make all client-go
 	// feature checks use kube's instance. The effect is that for kube binaries, client-go
@@ -1094,7 +1096,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	NodeSwap: {Default: true, PreRelease: featuregate.Beta},
 
-	PDBUnhealthyPodEvictionPolicy: {Default: true, PreRelease: featuregate.Beta},
+	PDBUnhealthyPodEvictionPolicy: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.33
 
 	PersistentVolumeLastPhaseTransitionTime: {Default: true, PreRelease: featuregate.Beta},
 
