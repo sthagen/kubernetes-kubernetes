@@ -103,15 +103,15 @@ var (
 
 	podWithClaimName = st.MakePod().Name(podName).Namespace(namespace).
 				UID(podUID).
-				PodResourceClaims(v1.PodResourceClaim{Name: resourceName, Source: v1.ClaimSource{ResourceClaimName: &claimName}}).
+				PodResourceClaims(v1.PodResourceClaim{Name: resourceName, ResourceClaimName: &claimName}).
 				Obj()
 	otherPodWithClaimName = st.MakePod().Name(podName).Namespace(namespace).
 				UID(podUID + "-II").
-				PodResourceClaims(v1.PodResourceClaim{Name: resourceName, Source: v1.ClaimSource{ResourceClaimName: &claimName}}).
+				PodResourceClaims(v1.PodResourceClaim{Name: resourceName, ResourceClaimName: &claimName}).
 				Obj()
 	podWithClaimTemplate = st.MakePod().Name(podName).Namespace(namespace).
 				UID(podUID).
-				PodResourceClaims(v1.PodResourceClaim{Name: resourceName, Source: v1.ClaimSource{ResourceClaimTemplateName: &claimName}}).
+				PodResourceClaims(v1.PodResourceClaim{Name: resourceName, ResourceClaimTemplateName: &claimName}).
 				Obj()
 	podWithClaimTemplateInStatus = func() *v1.Pod {
 		pod := podWithClaimTemplate.DeepCopy()
@@ -125,8 +125,8 @@ var (
 	}()
 	podWithTwoClaimNames = st.MakePod().Name(podName).Namespace(namespace).
 				UID(podUID).
-				PodResourceClaims(v1.PodResourceClaim{Name: resourceName, Source: v1.ClaimSource{ResourceClaimName: &claimName}}).
-				PodResourceClaims(v1.PodResourceClaim{Name: resourceName2, Source: v1.ClaimSource{ResourceClaimName: &claimName2}}).
+				PodResourceClaims(v1.PodResourceClaim{Name: resourceName, ResourceClaimName: &claimName}).
+				PodResourceClaims(v1.PodResourceClaim{Name: resourceName2, ResourceClaimName: &claimName2}).
 				Obj()
 
 	workerNode      = &st.MakeNode().Name("worker").Label("kubernetes.io/hostname", "worker").Node
@@ -569,6 +569,115 @@ func TestPlugin(t *testing.T) {
 							if claim.Name == claimName {
 								claim = claim.DeepCopy()
 								claim.Finalizers = structuredAllocatedClaim.Finalizers
+								claim.Status = structuredInUseClaim.Status
+							}
+							return claim
+						},
+					},
+				},
+				postbind: result{
+					assumedClaim: reserve(structuredAllocatedClaim, podWithClaimName),
+				},
+			},
+		},
+		"delayed-allocation-structured-with-resources-has-finalizer": {
+			// As before. but the finalizer is already set. Could happen if
+			// the scheduler got interrupted.
+			pod: podWithClaimName,
+			claims: func() []*resourcev1alpha2.ResourceClaim {
+				claim := pendingDelayedClaim.DeepCopy()
+				claim.Finalizers = structuredAllocatedClaim.Finalizers
+				return []*resourcev1alpha2.ResourceClaim{claim}
+			}(),
+			classes: []*resourcev1alpha2.ResourceClass{structuredResourceClass},
+			objs:    []apiruntime.Object{workerNodeSlice},
+			want: want{
+				reserve: result{
+					inFlightClaim: structuredAllocatedClaim,
+				},
+				prebind: result{
+					assumedClaim: reserve(structuredAllocatedClaim, podWithClaimName),
+					changes: change{
+						claim: func(claim *resourcev1alpha2.ResourceClaim) *resourcev1alpha2.ResourceClaim {
+							if claim.Name == claimName {
+								claim = claim.DeepCopy()
+								claim.Status = structuredInUseClaim.Status
+							}
+							return claim
+						},
+					},
+				},
+				postbind: result{
+					assumedClaim: reserve(structuredAllocatedClaim, podWithClaimName),
+				},
+			},
+		},
+		"delayed-allocation-structured-with-resources-finalizer-gets-removed": {
+			// As before. but the finalizer is already set. Then it gets
+			// removed before the scheduler reaches PreBind.
+			pod: podWithClaimName,
+			claims: func() []*resourcev1alpha2.ResourceClaim {
+				claim := pendingDelayedClaim.DeepCopy()
+				claim.Finalizers = structuredAllocatedClaim.Finalizers
+				return []*resourcev1alpha2.ResourceClaim{claim}
+			}(),
+			classes: []*resourcev1alpha2.ResourceClass{structuredResourceClass},
+			objs:    []apiruntime.Object{workerNodeSlice},
+			prepare: prepare{
+				prebind: change{
+					claim: func(claim *resourcev1alpha2.ResourceClaim) *resourcev1alpha2.ResourceClaim {
+						claim.Finalizers = nil
+						return claim
+					},
+				},
+			},
+			want: want{
+				reserve: result{
+					inFlightClaim: structuredAllocatedClaim,
+				},
+				prebind: result{
+					assumedClaim: reserve(structuredAllocatedClaim, podWithClaimName),
+					changes: change{
+						claim: func(claim *resourcev1alpha2.ResourceClaim) *resourcev1alpha2.ResourceClaim {
+							if claim.Name == claimName {
+								claim = claim.DeepCopy()
+								claim.Finalizers = structuredAllocatedClaim.Finalizers
+								claim.Status = structuredInUseClaim.Status
+							}
+							return claim
+						},
+					},
+				},
+				postbind: result{
+					assumedClaim: reserve(structuredAllocatedClaim, podWithClaimName),
+				},
+			},
+		},
+		"delayed-allocation-structured-with-resources-finalizer-gets-added": {
+			// No finalizer initially, then it gets added before
+			// the scheduler reaches PreBind. Shouldn't happen?
+			pod:     podWithClaimName,
+			claims:  []*resourcev1alpha2.ResourceClaim{pendingDelayedClaim},
+			classes: []*resourcev1alpha2.ResourceClass{structuredResourceClass},
+			objs:    []apiruntime.Object{workerNodeSlice},
+			prepare: prepare{
+				prebind: change{
+					claim: func(claim *resourcev1alpha2.ResourceClaim) *resourcev1alpha2.ResourceClaim {
+						claim.Finalizers = structuredAllocatedClaim.Finalizers
+						return claim
+					},
+				},
+			},
+			want: want{
+				reserve: result{
+					inFlightClaim: structuredAllocatedClaim,
+				},
+				prebind: result{
+					assumedClaim: reserve(structuredAllocatedClaim, podWithClaimName),
+					changes: change{
+						claim: func(claim *resourcev1alpha2.ResourceClaim) *resourcev1alpha2.ResourceClaim {
+							if claim.Name == claimName {
+								claim = claim.DeepCopy()
 								claim.Status = structuredInUseClaim.Status
 							}
 							return claim
