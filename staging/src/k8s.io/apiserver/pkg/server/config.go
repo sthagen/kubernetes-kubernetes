@@ -64,6 +64,7 @@ import (
 	genericfilters "k8s.io/apiserver/pkg/server/filters"
 	"k8s.io/apiserver/pkg/server/healthz"
 	"k8s.io/apiserver/pkg/server/routes"
+	"k8s.io/apiserver/pkg/server/routine"
 	serverstore "k8s.io/apiserver/pkg/server/storage"
 	storagevalue "k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/apiserver/pkg/storageversion"
@@ -215,6 +216,10 @@ type Config struct {
 	// If specified, long running requests such as watch will be allocated a random timeout between this value, and
 	// twice this value.  Note that it is up to the request handlers to ignore or honor this timeout. In seconds.
 	MinRequestTimeout int
+
+	// StorageInitializationTimeout defines the maximum amount of time to wait for storage initialization
+	// before declaring apiserver ready.
+	StorageInitializationTimeout time.Duration
 
 	// This represents the maximum amount of time it should take for apiserver to complete its startup
 	// sequence and become healthy. From apiserver's start time to when this amount of time has
@@ -426,6 +431,7 @@ func NewConfig(codecs serializer.CodecFactory) *Config {
 		MaxMutatingRequestsInFlight:    200,
 		RequestTimeout:                 time.Duration(60) * time.Second,
 		MinRequestTimeout:              1800,
+		StorageInitializationTimeout:   time.Minute,
 		LivezGracePeriod:               time.Duration(0),
 		ShutdownDelayDuration:          time.Duration(0),
 		// 1.5MB is the default client request size in bytes
@@ -824,6 +830,7 @@ func (c completedConfig) New(name string, delegationTarget DelegationTarget) (*G
 		ShutdownSendRetryAfter: c.ShutdownSendRetryAfter,
 
 		APIServerID:           c.APIServerID,
+		StorageReadinessHook:  NewStorageReadinessHook(c.StorageInitializationTimeout),
 		StorageVersionManager: c.StorageVersionManager,
 
 		EffectiveVersion: c.EffectiveVersion,
@@ -1055,7 +1062,7 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *Config) http.Handler {
 	// handler in current goroutine to minimize the stack memory usage. It must be
 	// after WithPanicRecover() to be protected from panics.
 	if c.FeatureGate.Enabled(genericfeatures.APIServingWithRoutine) {
-		handler = genericfilters.WithRoutine(handler, c.LongRunningFunc)
+		handler = routine.WithRoutine(handler, c.LongRunningFunc)
 	}
 	handler = genericapifilters.WithRequestInfo(handler, c.RequestInfoResolver)
 	handler = genericapifilters.WithRequestReceivedTimestamp(handler)
