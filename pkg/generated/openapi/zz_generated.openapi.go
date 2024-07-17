@@ -479,6 +479,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"k8s.io/api/core/v1.NodeConfigSource":                                                                   schema_k8sio_api_core_v1_NodeConfigSource(ref),
 		"k8s.io/api/core/v1.NodeConfigStatus":                                                                   schema_k8sio_api_core_v1_NodeConfigStatus(ref),
 		"k8s.io/api/core/v1.NodeDaemonEndpoints":                                                                schema_k8sio_api_core_v1_NodeDaemonEndpoints(ref),
+		"k8s.io/api/core/v1.NodeFeatures":                                                                       schema_k8sio_api_core_v1_NodeFeatures(ref),
 		"k8s.io/api/core/v1.NodeList":                                                                           schema_k8sio_api_core_v1_NodeList(ref),
 		"k8s.io/api/core/v1.NodeProxyOptions":                                                                   schema_k8sio_api_core_v1_NodeProxyOptions(ref),
 		"k8s.io/api/core/v1.NodeRuntimeHandler":                                                                 schema_k8sio_api_core_v1_NodeRuntimeHandler(ref),
@@ -2257,6 +2258,7 @@ func schema_k8sio_api_admissionregistration_v1_ValidatingAdmissionPolicyBindingL
 						},
 					},
 				},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -2362,6 +2364,7 @@ func schema_k8sio_api_admissionregistration_v1_ValidatingAdmissionPolicyList(ref
 						},
 					},
 				},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -3444,6 +3447,7 @@ func schema_k8sio_api_admissionregistration_v1alpha1_ValidatingAdmissionPolicyBi
 						},
 					},
 				},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -3549,6 +3553,7 @@ func schema_k8sio_api_admissionregistration_v1alpha1_ValidatingAdmissionPolicyLi
 						},
 					},
 				},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -4638,6 +4643,7 @@ func schema_k8sio_api_admissionregistration_v1beta1_ValidatingAdmissionPolicyBin
 						},
 					},
 				},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -4743,6 +4749,7 @@ func schema_k8sio_api_admissionregistration_v1beta1_ValidatingAdmissionPolicyLis
 						},
 					},
 				},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -24412,6 +24419,26 @@ func schema_k8sio_api_core_v1_NodeDaemonEndpoints(ref common.ReferenceCallback) 
 	}
 }
 
+func schema_k8sio_api_core_v1_NodeFeatures(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NodeFeatures describes the set of features implemented by the CRI implementation. The features contained in the NodeFeatures should depend only on the cri implementation independent of runtime handlers.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"supplementalGroupsPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SupplementalGroupsPolicy is set to true if the runtime supports SupplementalGroupsPolicy and ContainerUser.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_k8sio_api_core_v1_NodeList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -24530,7 +24557,7 @@ func schema_k8sio_api_core_v1_NodeRuntimeHandlerFeatures(ref common.ReferenceCal
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "NodeRuntimeHandlerFeatures is a set of runtime features.",
+				Description: "NodeRuntimeHandlerFeatures is a set of features implemented by the runtime handler.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"recursiveReadOnlyMounts": {
@@ -24979,11 +25006,17 @@ func schema_k8sio_api_core_v1_NodeStatus(ref common.ReferenceCallback) common.Op
 							},
 						},
 					},
+					"features": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Features describes the set of features implemented by the CRI implementation.",
+							Ref:         ref("k8s.io/api/core/v1.NodeFeatures"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.AttachedVolume", "k8s.io/api/core/v1.ContainerImage", "k8s.io/api/core/v1.NodeAddress", "k8s.io/api/core/v1.NodeCondition", "k8s.io/api/core/v1.NodeConfigStatus", "k8s.io/api/core/v1.NodeDaemonEndpoints", "k8s.io/api/core/v1.NodeRuntimeHandler", "k8s.io/api/core/v1.NodeSystemInfo", "k8s.io/apimachinery/pkg/api/resource.Quantity"},
+			"k8s.io/api/core/v1.AttachedVolume", "k8s.io/api/core/v1.ContainerImage", "k8s.io/api/core/v1.NodeAddress", "k8s.io/api/core/v1.NodeCondition", "k8s.io/api/core/v1.NodeConfigStatus", "k8s.io/api/core/v1.NodeDaemonEndpoints", "k8s.io/api/core/v1.NodeFeatures", "k8s.io/api/core/v1.NodeRuntimeHandler", "k8s.io/api/core/v1.NodeSystemInfo", "k8s.io/apimachinery/pkg/api/resource.Quantity"},
 	}
 }
 
@@ -59495,6 +59528,13 @@ func schema_k8sio_kube_proxy_config_v1alpha1_KubeProxyConfiguration(ref common.R
 							Description: "portRange was previously used to configure the userspace proxy, but is now unused.",
 							Default:     "",
 							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"windowsRunAsService": {
+						SchemaProps: spec.SchemaProps{
+							Description: "windowsRunAsService, if true, enables Windows service control manager API integration.",
+							Type:        []string{"boolean"},
 							Format:      "",
 						},
 					},
