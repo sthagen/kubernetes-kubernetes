@@ -45,6 +45,13 @@ const (
 	// Enable usage of Provision of PVCs from snapshots in other namespaces
 	CrossNamespaceVolumeDataSource featuregate.Feature = "CrossNamespaceVolumeDataSource"
 
+	// owner: @aojea
+	// Deprecated: v1.31
+	//
+	// Allow kubelet to request a certificate without any Node IP available, only
+	// with DNS names.
+	AllowDNSOnlyNodeCSR featuregate.Feature = "AllowDNSOnlyNodeCSR"
+
 	// owner: @thockin
 	// deprecated: v1.29
 	//
@@ -959,6 +966,13 @@ const (
 	//
 	// Enable SupplementalGroupsPolicy feature in PodSecurityContext
 	SupplementalGroupsPolicy featuregate.Feature = "SupplementalGroupsPolicy"
+
+	// owner: @saschagrunert
+	// kep: https://kep.k8s.io/4639
+	// alpha: v1.31
+	//
+	// Enables the image volume source.
+	ImageVolume featuregate.Feature = "ImageVolume"
 )
 
 func init() {
@@ -983,6 +997,8 @@ func init() {
 // when adding or removing one entry.
 var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	CrossNamespaceVolumeDataSource: {Default: false, PreRelease: featuregate.Alpha},
+
+	AllowDNSOnlyNodeCSR: {Default: false, PreRelease: featuregate.Deprecated}, // remove after 1.33
 
 	AllowServiceLBStatusOnNonLB: {Default: false, PreRelease: featuregate.Deprecated}, // remove after 1.29
 
@@ -1216,6 +1232,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	SupplementalGroupsPolicy: {Default: false, PreRelease: featuregate.Alpha},
 
+	ImageVolume: {Default: false, PreRelease: featuregate.Alpha},
+
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
 
@@ -1283,7 +1301,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	genericfeatures.WatchFromStorageWithoutResourceVersion: {Default: false, PreRelease: featuregate.Beta},
 
-	genericfeatures.WatchList: {Default: true, PreRelease: featuregate.Beta},
+	genericfeatures.WatchList: {Default: false, PreRelease: featuregate.Alpha},
 
 	genericfeatures.ZeroLimitedNominalConcurrencyShares: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.32
 
