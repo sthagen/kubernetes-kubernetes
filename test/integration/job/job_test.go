@@ -118,7 +118,7 @@ func validateTerminatedPodsTrackingFinalizerMetric(ctx context.Context, t *testi
 // Note: this scenario requires the use of finalizers. Without finalizers there is no guarantee a failed pod would be
 // checked against the pod failure policy rules before its removal by PodGC.
 func TestJobPodFailurePolicyWithFailedPodDeletedDuringControllerRestart(t *testing.T) {
-	count := 3
+	count := int32(3)
 	job := batchv1.Job{
 		Spec: batchv1.JobSpec{
 			Template: v1.PodTemplateSpec{
@@ -133,8 +133,8 @@ func TestJobPodFailurePolicyWithFailedPodDeletedDuringControllerRestart(t *testi
 					},
 				},
 			},
-			Parallelism: ptr.To(int32(count)),
-			Completions: ptr.To(int32(count)),
+			Parallelism: &count,
+			Completions: &count,
 			PodFailurePolicy: &batchv1.PodFailurePolicy{
 				Rules: []batchv1.PodFailurePolicyRule{
 					{
@@ -181,7 +181,7 @@ func TestJobPodFailurePolicyWithFailedPodDeletedDuringControllerRestart(t *testi
 		t.Fatalf("Failed to create Job: %v", err)
 	}
 	validateJobPodsStatus(ctx, t, cs, jobObj, podsByStatus{
-		Active:      count,
+		Active:      int(count),
 		Ready:       ptr.To[int32](0),
 		Terminating: ptr.To[int32](0),
 	})
@@ -389,7 +389,7 @@ func TestJobPodFailurePolicy(t *testing.T) {
 				Value:  1,
 			},
 			wantJobFinishedMetric: metricLabelsWithValue{
-				Labels: []string{"NonIndexed", "succeeded", ""},
+				Labels: []string{"NonIndexed", "succeeded", "CompletionsReached"},
 				Value:  1,
 			},
 		},
@@ -400,7 +400,7 @@ func TestJobPodFailurePolicy(t *testing.T) {
 			wantFailed:           1,
 			wantJobConditionType: batchv1.JobComplete,
 			wantJobFinishedMetric: metricLabelsWithValue{
-				Labels: []string{"NonIndexed", "succeeded", ""},
+				Labels: []string{"NonIndexed", "succeeded", "CompletionsReached"},
 				Value:  1,
 			},
 			wantPodFailuresHandledByPolicyRuleMetric: &metricLabelsWithValue{
@@ -415,7 +415,7 @@ func TestJobPodFailurePolicy(t *testing.T) {
 			wantFailed:           1,
 			wantJobConditionType: batchv1.JobComplete,
 			wantJobFinishedMetric: metricLabelsWithValue{
-				Labels: []string{"NonIndexed", "succeeded", ""},
+				Labels: []string{"NonIndexed", "succeeded", "CompletionsReached"},
 				Value:  1,
 			},
 			wantPodFailuresHandledByPolicyRuleMetric: &metricLabelsWithValue{
@@ -541,13 +541,13 @@ func TestSuccessPolicy(t *testing.T) {
 					wantFailed:           0,
 					wantSucceeded:        1,
 					wantCompletedIndexes: "0",
-					wantTerminating:      ptr.To(int32(0)),
+					wantTerminating:      ptr.To[int32](0),
 				},
 			},
 			wantConditionTypes: []batchv1.JobConditionType{batchv1.JobSuccessCriteriaMet, batchv1.JobComplete},
 			wantJobFinishedNumMetric: []metricLabelsWithValue{
 				{
-					Labels: []string{"Indexed", "succeeded", ""},
+					Labels: []string{"Indexed", "succeeded", "SuccessPolicy"},
 					Value:  1,
 				},
 			},
@@ -576,13 +576,44 @@ func TestSuccessPolicy(t *testing.T) {
 					wantFailed:           0,
 					wantSucceeded:        1,
 					wantCompletedIndexes: "0",
-					wantTerminating:      ptr.To(int32(0)),
+					wantTerminating:      ptr.To[int32](0),
 				},
 			},
 			wantConditionTypes: []batchv1.JobConditionType{batchv1.JobComplete},
 			wantJobFinishedNumMetric: []metricLabelsWithValue{
 				{
 					Labels: []string{"Indexed", "succeeded", ""},
+					Value:  1,
+				},
+			},
+		},
+		"job without successPolicy; incremented the jobs_finished_total metric with CompletionsReached reason": {
+			enableJobSuccessPolicy: true,
+			job: batchv1.Job{
+				Spec: batchv1.JobSpec{
+					Parallelism:    ptr.To[int32](1),
+					Completions:    ptr.To[int32](1),
+					CompletionMode: completionModePtr(batchv1.IndexedCompletion),
+					Template:       podTemplateSpec,
+				},
+			},
+			podTerminations: []podTerminationWithExpectations{
+				{
+					index: 0,
+					status: v1.PodStatus{
+						Phase: v1.PodSucceeded,
+					},
+					wantActive:           0,
+					wantFailed:           0,
+					wantSucceeded:        1,
+					wantCompletedIndexes: "0",
+					wantTerminating:      ptr.To[int32](0),
+				},
+			},
+			wantConditionTypes: []batchv1.JobConditionType{batchv1.JobSuccessCriteriaMet, batchv1.JobComplete},
+			wantJobFinishedNumMetric: []metricLabelsWithValue{
+				{
+					Labels: []string{"Indexed", "succeeded", "CompletionsReached"},
 					Value:  1,
 				},
 			},
@@ -612,7 +643,7 @@ func TestSuccessPolicy(t *testing.T) {
 					wantActiveIndexes: sets.New(0, 1),
 					wantFailed:        0,
 					wantSucceeded:     0,
-					wantTerminating:   ptr.To(int32(0)),
+					wantTerminating:   ptr.To[int32](0),
 				},
 				{
 					index: 1,
@@ -623,13 +654,13 @@ func TestSuccessPolicy(t *testing.T) {
 					wantFailed:           0,
 					wantSucceeded:        1,
 					wantCompletedIndexes: "1",
-					wantTerminating:      ptr.To(int32(1)),
+					wantTerminating:      ptr.To[int32](1),
 				},
 			},
 			wantConditionTypes: []batchv1.JobConditionType{batchv1.JobSuccessCriteriaMet, batchv1.JobComplete},
 			wantJobFinishedNumMetric: []metricLabelsWithValue{
 				{
-					Labels: []string{"Indexed", "succeeded", ""},
+					Labels: []string{"Indexed", "succeeded", "SuccessPolicy"},
 					Value:  1,
 				},
 			},
@@ -659,7 +690,7 @@ func TestSuccessPolicy(t *testing.T) {
 					wantActiveIndexes: sets.New(0, 1),
 					wantFailed:        0,
 					wantSucceeded:     0,
-					wantTerminating:   ptr.To(int32(0)),
+					wantTerminating:   ptr.To[int32](0),
 				},
 				{
 					index: 1,
@@ -670,13 +701,13 @@ func TestSuccessPolicy(t *testing.T) {
 					wantFailed:           0,
 					wantSucceeded:        1,
 					wantCompletedIndexes: "1",
-					wantTerminating:      ptr.To(int32(1)),
+					wantTerminating:      ptr.To[int32](1),
 				},
 			},
 			wantConditionTypes: []batchv1.JobConditionType{batchv1.JobSuccessCriteriaMet, batchv1.JobComplete},
 			wantJobFinishedNumMetric: []metricLabelsWithValue{
 				{
-					Labels: []string{"Indexed", "succeeded", ""},
+					Labels: []string{"Indexed", "succeeded", "SuccessPolicy"},
 					Value:  1,
 				},
 			},
@@ -709,7 +740,7 @@ func TestSuccessPolicy(t *testing.T) {
 					wantFailed:        1,
 					wantFailedIndexes: ptr.To("0"),
 					wantSucceeded:     0,
-					wantTerminating:   ptr.To(int32(0)),
+					wantTerminating:   ptr.To[int32](0),
 				},
 				{
 					index: 1,
@@ -721,7 +752,7 @@ func TestSuccessPolicy(t *testing.T) {
 					wantSucceeded:        1,
 					wantFailedIndexes:    ptr.To("0"),
 					wantCompletedIndexes: "1",
-					wantTerminating:      ptr.To(int32(0)),
+					wantTerminating:      ptr.To[int32](0),
 				},
 			},
 			wantConditionTypes: []batchv1.JobConditionType{batchv1.JobFailed},
@@ -1185,6 +1216,7 @@ func TestDelayTerminalPhaseCondition(t *testing.T) {
 	testCases := map[string]struct {
 		enableJobManagedBy            bool
 		enableJobPodReplacementPolicy bool
+		enableJobSuccessPolicy        bool
 
 		job                batchv1.Job
 		action             func(context.Context, clientset.Interface, *batchv1.Job)
@@ -1393,6 +1425,92 @@ func TestDelayTerminalPhaseCondition(t *testing.T) {
 				},
 			},
 		},
+		"job scale down to meet completions; JobManagedBy and JobSuccessPolicy are enabled": {
+			enableJobManagedBy:     true,
+			enableJobSuccessPolicy: true,
+			job: batchv1.Job{
+				Spec: batchv1.JobSpec{
+					Parallelism:    ptr.To[int32](2),
+					Completions:    ptr.To[int32](2),
+					CompletionMode: ptr.To(batchv1.IndexedCompletion),
+					Template:       podTemplateSpec,
+				},
+			},
+			action: succeedOnePodAndScaleDown,
+			wantInterimStatus: &batchv1.JobStatus{
+				Succeeded:        1,
+				Ready:            ptr.To[int32](0),
+				CompletedIndexes: "0",
+				Conditions: []batchv1.JobCondition{
+					{
+						Type:   batchv1.JobSuccessCriteriaMet,
+						Status: v1.ConditionTrue,
+						Reason: batchv1.JobReasonCompletionsReached,
+					},
+				},
+			},
+			wantTerminalStatus: batchv1.JobStatus{
+				Succeeded:        1,
+				Ready:            ptr.To[int32](0),
+				CompletedIndexes: "0",
+				Conditions: []batchv1.JobCondition{
+					{
+						Type:   batchv1.JobSuccessCriteriaMet,
+						Status: v1.ConditionTrue,
+						Reason: batchv1.JobReasonCompletionsReached,
+					},
+					{
+						Type:   batchv1.JobComplete,
+						Status: v1.ConditionTrue,
+						Reason: batchv1.JobReasonCompletionsReached,
+					},
+				},
+			},
+		},
+		"job scale down to meet completions; JobPodReplacementPolicy and JobSuccessPolicy are enabled": {
+			enableJobPodReplacementPolicy: true,
+			enableJobSuccessPolicy:        true,
+			job: batchv1.Job{
+				Spec: batchv1.JobSpec{
+					Parallelism:    ptr.To[int32](2),
+					Completions:    ptr.To[int32](2),
+					CompletionMode: ptr.To(batchv1.IndexedCompletion),
+					Template:       podTemplateSpec,
+				},
+			},
+			action: succeedOnePodAndScaleDown,
+			wantInterimStatus: &batchv1.JobStatus{
+				Succeeded:        1,
+				Ready:            ptr.To[int32](0),
+				Terminating:      ptr.To[int32](1),
+				CompletedIndexes: "0",
+				Conditions: []batchv1.JobCondition{
+					{
+						Type:   batchv1.JobSuccessCriteriaMet,
+						Status: v1.ConditionTrue,
+						Reason: batchv1.JobReasonCompletionsReached,
+					},
+				},
+			},
+			wantTerminalStatus: batchv1.JobStatus{
+				Succeeded:        1,
+				Ready:            ptr.To[int32](0),
+				Terminating:      ptr.To[int32](0),
+				CompletedIndexes: "0",
+				Conditions: []batchv1.JobCondition{
+					{
+						Type:   batchv1.JobSuccessCriteriaMet,
+						Status: v1.ConditionTrue,
+						Reason: batchv1.JobReasonCompletionsReached,
+					},
+					{
+						Type:   batchv1.JobComplete,
+						Status: v1.ConditionTrue,
+						Reason: batchv1.JobReasonCompletionsReached,
+					},
+				},
+			},
+		},
 	}
 	for name, test := range testCases {
 		t.Run(name, func(t *testing.T) {
@@ -1400,6 +1518,7 @@ func TestDelayTerminalPhaseCondition(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, features.JobPodReplacementPolicy, test.enableJobPodReplacementPolicy)
 			featuregatetesting.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, features.JobManagedBy, test.enableJobManagedBy)
 			featuregatetesting.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, features.ElasticIndexedJob, true)
+			featuregatetesting.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, features.JobSuccessPolicy, test.enableJobSuccessPolicy)
 
 			closeFn, restConfig, clientSet, ns := setup(t, "delay-terminal-condition")
 			t.Cleanup(closeFn)
@@ -1492,7 +1611,7 @@ func TestBackoffLimitPerIndex(t *testing.T) {
 					wantActiveIndexes:              sets.New(0, 1),
 					wantFailedIndexes:              ptr.To(""),
 					wantReplacementPodFailureCount: ptr.To(1),
-					wantTerminating:                ptr.To(int32(0)),
+					wantTerminating:                ptr.To[int32](0),
 				},
 			},
 			wantJobConditionType: batchv1.JobComplete,
@@ -1523,7 +1642,7 @@ func TestBackoffLimitPerIndex(t *testing.T) {
 					wantActiveIndexes:              sets.New(0, 1),
 					wantFailedIndexes:              ptr.To(""),
 					wantReplacementPodFailureCount: ptr.To(1),
-					wantTerminating:                ptr.To(int32(0)),
+					wantTerminating:                ptr.To[int32](0),
 				},
 				{
 					status: v1.PodStatus{
@@ -1534,7 +1653,7 @@ func TestBackoffLimitPerIndex(t *testing.T) {
 					wantActiveIndexes:              sets.New(0, 1),
 					wantFailedIndexes:              ptr.To(""),
 					wantReplacementPodFailureCount: ptr.To(2),
-					wantTerminating:                ptr.To(int32(0)),
+					wantTerminating:                ptr.To[int32](0),
 				},
 				{
 					status: v1.PodStatus{
@@ -1544,7 +1663,7 @@ func TestBackoffLimitPerIndex(t *testing.T) {
 					wantFailed:        3,
 					wantActiveIndexes: sets.New(1),
 					wantFailedIndexes: ptr.To("0"),
-					wantTerminating:   ptr.To(int32(0)),
+					wantTerminating:   ptr.To[int32](0),
 				},
 			},
 			wantJobConditionType: batchv1.JobFailed,
@@ -1580,7 +1699,7 @@ func TestBackoffLimitPerIndex(t *testing.T) {
 					wantFailed:        1,
 					wantActiveIndexes: sets.New(0, 1, 2),
 					wantFailedIndexes: ptr.To(""),
-					wantTerminating:   ptr.To(int32(0)),
+					wantTerminating:   ptr.To[int32](0),
 				},
 				{
 					index: 1,
@@ -1591,7 +1710,7 @@ func TestBackoffLimitPerIndex(t *testing.T) {
 					wantFailed:        2,
 					wantActiveIndexes: sets.New(0, 1, 2),
 					wantFailedIndexes: ptr.To(""),
-					wantTerminating:   ptr.To(int32(0)),
+					wantTerminating:   ptr.To[int32](0),
 				},
 				{
 					index: 2,
@@ -1600,7 +1719,7 @@ func TestBackoffLimitPerIndex(t *testing.T) {
 					},
 					wantFailed:        5,
 					wantFailedIndexes: ptr.To(""),
-					wantTerminating:   ptr.To(int32(2)),
+					wantTerminating:   ptr.To[int32](2),
 				},
 			},
 			wantJobConditionType: batchv1.JobFailed,
@@ -1635,7 +1754,7 @@ func TestBackoffLimitPerIndex(t *testing.T) {
 					wantFailed:        1,
 					wantActiveIndexes: sets.New(1),
 					wantFailedIndexes: ptr.To("0"),
-					wantTerminating:   ptr.To(int32(0)),
+					wantTerminating:   ptr.To[int32](0),
 				},
 				{
 					index: 1,
@@ -1646,7 +1765,7 @@ func TestBackoffLimitPerIndex(t *testing.T) {
 					wantSucceeded:        1,
 					wantFailedIndexes:    ptr.To("0"),
 					wantCompletedIndexes: "1",
-					wantTerminating:      ptr.To(int32(0)),
+					wantTerminating:      ptr.To[int32](0),
 				},
 			},
 			wantJobConditionType: batchv1.JobFailed,
@@ -1682,7 +1801,7 @@ func TestBackoffLimitPerIndex(t *testing.T) {
 					wantFailed:        1,
 					wantActiveIndexes: sets.New(1, 2),
 					wantFailedIndexes: ptr.To("0"),
-					wantTerminating:   ptr.To(int32(0)),
+					wantTerminating:   ptr.To[int32](0),
 				},
 				{
 					index: 1,
@@ -1692,7 +1811,7 @@ func TestBackoffLimitPerIndex(t *testing.T) {
 					wantActive:        0,
 					wantFailed:        3,
 					wantFailedIndexes: ptr.To("0,1"),
-					wantTerminating:   ptr.To(int32(1)),
+					wantTerminating:   ptr.To[int32](1),
 				},
 			},
 			wantJobConditionType: batchv1.JobFailed,
@@ -1752,7 +1871,7 @@ func TestBackoffLimitPerIndex(t *testing.T) {
 					wantFailed:        1,
 					wantActiveIndexes: sets.New(1),
 					wantFailedIndexes: ptr.To("0"),
-					wantTerminating:   ptr.To(int32(0)),
+					wantTerminating:   ptr.To[int32](0),
 				},
 				{
 					index: 1,
@@ -1767,7 +1886,7 @@ func TestBackoffLimitPerIndex(t *testing.T) {
 					},
 					wantFailed:        2,
 					wantFailedIndexes: ptr.To("0,1"),
-					wantTerminating:   ptr.To(int32(0)),
+					wantTerminating:   ptr.To[int32](0),
 				},
 			},
 			wantJobConditionType: batchv1.JobFailed,
@@ -2355,7 +2474,7 @@ func TestNonParallelJob(t *testing.T) {
 	})
 	validateFinishedPodsNoFinalizer(ctx, t, clientSet, jobObj)
 	validateCounterMetric(ctx, t, metrics.JobFinishedNum, metricLabelsWithValue{
-		Labels: []string{"NonIndexed", "succeeded", ""},
+		Labels: []string{"NonIndexed", "succeeded", "CompletionsReached"},
 		Value:  1,
 	})
 	validateCounterMetric(ctx, t, metrics.JobPodsFinished, metricLabelsWithValue{
@@ -2443,7 +2562,7 @@ func TestParallelJob(t *testing.T) {
 	validateFinishedPodsNoFinalizer(ctx, t, clientSet, jobObj)
 	validateTerminatedPodsTrackingFinalizerMetric(ctx, t, 7)
 	validateCounterMetric(ctx, t, metrics.JobFinishedNum, metricLabelsWithValue{
-		Labels: []string{"NonIndexed", "succeeded", ""},
+		Labels: []string{"NonIndexed", "succeeded", "CompletionsReached"},
 		Value:  1,
 	})
 	validateCounterMetric(ctx, t, metrics.JobPodsFinished, metricLabelsWithValue{
@@ -2585,7 +2704,7 @@ func TestParallelJobWithCompletions(t *testing.T) {
 	validateJobPodsStatus(ctx, t, clientSet, jobObj, want)
 	validateFinishedPodsNoFinalizer(ctx, t, clientSet, jobObj)
 	validateCounterMetric(ctx, t, metrics.JobFinishedNum, metricLabelsWithValue{
-		Labels: []string{"NonIndexed", "succeeded", ""},
+		Labels: []string{"NonIndexed", "succeeded", "CompletionsReached"},
 		Value:  1,
 	})
 	validateCounterMetric(ctx, t, metrics.JobPodsFinished, metricLabelsWithValue{
@@ -2681,7 +2800,7 @@ func TestIndexedJob(t *testing.T) {
 		Value:  4,
 	})
 	validateCounterMetric(ctx, t, metrics.JobFinishedNum, metricLabelsWithValue{
-		Labels: []string{"Indexed", "succeeded", ""},
+		Labels: []string{"Indexed", "succeeded", "CompletionsReached"},
 		Value:  1,
 	})
 	validateCounterMetric(ctx, t, metrics.JobPodsFinished, metricLabelsWithValue{

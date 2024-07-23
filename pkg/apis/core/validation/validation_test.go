@@ -3007,6 +3007,20 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 			enableVolumeAttributesClass: true,
 			isExpectedFailure:           true,
 		},
+		"invalid-update-volume-attributes-class-when-claim-not-bound": {
+			oldClaim: func() *core.PersistentVolumeClaim {
+				clone := validClaimVolumeAttributesClass1.DeepCopy()
+				clone.Status.Phase = core.ClaimPending
+				return clone
+			}(),
+			newClaim: func() *core.PersistentVolumeClaim {
+				clone := validClaimVolumeAttributesClass2.DeepCopy()
+				clone.Status.Phase = core.ClaimPending
+				return clone
+			}(),
+			enableVolumeAttributesClass: true,
+			isExpectedFailure:           true,
+		},
 		"invalid-update-volume-attributes-class-to-nil-without-featuregate-enabled": {
 			oldClaim:                    validClaimVolumeAttributesClass1,
 			newClaim:                    validClaimNilVolumeAttributesClass,
@@ -19067,7 +19081,7 @@ func TestValidatePersistentVolumeClaimStatusUpdate(t *testing.T) {
 		},
 	}, core.PersistentVolumeClaimStatus{
 		AllocatedResourceStatuses: map[core.ResourceName]core.ClaimResourceStatus{
-			core.ResourceStorage: core.PersistentVolumeClaimControllerResizeFailed,
+			core.ResourceStorage: core.PersistentVolumeClaimControllerResizeInfeasible,
 		},
 	})
 
@@ -19097,7 +19111,7 @@ func TestValidatePersistentVolumeClaimStatusUpdate(t *testing.T) {
 		},
 	}, core.PersistentVolumeClaimStatus{
 		AllocatedResourceStatuses: map[core.ResourceName]core.ClaimResourceStatus{
-			core.ResourceStorage: core.PersistentVolumeClaimNodeResizeFailed,
+			core.ResourceStorage: core.PersistentVolumeClaimNodeResizeInfeasible,
 		},
 	})
 
@@ -19141,7 +19155,7 @@ func TestValidatePersistentVolumeClaimStatusUpdate(t *testing.T) {
 			validResizeKeyCustom: resource.MustParse("10Gi"),
 		},
 		AllocatedResourceStatuses: map[core.ResourceName]core.ClaimResourceStatus{
-			core.ResourceStorage: core.PersistentVolumeClaimControllerResizeFailed,
+			core.ResourceStorage: core.PersistentVolumeClaimControllerResizeInfeasible,
 			validResizeKeyCustom: core.PersistentVolumeClaimControllerResizeInProgress,
 		},
 	})
@@ -19330,6 +19344,10 @@ func TestValidateResourceQuota(t *testing.T) {
 			core.ResourceQuotas:                 resource.MustParse("10"),
 			core.ResourceConfigMaps:             resource.MustParse("10"),
 			core.ResourceSecrets:                resource.MustParse("10"),
+
+			// These are unknown and not enforced unless DRA is enabled, but not invalid.
+			"count/resourceclaims.resource.k8s.io":     resource.MustParse("1"),
+			"gold.deviceclass.resource.k8s.io/devices": resource.MustParse("1"),
 		},
 	}
 

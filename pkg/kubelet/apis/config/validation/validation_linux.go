@@ -1,5 +1,5 @@
-//go:build windows
-// +build windows
+//go:build linux
+// +build linux
 
 /*
 Copyright 2024 The Kubernetes Authors.
@@ -20,13 +20,17 @@ limitations under the License.
 package validation
 
 import (
-	"k8s.io/apimachinery/pkg/util/validation/field"
-	kubeproxyconfig "k8s.io/kubernetes/pkg/proxy/apis/config"
+	"fmt"
+
+	libcontainercgroups "github.com/opencontainers/runc/libcontainer/cgroups"
+	kubeletconfig "k8s.io/kubernetes/pkg/kubelet/apis/config"
 )
 
-var (
-	osKubeProxyConfigTestCases = map[string]struct {
-		mutateConfigFunc func(*kubeproxyconfig.KubeProxyConfiguration)
-		expectedErrs     field.ErrorList
-	}{}
-)
+// validateKubeletOSConfiguration validates os specific kubelet configuration and returns an error if it is invalid.
+func validateKubeletOSConfiguration(kc *kubeletconfig.KubeletConfiguration) error {
+	if kc.FailCgroupV1 && !libcontainercgroups.IsCgroup2UnifiedMode() {
+		return fmt.Errorf("kubelet is configured to not run on a host using cgroup v1. cgroup v1 support is in maintenance mode")
+	}
+
+	return nil
+}
