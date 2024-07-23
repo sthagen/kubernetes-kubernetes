@@ -235,7 +235,17 @@ const (
 	// alpha: v1.26
 	//
 	// Enables support for resources with custom parameters and a lifecycle
-	// that is independent of a Pod.
+	// that is independent of a Pod. Resource allocation is done by a DRA driver's
+	// "control plane controller" in cooperation with the scheduler.
+	DRAControlPlaneController featuregate.Feature = "DRAControlPlaneController"
+
+	// owner: @pohly
+	// kep: http://kep.k8s.io/4381
+	// alpha: v1.29
+	//
+	// Enables support for resources with custom parameters and a lifecycle
+	// that is independent of a Pod. Resource allocation is done by the scheduler
+	// based on "structured parameters".
 	DynamicResourceAllocation featuregate.Feature = "DynamicResourceAllocation"
 
 	// owner: @harche
@@ -801,6 +811,7 @@ const (
 	// owner: @psch
 	// alpha: v1.26
 	// beta: v1.27
+	// stable: v1.31
 	//
 	// Enables a StatefulSet to start from an arbitrary non zero ordinal
 	StatefulSetStartOrdinal featuregate.Feature = "StatefulSetStartOrdinal"
@@ -1061,6 +1072,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	DevicePluginCDIDevices: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.33
 
+	DRAControlPlaneController: {Default: false, PreRelease: featuregate.Alpha},
+
 	DynamicResourceAllocation: {Default: false, PreRelease: featuregate.Alpha},
 
 	EventedPLEG: {Default: false, PreRelease: featuregate.Alpha},
@@ -1205,7 +1218,7 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	StatefulSetAutoDeletePVC: {Default: true, PreRelease: featuregate.Beta},
 
-	StatefulSetStartOrdinal: {Default: true, PreRelease: featuregate.Beta},
+	StatefulSetStartOrdinal: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // GA in 1.31, remove in 1.33
 
 	StorageVersionMigrator: {Default: false, PreRelease: featuregate.Alpha},
 
