@@ -1660,7 +1660,13 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 		// Introduce some small jittering to ensure that over time the requests won't start
 		// accumulating at approximately the same time from the set of nodes due to priority and
 		// fairness effect.
-		go wait.JitterUntil(kl.syncNodeStatus, kl.nodeStatusUpdateFrequency, 0.04, true, wait.NeverStop)
+		go func() {
+			// Call updateRuntimeUp once before syncNodeStatus to make sure kubelet had already checked runtime state
+			// otherwise when restart kubelet, syncNodeStatus will report node notReady in first report period
+			kl.updateRuntimeUp()
+			wait.JitterUntil(kl.syncNodeStatus, kl.nodeStatusUpdateFrequency, 0.04, true, wait.NeverStop)
+		}()
+
 		go kl.fastStatusUpdateOnce()
 
 		// start syncing lease
@@ -2473,6 +2479,23 @@ func (kl *Kubelet) syncLoopIteration(ctx context.Context, configCh <-chan kubety
 			status = "started"
 		}
 		handleProbeSync(kl, update, handler, "startup", status)
+	case update := <-kl.containerManager.Updates():
+		pods := []*v1.Pod{}
+		for _, p := range update.PodUIDs {
+			if pod, ok := kl.podManager.GetPodByUID(types.UID(p)); ok {
+				klog.V(3).InfoS("SyncLoop (containermanager): event for pod", "pod", klog.KObj(pod), "event", update)
+				pods = append(pods, pod)
+			} else {
+				// If the pod no longer exists, ignore the event.
+				klog.V(4).InfoS("SyncLoop (containermanager): pod does not exist, ignore devices updates", "event", update)
+			}
+		}
+		if len(pods) > 0 {
+			// Updating the pod by syncing it again
+			// We do not apply the optimization by updating the status directly, but can do it later
+			handler.HandlePodSyncs(pods)
+		}
+
 	case <-housekeepingCh:
 		if !kl.sourcesReady.AllReady() {
 			// If the sources aren't ready or volume manager has not yet synced the states,

@@ -49,10 +49,10 @@ func (o *imagePlugin) GetPluginName() string                           { return 
 func (o *imagePlugin) GetVolumeName(spec *volume.Spec) (string, error) { return o.spec.Name(), nil }
 
 func (o *imagePlugin) CanSupport(spec *volume.Spec) bool {
-	return spec.Volume.Image != nil
+	return spec != nil && spec.Volume != nil && spec.Volume.Image != nil
 }
 
-func (o *imagePlugin) NewMounter(spec *volume.Spec, podRef *v1.Pod, opts volume.VolumeOptions) (volume.Mounter, error) {
+func (o *imagePlugin) NewMounter(spec *volume.Spec, podRef *v1.Pod) (volume.Mounter, error) {
 	return o, nil
 }
 
