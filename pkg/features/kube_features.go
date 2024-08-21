@@ -84,14 +84,6 @@ const (
 	// Requires AuthorizeWithSelectors to be enabled.
 	AuthorizeNodeWithSelectors featuregate.Feature = "AuthorizeNodeWithSelectors"
 
-	// owner: @danwinship
-	// alpha: v1.27
-	// beta: v1.29
-	// GA: v1.30
-	//
-	// Enables dual-stack --node-ip in kubelet with external cloud providers
-	CloudDualStackNodeIPs featuregate.Feature = "CloudDualStackNodeIPs"
-
 	// owner: @ahmedtd
 	// alpha: v1.26
 	//
@@ -780,15 +772,6 @@ const (
 	// Enables kubelet support to size memory backed volumes
 	SizeMemoryBackedVolumes featuregate.Feature = "SizeMemoryBackedVolumes"
 
-	// owner: @alexanderConstantinescu
-	// kep: http://kep.k8s.io/3458
-	// beta: v1.27
-	// GA: v1.30
-	//
-	// Enables less load balancer re-configurations by the service controller
-	// (KCCM) as an effect of changing node state.
-	StableLoadBalancerNodeSet featuregate.Feature = "StableLoadBalancerNodeSet"
-
 	// owner: @mattcary
 	// alpha: v1.22
 	// beta: v1.27
@@ -1025,8 +1008,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	AuthorizeNodeWithSelectors: {Default: false, PreRelease: featuregate.Alpha},
 
-	CloudDualStackNodeIPs: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.32
-
 	ClusterTrustBundle: {Default: false, PreRelease: featuregate.Alpha},
 
 	ClusterTrustBundleProjection: {Default: false, PreRelease: featuregate.Alpha},
@@ -1192,8 +1173,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	SidecarContainers: {Default: true, PreRelease: featuregate.Beta},
 
 	SizeMemoryBackedVolumes: {Default: true, PreRelease: featuregate.Beta},
-
-	StableLoadBalancerNodeSet: {Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // GA in 1.30, remove in 1.32
 
 	StatefulSetAutoDeletePVC: {Default: true, PreRelease: featuregate.Beta},
 
