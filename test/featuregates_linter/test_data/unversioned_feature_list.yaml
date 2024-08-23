@@ -622,12 +622,6 @@
     lockToDefault: false
     preRelease: Beta
     version: ""
-- name: RelaxedEnvironmentVariableValidation
-  versionedSpecs:
-  - default: false
-    lockToDefault: false
-    preRelease: Alpha
-    version: ""
 - name: ReloadKubeletServerCertificateFile
   versionedSpecs:
   - default: true
@@ -873,12 +867,6 @@
   - default: false
     lockToDefault: false
     preRelease: Beta
-    version: ""
-- name: ValidatingAdmissionPolicy
-  versionedSpecs:
-  - default: true
-    lockToDefault: true
-    preRelease: GA
     version: ""
 - name: VolumeAttributesClass
   versionedSpecs:
