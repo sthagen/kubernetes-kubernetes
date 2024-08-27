@@ -102,6 +102,15 @@ performance.
 During interactive debugging sessions it is possible to enable per-test output
 via -use-testing-log.
 
+Log output can be quite large, in particular when running the large benchmarks
+and when not using -use-testing-log. For benchmarks, we want to produce that
+log output in a realistic way (= write to disk using the normal logging
+backends) and only capture the output of a specific test as part of the job
+results when that test failed. Therefore each test redirects its own output if
+the ARTIFACTS env variable is set to a `$ARTIFACTS/<test name>.log` file and
+removes that file only if the test passed.
+
+
 ### Integration tests
 
 To run integration tests, use:
@@ -158,7 +167,7 @@ the ci-benchmark-scheduler-perf periodic job will fail with an error log such as
 ```
 --- FAIL: BenchmarkPerfScheduling/SchedulingBasic/5000Nodes_10000Pods
     ...
-    scheduler_perf.go:1098: ERROR: op 2: expected SchedulingThroughput Average to be higher: got 256.12, want 270
+    scheduler_perf.go:1098: ERROR: op 2: SchedulingBasic/5000Nodes_10000Pods/namespace-2: expected SchedulingThroughput Average to be higher: got 256.12, want 270
 ```
 
 This allows to analyze which workload failed. Make sure that the failure is not an outlier 
