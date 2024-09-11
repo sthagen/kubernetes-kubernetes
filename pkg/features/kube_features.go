@@ -266,13 +266,6 @@ const (
 	// Lock to default and remove after v1.22 based on user feedback that should be reflected in KEP #1972 update
 	ExecProbeTimeout featuregate.Feature = "ExecProbeTimeout"
 
-	// owner: @jpbetz
-	// alpha: v1.30
-	// beta: v1.31
-	// Resource create requests using generateName are retried automatically by the apiserver
-	// if the generated name conflicts with an existing resource name, up to a maximum number of 7 retries.
-	RetryGenerateName featuregate.Feature = "RetryGenerateName"
-
 	// owner: @bobbypage
 	// alpha: v1.20
 	// beta:  v1.21
@@ -471,15 +464,6 @@ const (
 	// Enables kubelet to support memory QoS with cgroups v2.
 	MemoryQoS featuregate.Feature = "MemoryQoS"
 
-	// owner: @sanposhiho
-	// kep: https://kep.k8s.io/3022
-	// alpha: v1.24
-	// beta: v1.25
-	// GA: v1.30
-	//
-	// Enable MinDomains in Pod Topology Spread.
-	MinDomainsInPodTopologySpread featuregate.Feature = "MinDomainsInPodTopologySpread"
-
 	// owner: @aojea
 	// kep: https://kep.k8s.io/1880
 	// alpha: v1.27
@@ -511,15 +495,6 @@ const (
 	//
 	// Enables querying logs of node services using the /logs endpoint
 	NodeLogQuery featuregate.Feature = "NodeLogQuery"
-
-	// owner: @xing-yang @sonasingh46
-	// kep: https://kep.k8s.io/2268
-	// alpha: v1.24
-	// beta: v1.26
-	// GA: v1.28
-	//
-	// Allow pods to failover to a different node in case of non graceful node shutdown
-	NodeOutOfServiceVolumeDetach featuregate.Feature = "NodeOutOfServiceVolumeDetach"
 
 	// owner: @iholder101 @kannon92
 	// kep: https://kep.k8s.io/2400
@@ -1028,6 +1003,8 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 
 	genericfeatures.ResilientWatchCacheInitialization: {Default: true, PreRelease: featuregate.Beta},
 
+	genericfeatures.RetryGenerateName: {Default: true, PreRelease: featuregate.Beta},
+
 	genericfeatures.SeparateCacheWatchRPC: {Default: true, PreRelease: featuregate.Beta},
 
 	genericfeatures.StorageVersionAPI: {Default: false, PreRelease: featuregate.Alpha},
@@ -1066,8 +1043,6 @@ var defaultKubernetesFeatureGates = map[featuregate.Feature]featuregate.FeatureS
 	CloudControllerManagerWebhook: {Default: false, PreRelease: featuregate.Alpha},
 
 	InPlacePodVerticalScaling: {Default: false, PreRelease: featuregate.Alpha},
-
-	RetryGenerateName: {Default: true, PreRelease: featuregate.Beta},
 
 	// features that enable backwards compatibility but are scheduled to be removed
 	// ...
