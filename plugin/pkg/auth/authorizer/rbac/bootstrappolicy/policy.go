@@ -389,17 +389,6 @@ func ClusterRoles() []rbacv1.ClusterRole {
 			},
 		},
 		{
-			// a role to use for full access to the kubelet API
-			ObjectMeta: metav1.ObjectMeta{Name: "system:kubelet-api-admin"},
-			Rules: []rbacv1.PolicyRule{
-				// Allow read-only access to the Node API objects
-				rbacv1helpers.NewRule("get", "list", "watch").Groups(legacyGroup).Resources("nodes").RuleOrDie(),
-				// Allow all API calls to the nodes
-				rbacv1helpers.NewRule("proxy").Groups(legacyGroup).Resources("nodes").RuleOrDie(),
-				rbacv1helpers.NewRule("*").Groups(legacyGroup).Resources("nodes/proxy", "nodes/metrics", "nodes/stats", "nodes/log").RuleOrDie(),
-			},
-		},
-		{
 			// a role to use for bootstrapping a node's client certificates
 			ObjectMeta: metav1.ObjectMeta{Name: "system:node-bootstrapper"},
 			Rules: []rbacv1.PolicyRule{
@@ -530,6 +519,25 @@ func ClusterRoles() []rbacv1.ClusterRole {
 		},
 	})
 
+	// Add the cluster role system:kubelet-api-admin
+	kubeletAPIAdminRules := []rbacv1.PolicyRule{
+		// Allow read-only access to the Node API objects
+		rbacv1helpers.NewRule("get", "list", "watch").Groups(legacyGroup).Resources("nodes").RuleOrDie(),
+		// Allow all API calls to the nodes
+		rbacv1helpers.NewRule("proxy").Groups(legacyGroup).Resources("nodes").RuleOrDie(),
+		rbacv1helpers.NewRule("*").Groups(legacyGroup).Resources("nodes/proxy", "nodes/metrics", "nodes/stats", "nodes/log").RuleOrDie(),
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.KubeletFineGrainedAuthz) {
+		kubeletAPIAdminRules = append(kubeletAPIAdminRules, rbacv1helpers.NewRule("*").Groups(legacyGroup).Resources("nodes/pods", "nodes/healthz", "nodes/configz").RuleOrDie())
+	}
+
+	roles = append(roles, rbacv1.ClusterRole{
+		// a role to use for full access to the kubelet API
+		ObjectMeta: metav1.ObjectMeta{Name: "system:kubelet-api-admin"},
+		Rules:      kubeletAPIAdminRules,
+	})
+
 	// node-proxier role is used by kube-proxy.
 	nodeProxierRules := []rbacv1.PolicyRule{
 		rbacv1helpers.NewRule("list", "watch").Groups(legacyGroup).Resources("services", "endpoints").RuleOrDie(),
@@ -583,8 +591,6 @@ func ClusterRoles() []rbacv1.ClusterRole {
 			rbacv1helpers.NewRule(Read...).Groups(resourceGroup).Resources("deviceclasses").RuleOrDie(),
 			rbacv1helpers.NewRule(ReadUpdate...).Groups(resourceGroup).Resources("resourceclaims").RuleOrDie(),
 			rbacv1helpers.NewRule(ReadUpdate...).Groups(resourceGroup).Resources("resourceclaims/status").RuleOrDie(),
-			rbacv1helpers.NewRule(ReadWrite...).Groups(resourceGroup).Resources("podschedulingcontexts").RuleOrDie(),
-			rbacv1helpers.NewRule(Read...).Groups(resourceGroup).Resources("podschedulingcontexts/status").RuleOrDie(),
 			rbacv1helpers.NewRule(ReadUpdate...).Groups(legacyGroup).Resources("pods/finalizers").RuleOrDie(),
 			rbacv1helpers.NewRule(Read...).Groups(resourceGroup).Resources("resourceslices").RuleOrDie(),
 		)

@@ -195,14 +195,6 @@ const (
 	DisableNodeKubeProxyVersion featuregate.Feature = "DisableNodeKubeProxyVersion"
 
 	// owner: @pohly
-	// kep: http://kep.k8s.io/3063
-	//
-	// Enables support for resources with custom parameters and a lifecycle
-	// that is independent of a Pod. Resource allocation is done by a DRA driver's
-	// "control plane controller" in cooperation with the scheduler.
-	DRAControlPlaneController featuregate.Feature = "DRAControlPlaneController"
-
-	// owner: @pohly
 	// kep: http://kep.k8s.io/4381
 	//
 	// Enables support for resources with custom parameters and a lifecycle
@@ -264,6 +256,8 @@ const (
 
 	// owner: @mimowo
 	// kep: https://kep.k8s.io/4368
+	// alpha: v1.30
+	// beta: v1.32
 	//
 	// Allows to delegate reconciliation of a Job object to an external controller.
 	JobManagedBy featuregate.Feature = "JobManagedBy"
@@ -298,6 +292,13 @@ const (
 	// configuration option. If runtime doesn't support it, the kubelet will
 	// fallback to using it's cgroupDriver option.
 	KubeletCgroupDriverFromCRI featuregate.Feature = "KubeletCgroupDriverFromCRI"
+
+	// owner: @vinayakankugoyal
+	// kep: http://kep.k8s.io/2862
+	//
+	// Enable fine-grained kubelet API authorization for webhook based
+	// authorization.
+	KubeletFineGrainedAuthz featuregate.Feature = "KubeletFineGrainedAuthz"
 
 	// owner: @AkihiroSuda
 	//
