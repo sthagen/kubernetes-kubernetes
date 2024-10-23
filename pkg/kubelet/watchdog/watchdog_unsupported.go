@@ -17,9 +17,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package inuserns
+package watchdog
 
-// RunningInUserNS detects whether the current process is running in a user namespace.
-func RunningInUserNS() bool {
-	return false
+type healthCheckerUnsupported struct{}
+
+var _ HealthChecker = &healthCheckerUnsupported{}
+
+// NewHealthChecker creates a fake one here
+func NewHealthChecker(_ syncLoopHealthChecker) (HealthChecker, error) {
+	return &healthCheckerUnsupported{}, nil
+}
+
+func (ow *healthCheckerUnsupported) Start() {
+	return
 }

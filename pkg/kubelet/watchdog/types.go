@@ -14,11 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package inuserns
+package watchdog
 
-import libcontaineruserns "github.com/opencontainers/runc/libcontainer/userns"
+import "net/http"
 
-// RunningInUserNS detects whether the current process is running in a user namespace.
-func RunningInUserNS() bool {
-	return libcontaineruserns.RunningInUserNS()
+// HealthChecker defines the interface of health checkers.
+type HealthChecker interface {
+	Start()
+}
+
+// syncLoopHealthChecker contains the health check method for syncLoop.
+type syncLoopHealthChecker interface {
+	SyncLoopHealthCheck(req *http.Request) error
 }
