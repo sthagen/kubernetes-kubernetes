@@ -71,7 +71,6 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	utilflowcontrol "k8s.io/apiserver/pkg/util/flowcontrol"
 	flowcontrolrequest "k8s.io/apiserver/pkg/util/flowcontrol/request"
-	utilversion "k8s.io/apiserver/pkg/util/version"
 	"k8s.io/client-go/informers"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/component-base/featuregate"
@@ -79,6 +78,7 @@ import (
 	"k8s.io/component-base/metrics/features"
 	"k8s.io/component-base/metrics/prometheus/slis"
 	"k8s.io/component-base/tracing"
+	utilversion "k8s.io/component-base/version"
 	"k8s.io/klog/v2"
 	openapicommon "k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/spec3"
@@ -742,7 +742,7 @@ func (c *RecommendedConfig) Complete() CompletedConfig {
 	return c.Config.Complete(c.SharedInformerFactory)
 }
 
-var allowedMediaTypes = []string{
+var defaultAllowedMediaTypes = []string{
 	runtime.ContentTypeJSON,
 	runtime.ContentTypeYAML,
 	runtime.ContentTypeProtobuf,
@@ -754,6 +754,10 @@ var allowedMediaTypes = []string{
 func (c completedConfig) New(name string, delegationTarget DelegationTarget) (*GenericAPIServer, error) {
 	if c.Serializer == nil {
 		return nil, fmt.Errorf("Genericapiserver.New() called with config.Serializer == nil")
+	}
+	allowedMediaTypes := defaultAllowedMediaTypes
+	if utilfeature.TestOnlyFeatureGate.Enabled(genericfeatures.TestOnlyCBORServingAndStorage) {
+		allowedMediaTypes = append(allowedMediaTypes, runtime.ContentTypeCBOR)
 	}
 	for _, info := range c.Serializer.SupportedMediaTypes() {
 		var ok bool

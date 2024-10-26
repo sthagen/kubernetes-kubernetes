@@ -34,8 +34,8 @@ import (
 	statsapi "k8s.io/kubelet/pkg/apis/stats/v1alpha1"
 	"k8s.io/utils/clock"
 
+	resourcehelper "k8s.io/component-helpers/resource"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
-	resourcehelper "k8s.io/kubernetes/pkg/api/v1/resource"
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 	"k8s.io/kubernetes/pkg/features"
 	evictionapi "k8s.io/kubernetes/pkg/kubelet/eviction/api"
@@ -252,17 +252,13 @@ func (m *managerImpl) synchronize(diskInfoProvider DiskInfoProvider, podFunc Act
 	// build the ranking functions (if not yet known)
 	// TODO: have a function in cadvisor that lets us know if global housekeeping has completed
 	if m.dedicatedImageFs == nil {
-		hasImageFs, imageFsErr := diskInfoProvider.HasDedicatedImageFs(ctx)
-		if imageFsErr != nil {
-			klog.ErrorS(imageFsErr, "Eviction manager: failed to get HasDedicatedImageFs")
-			return nil, fmt.Errorf("eviction manager: failed to get HasDedicatedImageFs: %w", imageFsErr)
+		hasImageFs, splitDiskError := diskInfoProvider.HasDedicatedImageFs(ctx)
+		if splitDiskError != nil {
+			klog.ErrorS(splitDiskError, "Eviction manager: failed to get HasDedicatedImageFs")
+			return nil, fmt.Errorf("eviction manager: failed to get HasDedicatedImageFs: %w", splitDiskError)
 		}
 		m.dedicatedImageFs = &hasImageFs
-		splitContainerImageFs, splitErr := diskInfoProvider.HasDedicatedContainerFs(ctx)
-		if splitErr != nil {
-			klog.ErrorS(splitErr, "Eviction manager: failed to get HasDedicatedContainerFs")
-			return nil, fmt.Errorf("eviction manager: failed to get HasDedicatedContainerFs: %w", splitErr)
-		}
+		splitContainerImageFs := m.containerGC.IsContainerFsSeparateFromImageFs(ctx)
 
 		// If we are a split filesystem but the feature is turned off
 		// we should return an error.
