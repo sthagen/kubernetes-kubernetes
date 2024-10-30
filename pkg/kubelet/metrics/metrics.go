@@ -32,6 +32,7 @@ import (
 const (
 	FirstNetworkPodStartSLIDurationKey = "first_network_pod_start_sli_duration_seconds"
 	KubeletSubsystem                   = "kubelet"
+	DRASubsystem                       = "dra"
 	NodeNameKey                        = "node_name"
 	NodeLabelKey                       = "node"
 	NodeStartupPreKubeletKey           = "node_startup_pre_kubelet_duration_seconds"
@@ -108,8 +109,10 @@ const (
 	ManagedEphemeralContainersKey = "managed_ephemeral_containers"
 
 	// Metrics to track the CPU manager behavior
-	CPUManagerPinningRequestsTotalKey = "cpu_manager_pinning_requests_total"
-	CPUManagerPinningErrorsTotalKey   = "cpu_manager_pinning_errors_total"
+	CPUManagerPinningRequestsTotalKey         = "cpu_manager_pinning_requests_total"
+	CPUManagerPinningErrorsTotalKey           = "cpu_manager_pinning_errors_total"
+	CPUManagerSharedPoolSizeMilliCoresKey     = "cpu_manager_shared_pool_size_millicores"
+	CPUManagerExclusiveCPUsAllocationCountKey = "cpu_manager_exclusive_cpu_allocation_count"
 
 	// Metrics to track the Memory manager behavior
 	MemoryManagerPinningRequestsTotalKey = "memory_manager_pinning_requests_total"
@@ -131,6 +134,10 @@ const (
 	ContainerAlignedComputeResourcesNameKey          = "container_aligned_compute_resources_count"
 	ContainerAlignedComputeResourcesScopeLabelKey    = "scope"
 	ContainerAlignedComputeResourcesBoundaryLabelKey = "boundary"
+
+	// Metric keys for DRA operations
+	DRAOperationsDurationKey     = "operations_duration_seconds"
+	DRAGRPCOperationsDurationKey = "grpc_operations_duration_seconds"
 
 	// Values used in metric labels
 	Container          = "container"
@@ -168,6 +175,11 @@ var (
 		{60 * 1024 * 1024 * 1024, "60GB-100GB"},
 		{100 * 1024 * 1024 * 1024, "GT100GB"},
 	}
+	// DRADurationBuckets is the bucket boundaries for DRA operation duration metrics
+	// DRAOperationsDuration and DRAGRPCOperationsDuration defined below in this file.
+	// The buckets max value 40 is based on the 45sec max gRPC timeout value defined
+	// for the DRA gRPC calls in the pkg/kubelet/cm/dra/plugin/registration.go
+	DRADurationBuckets = metrics.ExponentialBucketsRange(.1, 40, 15)
 )
 
 var (
@@ -773,6 +785,27 @@ var (
 		},
 	)
 
+	// CPUManagerSharedPoolSizeMilliCores reports the current size of the shared CPU pool for non-guaranteed pods
+	CPUManagerSharedPoolSizeMilliCores = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           CPUManagerSharedPoolSizeMilliCoresKey,
+			Help:           "The size of the shared CPU pool for non-guaranteed QoS pods, in millicores.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	// CPUManagerExclusiveCPUsAllocationCount reports the total number of CPUs exclusively allocated to containers running on this node
+	CPUManagerExclusiveCPUsAllocationCount = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           CPUManagerExclusiveCPUsAllocationCountKey,
+			Help:           "The total number of CPUs exclusively allocated to containers running on this node",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	// ContainerAlignedComputeResources reports the count of resources allocation which granted aligned resources, per alignment boundary
 	ContainerAlignedComputeResources = metrics.NewCounterVec(
 		&metrics.CounterOpts{
 			Subsystem:      KubeletSubsystem,
@@ -782,7 +815,6 @@ var (
 		},
 		[]string{ContainerAlignedComputeResourcesScopeLabelKey, ContainerAlignedComputeResourcesBoundaryLabelKey},
 	)
-
 	// MemoryManagerPinningRequestTotal tracks the number of times the pod spec required the memory manager to pin memory pages
 	MemoryManagerPinningRequestTotal = metrics.NewCounter(
 		&metrics.CounterOpts{
@@ -938,6 +970,30 @@ var (
 			StabilityLevel: metrics.ALPHA,
 		},
 	)
+
+	// DRAOperationsDuration tracks the duration of the DRA PrepareResources and UnprepareResources requests.
+	DRAOperationsDuration = metrics.NewHistogramVec(
+		&metrics.HistogramOpts{
+			Subsystem:      DRASubsystem,
+			Name:           DRAOperationsDurationKey,
+			Help:           "Latency histogram in seconds for the duration of handling all ResourceClaims referenced by a pod when the pod starts or stops. Identified by the name of the operation (PrepareResources or UnprepareResources) and separated by the success of the operation. The number of failed operations is provided through the histogram's overall count.",
+			Buckets:        DRADurationBuckets,
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"operation_name", "is_error"},
+	)
+
+	// DRAGRPCOperationsDuration tracks the duration of the DRA GRPC operations.
+	DRAGRPCOperationsDuration = metrics.NewHistogramVec(
+		&metrics.HistogramOpts{
+			Subsystem:      DRASubsystem,
+			Name:           DRAGRPCOperationsDurationKey,
+			Help:           "Duration in seconds of the DRA gRPC operations",
+			Buckets:        DRADurationBuckets,
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"driver_name", "method_name", "grpc_status_code"},
+	)
 )
 
 var registerMetrics sync.Once
@@ -1006,6 +1062,8 @@ func Register(collectors ...metrics.StableCollector) {
 		legacyregistry.MustRegister(RunPodSandboxErrors)
 		legacyregistry.MustRegister(CPUManagerPinningRequestsTotal)
 		legacyregistry.MustRegister(CPUManagerPinningErrorsTotal)
+		legacyregistry.MustRegister(CPUManagerSharedPoolSizeMilliCores)
+		legacyregistry.MustRegister(CPUManagerExclusiveCPUsAllocationCount)
 		legacyregistry.MustRegister(ContainerAlignedComputeResources)
 		if utilfeature.DefaultFeatureGate.Enabled(features.MemoryManager) {
 			legacyregistry.MustRegister(MemoryManagerPinningRequestTotal)
@@ -1030,6 +1088,11 @@ func Register(collectors ...metrics.StableCollector) {
 		legacyregistry.MustRegister(LifecycleHandlerHTTPFallbacks)
 		legacyregistry.MustRegister(LifecycleHandlerSleepTerminated)
 		legacyregistry.MustRegister(CgroupVersion)
+
+		if utilfeature.DefaultFeatureGate.Enabled(features.DynamicResourceAllocation) {
+			legacyregistry.MustRegister(DRAOperationsDuration)
+			legacyregistry.MustRegister(DRAGRPCOperationsDuration)
+		}
 	})
 }
 

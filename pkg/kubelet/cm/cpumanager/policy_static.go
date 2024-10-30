@@ -194,6 +194,7 @@ func (p *staticPolicy) Start(s state.State) error {
 		klog.ErrorS(err, "Static policy invalid state, please drain node and remove policy state file")
 		return err
 	}
+	p.initializeMetrics(s)
 	return nil
 }
 
@@ -201,14 +202,19 @@ func (p *staticPolicy) validateState(s state.State) error {
 	tmpAssignments := s.GetCPUAssignments()
 	tmpDefaultCPUset := s.GetDefaultCPUSet()
 
+	allCPUs := p.topology.CPUDetails.CPUs()
+	if p.options.StrictCPUReservation {
+		allCPUs = allCPUs.Difference(p.reservedCPUs)
+	}
+
 	// Default cpuset cannot be empty when assignments exist
 	if tmpDefaultCPUset.IsEmpty() {
 		if len(tmpAssignments) != 0 {
 			return fmt.Errorf("default cpuset cannot be empty")
 		}
 		// state is empty initialize
-		allCPUs := p.topology.CPUDetails.CPUs()
 		s.SetDefaultCPUSet(allCPUs)
+		klog.InfoS("Static policy initialized", "defaultCPUSet", allCPUs)
 		return nil
 	}
 
@@ -216,9 +222,16 @@ func (p *staticPolicy) validateState(s state.State) error {
 	// 1. Check if the reserved cpuset is not part of default cpuset because:
 	// - kube/system reserved have changed (increased) - may lead to some containers not being able to start
 	// - user tampered with file
-	if !p.reservedCPUs.Intersection(tmpDefaultCPUset).Equals(p.reservedCPUs) {
-		return fmt.Errorf("not all reserved cpus: \"%s\" are present in defaultCpuSet: \"%s\"",
-			p.reservedCPUs.String(), tmpDefaultCPUset.String())
+	if p.options.StrictCPUReservation {
+		if !p.reservedCPUs.Intersection(tmpDefaultCPUset).IsEmpty() {
+			return fmt.Errorf("some of strictly reserved cpus: \"%s\" are present in defaultCpuSet: \"%s\"",
+				p.reservedCPUs.Intersection(tmpDefaultCPUset).String(), tmpDefaultCPUset.String())
+		}
+	} else {
+		if !p.reservedCPUs.Intersection(tmpDefaultCPUset).Equals(p.reservedCPUs) {
+			return fmt.Errorf("not all reserved cpus: \"%s\" are present in defaultCpuSet: \"%s\"",
+				p.reservedCPUs.String(), tmpDefaultCPUset.String())
+		}
 	}
 
 	// 2. Check if state for static policy is consistent
@@ -247,9 +260,10 @@ func (p *staticPolicy) validateState(s state.State) error {
 		}
 	}
 	totalKnownCPUs = totalKnownCPUs.Union(tmpCPUSets...)
-	if !totalKnownCPUs.Equals(p.topology.CPUDetails.CPUs()) {
+	if !totalKnownCPUs.Equals(allCPUs) {
 		return fmt.Errorf("current set of available CPUs \"%s\" doesn't match with CPUs in state \"%s\"",
-			p.topology.CPUDetails.CPUs().String(), totalKnownCPUs.String())
+			allCPUs.String(), totalKnownCPUs.String())
+
 	}
 
 	return nil
@@ -370,8 +384,10 @@ func (p *staticPolicy) Allocate(s state.State, pod *v1.Pod, container *v1.Contai
 		klog.ErrorS(err, "Unable to allocate CPUs", "pod", klog.KObj(pod), "containerName", container.Name, "numCPUs", numCPUs)
 		return err
 	}
+
 	s.SetCPUSet(string(pod.UID), container.Name, cpuset)
 	p.updateCPUsToReuse(pod, container, cpuset)
+	p.updateMetricsOnAllocate(cpuset)
 
 	return nil
 }
@@ -397,6 +413,7 @@ func (p *staticPolicy) RemoveContainer(s state.State, podUID string, containerNa
 		// Mutate the shared pool, adding released cpus.
 		toRelease = toRelease.Difference(cpusInUse)
 		s.SetDefaultCPUSet(s.GetDefaultCPUSet().Union(toRelease))
+		p.updateMetricsOnRelease(toRelease)
 	}
 	return nil
 }
@@ -719,4 +736,31 @@ func (p *staticPolicy) getAlignedCPUs(numaAffinity bitmask.BitMask, allocatableC
 	}
 
 	return alignedCPUs
+}
+
+func (p *staticPolicy) initializeMetrics(s state.State) {
+	metrics.CPUManagerSharedPoolSizeMilliCores.Set(float64(p.GetAvailableCPUs(s).Size() * 1000))
+	metrics.CPUManagerExclusiveCPUsAllocationCount.Set(float64(countExclusiveCPUs(s)))
+}
+
+func (p *staticPolicy) updateMetricsOnAllocate(cset cpuset.CPUSet) {
+	ncpus := cset.Size()
+	metrics.CPUManagerExclusiveCPUsAllocationCount.Add(float64(ncpus))
+	metrics.CPUManagerSharedPoolSizeMilliCores.Add(float64(-ncpus * 1000))
+}
+
+func (p *staticPolicy) updateMetricsOnRelease(cset cpuset.CPUSet) {
+	ncpus := cset.Size()
+	metrics.CPUManagerExclusiveCPUsAllocationCount.Add(float64(-ncpus))
+	metrics.CPUManagerSharedPoolSizeMilliCores.Add(float64(ncpus * 1000))
+}
+
+func countExclusiveCPUs(s state.State) int {
+	exclusiveCPUs := 0
+	for _, cpuAssign := range s.GetCPUAssignments() {
+		for _, cset := range cpuAssign {
+			exclusiveCPUs += cset.Size()
+		}
+	}
+	return exclusiveCPUs
 }
