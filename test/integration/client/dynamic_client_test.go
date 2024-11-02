@@ -17,9 +17,11 @@ limitations under the License.
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"testing"
@@ -32,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	cbor "k8s.io/apimachinery/pkg/runtime/serializer/cbor/direct"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
@@ -137,6 +140,59 @@ func TestDynamicClientWatch(t *testing.T) {
 		t.Fatalf("unexpected error creating dynamic client: %v", err)
 	}
 
+	testDynamicClientWatch(t, client, dynamicClient)
+}
+
+func TestDynamicClientWatchWithCBOR(t *testing.T) {
+	framework.EnableCBORServingAndStorageForTest(t)
+	framework.SetTestOnlyCBORClientFeatureGatesForTest(t, true, true)
+
+	result := kubeapiservertesting.StartTestServerOrDie(t, nil, framework.DefaultTestServerFlags(), framework.SharedEtcd())
+	defer result.TearDownFn()
+
+	client := clientset.NewForConfigOrDie(result.ClientConfig)
+	dynamicClientConfig := rest.CopyConfig(result.ClientConfig)
+	dynamicClientConfig.Wrap(framework.AssertRequestResponseAsCBOR(t))
+	dynamicClientConfig.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+		return roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+			response, rterr := rt.RoundTrip(request)
+			if rterr != nil {
+				return response, rterr
+			}
+
+			// We can't synchronously inspect streaming responses, so tee to a buffer
+			// and inspect it at the end of the test.
+			var buf bytes.Buffer
+			response.Body = struct {
+				io.Reader
+				io.Closer
+			}{
+				Reader: io.TeeReader(response.Body, &buf),
+				Closer: response.Body,
+			}
+			t.Cleanup(func() {
+				var event metav1.WatchEvent
+				if err := cbor.Unmarshal(buf.Bytes(), &event); err != nil {
+					t.Errorf("non-cbor event: 0x%x", buf.Bytes())
+					return
+				}
+				if err := cbor.Unmarshal(event.Object.Raw, new(interface{})); err != nil {
+					t.Errorf("non-cbor event object: 0x%x", buf.Bytes())
+				}
+			})
+
+			return response, rterr
+		})
+	})
+	dynamicClient, err := dynamic.NewForConfig(dynamicClientConfig)
+	if err != nil {
+		t.Fatalf("unexpected error creating dynamic client: %v", err)
+	}
+
+	testDynamicClientWatch(t, client, dynamicClient)
+}
+
+func testDynamicClientWatch(t *testing.T, client clientset.Interface, dynamicClient dynamic.Interface) {
 	resource := corev1.SchemeGroupVersion.WithResource("events")
 
 	mkEvent := func(i int) *corev1.Event {
@@ -531,5 +587,51 @@ func TestDynamicClientCBOREnablement(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestUnsupportedMediaTypeCircuitBreakerDynamicClient(t *testing.T) {
+	framework.SetTestOnlyCBORClientFeatureGatesForTest(t, true, true)
+
+	server := kubeapiservertesting.StartTestServerOrDie(t, nil, framework.DefaultTestServerFlags(), framework.SharedEtcd())
+	t.Cleanup(server.TearDownFn)
+
+	config := rest.CopyConfig(server.ClientConfig)
+
+	client, err := dynamic.NewForConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := client.Resource(corev1.SchemeGroupVersion.WithResource("namespaces")).Create(
+		context.TODO(),
+		&unstructured.Unstructured{Object: map[string]interface{}{"metadata": map[string]interface{}{"name": "test-dynamic-client-415"}}},
+		metav1.CreateOptions{DryRun: []string{metav1.DryRunAll}},
+	); !errors.IsUnsupportedMediaType(err) {
+		t.Errorf("expected to receive unsupported media type on first cbor request, got: %v", err)
+	}
+
+	// Requests from this client should fall back from application/cbor to application/json.
+	if _, err := client.Resource(corev1.SchemeGroupVersion.WithResource("namespaces")).Create(
+		context.TODO(),
+		&unstructured.Unstructured{Object: map[string]interface{}{"metadata": map[string]interface{}{"name": "test-dynamic-client-415"}}},
+		metav1.CreateOptions{DryRun: []string{metav1.DryRunAll}},
+	); err != nil {
+		t.Errorf("expected to receive nil error on subsequent cbor request, got: %v", err)
+	}
+
+	// The circuit breaker trips on a per-client basis, so it should not begin tripped for a
+	// fresh client with identical config.
+	client, err = dynamic.NewForConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := client.Resource(corev1.SchemeGroupVersion.WithResource("namespaces")).Create(
+		context.TODO(),
+		&unstructured.Unstructured{Object: map[string]interface{}{"metadata": map[string]interface{}{"name": "test-dynamic-client-415"}}},
+		metav1.CreateOptions{DryRun: []string{metav1.DryRunAll}},
+	); !errors.IsUnsupportedMediaType(err) {
+		t.Errorf("expected to receive unsupported media type on cbor request with fresh client, got: %v", err)
 	}
 }
