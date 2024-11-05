@@ -111,9 +111,6 @@ github.com/cyphar/filepath-securejoin
 # github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 ## explicit
 github.com/davecgh/go-spew/spew
-# github.com/daviddengcn/go-colortext v1.0.0
-## explicit; go 1.14
-github.com/daviddengcn/go-colortext
 # github.com/distribution/reference v0.6.0
 ## explicit; go 1.20
 github.com/distribution/reference
@@ -1132,10 +1129,10 @@ k8s.io/kube-openapi/pkg/validation/validate
 ## explicit; go 1.23.0
 # k8s.io/sample-apiserver v0.0.0 => ./staging/src/k8s.io/sample-apiserver
 ## explicit; go 1.23.0
-# k8s.io/system-validators v1.8.0
+# k8s.io/system-validators v1.9.1
 ## explicit; go 1.16
 k8s.io/system-validators/validators
-# k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
+# k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 ## explicit; go 1.18
 k8s.io/utils/buffer
 k8s.io/utils/clock

@@ -348,11 +348,6 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.32"), Default: true, PreRelease: featuregate.Beta},
 	},
 
-	genericfeatures.ZeroLimitedNominalConcurrencyShares: {
-		{Version: version.MustParse("1.29"), Default: false, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.30"), Default: true, PreRelease: featuregate.GA, LockToDefault: true},
-	},
-
 	GracefulNodeShutdown: {
 		{Version: version.MustParse("1.20"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.21"), Default: true, PreRelease: featuregate.Beta},
@@ -496,6 +491,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	MemoryManager: {
 		{Version: version.MustParse("1.21"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.22"), Default: true, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.32"), Default: true, PreRelease: featuregate.GA, LockToDefault: true},
 	},
 
 	MemoryQoS: {
@@ -563,11 +559,13 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	PodIndexLabel: {
 		{Version: version.MustParse("1.28"), Default: true, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.32"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.35
 	},
 
 	PodLifecycleSleepAction: {
 		{Version: version.MustParse("1.29"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.30"), Default: true, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.32"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.35 when this version cannot be emulated any longer
 	},
 	PodReadyToStartContainersCondition: {
 		{Version: version.MustParse("1.28"), Default: false, PreRelease: featuregate.Alpha},
@@ -598,6 +596,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	RecoverVolumeExpansionFailure: {
 		{Version: version.MustParse("1.23"), Default: false, PreRelease: featuregate.Alpha},
+		{Version: version.MustParse("1.32"), Default: true, PreRelease: featuregate.Beta},
 	},
 	RecursiveReadOnlyMounts: {
 		{Version: version.MustParse("1.30"), Default: false, PreRelease: featuregate.Alpha},
@@ -632,6 +631,10 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	SchedulerQueueingHints: {
 		{Version: version.MustParse("1.28"), Default: false, PreRelease: featuregate.Beta},
+	},
+
+	SELinuxChangePolicy: {
+		{Version: version.MustParse("1.32"), Default: false, PreRelease: featuregate.Alpha},
 	},
 
 	SELinuxMount: {
@@ -769,6 +772,10 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	WinOverlay: {
 		{Version: version.MustParse("1.14"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.20"), Default: true, PreRelease: featuregate.Beta},
+	},
+
+	WindowsCPUAndMemoryAffinity: {
+		{Version: version.MustParse("1.32"), Default: false, PreRelease: featuregate.Alpha},
 	},
 
 	WindowsHostNetwork: {

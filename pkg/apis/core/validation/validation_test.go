@@ -3066,19 +3066,21 @@ func TestValidationOptionsForPersistentVolumeClaim(t *testing.T) {
 		"nil pv": {
 			oldPvc: nil,
 			expectValidationOpts: PersistentVolumeClaimSpecValidationOptions{
-				EnableRecoverFromExpansionFailure: false,
+				EnableRecoverFromExpansionFailure: true,
 				EnableVolumeAttributesClass:       false,
 			},
 		},
 		"invaild apiGroup in dataSource allowed because the old pvc is used": {
 			oldPvc: pvcWithDataSource(&core.TypedLocalObjectReference{APIGroup: &invaildAPIGroup}),
 			expectValidationOpts: PersistentVolumeClaimSpecValidationOptions{
+				EnableRecoverFromExpansionFailure:     true,
 				AllowInvalidAPIGroupInDataSourceOrRef: true,
 			},
 		},
 		"invaild apiGroup in dataSourceRef allowed because the old pvc is used": {
 			oldPvc: pvcWithDataSourceRef(&core.TypedObjectReference{APIGroup: &invaildAPIGroup}),
 			expectValidationOpts: PersistentVolumeClaimSpecValidationOptions{
+				EnableRecoverFromExpansionFailure:     true,
 				AllowInvalidAPIGroupInDataSourceOrRef: true,
 			},
 		},
@@ -3086,7 +3088,7 @@ func TestValidationOptionsForPersistentVolumeClaim(t *testing.T) {
 			oldPvc:                      pvcWithVolumeAttributesClassName(utilpointer.String("foo")),
 			enableVolumeAttributesClass: true,
 			expectValidationOpts: PersistentVolumeClaimSpecValidationOptions{
-				EnableRecoverFromExpansionFailure: false,
+				EnableRecoverFromExpansionFailure: true,
 				EnableVolumeAttributesClass:       true,
 			},
 		},
@@ -3094,7 +3096,7 @@ func TestValidationOptionsForPersistentVolumeClaim(t *testing.T) {
 			oldPvc:                      pvcWithVolumeAttributesClassName(utilpointer.String("foo")),
 			enableVolumeAttributesClass: false,
 			expectValidationOpts: PersistentVolumeClaimSpecValidationOptions{
-				EnableRecoverFromExpansionFailure: false,
+				EnableRecoverFromExpansionFailure: true,
 				EnableVolumeAttributesClass:       true,
 			},
 		},
@@ -20583,6 +20585,7 @@ func TestValidateOSFields(t *testing.T) {
 		"SecurityContext.RunAsGroup",
 		"SecurityContext.RunAsUser",
 		"SecurityContext.SELinuxOptions",
+		"SecurityContext.SELinuxChangePolicy",
 		"SecurityContext.SeccompProfile",
 		"SecurityContext.ShareProcessNamespace",
 		"SecurityContext.SupplementalGroups",
@@ -25023,6 +25026,81 @@ func TestValidateContainerStatusAllocatedResourcesStatus(t *testing.T) {
 			if diff := cmp.Diff(tt.wantFieldErrors, errs); diff != "" {
 				t.Errorf("unexpected field errors (-want, +got):\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestValidateSELinuxChangePolicy(t *testing.T) {
+	tests := []struct {
+		name               string
+		pod                *core.Pod
+		allowOnlyRecursive bool
+		wantErrs           field.ErrorList
+	}{
+		{
+			name: "nil is valid",
+			pod: podtest.MakePod("pod", podtest.SetSecurityContext(&core.PodSecurityContext{
+				SELinuxChangePolicy: nil,
+			})),
+			allowOnlyRecursive: false,
+			wantErrs:           nil,
+		},
+		{
+			name: "Recursive is always valid",
+			pod: podtest.MakePod("pod", podtest.SetSecurityContext(&core.PodSecurityContext{
+				SELinuxChangePolicy: ptr.To(core.SELinuxChangePolicyRecursive),
+			})),
+			allowOnlyRecursive: false,
+			wantErrs:           nil,
+		},
+		{
+			name: "MountOption is not valid when AllowOnlyRecursiveSELinuxChangePolicy",
+			pod: podtest.MakePod("pod", podtest.SetSecurityContext(&core.PodSecurityContext{
+				SELinuxChangePolicy: ptr.To(core.SELinuxChangePolicyMountOption),
+			})),
+			allowOnlyRecursive: true,
+			wantErrs: field.ErrorList{
+				field.NotSupported(
+					field.NewPath("spec", "securityContext", "seLinuxChangePolicy"),
+					core.PodSELinuxChangePolicy("MountOption"),
+					[]string{"Recursive"}),
+			},
+		},
+		{
+			name: "MountOption is valid when not AllowOnlyRecursiveSELinuxChangePolicy",
+			pod: podtest.MakePod("pod", podtest.SetSecurityContext(&core.PodSecurityContext{
+				SELinuxChangePolicy: ptr.To(core.SELinuxChangePolicyMountOption),
+			})),
+			allowOnlyRecursive: false,
+			wantErrs:           nil,
+		},
+		{
+			name: "invalid value",
+			pod: podtest.MakePod("pod", podtest.SetSecurityContext(&core.PodSecurityContext{
+				SELinuxChangePolicy: ptr.To(core.PodSELinuxChangePolicy("InvalidValue")),
+			})),
+			allowOnlyRecursive: false,
+			wantErrs: field.ErrorList{
+				field.NotSupported(field.NewPath("spec", "securityContext", "seLinuxChangePolicy"),
+					core.PodSELinuxChangePolicy("InvalidValue"),
+					[]string{"MountOption", "Recursive"}),
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := PodValidationOptions{
+				AllowOnlyRecursiveSELinuxChangePolicy: tc.allowOnlyRecursive,
+			}
+			errs := ValidatePodSpec(&tc.pod.Spec, &tc.pod.ObjectMeta, field.NewPath("spec"), opts)
+			if len(errs) == 0 {
+				errs = nil
+			}
+			if diff := cmp.Diff(tc.wantErrs, errs); diff != "" {
+				t.Errorf("unexpected field errors (-want, +got):\n%s", diff)
+			}
+
 		})
 	}
 }

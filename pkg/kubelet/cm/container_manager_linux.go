@@ -46,6 +46,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	utilsysctl "k8s.io/component-helpers/node/util/sysctl"
 	internalapi "k8s.io/cri-api/pkg/apis"
+	pluginwatcherapi "k8s.io/kubelet/pkg/apis/pluginregistration/v1"
 	podresourcesapi "k8s.io/kubelet/pkg/apis/podresources/v1"
 	kubefeatures "k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
@@ -132,6 +133,8 @@ type containerManagerImpl struct {
 	topologyManager topologymanager.Manager
 	// Interface for Dynamic Resource Allocation management.
 	draManager dra.Manager
+	// kubeClient is the interface to the Kubernetes API server. May be nil if the kubelet is running in standalone mode.
+	kubeClient clientset.Interface
 }
 
 type features struct {
@@ -312,6 +315,7 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 			return nil, err
 		}
 	}
+	cm.kubeClient = kubeClient
 
 	// Initialize CPU manager
 	cm.cpuManager, err = cpumanager.NewManager(
@@ -330,21 +334,19 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 	}
 	cm.topologyManager.AddHintProvider(cm.cpuManager)
 
-	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.MemoryManager) {
-		cm.memoryManager, err = memorymanager.NewManager(
-			nodeConfig.ExperimentalMemoryManagerPolicy,
-			machineInfo,
-			cm.GetNodeAllocatableReservation(),
-			nodeConfig.ExperimentalMemoryManagerReservedMemory,
-			nodeConfig.KubeletRootDir,
-			cm.topologyManager,
-		)
-		if err != nil {
-			klog.ErrorS(err, "Failed to initialize memory manager")
-			return nil, err
-		}
-		cm.topologyManager.AddHintProvider(cm.memoryManager)
+	cm.memoryManager, err = memorymanager.NewManager(
+		nodeConfig.ExperimentalMemoryManagerPolicy,
+		machineInfo,
+		cm.GetNodeAllocatableReservation(),
+		nodeConfig.ExperimentalMemoryManagerReservedMemory,
+		nodeConfig.KubeletRootDir,
+		cm.topologyManager,
+	)
+	if err != nil {
+		klog.ErrorS(err, "Failed to initialize memory manager")
+		return nil, err
 	}
+	cm.topologyManager.AddHintProvider(cm.memoryManager)
 
 	return cm, nil
 }
@@ -555,6 +557,7 @@ func (cm *containerManagerImpl) Status() Status {
 
 func (cm *containerManagerImpl) Start(ctx context.Context, node *v1.Node,
 	activePods ActivePodsFunc,
+	getNode GetNodeFunc,
 	sourcesReady config.SourcesReady,
 	podStatusProvider status.PodStatusProvider,
 	runtimeService internalapi.RuntimeService,
@@ -564,7 +567,7 @@ func (cm *containerManagerImpl) Start(ctx context.Context, node *v1.Node,
 
 	// Initialize DRA manager
 	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.DynamicResourceAllocation) {
-		err := cm.draManager.Start(ctx, dra.ActivePodsFunc(activePods), sourcesReady)
+		err := cm.draManager.Start(ctx, dra.ActivePodsFunc(activePods), dra.GetNodeFunc(getNode), sourcesReady)
 		if err != nil {
 			return fmt.Errorf("start dra manager error: %w", err)
 		}
@@ -573,16 +576,13 @@ func (cm *containerManagerImpl) Start(ctx context.Context, node *v1.Node,
 	// Initialize CPU manager
 	err := cm.cpuManager.Start(cpumanager.ActivePodsFunc(activePods), sourcesReady, podStatusProvider, runtimeService, containerMap)
 	if err != nil {
-		return fmt.Errorf("start cpu manager error: %v", err)
+		return fmt.Errorf("start cpu manager error: %w", err)
 	}
 
 	// Initialize memory manager
-	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.MemoryManager) {
-		containerMap, _ := buildContainerMapAndRunningSetFromRuntime(ctx, runtimeService)
-		err := cm.memoryManager.Start(memorymanager.ActivePodsFunc(activePods), sourcesReady, podStatusProvider, runtimeService, containerMap)
-		if err != nil {
-			return fmt.Errorf("start memory manager error: %v", err)
-		}
+	err = cm.memoryManager.Start(memorymanager.ActivePodsFunc(activePods), sourcesReady, podStatusProvider, runtimeService, containerMap)
+	if err != nil {
+		return fmt.Errorf("start memory manager error: %w", err)
 	}
 
 	// cache the node Info including resource capacity and
@@ -649,8 +649,16 @@ func (cm *containerManagerImpl) Start(ctx context.Context, node *v1.Node,
 	return nil
 }
 
-func (cm *containerManagerImpl) GetPluginRegistrationHandler() cache.PluginHandler {
-	return cm.deviceManager.GetWatcherHandler()
+func (cm *containerManagerImpl) GetPluginRegistrationHandlers() map[string]cache.PluginHandler {
+	res := map[string]cache.PluginHandler{
+		pluginwatcherapi.DevicePlugin: cm.deviceManager.GetWatcherHandler(),
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.DynamicResourceAllocation) {
+		res[pluginwatcherapi.DRAPlugin] = cm.draManager.GetWatcherHandler()
+	}
+
+	return res
 }
 
 // TODO: move the GetResources logic to PodContainerManager.
@@ -910,14 +918,6 @@ func (cm *containerManagerImpl) GetDevices(podUID, containerName string) []*podr
 
 func (cm *containerManagerImpl) GetAllocatableDevices() []*podresourcesapi.ContainerDevices {
 	return containerDevicesFromResourceDeviceInstances(cm.deviceManager.GetAllocatableDevices())
-}
-
-func int64Slice(in []int) []int64 {
-	out := make([]int64, len(in))
-	for i := range in {
-		out[i] = int64(in[i])
-	}
-	return out
 }
 
 func (cm *containerManagerImpl) GetCPUs(podUID, containerName string) []int64 {

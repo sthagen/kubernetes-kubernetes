@@ -31,7 +31,6 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 	github.com/golang/protobuf v1.5.4
 	github.com/google/cadvisor v0.51.0
 	github.com/google/cel-go v0.21.0
@@ -116,8 +115,8 @@ require (
 	k8s.io/mount-utils v0.0.0
 	k8s.io/pod-security-admission v0.0.0
 	k8s.io/sample-apiserver v0.0.0
-	k8s.io/system-validators v1.8.0
-	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
+	k8s.io/system-validators v1.9.1
+	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 	sigs.k8s.io/knftables v0.0.17
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.2
 	sigs.k8s.io/yaml v1.4.0
@@ -140,7 +139,6 @@ require (
 	github.com/coredns/caddy v1.1.1 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/daviddengcn/go-colortext v1.0.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
@@ -155,6 +153,7 @@ require (
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
+	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/btree v1.0.1 // indirect
 	github.com/google/pprof v0.0.0-20241029153458-d1b30febd7db // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect

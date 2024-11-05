@@ -46,7 +46,7 @@ type containerManagerStub struct {
 
 var _ ContainerManager = &containerManagerStub{}
 
-func (cm *containerManagerStub) Start(_ context.Context, _ *v1.Node, _ ActivePodsFunc, _ config.SourcesReady, _ status.PodStatusProvider, _ internalapi.RuntimeService, _ bool) error {
+func (cm *containerManagerStub) Start(_ context.Context, _ *v1.Node, _ ActivePodsFunc, _ GetNodeFunc, _ config.SourcesReady, _ status.PodStatusProvider, _ internalapi.RuntimeService, _ bool) error {
 	klog.V(2).InfoS("Starting stub container manager")
 	return nil
 }
@@ -91,7 +91,7 @@ func (cm *containerManagerStub) GetCapacity(localStorageCapacityIsolation bool) 
 	return c
 }
 
-func (cm *containerManagerStub) GetPluginRegistrationHandler() cache.PluginHandler {
+func (cm *containerManagerStub) GetPluginRegistrationHandlers() map[string]cache.PluginHandler {
 	return nil
 }
 
@@ -103,7 +103,7 @@ func (m *podContainerManagerStub) GetPodCgroupConfig(_ *v1.Pod, _ v1.ResourceNam
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *podContainerManagerStub) SetPodCgroupConfig(_ *v1.Pod, _ v1.ResourceName, _ *ResourceConfig) error {
+func (m *podContainerManagerStub) SetPodCgroupConfig(pod *v1.Pod, resourceConfig *ResourceConfig) error {
 	return fmt.Errorf("not implemented")
 }
 

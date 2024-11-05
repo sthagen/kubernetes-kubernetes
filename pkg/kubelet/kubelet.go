@@ -81,7 +81,6 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/cloudresource"
 	"k8s.io/kubernetes/pkg/kubelet/clustertrustbundle"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
-	draplugin "k8s.io/kubernetes/pkg/kubelet/cm/dra/plugin"
 	"k8s.io/kubernetes/pkg/kubelet/config"
 	"k8s.io/kubernetes/pkg/kubelet/configmap"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
@@ -145,8 +144,11 @@ const (
 	// DefaultContainerLogsDir is the location of container logs.
 	DefaultContainerLogsDir = "/var/log/containers"
 
-	// MaxContainerBackOff is the max backoff period, exported for the e2e test
+	// MaxContainerBackOff is the max backoff period for container restarts, exported for the e2e test
 	MaxContainerBackOff = 300 * time.Second
+
+	// MaxImageBackOff is the max backoff period for image pulls, exported for the e2e test
+	MaxImageBackOff = 300 * time.Second
 
 	// Period for performing global cleanup tasks.
 	housekeepingPeriod = time.Second * 2
@@ -190,9 +192,14 @@ const (
 	eventedPlegMaxStreamRetries = 5
 
 	// backOffPeriod is the period to back off when pod syncing results in an
-	// error. It is also used as the base period for the exponential backoff
-	// container restarts and image pulls.
+	// error.
 	backOffPeriod = time.Second * 10
+
+	// Initial period for the exponential backoff for container restarts.
+	containerBackOffPeriod = time.Second * 10
+
+	// Initial period for the exponential backoff for image pulls.
+	imageBackOffPeriod = time.Second * 10
 
 	// ContainerGCPeriod is the period for performing container garbage collection.
 	ContainerGCPeriod = time.Minute
@@ -616,7 +623,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	machineInfo.Timestamp = time.Time{}
 	klet.setCachedMachineInfo(machineInfo)
 
-	imageBackOff := flowcontrol.NewBackOff(backOffPeriod, MaxContainerBackOff)
+	imageBackOff := flowcontrol.NewBackOff(imageBackOffPeriod, MaxImageBackOff)
 
 	klet.livenessManager = proberesults.NewManager()
 	klet.readinessManager = proberesults.NewManager()
@@ -875,7 +882,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		kubeDeps.Recorder,
 		volumepathhandler.NewBlockVolumePathHandler())
 
-	klet.backOff = flowcontrol.NewBackOff(backOffPeriod, MaxContainerBackOff)
+	klet.backOff = flowcontrol.NewBackOff(containerBackOffPeriod, MaxContainerBackOff)
 
 	// setup eviction manager
 	evictionManager, evictionAdmitHandler := eviction.NewManager(klet.resourceAnalyzer, evictionConfig,
@@ -1575,7 +1582,7 @@ func (kl *Kubelet) initializeRuntimeDependentModules() {
 		os.Exit(1)
 	}
 	// containerManager must start after cAdvisor because it needs filesystem capacity information
-	if err := kl.containerManager.Start(context.TODO(), node, kl.GetActivePods, kl.sourcesReady, kl.statusManager, kl.runtimeService, kl.supportLocalStorageCapacityIsolation()); err != nil {
+	if err := kl.containerManager.Start(context.TODO(), node, kl.GetActivePods, kl.getNodeAnyWay, kl.sourcesReady, kl.statusManager, kl.runtimeService, kl.supportLocalStorageCapacityIsolation()); err != nil {
 		// Fail kubelet and rely on the babysitter to retry starting kubelet.
 		klog.ErrorS(err, "Failed to start ContainerManager")
 		os.Exit(1)
@@ -1589,12 +1596,10 @@ func (kl *Kubelet) initializeRuntimeDependentModules() {
 	kl.containerLogManager.Start()
 	// Adding Registration Callback function for CSI Driver
 	kl.pluginManager.AddHandler(pluginwatcherapi.CSIPlugin, plugincache.PluginHandler(csi.PluginHandler))
-	// Adding Registration Callback function for DRA Plugin
-	if utilfeature.DefaultFeatureGate.Enabled(features.DynamicResourceAllocation) {
-		kl.pluginManager.AddHandler(pluginwatcherapi.DRAPlugin, plugincache.PluginHandler(draplugin.NewRegistrationHandler(kl.kubeClient, kl.getNodeAnyWay)))
+	// Adding Registration Callback function for DRA Plugin and Device Plugin
+	for name, handler := range kl.containerManager.GetPluginRegistrationHandlers() {
+		kl.pluginManager.AddHandler(name, handler)
 	}
-	// Adding Registration Callback function for Device Manager
-	kl.pluginManager.AddHandler(pluginwatcherapi.DevicePlugin, kl.containerManager.GetPluginRegistrationHandler())
 
 	// Start the plugin manager
 	klog.V(4).InfoS("Starting plugin manager")
