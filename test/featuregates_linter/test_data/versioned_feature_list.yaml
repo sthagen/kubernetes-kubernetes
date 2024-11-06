@@ -164,6 +164,18 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.32"
+- name: BtreeWatchCache
+  versionedSpecs:
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.32"
+- name: CBORServingAndStorage
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.32"
 - name: CloudControllerManagerWebhook
   versionedSpecs:
   - default: false
@@ -466,20 +478,6 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.31"
-- name: HPAContainerMetrics
-  versionedSpecs:
-  - default: false
-    lockToDefault: false
-    preRelease: Alpha
-    version: "1.20"
-  - default: true
-    lockToDefault: false
-    preRelease: Beta
-    version: "1.27"
-  - default: true
-    lockToDefault: true
-    preRelease: GA
-    version: "1.30"
 - name: HPAScaleToZero
   versionedSpecs:
   - default: false
@@ -508,6 +506,12 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.27"
+- name: InPlacePodVerticalScalingAllocatedStatus
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.32"
 - name: InTreePluginPortworxUnregister
   versionedSpecs:
   - default: false
@@ -751,7 +755,7 @@
   - default: false
     lockToDefault: false
     preRelease: Alpha
-    version: "1.30"
+    version: "1.32"
 - name: NFTablesProxyMode
   versionedSpecs:
   - default: false
@@ -1294,12 +1298,6 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.32"
-- name: TestOnlyCBORServingAndStorage
-  versionedSpecs:
-  - default: false
-    lockToDefault: false
-    preRelease: Alpha
-    version: "1.32"
 - name: TopologyAwareHints
   versionedSpecs:
   - default: false
@@ -1439,6 +1437,12 @@
     preRelease: Beta
     version: "1.32"
 - name: WindowsCPUAndMemoryAffinity
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.32"
+- name: WindowsGracefulNodeShutdown
   versionedSpecs:
   - default: false
     lockToDefault: false

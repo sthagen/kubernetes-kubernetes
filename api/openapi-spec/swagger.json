@@ -866,6 +866,16 @@
       },
       "type": "object"
     },
+    "io.k8s.api.admissionregistration.v1alpha1.ApplyConfiguration": {
+      "description": "ApplyConfiguration defines the desired configuration values of an object.",
+      "properties": {
+        "expression": {
+          "description": "expression will be evaluated by CEL to create an apply configuration. ref: https://github.com/google/cel-spec\n\nApply configurations are declared in CEL using object initialization. For example, this CEL expression returns an apply configuration to set a single field:\n\n\tObject{\n\t  spec: Object.spec{\n\t    serviceAccountName: \"example\"\n\t  }\n\t}\n\nApply configurations may not modify atomic structs, maps or arrays due to the risk of accidental deletion of values not included in the apply configuration.\n\nCEL expressions have access to the object types needed to create apply configurations:\n\n- 'Object' - CEL type of the resource object. - 'Object.<fieldName>' - CEL type of object field (such as 'Object.spec') - 'Object.<fieldName1>.<fieldName2>...<fieldNameN>` - CEL type of nested field (such as 'Object.spec.containers')\n\nCEL expressions have access to the contents of the API request, organized into CEL variables as well as some other useful variables:\n\n- 'object' - The object from the incoming request. The value is null for DELETE requests. - 'oldObject' - The existing object. The value is null for CREATE requests. - 'request' - Attributes of the API request([ref](/pkg/apis/admission/types.go#AdmissionRequest)). - 'params' - Parameter resource referred to by the policy binding being evaluated. Only populated if the policy has a ParamKind. - 'namespaceObject' - The namespace object that the incoming object belongs to. The value is null for cluster-scoped resources. - 'variables' - Map of composited variables, from its name to its lazily evaluated value.\n  For example, a variable named 'foo' can be accessed as 'variables.foo'.\n- 'authorizer' - A CEL Authorizer. May be used to perform authorization checks for the principal (user or service account) of the request.\n  See https://pkg.go.dev/k8s.io/apiserver/pkg/cel/library#Authz\n- 'authorizer.requestResource' - A CEL ResourceCheck constructed from the 'authorizer' and configured with the\n  request resource.\n\nThe `apiVersion`, `kind`, `metadata.name` and `metadata.generateName` are always accessible from the root of the object. No other metadata properties are accessible.\n\nOnly property names of the form `[a-zA-Z_.-/][a-zA-Z0-9_.-/]*` are accessible. Required.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "io.k8s.api.admissionregistration.v1alpha1.AuditAnnotation": {
       "description": "AuditAnnotation describes how to produce an audit annotation for an API request.",
       "properties": {
@@ -900,6 +910,16 @@
         "fieldRef",
         "warning"
       ],
+      "type": "object"
+    },
+    "io.k8s.api.admissionregistration.v1alpha1.JSONPatch": {
+      "description": "JSONPatch defines a JSON Patch.",
+      "properties": {
+        "expression": {
+          "description": "expression will be evaluated by CEL to create a [JSON patch](https://jsonpatch.com/). ref: https://github.com/google/cel-spec\n\nexpression must return an array of JSONPatch values.\n\nFor example, this CEL expression returns a JSON patch to conditionally modify a value:\n\n\t  [\n\t    JSONPatch{op: \"test\", path: \"/spec/example\", value: \"Red\"},\n\t    JSONPatch{op: \"replace\", path: \"/spec/example\", value: \"Green\"}\n\t  ]\n\nTo define an object for the patch value, use Object types. For example:\n\n\t  [\n\t    JSONPatch{\n\t      op: \"add\",\n\t      path: \"/spec/selector\",\n\t      value: Object.spec.selector{matchLabels: {\"environment\": \"test\"}}\n\t    }\n\t  ]\n\nTo use strings containing '/' and '~' as JSONPatch path keys, use \"jsonpatch.escapeKey\". For example:\n\n\t  [\n\t    JSONPatch{\n\t      op: \"add\",\n\t      path: \"/metadata/labels/\" + jsonpatch.escapeKey(\"example.com/environment\"),\n\t      value: \"test\"\n\t    },\n\t  ]\n\nCEL expressions have access to the types needed to create JSON patches and objects:\n\n- 'JSONPatch' - CEL type of JSON Patch operations. JSONPatch has the fields 'op', 'from', 'path' and 'value'.\n  See [JSON patch](https://jsonpatch.com/) for more details. The 'value' field may be set to any of: string,\n  integer, array, map or object.  If set, the 'path' and 'from' fields must be set to a\n  [JSON pointer](https://datatracker.ietf.org/doc/html/rfc6901/) string, where the 'jsonpatch.escapeKey()' CEL\n  function may be used to escape path keys containing '/' and '~'.\n- 'Object' - CEL type of the resource object. - 'Object.<fieldName>' - CEL type of object field (such as 'Object.spec') - 'Object.<fieldName1>.<fieldName2>...<fieldNameN>` - CEL type of nested field (such as 'Object.spec.containers')\n\nCEL expressions have access to the contents of the API request, organized into CEL variables as well as some other useful variables:\n\n- 'object' - The object from the incoming request. The value is null for DELETE requests. - 'oldObject' - The existing object. The value is null for CREATE requests. - 'request' - Attributes of the API request([ref](/pkg/apis/admission/types.go#AdmissionRequest)). - 'params' - Parameter resource referred to by the policy binding being evaluated. Only populated if the policy has a ParamKind. - 'namespaceObject' - The namespace object that the incoming object belongs to. The value is null for cluster-scoped resources. - 'variables' - Map of composited variables, from its name to its lazily evaluated value.\n  For example, a variable named 'foo' can be accessed as 'variables.foo'.\n- 'authorizer' - A CEL Authorizer. May be used to perform authorization checks for the principal (user or service account) of the request.\n  See https://pkg.go.dev/k8s.io/apiserver/pkg/cel/library#Authz\n- 'authorizer.requestResource' - A CEL ResourceCheck constructed from the 'authorizer' and configured with the\n  request resource.\n\nCEL expressions have access to [Kubernetes CEL function libraries](https://kubernetes.io/docs/reference/using-api/cel/#cel-options-language-features-and-libraries) as well as:\n\n- 'jsonpatch.escapeKey' - Performs JSONPatch key escaping. '~' and  '/' are escaped as '~0' and `~1' respectively).\n\nOnly property names of the form `[a-zA-Z_.-/][a-zA-Z0-9_.-/]*` are accessible. Required.",
+          "type": "string"
+        }
+      },
       "type": "object"
     },
     "io.k8s.api.admissionregistration.v1alpha1.MatchCondition": {
@@ -953,6 +973,224 @@
       },
       "type": "object",
       "x-kubernetes-map-type": "atomic"
+    },
+    "io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicy": {
+      "description": "MutatingAdmissionPolicy describes the definition of an admission mutation policy that mutates the object coming into admission chain.",
+      "properties": {
+        "apiVersion": {
+          "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
+          "description": "Standard object metadata; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata."
+        },
+        "spec": {
+          "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicySpec",
+          "description": "Specification of the desired behavior of the MutatingAdmissionPolicy."
+        }
+      },
+      "type": "object",
+      "x-kubernetes-group-version-kind": [
+        {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicy",
+          "version": "v1alpha1"
+        }
+      ]
+    },
+    "io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBinding": {
+      "description": "MutatingAdmissionPolicyBinding binds the MutatingAdmissionPolicy with parametrized resources. MutatingAdmissionPolicyBinding and the optional parameter resource together define how cluster administrators configure policies for clusters.\n\nFor a given admission request, each binding will cause its policy to be evaluated N times, where N is 1 for policies/bindings that don't use params, otherwise N is the number of parameters selected by the binding. Each evaluation is constrained by a [runtime cost budget](https://kubernetes.io/docs/reference/using-api/cel/#runtime-cost-budget).\n\nAdding/removing policies, bindings, or params can not affect whether a given (policy, binding, param) combination is within its own CEL budget.",
+      "properties": {
+        "apiVersion": {
+          "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
+          "description": "Standard object metadata; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata."
+        },
+        "spec": {
+          "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBindingSpec",
+          "description": "Specification of the desired behavior of the MutatingAdmissionPolicyBinding."
+        }
+      },
+      "type": "object",
+      "x-kubernetes-group-version-kind": [
+        {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicyBinding",
+          "version": "v1alpha1"
+        }
+      ]
+    },
+    "io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBindingList": {
+      "description": "MutatingAdmissionPolicyBindingList is a list of MutatingAdmissionPolicyBinding.",
+      "properties": {
+        "apiVersion": {
+          "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+          "type": "string"
+        },
+        "items": {
+          "description": "List of PolicyBinding.",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBinding"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta",
+          "description": "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object",
+      "x-kubernetes-group-version-kind": [
+        {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicyBindingList",
+          "version": "v1alpha1"
+        }
+      ]
+    },
+    "io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBindingSpec": {
+      "description": "MutatingAdmissionPolicyBindingSpec is the specification of the MutatingAdmissionPolicyBinding.",
+      "properties": {
+        "matchResources": {
+          "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MatchResources",
+          "description": "matchResources limits what resources match this binding and may be mutated by it. Note that if matchResources matches a resource, the resource must also match a policy's matchConstraints and matchConditions before the resource may be mutated. When matchResources is unset, it does not constrain resource matching, and only the policy's matchConstraints and matchConditions must match for the resource to be mutated. Additionally, matchResources.resourceRules are optional and do not constraint matching when unset. Note that this is differs from MutatingAdmissionPolicy matchConstraints, where resourceRules are required. The CREATE, UPDATE and CONNECT operations are allowed.  The DELETE operation may not be matched. '*' matches CREATE, UPDATE and CONNECT."
+        },
+        "paramRef": {
+          "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ParamRef",
+          "description": "paramRef specifies the parameter resource used to configure the admission control policy. It should point to a resource of the type specified in spec.ParamKind of the bound MutatingAdmissionPolicy. If the policy specifies a ParamKind and the resource referred to by ParamRef does not exist, this binding is considered mis-configured and the FailurePolicy of the MutatingAdmissionPolicy applied. If the policy does not specify a ParamKind then this field is ignored, and the rules are evaluated without a param."
+        },
+        "policyName": {
+          "description": "policyName references a MutatingAdmissionPolicy name which the MutatingAdmissionPolicyBinding binds to. If the referenced resource does not exist, this binding is considered invalid and will be ignored Required.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyList": {
+      "description": "MutatingAdmissionPolicyList is a list of MutatingAdmissionPolicy.",
+      "properties": {
+        "apiVersion": {
+          "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+          "type": "string"
+        },
+        "items": {
+          "description": "List of ValidatingAdmissionPolicy.",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicy"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta",
+          "description": "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object",
+      "x-kubernetes-group-version-kind": [
+        {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicyList",
+          "version": "v1alpha1"
+        }
+      ]
+    },
+    "io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicySpec": {
+      "description": "MutatingAdmissionPolicySpec is the specification of the desired behavior of the admission policy.",
+      "properties": {
+        "failurePolicy": {
+          "description": "failurePolicy defines how to handle failures for the admission policy. Failures can occur from CEL expression parse errors, type check errors, runtime errors and invalid or mis-configured policy definitions or bindings.\n\nA policy is invalid if paramKind refers to a non-existent Kind. A binding is invalid if paramRef.name refers to a non-existent resource.\n\nfailurePolicy does not define how validations that evaluate to false are handled.\n\nAllowed values are Ignore or Fail. Defaults to Fail.",
+          "type": "string"
+        },
+        "matchConditions": {
+          "description": "matchConditions is a list of conditions that must be met for a request to be validated. Match conditions filter requests that have already been matched by the matchConstraints. An empty list of matchConditions matches all requests. There are a maximum of 64 match conditions allowed.\n\nIf a parameter object is provided, it can be accessed via the `params` handle in the same manner as validation expressions.\n\nThe exact matching logic is (in order):\n  1. If ANY matchCondition evaluates to FALSE, the policy is skipped.\n  2. If ALL matchConditions evaluate to TRUE, the policy is evaluated.\n  3. If any matchCondition evaluates to an error (but none are FALSE):\n     - If failurePolicy=Fail, reject the request\n     - If failurePolicy=Ignore, the policy is skipped",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MatchCondition"
+          },
+          "type": "array",
+          "x-kubernetes-list-map-keys": [
+            "name"
+          ],
+          "x-kubernetes-list-type": "map",
+          "x-kubernetes-patch-merge-key": "name",
+          "x-kubernetes-patch-strategy": "merge"
+        },
+        "matchConstraints": {
+          "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MatchResources",
+          "description": "matchConstraints specifies what resources this policy is designed to validate. The MutatingAdmissionPolicy cares about a request if it matches _all_ Constraints. However, in order to prevent clusters from being put into an unstable state that cannot be recovered from via the API MutatingAdmissionPolicy cannot match MutatingAdmissionPolicy and MutatingAdmissionPolicyBinding. The CREATE, UPDATE and CONNECT operations are allowed.  The DELETE operation may not be matched. '*' matches CREATE, UPDATE and CONNECT. Required."
+        },
+        "mutations": {
+          "description": "mutations contain operations to perform on matching objects. mutations may not be empty; a minimum of one mutation is required. mutations are evaluated in order, and are reinvoked according to the reinvocationPolicy. The mutations of a policy are invoked for each binding of this policy and reinvocation of mutations occurs on a per binding basis.",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.Mutation"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        },
+        "paramKind": {
+          "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ParamKind",
+          "description": "paramKind specifies the kind of resources used to parameterize this policy. If absent, there are no parameters for this policy and the param CEL variable will not be provided to validation expressions. If paramKind refers to a non-existent kind, this policy definition is mis-configured and the FailurePolicy is applied. If paramKind is specified but paramRef is unset in MutatingAdmissionPolicyBinding, the params variable will be null."
+        },
+        "reinvocationPolicy": {
+          "description": "reinvocationPolicy indicates whether mutations may be called multiple times per MutatingAdmissionPolicyBinding as part of a single admission evaluation. Allowed values are \"Never\" and \"IfNeeded\".\n\nNever: These mutations will not be called more than once per binding in a single admission evaluation.\n\nIfNeeded: These mutations may be invoked more than once per binding for a single admission request and there is no guarantee of order with respect to other admission plugins, admission webhooks, bindings of this policy and admission policies.  Mutations are only reinvoked when mutations change the object after this mutation is invoked. Required.",
+          "type": "string"
+        },
+        "variables": {
+          "description": "variables contain definitions of variables that can be used in composition of other expressions. Each variable is defined as a named CEL expression. The variables defined here will be available under `variables` in other expressions of the policy except matchConditions because matchConditions are evaluated before the rest of the policy.\n\nThe expression of a variable can refer to other variables defined earlier in the list but not those after. Thus, variables must be sorted by the order of first appearance and acyclic.",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.Variable"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "atomic"
+        }
+      },
+      "type": "object"
+    },
+    "io.k8s.api.admissionregistration.v1alpha1.Mutation": {
+      "description": "Mutation specifies the CEL expression which is used to apply the Mutation.",
+      "properties": {
+        "applyConfiguration": {
+          "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ApplyConfiguration",
+          "description": "applyConfiguration defines the desired configuration values of an object. The configuration is applied to the admission object using [structured merge diff](https://github.com/kubernetes-sigs/structured-merge-diff). A CEL expression is used to create apply configuration."
+        },
+        "jsonPatch": {
+          "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.JSONPatch",
+          "description": "jsonPatch defines a [JSON patch](https://jsonpatch.com/) operation to perform a mutation to the object. A CEL expression is used to create the JSON patch."
+        },
+        "patchType": {
+          "description": "patchType indicates the patch strategy used. Allowed values are \"ApplyConfiguration\" and \"JSONPatch\". Required.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "patchType"
+      ],
+      "type": "object"
     },
     "io.k8s.api.admissionregistration.v1alpha1.NamedRuleWithOperations": {
       "description": "NamedRuleWithOperations is a tuple of Operations and Resources with ResourceNames.",
@@ -4325,7 +4563,7 @@
       "properties": {
         "containerResource": {
           "$ref": "#/definitions/io.k8s.api.autoscaling.v2.ContainerResourceMetricSource",
-          "description": "containerResource refers to a resource metric (such as those specified in requests and limits) known to Kubernetes describing a single container in each pod of the current scale target (e.g. CPU or memory). Such metrics are built in to Kubernetes, and have special scaling options on top of those available to normal per-pod metrics using the \"pods\" source. This is an alpha feature and can be enabled by the HPAContainerMetrics feature flag."
+          "description": "containerResource refers to a resource metric (such as those specified in requests and limits) known to Kubernetes describing a single container in each pod of the current scale target (e.g. CPU or memory). Such metrics are built in to Kubernetes, and have special scaling options on top of those available to normal per-pod metrics using the \"pods\" source."
         },
         "external": {
           "$ref": "#/definitions/io.k8s.api.autoscaling.v2.ExternalMetricSource",
@@ -4344,7 +4582,7 @@
           "description": "resource refers to a resource metric (such as those specified in requests and limits) known to Kubernetes describing each pod in the current scale target (e.g. CPU or memory). Such metrics are built in to Kubernetes, and have special scaling options on top of those available to normal per-pod metrics using the \"pods\" source."
         },
         "type": {
-          "description": "type is the type of metric source.  It should be one of \"ContainerResource\", \"External\", \"Object\", \"Pods\" or \"Resource\", each mapping to a matching field in the object. Note: \"ContainerResource\" type is available on when the feature-gate HPAContainerMetrics is enabled",
+          "description": "type is the type of metric source.  It should be one of \"ContainerResource\", \"External\", \"Object\", \"Pods\" or \"Resource\", each mapping to a matching field in the object.",
           "type": "string"
         }
       },
@@ -4377,7 +4615,7 @@
           "description": "resource refers to a resource metric (such as those specified in requests and limits) known to Kubernetes describing each pod in the current scale target (e.g. CPU or memory). Such metrics are built in to Kubernetes, and have special scaling options on top of those available to normal per-pod metrics using the \"pods\" source."
         },
         "type": {
-          "description": "type is the type of metric source.  It will be one of \"ContainerResource\", \"External\", \"Object\", \"Pods\" or \"Resource\", each corresponds to a matching field in the object. Note: \"ContainerResource\" type is available on when the feature-gate HPAContainerMetrics is enabled",
+          "description": "type is the type of metric source.  It will be one of \"ContainerResource\", \"External\", \"Object\", \"Pods\" or \"Resource\", each corresponds to a matching field in the object.",
           "type": "string"
         }
       },
@@ -20667,7 +20905,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ConfigMap",
         "operationId": "patchCoreV1NamespacedConfigMap",
@@ -21152,7 +21391,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified Endpoints",
         "operationId": "patchCoreV1NamespacedEndpoints",
@@ -21637,7 +21877,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified Event",
         "operationId": "patchCoreV1NamespacedEvent",
@@ -22122,7 +22363,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified LimitRange",
         "operationId": "patchCoreV1NamespacedLimitRange",
@@ -22607,7 +22849,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified PersistentVolumeClaim",
         "operationId": "patchCoreV1NamespacedPersistentVolumeClaim",
@@ -22797,7 +23040,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified PersistentVolumeClaim",
         "operationId": "patchCoreV1NamespacedPersistentVolumeClaimStatus",
@@ -23282,7 +23526,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified Pod",
         "operationId": "patchCoreV1NamespacedPod",
@@ -23660,7 +23905,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update ephemeralcontainers of the specified Pod",
         "operationId": "patchCoreV1NamespacedPodEphemeralcontainers",
@@ -24704,7 +24950,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified Pod",
         "operationId": "patchCoreV1NamespacedPodStatus",
@@ -25189,7 +25436,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified PodTemplate",
         "operationId": "patchCoreV1NamespacedPodTemplate",
@@ -25674,7 +25922,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ReplicationController",
         "operationId": "patchCoreV1NamespacedReplicationController",
@@ -25864,7 +26113,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update scale of the specified ReplicationController",
         "operationId": "patchCoreV1NamespacedReplicationControllerScale",
@@ -26054,7 +26304,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified ReplicationController",
         "operationId": "patchCoreV1NamespacedReplicationControllerStatus",
@@ -26539,7 +26790,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ResourceQuota",
         "operationId": "patchCoreV1NamespacedResourceQuota",
@@ -26729,7 +26981,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified ResourceQuota",
         "operationId": "patchCoreV1NamespacedResourceQuotaStatus",
@@ -27214,7 +27467,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified Secret",
         "operationId": "patchCoreV1NamespacedSecret",
@@ -27699,7 +27953,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ServiceAccount",
         "operationId": "patchCoreV1NamespacedServiceAccount",
@@ -28276,7 +28531,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified Service",
         "operationId": "patchCoreV1NamespacedService",
@@ -28967,7 +29223,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified Service",
         "operationId": "patchCoreV1NamespacedServiceStatus",
@@ -29216,7 +29473,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified Namespace",
         "operationId": "patchCoreV1Namespace",
@@ -29486,7 +29744,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified Namespace",
         "operationId": "patchCoreV1NamespaceStatus",
@@ -29965,7 +30224,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified Node",
         "operationId": "patchCoreV1Node",
@@ -30647,7 +30907,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified Node",
         "operationId": "patchCoreV1NodeStatus",
@@ -31200,7 +31461,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified PersistentVolume",
         "operationId": "patchCoreV1PersistentVolume",
@@ -31387,7 +31649,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified PersistentVolume",
         "operationId": "patchCoreV1PersistentVolumeStatus",
@@ -35783,7 +36046,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified MutatingWebhookConfiguration",
         "operationId": "patchAdmissionregistrationV1MutatingWebhookConfiguration",
@@ -36262,7 +36526,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ValidatingAdmissionPolicy",
         "operationId": "patchAdmissionregistrationV1ValidatingAdmissionPolicy",
@@ -36449,7 +36714,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified ValidatingAdmissionPolicy",
         "operationId": "patchAdmissionregistrationV1ValidatingAdmissionPolicyStatus",
@@ -36928,7 +37194,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ValidatingAdmissionPolicyBinding",
         "operationId": "patchAdmissionregistrationV1ValidatingAdmissionPolicyBinding",
@@ -37407,7 +37674,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ValidatingWebhookConfiguration",
         "operationId": "patchAdmissionregistrationV1ValidatingWebhookConfiguration",
@@ -38197,6 +38465,966 @@
         ]
       }
     },
+    "/apis/admissionregistration.k8s.io/v1alpha1/mutatingadmissionpolicies": {
+      "delete": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "delete collection of MutatingAdmissionPolicy",
+        "operationId": "deleteAdmissionregistrationV1alpha1CollectionMutatingAdmissionPolicy",
+        "parameters": [
+          {
+            "$ref": "#/parameters/body-2Y1dVQaQ"
+          },
+          {
+            "$ref": "#/parameters/continue-QfD61s0i"
+          },
+          {
+            "description": "When present, indicates that modifications should not be persisted. An invalid or unrecognized dryRun directive will result in an error response and no further processing of the request. Valid values are: - All: all dry run stages will be processed",
+            "in": "query",
+            "name": "dryRun",
+            "type": "string",
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/parameters/fieldSelector-xIcQKXFG"
+          },
+          {
+            "$ref": "#/parameters/gracePeriodSeconds--K5HaBOS"
+          },
+          {
+            "$ref": "#/parameters/labelSelector-5Zw57w4C"
+          },
+          {
+            "$ref": "#/parameters/limit-1NfNmdNH"
+          },
+          {
+            "$ref": "#/parameters/orphanDependents-uRB25kX5"
+          },
+          {
+            "$ref": "#/parameters/propagationPolicy-6jk3prlO"
+          },
+          {
+            "$ref": "#/parameters/resourceVersion-5WAnf1kx"
+          },
+          {
+            "$ref": "#/parameters/resourceVersionMatch-t8XhRHeC"
+          },
+          {
+            "$ref": "#/parameters/sendInitialEvents-rLXlEK_k"
+          },
+          {
+            "$ref": "#/parameters/timeoutSeconds-yvYezaOC"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "deletecollection",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicy",
+          "version": "v1alpha1"
+        }
+      },
+      "get": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "list or watch objects of kind MutatingAdmissionPolicy",
+        "operationId": "listAdmissionregistrationV1alpha1MutatingAdmissionPolicy",
+        "parameters": [
+          {
+            "$ref": "#/parameters/allowWatchBookmarks-HC2hJt-J"
+          },
+          {
+            "$ref": "#/parameters/continue-QfD61s0i"
+          },
+          {
+            "$ref": "#/parameters/fieldSelector-xIcQKXFG"
+          },
+          {
+            "$ref": "#/parameters/labelSelector-5Zw57w4C"
+          },
+          {
+            "$ref": "#/parameters/limit-1NfNmdNH"
+          },
+          {
+            "$ref": "#/parameters/resourceVersion-5WAnf1kx"
+          },
+          {
+            "$ref": "#/parameters/resourceVersionMatch-t8XhRHeC"
+          },
+          {
+            "$ref": "#/parameters/sendInitialEvents-rLXlEK_k"
+          },
+          {
+            "$ref": "#/parameters/timeoutSeconds-yvYezaOC"
+          },
+          {
+            "$ref": "#/parameters/watch-XNNPZGbK"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf",
+          "application/json;stream=watch",
+          "application/vnd.kubernetes.protobuf;stream=watch"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyList"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "list",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicy",
+          "version": "v1alpha1"
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/parameters/pretty-tJGM1-ng"
+        }
+      ],
+      "post": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "create a MutatingAdmissionPolicy",
+        "operationId": "createAdmissionregistrationV1alpha1MutatingAdmissionPolicy",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicy"
+            }
+          },
+          {
+            "description": "When present, indicates that modifications should not be persisted. An invalid or unrecognized dryRun directive will result in an error response and no further processing of the request. Valid values are: - All: all dry run stages will be processed",
+            "in": "query",
+            "name": "dryRun",
+            "type": "string",
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/parameters/fieldManager-Qy4HdaTW"
+          },
+          {
+            "description": "fieldValidation instructs the server on how to handle objects in the request (POST/PUT/PATCH) containing unknown or duplicate fields. Valid values are: - Ignore: This will ignore any unknown fields that are silently dropped from the object, and will ignore all but the last duplicate field that the decoder encounters. This is the default behavior prior to v1.23. - Warn: This will send a warning via the standard warning response header for each unknown field that is dropped from the object, and for each duplicate field that is encountered. The request will still succeed if there are no other errors, and will only persist the last of any duplicate fields. This is the default in v1.23+ - Strict: This will fail the request with a BadRequest error if any unknown fields would be dropped from the object, or if any duplicate fields are present. The error returned from the server will contain all unknown and duplicate fields encountered.",
+            "in": "query",
+            "name": "fieldValidation",
+            "type": "string",
+            "uniqueItems": true
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicy"
+            }
+          },
+          "201": {
+            "description": "Created",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicy"
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicy"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "post",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicy",
+          "version": "v1alpha1"
+        }
+      }
+    },
+    "/apis/admissionregistration.k8s.io/v1alpha1/mutatingadmissionpolicies/{name}": {
+      "delete": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "delete a MutatingAdmissionPolicy",
+        "operationId": "deleteAdmissionregistrationV1alpha1MutatingAdmissionPolicy",
+        "parameters": [
+          {
+            "$ref": "#/parameters/body-2Y1dVQaQ"
+          },
+          {
+            "description": "When present, indicates that modifications should not be persisted. An invalid or unrecognized dryRun directive will result in an error response and no further processing of the request. Valid values are: - All: all dry run stages will be processed",
+            "in": "query",
+            "name": "dryRun",
+            "type": "string",
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/parameters/gracePeriodSeconds--K5HaBOS"
+          },
+          {
+            "$ref": "#/parameters/orphanDependents-uRB25kX5"
+          },
+          {
+            "$ref": "#/parameters/propagationPolicy-6jk3prlO"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "delete",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicy",
+          "version": "v1alpha1"
+        }
+      },
+      "get": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "read the specified MutatingAdmissionPolicy",
+        "operationId": "readAdmissionregistrationV1alpha1MutatingAdmissionPolicy",
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicy"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "get",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicy",
+          "version": "v1alpha1"
+        }
+      },
+      "parameters": [
+        {
+          "description": "name of the MutatingAdmissionPolicy",
+          "in": "path",
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "uniqueItems": true
+        },
+        {
+          "$ref": "#/parameters/pretty-tJGM1-ng"
+        }
+      ],
+      "patch": {
+        "consumes": [
+          "application/json-patch+json",
+          "application/merge-patch+json",
+          "application/strategic-merge-patch+json",
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
+        ],
+        "description": "partially update the specified MutatingAdmissionPolicy",
+        "operationId": "patchAdmissionregistrationV1alpha1MutatingAdmissionPolicy",
+        "parameters": [
+          {
+            "$ref": "#/parameters/body-78PwaGsr"
+          },
+          {
+            "description": "When present, indicates that modifications should not be persisted. An invalid or unrecognized dryRun directive will result in an error response and no further processing of the request. Valid values are: - All: all dry run stages will be processed",
+            "in": "query",
+            "name": "dryRun",
+            "type": "string",
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/parameters/fieldManager-7c6nTn1T"
+          },
+          {
+            "description": "fieldValidation instructs the server on how to handle objects in the request (POST/PUT/PATCH) containing unknown or duplicate fields. Valid values are: - Ignore: This will ignore any unknown fields that are silently dropped from the object, and will ignore all but the last duplicate field that the decoder encounters. This is the default behavior prior to v1.23. - Warn: This will send a warning via the standard warning response header for each unknown field that is dropped from the object, and for each duplicate field that is encountered. The request will still succeed if there are no other errors, and will only persist the last of any duplicate fields. This is the default in v1.23+ - Strict: This will fail the request with a BadRequest error if any unknown fields would be dropped from the object, or if any duplicate fields are present. The error returned from the server will contain all unknown and duplicate fields encountered.",
+            "in": "query",
+            "name": "fieldValidation",
+            "type": "string",
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/parameters/force-tOGGb0Yi"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicy"
+            }
+          },
+          "201": {
+            "description": "Created",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicy"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "patch",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicy",
+          "version": "v1alpha1"
+        }
+      },
+      "put": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "replace the specified MutatingAdmissionPolicy",
+        "operationId": "replaceAdmissionregistrationV1alpha1MutatingAdmissionPolicy",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicy"
+            }
+          },
+          {
+            "description": "When present, indicates that modifications should not be persisted. An invalid or unrecognized dryRun directive will result in an error response and no further processing of the request. Valid values are: - All: all dry run stages will be processed",
+            "in": "query",
+            "name": "dryRun",
+            "type": "string",
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/parameters/fieldManager-Qy4HdaTW"
+          },
+          {
+            "description": "fieldValidation instructs the server on how to handle objects in the request (POST/PUT/PATCH) containing unknown or duplicate fields. Valid values are: - Ignore: This will ignore any unknown fields that are silently dropped from the object, and will ignore all but the last duplicate field that the decoder encounters. This is the default behavior prior to v1.23. - Warn: This will send a warning via the standard warning response header for each unknown field that is dropped from the object, and for each duplicate field that is encountered. The request will still succeed if there are no other errors, and will only persist the last of any duplicate fields. This is the default in v1.23+ - Strict: This will fail the request with a BadRequest error if any unknown fields would be dropped from the object, or if any duplicate fields are present. The error returned from the server will contain all unknown and duplicate fields encountered.",
+            "in": "query",
+            "name": "fieldValidation",
+            "type": "string",
+            "uniqueItems": true
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicy"
+            }
+          },
+          "201": {
+            "description": "Created",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicy"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "put",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicy",
+          "version": "v1alpha1"
+        }
+      }
+    },
+    "/apis/admissionregistration.k8s.io/v1alpha1/mutatingadmissionpolicybindings": {
+      "delete": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "delete collection of MutatingAdmissionPolicyBinding",
+        "operationId": "deleteAdmissionregistrationV1alpha1CollectionMutatingAdmissionPolicyBinding",
+        "parameters": [
+          {
+            "$ref": "#/parameters/body-2Y1dVQaQ"
+          },
+          {
+            "$ref": "#/parameters/continue-QfD61s0i"
+          },
+          {
+            "description": "When present, indicates that modifications should not be persisted. An invalid or unrecognized dryRun directive will result in an error response and no further processing of the request. Valid values are: - All: all dry run stages will be processed",
+            "in": "query",
+            "name": "dryRun",
+            "type": "string",
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/parameters/fieldSelector-xIcQKXFG"
+          },
+          {
+            "$ref": "#/parameters/gracePeriodSeconds--K5HaBOS"
+          },
+          {
+            "$ref": "#/parameters/labelSelector-5Zw57w4C"
+          },
+          {
+            "$ref": "#/parameters/limit-1NfNmdNH"
+          },
+          {
+            "$ref": "#/parameters/orphanDependents-uRB25kX5"
+          },
+          {
+            "$ref": "#/parameters/propagationPolicy-6jk3prlO"
+          },
+          {
+            "$ref": "#/parameters/resourceVersion-5WAnf1kx"
+          },
+          {
+            "$ref": "#/parameters/resourceVersionMatch-t8XhRHeC"
+          },
+          {
+            "$ref": "#/parameters/sendInitialEvents-rLXlEK_k"
+          },
+          {
+            "$ref": "#/parameters/timeoutSeconds-yvYezaOC"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "deletecollection",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicyBinding",
+          "version": "v1alpha1"
+        }
+      },
+      "get": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "list or watch objects of kind MutatingAdmissionPolicyBinding",
+        "operationId": "listAdmissionregistrationV1alpha1MutatingAdmissionPolicyBinding",
+        "parameters": [
+          {
+            "$ref": "#/parameters/allowWatchBookmarks-HC2hJt-J"
+          },
+          {
+            "$ref": "#/parameters/continue-QfD61s0i"
+          },
+          {
+            "$ref": "#/parameters/fieldSelector-xIcQKXFG"
+          },
+          {
+            "$ref": "#/parameters/labelSelector-5Zw57w4C"
+          },
+          {
+            "$ref": "#/parameters/limit-1NfNmdNH"
+          },
+          {
+            "$ref": "#/parameters/resourceVersion-5WAnf1kx"
+          },
+          {
+            "$ref": "#/parameters/resourceVersionMatch-t8XhRHeC"
+          },
+          {
+            "$ref": "#/parameters/sendInitialEvents-rLXlEK_k"
+          },
+          {
+            "$ref": "#/parameters/timeoutSeconds-yvYezaOC"
+          },
+          {
+            "$ref": "#/parameters/watch-XNNPZGbK"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf",
+          "application/json;stream=watch",
+          "application/vnd.kubernetes.protobuf;stream=watch"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBindingList"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "list",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicyBinding",
+          "version": "v1alpha1"
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/parameters/pretty-tJGM1-ng"
+        }
+      ],
+      "post": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "create a MutatingAdmissionPolicyBinding",
+        "operationId": "createAdmissionregistrationV1alpha1MutatingAdmissionPolicyBinding",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBinding"
+            }
+          },
+          {
+            "description": "When present, indicates that modifications should not be persisted. An invalid or unrecognized dryRun directive will result in an error response and no further processing of the request. Valid values are: - All: all dry run stages will be processed",
+            "in": "query",
+            "name": "dryRun",
+            "type": "string",
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/parameters/fieldManager-Qy4HdaTW"
+          },
+          {
+            "description": "fieldValidation instructs the server on how to handle objects in the request (POST/PUT/PATCH) containing unknown or duplicate fields. Valid values are: - Ignore: This will ignore any unknown fields that are silently dropped from the object, and will ignore all but the last duplicate field that the decoder encounters. This is the default behavior prior to v1.23. - Warn: This will send a warning via the standard warning response header for each unknown field that is dropped from the object, and for each duplicate field that is encountered. The request will still succeed if there are no other errors, and will only persist the last of any duplicate fields. This is the default in v1.23+ - Strict: This will fail the request with a BadRequest error if any unknown fields would be dropped from the object, or if any duplicate fields are present. The error returned from the server will contain all unknown and duplicate fields encountered.",
+            "in": "query",
+            "name": "fieldValidation",
+            "type": "string",
+            "uniqueItems": true
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBinding"
+            }
+          },
+          "201": {
+            "description": "Created",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBinding"
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBinding"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "post",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicyBinding",
+          "version": "v1alpha1"
+        }
+      }
+    },
+    "/apis/admissionregistration.k8s.io/v1alpha1/mutatingadmissionpolicybindings/{name}": {
+      "delete": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "delete a MutatingAdmissionPolicyBinding",
+        "operationId": "deleteAdmissionregistrationV1alpha1MutatingAdmissionPolicyBinding",
+        "parameters": [
+          {
+            "$ref": "#/parameters/body-2Y1dVQaQ"
+          },
+          {
+            "description": "When present, indicates that modifications should not be persisted. An invalid or unrecognized dryRun directive will result in an error response and no further processing of the request. Valid values are: - All: all dry run stages will be processed",
+            "in": "query",
+            "name": "dryRun",
+            "type": "string",
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/parameters/gracePeriodSeconds--K5HaBOS"
+          },
+          {
+            "$ref": "#/parameters/orphanDependents-uRB25kX5"
+          },
+          {
+            "$ref": "#/parameters/propagationPolicy-6jk3prlO"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "delete",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicyBinding",
+          "version": "v1alpha1"
+        }
+      },
+      "get": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "read the specified MutatingAdmissionPolicyBinding",
+        "operationId": "readAdmissionregistrationV1alpha1MutatingAdmissionPolicyBinding",
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBinding"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "get",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicyBinding",
+          "version": "v1alpha1"
+        }
+      },
+      "parameters": [
+        {
+          "description": "name of the MutatingAdmissionPolicyBinding",
+          "in": "path",
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "uniqueItems": true
+        },
+        {
+          "$ref": "#/parameters/pretty-tJGM1-ng"
+        }
+      ],
+      "patch": {
+        "consumes": [
+          "application/json-patch+json",
+          "application/merge-patch+json",
+          "application/strategic-merge-patch+json",
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
+        ],
+        "description": "partially update the specified MutatingAdmissionPolicyBinding",
+        "operationId": "patchAdmissionregistrationV1alpha1MutatingAdmissionPolicyBinding",
+        "parameters": [
+          {
+            "$ref": "#/parameters/body-78PwaGsr"
+          },
+          {
+            "description": "When present, indicates that modifications should not be persisted. An invalid or unrecognized dryRun directive will result in an error response and no further processing of the request. Valid values are: - All: all dry run stages will be processed",
+            "in": "query",
+            "name": "dryRun",
+            "type": "string",
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/parameters/fieldManager-7c6nTn1T"
+          },
+          {
+            "description": "fieldValidation instructs the server on how to handle objects in the request (POST/PUT/PATCH) containing unknown or duplicate fields. Valid values are: - Ignore: This will ignore any unknown fields that are silently dropped from the object, and will ignore all but the last duplicate field that the decoder encounters. This is the default behavior prior to v1.23. - Warn: This will send a warning via the standard warning response header for each unknown field that is dropped from the object, and for each duplicate field that is encountered. The request will still succeed if there are no other errors, and will only persist the last of any duplicate fields. This is the default in v1.23+ - Strict: This will fail the request with a BadRequest error if any unknown fields would be dropped from the object, or if any duplicate fields are present. The error returned from the server will contain all unknown and duplicate fields encountered.",
+            "in": "query",
+            "name": "fieldValidation",
+            "type": "string",
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/parameters/force-tOGGb0Yi"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBinding"
+            }
+          },
+          "201": {
+            "description": "Created",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBinding"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "patch",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicyBinding",
+          "version": "v1alpha1"
+        }
+      },
+      "put": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "replace the specified MutatingAdmissionPolicyBinding",
+        "operationId": "replaceAdmissionregistrationV1alpha1MutatingAdmissionPolicyBinding",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBinding"
+            }
+          },
+          {
+            "description": "When present, indicates that modifications should not be persisted. An invalid or unrecognized dryRun directive will result in an error response and no further processing of the request. Valid values are: - All: all dry run stages will be processed",
+            "in": "query",
+            "name": "dryRun",
+            "type": "string",
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/parameters/fieldManager-Qy4HdaTW"
+          },
+          {
+            "description": "fieldValidation instructs the server on how to handle objects in the request (POST/PUT/PATCH) containing unknown or duplicate fields. Valid values are: - Ignore: This will ignore any unknown fields that are silently dropped from the object, and will ignore all but the last duplicate field that the decoder encounters. This is the default behavior prior to v1.23. - Warn: This will send a warning via the standard warning response header for each unknown field that is dropped from the object, and for each duplicate field that is encountered. The request will still succeed if there are no other errors, and will only persist the last of any duplicate fields. This is the default in v1.23+ - Strict: This will fail the request with a BadRequest error if any unknown fields would be dropped from the object, or if any duplicate fields are present. The error returned from the server will contain all unknown and duplicate fields encountered.",
+            "in": "query",
+            "name": "fieldValidation",
+            "type": "string",
+            "uniqueItems": true
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBinding"
+            }
+          },
+          "201": {
+            "description": "Created",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingAdmissionPolicyBinding"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "put",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicyBinding",
+          "version": "v1alpha1"
+        }
+      }
+    },
     "/apis/admissionregistration.k8s.io/v1alpha1/validatingadmissionpolicies": {
       "delete": {
         "consumes": [
@@ -38543,7 +39771,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ValidatingAdmissionPolicy",
         "operationId": "patchAdmissionregistrationV1alpha1ValidatingAdmissionPolicy",
@@ -38730,7 +39959,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified ValidatingAdmissionPolicy",
         "operationId": "patchAdmissionregistrationV1alpha1ValidatingAdmissionPolicyStatus",
@@ -39209,7 +40439,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ValidatingAdmissionPolicyBinding",
         "operationId": "patchAdmissionregistrationV1alpha1ValidatingAdmissionPolicyBinding",
@@ -39341,6 +40572,318 @@
           "version": "v1alpha1"
         }
       }
+    },
+    "/apis/admissionregistration.k8s.io/v1alpha1/watch/mutatingadmissionpolicies": {
+      "get": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "watch individual changes to a list of MutatingAdmissionPolicy. deprecated: use the 'watch' parameter with a list operation instead.",
+        "operationId": "watchAdmissionregistrationV1alpha1MutatingAdmissionPolicyList",
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf",
+          "application/json;stream=watch",
+          "application/vnd.kubernetes.protobuf;stream=watch"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.WatchEvent"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "watchlist",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicy",
+          "version": "v1alpha1"
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/parameters/allowWatchBookmarks-HC2hJt-J"
+        },
+        {
+          "$ref": "#/parameters/continue-QfD61s0i"
+        },
+        {
+          "$ref": "#/parameters/fieldSelector-xIcQKXFG"
+        },
+        {
+          "$ref": "#/parameters/labelSelector-5Zw57w4C"
+        },
+        {
+          "$ref": "#/parameters/limit-1NfNmdNH"
+        },
+        {
+          "$ref": "#/parameters/pretty-tJGM1-ng"
+        },
+        {
+          "$ref": "#/parameters/resourceVersion-5WAnf1kx"
+        },
+        {
+          "$ref": "#/parameters/resourceVersionMatch-t8XhRHeC"
+        },
+        {
+          "$ref": "#/parameters/sendInitialEvents-rLXlEK_k"
+        },
+        {
+          "$ref": "#/parameters/timeoutSeconds-yvYezaOC"
+        },
+        {
+          "$ref": "#/parameters/watch-XNNPZGbK"
+        }
+      ]
+    },
+    "/apis/admissionregistration.k8s.io/v1alpha1/watch/mutatingadmissionpolicies/{name}": {
+      "get": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "watch changes to an object of kind MutatingAdmissionPolicy. deprecated: use the 'watch' parameter with a list operation instead, filtered to a single item with the 'fieldSelector' parameter.",
+        "operationId": "watchAdmissionregistrationV1alpha1MutatingAdmissionPolicy",
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf",
+          "application/json;stream=watch",
+          "application/vnd.kubernetes.protobuf;stream=watch"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.WatchEvent"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "watch",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicy",
+          "version": "v1alpha1"
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/parameters/allowWatchBookmarks-HC2hJt-J"
+        },
+        {
+          "$ref": "#/parameters/continue-QfD61s0i"
+        },
+        {
+          "$ref": "#/parameters/fieldSelector-xIcQKXFG"
+        },
+        {
+          "$ref": "#/parameters/labelSelector-5Zw57w4C"
+        },
+        {
+          "$ref": "#/parameters/limit-1NfNmdNH"
+        },
+        {
+          "description": "name of the MutatingAdmissionPolicy",
+          "in": "path",
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "uniqueItems": true
+        },
+        {
+          "$ref": "#/parameters/pretty-tJGM1-ng"
+        },
+        {
+          "$ref": "#/parameters/resourceVersion-5WAnf1kx"
+        },
+        {
+          "$ref": "#/parameters/resourceVersionMatch-t8XhRHeC"
+        },
+        {
+          "$ref": "#/parameters/sendInitialEvents-rLXlEK_k"
+        },
+        {
+          "$ref": "#/parameters/timeoutSeconds-yvYezaOC"
+        },
+        {
+          "$ref": "#/parameters/watch-XNNPZGbK"
+        }
+      ]
+    },
+    "/apis/admissionregistration.k8s.io/v1alpha1/watch/mutatingadmissionpolicybindings": {
+      "get": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "watch individual changes to a list of MutatingAdmissionPolicyBinding. deprecated: use the 'watch' parameter with a list operation instead.",
+        "operationId": "watchAdmissionregistrationV1alpha1MutatingAdmissionPolicyBindingList",
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf",
+          "application/json;stream=watch",
+          "application/vnd.kubernetes.protobuf;stream=watch"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.WatchEvent"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "watchlist",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicyBinding",
+          "version": "v1alpha1"
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/parameters/allowWatchBookmarks-HC2hJt-J"
+        },
+        {
+          "$ref": "#/parameters/continue-QfD61s0i"
+        },
+        {
+          "$ref": "#/parameters/fieldSelector-xIcQKXFG"
+        },
+        {
+          "$ref": "#/parameters/labelSelector-5Zw57w4C"
+        },
+        {
+          "$ref": "#/parameters/limit-1NfNmdNH"
+        },
+        {
+          "$ref": "#/parameters/pretty-tJGM1-ng"
+        },
+        {
+          "$ref": "#/parameters/resourceVersion-5WAnf1kx"
+        },
+        {
+          "$ref": "#/parameters/resourceVersionMatch-t8XhRHeC"
+        },
+        {
+          "$ref": "#/parameters/sendInitialEvents-rLXlEK_k"
+        },
+        {
+          "$ref": "#/parameters/timeoutSeconds-yvYezaOC"
+        },
+        {
+          "$ref": "#/parameters/watch-XNNPZGbK"
+        }
+      ]
+    },
+    "/apis/admissionregistration.k8s.io/v1alpha1/watch/mutatingadmissionpolicybindings/{name}": {
+      "get": {
+        "consumes": [
+          "*/*"
+        ],
+        "description": "watch changes to an object of kind MutatingAdmissionPolicyBinding. deprecated: use the 'watch' parameter with a list operation instead, filtered to a single item with the 'fieldSelector' parameter.",
+        "operationId": "watchAdmissionregistrationV1alpha1MutatingAdmissionPolicyBinding",
+        "produces": [
+          "application/json",
+          "application/yaml",
+          "application/vnd.kubernetes.protobuf",
+          "application/json;stream=watch",
+          "application/vnd.kubernetes.protobuf;stream=watch"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.WatchEvent"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "schemes": [
+          "https"
+        ],
+        "tags": [
+          "admissionregistration_v1alpha1"
+        ],
+        "x-kubernetes-action": "watch",
+        "x-kubernetes-group-version-kind": {
+          "group": "admissionregistration.k8s.io",
+          "kind": "MutatingAdmissionPolicyBinding",
+          "version": "v1alpha1"
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/parameters/allowWatchBookmarks-HC2hJt-J"
+        },
+        {
+          "$ref": "#/parameters/continue-QfD61s0i"
+        },
+        {
+          "$ref": "#/parameters/fieldSelector-xIcQKXFG"
+        },
+        {
+          "$ref": "#/parameters/labelSelector-5Zw57w4C"
+        },
+        {
+          "$ref": "#/parameters/limit-1NfNmdNH"
+        },
+        {
+          "description": "name of the MutatingAdmissionPolicyBinding",
+          "in": "path",
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "uniqueItems": true
+        },
+        {
+          "$ref": "#/parameters/pretty-tJGM1-ng"
+        },
+        {
+          "$ref": "#/parameters/resourceVersion-5WAnf1kx"
+        },
+        {
+          "$ref": "#/parameters/resourceVersionMatch-t8XhRHeC"
+        },
+        {
+          "$ref": "#/parameters/sendInitialEvents-rLXlEK_k"
+        },
+        {
+          "$ref": "#/parameters/timeoutSeconds-yvYezaOC"
+        },
+        {
+          "$ref": "#/parameters/watch-XNNPZGbK"
+        }
+      ]
     },
     "/apis/admissionregistration.k8s.io/v1alpha1/watch/validatingadmissionpolicies": {
       "get": {
@@ -40033,7 +41576,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ValidatingAdmissionPolicy",
         "operationId": "patchAdmissionregistrationV1beta1ValidatingAdmissionPolicy",
@@ -40220,7 +41764,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified ValidatingAdmissionPolicy",
         "operationId": "patchAdmissionregistrationV1beta1ValidatingAdmissionPolicyStatus",
@@ -40699,7 +42244,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ValidatingAdmissionPolicyBinding",
         "operationId": "patchAdmissionregistrationV1beta1ValidatingAdmissionPolicyBinding",
@@ -41556,7 +43102,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified CustomResourceDefinition",
         "operationId": "patchApiextensionsV1CustomResourceDefinition",
@@ -41743,7 +43290,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified CustomResourceDefinition",
         "operationId": "patchApiextensionsV1CustomResourceDefinitionStatus",
@@ -42444,7 +43992,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified APIService",
         "operationId": "patchApiregistrationV1APIService",
@@ -42631,7 +44180,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified APIService",
         "operationId": "patchApiregistrationV1APIServiceStatus",
@@ -43560,7 +45110,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ControllerRevision",
         "operationId": "patchAppsV1NamespacedControllerRevision",
@@ -44045,7 +45596,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified DaemonSet",
         "operationId": "patchAppsV1NamespacedDaemonSet",
@@ -44235,7 +45787,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified DaemonSet",
         "operationId": "patchAppsV1NamespacedDaemonSetStatus",
@@ -44720,7 +46273,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified Deployment",
         "operationId": "patchAppsV1NamespacedDeployment",
@@ -44910,7 +46464,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update scale of the specified Deployment",
         "operationId": "patchAppsV1NamespacedDeploymentScale",
@@ -45100,7 +46655,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified Deployment",
         "operationId": "patchAppsV1NamespacedDeploymentStatus",
@@ -45585,7 +47141,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ReplicaSet",
         "operationId": "patchAppsV1NamespacedReplicaSet",
@@ -45775,7 +47332,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update scale of the specified ReplicaSet",
         "operationId": "patchAppsV1NamespacedReplicaSetScale",
@@ -45965,7 +47523,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified ReplicaSet",
         "operationId": "patchAppsV1NamespacedReplicaSetStatus",
@@ -46450,7 +48009,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified StatefulSet",
         "operationId": "patchAppsV1NamespacedStatefulSet",
@@ -46640,7 +48200,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update scale of the specified StatefulSet",
         "operationId": "patchAppsV1NamespacedStatefulSetScale",
@@ -46830,7 +48391,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified StatefulSet",
         "operationId": "patchAppsV1NamespacedStatefulSetStatus",
@@ -49632,7 +51194,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified HorizontalPodAutoscaler",
         "operationId": "patchAutoscalingV1NamespacedHorizontalPodAutoscaler",
@@ -49822,7 +51385,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified HorizontalPodAutoscaler",
         "operationId": "patchAutoscalingV1NamespacedHorizontalPodAutoscalerStatus",
@@ -50650,7 +52214,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified HorizontalPodAutoscaler",
         "operationId": "patchAutoscalingV2NamespacedHorizontalPodAutoscaler",
@@ -50840,7 +52405,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified HorizontalPodAutoscaler",
         "operationId": "patchAutoscalingV2NamespacedHorizontalPodAutoscalerStatus",
@@ -51775,7 +53341,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified CronJob",
         "operationId": "patchBatchV1NamespacedCronJob",
@@ -51965,7 +53532,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified CronJob",
         "operationId": "patchBatchV1NamespacedCronJobStatus",
@@ -52450,7 +54018,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified Job",
         "operationId": "patchBatchV1NamespacedJob",
@@ -52640,7 +54209,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified Job",
         "operationId": "patchBatchV1NamespacedJobStatus",
@@ -53657,7 +55227,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified CertificateSigningRequest",
         "operationId": "patchCertificatesV1CertificateSigningRequest",
@@ -53844,7 +55415,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update approval of the specified CertificateSigningRequest",
         "operationId": "patchCertificatesV1CertificateSigningRequestApproval",
@@ -54031,7 +55603,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified CertificateSigningRequest",
         "operationId": "patchCertificatesV1CertificateSigningRequestStatus",
@@ -54699,7 +56272,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ClusterTrustBundle",
         "operationId": "patchCertificatesV1alpha1ClusterTrustBundle",
@@ -55480,7 +57054,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified Lease",
         "operationId": "patchCoordinationV1NamespacedLease",
@@ -56308,7 +57883,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified LeaseCandidate",
         "operationId": "patchCoordinationV1alpha1NamespacedLeaseCandidate",
@@ -57169,7 +58745,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified EndpointSlice",
         "operationId": "patchDiscoveryV1NamespacedEndpointSlice",
@@ -58030,7 +59607,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified Event",
         "operationId": "patchEventsV1NamespacedEvent",
@@ -58811,7 +60389,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified FlowSchema",
         "operationId": "patchFlowcontrolApiserverV1FlowSchema",
@@ -58998,7 +60577,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified FlowSchema",
         "operationId": "patchFlowcontrolApiserverV1FlowSchemaStatus",
@@ -59477,7 +61057,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified PriorityLevelConfiguration",
         "operationId": "patchFlowcontrolApiserverV1PriorityLevelConfiguration",
@@ -59664,7 +61245,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified PriorityLevelConfiguration",
         "operationId": "patchFlowcontrolApiserverV1PriorityLevelConfigurationStatus",
@@ -60488,7 +62070,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified FlowSchema",
         "operationId": "patchFlowcontrolApiserverV1beta3FlowSchema",
@@ -60675,7 +62258,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified FlowSchema",
         "operationId": "patchFlowcontrolApiserverV1beta3FlowSchemaStatus",
@@ -61154,7 +62738,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified PriorityLevelConfiguration",
         "operationId": "patchFlowcontrolApiserverV1beta3PriorityLevelConfiguration",
@@ -61341,7 +62926,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified PriorityLevelConfiguration",
         "operationId": "patchFlowcontrolApiserverV1beta3PriorityLevelConfigurationStatus",
@@ -62198,7 +63784,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified StorageVersion",
         "operationId": "patchInternalApiserverV1alpha1StorageVersion",
@@ -62385,7 +63972,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified StorageVersion",
         "operationId": "patchInternalApiserverV1alpha1StorageVersionStatus",
@@ -63086,7 +64674,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified IngressClass",
         "operationId": "patchNetworkingV1IngressClass",
@@ -63645,7 +65234,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified Ingress",
         "operationId": "patchNetworkingV1NamespacedIngress",
@@ -63835,7 +65425,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified Ingress",
         "operationId": "patchNetworkingV1NamespacedIngressStatus",
@@ -64320,7 +65911,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified NetworkPolicy",
         "operationId": "patchNetworkingV1NamespacedNetworkPolicy",
@@ -65534,7 +67126,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified IPAddress",
         "operationId": "patchNetworkingV1beta1IPAddress",
@@ -66013,7 +67606,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ServiceCIDR",
         "operationId": "patchNetworkingV1beta1ServiceCIDR",
@@ -66200,7 +67794,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified ServiceCIDR",
         "operationId": "patchNetworkingV1beta1ServiceCIDRStatus",
@@ -67057,7 +68652,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified RuntimeClass",
         "operationId": "patchNodeV1RuntimeClass",
@@ -67764,7 +69360,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified PodDisruptionBudget",
         "operationId": "patchPolicyV1NamespacedPodDisruptionBudget",
@@ -67954,7 +69551,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified PodDisruptionBudget",
         "operationId": "patchPolicyV1NamespacedPodDisruptionBudgetStatus",
@@ -68809,7 +70407,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ClusterRoleBinding",
         "operationId": "patchRbacAuthorizationV1ClusterRoleBinding",
@@ -69288,7 +70887,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ClusterRole",
         "operationId": "patchRbacAuthorizationV1ClusterRole",
@@ -69773,7 +71373,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified RoleBinding",
         "operationId": "patchRbacAuthorizationV1NamespacedRoleBinding",
@@ -70258,7 +71859,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified Role",
         "operationId": "patchRbacAuthorizationV1NamespacedRole",
@@ -71735,7 +73337,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified DeviceClass",
         "operationId": "patchResourceV1alpha3DeviceClass",
@@ -72220,7 +73823,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ResourceClaim",
         "operationId": "patchResourceV1alpha3NamespacedResourceClaim",
@@ -72410,7 +74014,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified ResourceClaim",
         "operationId": "patchResourceV1alpha3NamespacedResourceClaimStatus",
@@ -72895,7 +74500,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ResourceClaimTemplate",
         "operationId": "patchResourceV1alpha3NamespacedResourceClaimTemplate",
@@ -73522,7 +75128,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified ResourceSlice",
         "operationId": "patchResourceV1alpha3ResourceSlice",
@@ -74851,7 +76458,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified PriorityClass",
         "operationId": "patchSchedulingV1PriorityClass",
@@ -75552,7 +77160,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified CSIDriver",
         "operationId": "patchStorageV1CSIDriver",
@@ -76031,7 +77640,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified CSINode",
         "operationId": "patchStorageV1CSINode",
@@ -76590,7 +78200,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified CSIStorageCapacity",
         "operationId": "patchStorageV1NamespacedCSIStorageCapacity",
@@ -77069,7 +78680,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified StorageClass",
         "operationId": "patchStorageV1StorageClass",
@@ -77548,7 +79160,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified VolumeAttachment",
         "operationId": "patchStorageV1VolumeAttachment",
@@ -77735,7 +79348,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified VolumeAttachment",
         "operationId": "patchStorageV1VolumeAttachmentStatus",
@@ -79107,7 +80721,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified VolumeAttributesClass",
         "operationId": "patchStorageV1alpha1VolumeAttributesClass",
@@ -79775,7 +81390,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified VolumeAttributesClass",
         "operationId": "patchStorageV1beta1VolumeAttributesClass",
@@ -80476,7 +82092,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update the specified StorageVersionMigration",
         "operationId": "patchStoragemigrationV1alpha1StorageVersionMigration",
@@ -80663,7 +82280,8 @@
           "application/json-patch+json",
           "application/merge-patch+json",
           "application/strategic-merge-patch+json",
-          "application/apply-patch+yaml"
+          "application/apply-patch+yaml",
+          "application/apply-patch+cbor"
         ],
         "description": "partially update status of the specified StorageVersionMigration",
         "operationId": "patchStoragemigrationV1alpha1StorageVersionMigrationStatus",

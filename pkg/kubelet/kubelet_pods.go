@@ -33,7 +33,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/go-cmp/cmp"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,6 +60,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/metrics"
 	"k8s.io/kubernetes/pkg/kubelet/status"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
+	"k8s.io/kubernetes/pkg/kubelet/util/format"
 	utilfs "k8s.io/kubernetes/pkg/util/filesystem"
 	utilkernel "k8s.io/kubernetes/pkg/util/kernel"
 	utilpod "k8s.io/kubernetes/pkg/util/pod"
@@ -277,18 +277,6 @@ func makeMounts(pod *v1.Pod, podDir string, container *v1.Container, hostName, h
 	mounts := []kubecontainer.Mount{}
 	var cleanupAction func()
 	for i, mount := range container.VolumeMounts {
-		// Check if the mount is referencing an OCI volume
-		if imageVolumes != nil && utilfeature.DefaultFeatureGate.Enabled(features.ImageVolume) {
-			if image, ok := imageVolumes[mount.Name]; ok {
-				mounts = append(mounts, kubecontainer.Mount{
-					Name:          mount.Name,
-					ContainerPath: mount.MountPath,
-					Image:         image,
-				})
-				continue
-			}
-		}
-
 		// do not mount /etc/hosts if container is already mounting on the path
 		mountEtcHostsFile = mountEtcHostsFile && (mount.MountPath != etcHostsPath)
 		vol, ok := podVolumes[mount.Name]
@@ -306,69 +294,82 @@ func makeMounts(pod *v1.Pod, podDir string, container *v1.Container, hostName, h
 			vol.SELinuxLabeled = true
 			relabelVolume = true
 		}
-		hostPath, err := volumeutil.GetPath(vol.Mounter)
-		if err != nil {
-			return nil, cleanupAction, err
+
+		var (
+			hostPath string
+			image    *runtimeapi.ImageSpec
+			err      error
+		)
+
+		if imageVolumes != nil && utilfeature.DefaultFeatureGate.Enabled(features.ImageVolume) {
+			image = imageVolumes[mount.Name]
 		}
 
-		subPath := mount.SubPath
-		if mount.SubPathExpr != "" {
-			subPath, err = kubecontainer.ExpandContainerVolumeMounts(mount, expandEnvs)
-
+		if image == nil {
+			hostPath, err = volumeutil.GetPath(vol.Mounter)
 			if err != nil {
 				return nil, cleanupAction, err
 			}
-		}
 
-		if subPath != "" {
-			if utilfs.IsAbs(subPath) {
-				return nil, cleanupAction, fmt.Errorf("error SubPath `%s` must not be an absolute path", subPath)
-			}
+			subPath := mount.SubPath
+			if mount.SubPathExpr != "" {
+				subPath, err = kubecontainer.ExpandContainerVolumeMounts(mount, expandEnvs)
 
-			err = volumevalidation.ValidatePathNoBacksteps(subPath)
-			if err != nil {
-				return nil, cleanupAction, fmt.Errorf("unable to provision SubPath `%s`: %v", subPath, err)
-			}
-
-			volumePath := hostPath
-			hostPath = filepath.Join(volumePath, subPath)
-
-			if subPathExists, err := hu.PathExists(hostPath); err != nil {
-				klog.ErrorS(nil, "Could not determine if subPath exists, will not attempt to change its permissions", "path", hostPath)
-			} else if !subPathExists {
-				// Create the sub path now because if it's auto-created later when referenced, it may have an
-				// incorrect ownership and mode. For example, the sub path directory must have at least g+rwx
-				// when the pod specifies an fsGroup, and if the directory is not created here, Docker will
-				// later auto-create it with the incorrect mode 0750
-				// Make extra care not to escape the volume!
-				perm, err := hu.GetMode(volumePath)
 				if err != nil {
 					return nil, cleanupAction, err
 				}
-				if err := subpather.SafeMakeDir(subPath, volumePath, perm); err != nil {
+			}
+
+			if subPath != "" {
+				if utilfs.IsAbs(subPath) {
+					return nil, cleanupAction, fmt.Errorf("error SubPath `%s` must not be an absolute path", subPath)
+				}
+
+				err = volumevalidation.ValidatePathNoBacksteps(subPath)
+				if err != nil {
+					return nil, cleanupAction, fmt.Errorf("unable to provision SubPath `%s`: %w", subPath, err)
+				}
+
+				volumePath := hostPath
+				hostPath = filepath.Join(volumePath, subPath)
+
+				if subPathExists, err := hu.PathExists(hostPath); err != nil {
+					klog.ErrorS(nil, "Could not determine if subPath exists, will not attempt to change its permissions", "path", hostPath)
+				} else if !subPathExists {
+					// Create the sub path now because if it's auto-created later when referenced, it may have an
+					// incorrect ownership and mode. For example, the sub path directory must have at least g+rwx
+					// when the pod specifies an fsGroup, and if the directory is not created here, Docker will
+					// later auto-create it with the incorrect mode 0750
+					// Make extra care not to escape the volume!
+					perm, err := hu.GetMode(volumePath)
+					if err != nil {
+						return nil, cleanupAction, err
+					}
+					if err := subpather.SafeMakeDir(subPath, volumePath, perm); err != nil {
+						// Don't pass detailed error back to the user because it could give information about host filesystem
+						klog.ErrorS(err, "Failed to create subPath directory for volumeMount of the container", "containerName", container.Name, "volumeMountName", mount.Name)
+						return nil, cleanupAction, fmt.Errorf("failed to create subPath directory for volumeMount %q of container %q", mount.Name, container.Name)
+					}
+				}
+				hostPath, cleanupAction, err = subpather.PrepareSafeSubpath(subpath.Subpath{
+					VolumeMountIndex: i,
+					Path:             hostPath,
+					VolumeName:       vol.InnerVolumeSpecName,
+					VolumePath:       volumePath,
+					PodDir:           podDir,
+					ContainerName:    container.Name,
+				})
+				if err != nil {
 					// Don't pass detailed error back to the user because it could give information about host filesystem
-					klog.ErrorS(err, "Failed to create subPath directory for volumeMount of the container", "containerName", container.Name, "volumeMountName", mount.Name)
-					return nil, cleanupAction, fmt.Errorf("failed to create subPath directory for volumeMount %q of container %q", mount.Name, container.Name)
+					klog.ErrorS(err, "Failed to prepare subPath for volumeMount of the container", "containerName", container.Name, "volumeMountName", mount.Name)
+					return nil, cleanupAction, fmt.Errorf("failed to prepare subPath for volumeMount %q of container %q", mount.Name, container.Name)
 				}
 			}
-			hostPath, cleanupAction, err = subpather.PrepareSafeSubpath(subpath.Subpath{
-				VolumeMountIndex: i,
-				Path:             hostPath,
-				VolumeName:       vol.InnerVolumeSpecName,
-				VolumePath:       volumePath,
-				PodDir:           podDir,
-				ContainerName:    container.Name,
-			})
-			if err != nil {
-				// Don't pass detailed error back to the user because it could give information about host filesystem
-				klog.ErrorS(err, "Failed to prepare subPath for volumeMount of the container", "containerName", container.Name, "volumeMountName", mount.Name)
-				return nil, cleanupAction, fmt.Errorf("failed to prepare subPath for volumeMount %q of container %q", mount.Name, container.Name)
-			}
-		}
 
-		// Docker Volume Mounts fail on Windows if it is not of the form C:/
-		if volumeutil.IsWindowsLocalPath(runtime.GOOS, hostPath) {
-			hostPath = volumeutil.MakeAbsolutePath(runtime.GOOS, hostPath)
+			// Docker Volume Mounts fail on Windows if it is not of the form C:/
+			if hostPath != "" && volumeutil.IsWindowsLocalPath(runtime.GOOS, hostPath) {
+				hostPath = volumeutil.MakeAbsolutePath(runtime.GOOS, hostPath)
+			}
 		}
 
 		containerPath := mount.MountPath
@@ -396,6 +397,7 @@ func makeMounts(pod *v1.Pod, podDir string, container *v1.Container, hostName, h
 			Name:              mount.Name,
 			ContainerPath:     containerPath,
 			HostPath:          hostPath,
+			Image:             image,
 			ReadOnly:          mount.ReadOnly || mustMountRO,
 			RecursiveReadOnly: rro,
 			SELinuxRelabel:    relabelVolume,
@@ -1741,46 +1743,79 @@ func getPhase(pod *v1.Pod, info []v1.ContainerStatus, podIsTerminal bool) v1.Pod
 	}
 }
 
-func deleteCustomResourceFromResourceRequirements(target *v1.ResourceRequirements) {
-	for resource := range target.Limits {
-		if resource != v1.ResourceCPU && resource != v1.ResourceMemory && resource != v1.ResourceEphemeralStorage {
-			delete(target.Limits, resource)
-		}
+func (kl *Kubelet) determinePodResizeStatus(allocatedPod *v1.Pod, podStatus *kubecontainer.PodStatus, podIsTerminal bool) v1.PodResizeStatus {
+	if kubetypes.IsStaticPod(allocatedPod) {
+		return ""
 	}
-	for resource := range target.Requests {
-		if resource != v1.ResourceCPU && resource != v1.ResourceMemory && resource != v1.ResourceEphemeralStorage {
-			delete(target.Requests, resource)
+
+	// If pod is terminal, clear the resize status.
+	if podIsTerminal {
+		if err := kl.statusManager.SetPodResizeStatus(allocatedPod.UID, ""); err != nil {
+			klog.ErrorS(err, "SetPodResizeStatus failed for terminal pod", "pod", format.Pod(allocatedPod))
 		}
+		return ""
 	}
+
+	resizeStatus, _ := kl.statusManager.GetPodResizeStatus(string(allocatedPod.UID))
+	// If the resize was in-progress and the actual resources match the allocated resources, mark
+	// the resize as complete by clearing the resize status.
+	if resizeStatus == v1.PodResizeStatusInProgress &&
+		allocatedResourcesMatchStatus(allocatedPod, podStatus) {
+		if err := kl.statusManager.SetPodResizeStatus(allocatedPod.UID, ""); err != nil {
+			klog.ErrorS(err, "SetPodResizeStatus failed", "pod", format.Pod(allocatedPod))
+		}
+		return ""
+	}
+	return resizeStatus
 }
 
-func (kl *Kubelet) determinePodResizeStatus(pod *v1.Pod, podStatus *v1.PodStatus) v1.PodResizeStatus {
-	var podResizeStatus v1.PodResizeStatus
-	specStatusDiffer := false
-	for _, c := range pod.Spec.Containers {
-		if cs, ok := podutil.GetContainerStatus(podStatus.ContainerStatuses, c.Name); ok {
-			cResourceCopy := c.Resources.DeepCopy()
-			// for both requests and limits, we only compare the cpu, memory and ephemeralstorage
-			// which are included in convertToAPIContainerStatuses
-			deleteCustomResourceFromResourceRequirements(cResourceCopy)
-			csResourceCopy := cs.Resources.DeepCopy()
-			if csResourceCopy != nil && !cmp.Equal(*cResourceCopy, *csResourceCopy) {
-				specStatusDiffer = true
-				break
+// allocatedResourcesMatchStatus tests whether the resizeable resources in the pod spec match the
+// resources reported in the status.
+func allocatedResourcesMatchStatus(allocatedPod *v1.Pod, podStatus *kubecontainer.PodStatus) bool {
+	for _, c := range allocatedPod.Spec.Containers {
+		if cs := podStatus.FindContainerStatusByName(c.Name); cs != nil {
+			if cs.State != kubecontainer.ContainerStateRunning {
+				// If the container isn't running, it isn't resizing.
+				continue
+			}
+
+			cpuReq, hasCPUReq := c.Resources.Requests[v1.ResourceCPU]
+			cpuLim, hasCPULim := c.Resources.Limits[v1.ResourceCPU]
+			memLim, hasMemLim := c.Resources.Limits[v1.ResourceMemory]
+
+			if cs.Resources == nil {
+				if hasCPUReq || hasCPULim || hasMemLim {
+					// Container status is missing Resources information, but the container does
+					// have resizable resources configured.
+					klog.ErrorS(nil, "Missing runtime resources information for resizing container",
+						"pod", format.Pod(allocatedPod), "container", c.Name)
+					return false // We don't want to clear resize status with insufficient information.
+				} else {
+					// No resizable resources configured; this might be ok.
+					continue
+				}
+			}
+
+			// Only compare resizeable resources, and only compare resources that are explicitly configured.
+			if hasCPUReq {
+				if !cpuReq.Equal(*cs.Resources.CPURequest) {
+					return false
+				}
+			}
+			if hasCPULim {
+				if !cpuLim.Equal(*cs.Resources.CPULimit) {
+					return false
+				}
+			}
+			if hasMemLim {
+				if !memLim.Equal(*cs.Resources.MemoryLimit) {
+					return false
+				}
 			}
 		}
 	}
-	if !specStatusDiffer {
-		// Clear last resize state from checkpoint
-		if err := kl.statusManager.SetPodResizeStatus(pod.UID, ""); err != nil {
-			klog.ErrorS(err, "SetPodResizeStatus failed", "pod", pod.Name)
-		}
-	} else {
-		if resizeStatus, found := kl.statusManager.GetPodResizeStatus(string(pod.UID)); found {
-			podResizeStatus = resizeStatus
-		}
-	}
-	return podResizeStatus
+
+	return true
 }
 
 // generateAPIPodStatus creates the final API pod status for a pod, given the
@@ -1794,7 +1829,7 @@ func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.Po
 	}
 	s := kl.convertStatusToAPIStatus(pod, podStatus, oldPodStatus)
 	if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScaling) {
-		s.Resize = kl.determinePodResizeStatus(pod, s)
+		s.Resize = kl.determinePodResizeStatus(pod, podStatus, podIsTerminal)
 	}
 	// calculate the next phase and preserve reason
 	allStatus := append(append([]v1.ContainerStatus{}, s.ContainerStatuses...), s.InitContainerStatuses...)
@@ -2074,103 +2109,63 @@ func (kl *Kubelet) convertToAPIContainerStatuses(pod *v1.Pod, podStatus *kubecon
 	}
 
 	convertContainerStatusResources := func(cName string, status *v1.ContainerStatus, cStatus *kubecontainer.Status, oldStatuses map[string]v1.ContainerStatus) *v1.ResourceRequirements {
-		var requests, limits v1.ResourceList
 		// oldStatus should always exist if container is running
 		oldStatus, oldStatusFound := oldStatuses[cName]
-		// Initialize limits/requests from container's spec upon transition to Running state
-		// For cpu & memory, values queried from runtime via CRI always supercedes spec values
-		// For ephemeral-storage, a running container's status.limit/request equals spec.limit/request
-		determineResource := func(rName v1.ResourceName, v1ContainerResource, oldStatusResource, resource v1.ResourceList) {
-			if oldStatusFound {
-				if oldStatus.State.Running == nil || status.ContainerID != oldStatus.ContainerID {
-					if r, exists := v1ContainerResource[rName]; exists {
-						resource[rName] = r.DeepCopy()
-					}
-				} else {
-					if oldStatusResource != nil {
-						if r, exists := oldStatusResource[rName]; exists {
-							resource[rName] = r.DeepCopy()
-						}
-					}
+
+		// If the new status is missing resources, then if the container is running and previous
+		// status was also running, preserve the resources previously reported.
+		preserveOldResourcesValue := func(rName v1.ResourceName, oldStatusResource, resource v1.ResourceList) {
+			if cStatus.State == kubecontainer.ContainerStateRunning &&
+				oldStatusFound && oldStatus.State.Running != nil &&
+				status.ContainerID == oldStatus.ContainerID &&
+				oldStatusResource != nil {
+				if r, exists := oldStatusResource[rName]; exists {
+					resource[rName] = r.DeepCopy()
 				}
 			}
 		}
-		container := kubecontainer.GetContainerSpec(pod, cName)
 
 		// Always set the status to the latest allocated resources, even if it differs from the
 		// allocation used by the current sync loop.
 		alloc, found := kl.statusManager.GetContainerResourceAllocation(string(pod.UID), cName)
-		if found {
-			status.AllocatedResources = alloc.Requests
-		} else if !(container.Resources.Requests == nil && container.Resources.Limits == nil) {
-			// This case is expected for ephemeral containers.
-			if oldStatusFound {
-				status.AllocatedResources = oldStatus.AllocatedResources
-			}
+		if !found {
+			// This case is expected for non-resizable containers (ephemeral & non-restartable init containers).
+			// Don't set status.Resources in this case.
+			return nil
+		}
+		if cStatus.State != kubecontainer.ContainerStateRunning {
+			// If the container isn't running, just use the allocated resources.
+			return &alloc
 		}
 		if oldStatus.Resources == nil {
 			oldStatus.Resources = &v1.ResourceRequirements{}
 		}
 
-		convertCustomResources := func(inResources, outResources v1.ResourceList) {
-			for resourceName, resourceQuantity := range inResources {
-				if resourceName == v1.ResourceCPU || resourceName == v1.ResourceMemory ||
-					resourceName == v1.ResourceStorage || resourceName == v1.ResourceEphemeralStorage {
-					continue
-				}
-
-				outResources[resourceName] = resourceQuantity.DeepCopy()
-			}
-		}
-
-		// Convert Limits
-		if alloc.Limits != nil {
-			limits = make(v1.ResourceList)
+		// Status resources default to the allocated resources.
+		// For non-running containers this will be the reported values.
+		// For non-resizable resources, these values will also be used.
+		resources := alloc
+		if resources.Limits != nil {
 			if cStatus.Resources != nil && cStatus.Resources.CPULimit != nil {
-				limits[v1.ResourceCPU] = cStatus.Resources.CPULimit.DeepCopy()
+				resources.Limits[v1.ResourceCPU] = cStatus.Resources.CPULimit.DeepCopy()
 			} else {
-				determineResource(v1.ResourceCPU, alloc.Limits, oldStatus.Resources.Limits, limits)
+				preserveOldResourcesValue(v1.ResourceCPU, oldStatus.Resources.Limits, resources.Limits)
 			}
 			if cStatus.Resources != nil && cStatus.Resources.MemoryLimit != nil {
-				limits[v1.ResourceMemory] = cStatus.Resources.MemoryLimit.DeepCopy()
+				resources.Limits[v1.ResourceMemory] = cStatus.Resources.MemoryLimit.DeepCopy()
 			} else {
-				determineResource(v1.ResourceMemory, alloc.Limits, oldStatus.Resources.Limits, limits)
+				preserveOldResourcesValue(v1.ResourceMemory, oldStatus.Resources.Limits, resources.Limits)
 			}
-			if ephemeralStorage, found := alloc.Limits[v1.ResourceEphemeralStorage]; found {
-				limits[v1.ResourceEphemeralStorage] = ephemeralStorage.DeepCopy()
-			}
-			if storage, found := alloc.Limits[v1.ResourceStorage]; found {
-				limits[v1.ResourceStorage] = storage.DeepCopy()
-			}
-
-			convertCustomResources(alloc.Limits, limits)
 		}
-		// Convert Requests
-		if alloc.Requests != nil {
-			requests = make(v1.ResourceList)
+		if resources.Requests != nil {
 			if cStatus.Resources != nil && cStatus.Resources.CPURequest != nil {
-				requests[v1.ResourceCPU] = cStatus.Resources.CPURequest.DeepCopy()
+				resources.Requests[v1.ResourceCPU] = cStatus.Resources.CPURequest.DeepCopy()
 			} else {
-				determineResource(v1.ResourceCPU, alloc.Requests, oldStatus.Resources.Requests, requests)
+				preserveOldResourcesValue(v1.ResourceCPU, oldStatus.Resources.Requests, resources.Requests)
 			}
-			if memory, found := alloc.Requests[v1.ResourceMemory]; found {
-				requests[v1.ResourceMemory] = memory.DeepCopy()
-			}
-			if ephemeralStorage, found := alloc.Requests[v1.ResourceEphemeralStorage]; found {
-				requests[v1.ResourceEphemeralStorage] = ephemeralStorage.DeepCopy()
-			}
-			if storage, found := alloc.Requests[v1.ResourceStorage]; found {
-				requests[v1.ResourceStorage] = storage.DeepCopy()
-			}
-
-			convertCustomResources(alloc.Requests, requests)
 		}
 
-		resources := &v1.ResourceRequirements{
-			Limits:   limits,
-			Requests: requests,
-		}
-		return resources
+		return &resources
 	}
 
 	convertContainerStatusUser := func(cStatus *kubecontainer.Status) *v1.ContainerUser {
@@ -2339,10 +2334,15 @@ func (kl *Kubelet) convertToAPIContainerStatuses(pod *v1.Pod, podStatus *kubecon
 		}
 		status := convertContainerStatus(cStatus, oldStatusPtr)
 		if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScaling) {
-			if status.State.Running != nil {
-				status.Resources = convertContainerStatusResources(cName, status, cStatus, oldStatuses)
+			status.Resources = convertContainerStatusResources(cName, status, cStatus, oldStatuses)
+
+			if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScalingAllocatedStatus) {
+				if alloc, found := kl.statusManager.GetContainerResourceAllocation(string(pod.UID), cName); found {
+					status.AllocatedResources = alloc.Requests
+				}
 			}
 		}
+
 		if utilfeature.DefaultFeatureGate.Enabled(features.SupplementalGroupsPolicy) {
 			status.User = convertContainerStatusUser(cStatus)
 		}
