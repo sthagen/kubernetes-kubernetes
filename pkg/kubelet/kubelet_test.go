@@ -60,7 +60,6 @@ import (
 	remote "k8s.io/cri-client/pkg"
 	fakeremote "k8s.io/cri-client/pkg/fake"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/ktesting"
 	"k8s.io/kubernetes/pkg/features"
 	kubeletconfiginternal "k8s.io/kubernetes/pkg/kubelet/apis/config"
 	cadvisortest "k8s.io/kubernetes/pkg/kubelet/cadvisor/testing"
@@ -104,6 +103,7 @@ import (
 	"k8s.io/kubernetes/pkg/volume/util"
 	"k8s.io/kubernetes/pkg/volume/util/hostutil"
 	"k8s.io/kubernetes/pkg/volume/util/subpath"
+	"k8s.io/kubernetes/test/utils/ktesting"
 	"k8s.io/utils/clock"
 	testingclock "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
@@ -2665,11 +2665,12 @@ func TestHandlePodResourcesResize(t *testing.T) {
 	defer kubelet.podManager.RemovePod(testPod1)
 
 	tests := []struct {
-		name                string
-		pod                 *v1.Pod
-		newRequests         v1.ResourceList
-		expectedAllocations v1.ResourceList
-		expectedResize      v1.PodResizeStatus
+		name                 string
+		pod                  *v1.Pod
+		newRequests          v1.ResourceList
+		newRequestsAllocated bool // Whether the new requests have already been allocated (but not actuated)
+		expectedAllocations  v1.ResourceList
+		expectedResize       v1.PodResizeStatus
 	}{
 		{
 			name:                "Request CPU and memory decrease - expect InProgress",
@@ -2720,25 +2721,63 @@ func TestHandlePodResourcesResize(t *testing.T) {
 			expectedAllocations: v1.ResourceList{v1.ResourceCPU: cpu1000m, v1.ResourceMemory: mem1000M},
 			expectedResize:      v1.PodResizeStatusInfeasible,
 		},
+		{
+			name:                 "CPU increase in progress - expect InProgress",
+			pod:                  testPod2,
+			newRequests:          v1.ResourceList{v1.ResourceCPU: cpu1500m, v1.ResourceMemory: mem1000M},
+			newRequestsAllocated: true,
+			expectedAllocations:  v1.ResourceList{v1.ResourceCPU: cpu1500m, v1.ResourceMemory: mem1000M},
+			expectedResize:       v1.PodResizeStatusInProgress,
+		},
+		{
+			name:                "No resize",
+			pod:                 testPod2,
+			newRequests:         v1.ResourceList{v1.ResourceCPU: cpu1000m, v1.ResourceMemory: mem1000M},
+			expectedAllocations: v1.ResourceList{v1.ResourceCPU: cpu1000m, v1.ResourceMemory: mem1000M},
+			expectedResize:      "",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			kubelet.statusManager = status.NewFakeManager()
-			require.NoError(t, kubelet.statusManager.SetPodAllocation(tt.pod))
 
-			pod := tt.pod.DeepCopy()
-			pod.Spec.Containers[0].Resources.Requests = tt.newRequests
-			updatedPod, err := kubelet.handlePodResourcesResize(pod)
+			newPod := tt.pod.DeepCopy()
+			newPod.Spec.Containers[0].Resources.Requests = tt.newRequests
+
+			if !tt.newRequestsAllocated {
+				require.NoError(t, kubelet.statusManager.SetPodAllocation(tt.pod))
+			} else {
+				require.NoError(t, kubelet.statusManager.SetPodAllocation(newPod))
+			}
+
+			podStatus := &kubecontainer.PodStatus{
+				ID:                tt.pod.UID,
+				Name:              tt.pod.Name,
+				Namespace:         tt.pod.Namespace,
+				ContainerStatuses: make([]*kubecontainer.Status, len(tt.pod.Spec.Containers)),
+			}
+			for i, c := range tt.pod.Spec.Containers {
+				podStatus.ContainerStatuses[i] = &kubecontainer.Status{
+					Name:  c.Name,
+					State: kubecontainer.ContainerStateRunning,
+					Resources: &kubecontainer.ContainerResources{
+						CPURequest:  c.Resources.Requests.Cpu(),
+						CPULimit:    c.Resources.Limits.Cpu(),
+						MemoryLimit: c.Resources.Limits.Memory(),
+					},
+				}
+			}
+
+			updatedPod, err := kubelet.handlePodResourcesResize(newPod, podStatus)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedAllocations, updatedPod.Spec.Containers[0].Resources.Requests, "updated pod spec resources")
 
-			alloc, found := kubelet.statusManager.GetContainerResourceAllocation(string(pod.UID), pod.Spec.Containers[0].Name)
+			alloc, found := kubelet.statusManager.GetContainerResourceAllocation(string(newPod.UID), newPod.Spec.Containers[0].Name)
 			require.True(t, found, "container allocation")
 			assert.Equal(t, tt.expectedAllocations, alloc.Requests, "stored container allocation")
 
-			resizeStatus, found := kubelet.statusManager.GetPodResizeStatus(string(pod.UID))
-			require.True(t, found, "pod resize status")
+			resizeStatus := kubelet.statusManager.GetPodResizeStatus(newPod.UID)
 			assert.Equal(t, tt.expectedResize, resizeStatus)
 		})
 	}
@@ -3052,6 +3091,7 @@ func createRemoteRuntimeService(endpoint string, t *testing.T, tp oteltrace.Trac
 }
 
 func TestNewMainKubeletStandAlone(t *testing.T) {
+	tCtx := ktesting.Init(t)
 	tempDir, err := os.MkdirTemp("", "logs")
 	ContainerLogsDir = tempDir
 	assert.NoError(t, err)
@@ -3067,7 +3107,7 @@ func TestNewMainKubeletStandAlone(t *testing.T) {
 	tp := noopoteltrace.NewTracerProvider()
 	cadvisor := cadvisortest.NewMockInterface(t)
 	cadvisor.EXPECT().MachineInfo().Return(&cadvisorapi.MachineInfo{}, nil).Maybe()
-	cadvisor.EXPECT().ImagesFsInfo().Return(cadvisorapiv2.FsInfo{
+	cadvisor.EXPECT().ImagesFsInfo(tCtx).Return(cadvisorapiv2.FsInfo{
 		Usage:     400,
 		Capacity:  1000,
 		Available: 600,

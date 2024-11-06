@@ -17,7 +17,6 @@ limitations under the License.
 package structured
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"slices"
@@ -28,12 +27,11 @@ import (
 	"github.com/onsi/gomega/types"
 
 	v1 "k8s.io/api/core/v1"
-	resourceapi "k8s.io/api/resource/v1alpha3"
+	resourceapi "k8s.io/api/resource/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -187,13 +185,17 @@ func claimWithDeviceConfig(name, request, class, driver, attribute string) *reso
 
 // generate a Device object with the given name, capacity and attributes.
 func device(name string, capacity map[resourceapi.QualifiedName]resource.Quantity, attributes map[resourceapi.QualifiedName]resourceapi.DeviceAttribute) resourceapi.Device {
-	return resourceapi.Device{
+	device := resourceapi.Device{
 		Name: name,
 		Basic: &resourceapi.BasicDevice{
 			Attributes: attributes,
-			Capacity:   capacity,
 		},
 	}
+	device.Basic.Capacity = make(map[resourceapi.QualifiedName]resourceapi.DeviceCapacity, len(capacity))
+	for name, quantity := range capacity {
+		device.Basic.Capacity[name] = resourceapi.DeviceCapacity{Value: quantity}
+	}
+	return device
 }
 
 // generate a ResourceSlice object with the given name, node,
@@ -1402,10 +1404,7 @@ type informerLister[T any] struct {
 	err  error
 }
 
-func (l informerLister[T]) List(selector labels.Selector) (ret []*T, err error) {
-	if selector.String() != labels.Everything().String() {
-		return nil, errors.New("labels selector not implemented")
-	}
+func (l informerLister[T]) List() (ret []*T, err error) {
 	return l.objs, l.err
 }
 

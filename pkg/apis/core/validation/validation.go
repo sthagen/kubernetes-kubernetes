@@ -1685,7 +1685,7 @@ func ValidateCSIDriverName(driverName string, fldPath *field.Path) field.ErrorLi
 	}
 
 	if len(driverName) > 63 {
-		allErrs = append(allErrs, field.TooLong(fldPath, driverName, 63))
+		allErrs = append(allErrs, field.TooLong(fldPath, "" /*unused*/, 63))
 	}
 
 	for _, msg := range validation.IsDNS1123Subdomain(strings.ToLower(driverName)) {
@@ -4772,7 +4772,7 @@ func ValidateAppArmorProfileField(profile *core.AppArmorProfile, fldPath *field.
 
 			const maxLocalhostProfileLength = 4095 // PATH_MAX - 1
 			if len(*profile.LocalhostProfile) > maxLocalhostProfileLength {
-				allErrs = append(allErrs, field.TooLongMaxLength(fldPath.Child("localhostProfile"), *profile.LocalhostProfile, maxLocalhostProfileLength))
+				allErrs = append(allErrs, field.TooLong(fldPath.Child("localhostProfile"), "" /*unused*/, maxLocalhostProfileLength))
 			}
 		}
 
@@ -5135,16 +5135,6 @@ var updatablePodSpecFields = []string{
 	"`spec.activeDeadlineSeconds`",
 	"`spec.tolerations` (only additions to existing tolerations)",
 	"`spec.terminationGracePeriodSeconds` (allow it to be set to 1 if it was previously negative)",
-	"`spec.containers[*].resources` (for CPU/memory only)",
-}
-
-// TODO(vinaykul,InPlacePodVerticalScaling): Drop this var once InPlacePodVerticalScaling goes GA and featuregate is gone.
-var updatablePodSpecFieldsNoResources = []string{
-	"`spec.containers[*].image`",
-	"`spec.initContainers[*].image`",
-	"`spec.activeDeadlineSeconds`",
-	"`spec.tolerations` (only additions to existing tolerations)",
-	"`spec.terminationGracePeriodSeconds` (allow it to be set to 1 if it was previously negative)",
 }
 
 // ValidatePodUpdate tests to see if the update is legal for an end user to make. newPod is updated with fields
@@ -5206,45 +5196,12 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod, opts PodValidationOptions) fiel
 		return allErrs
 	}
 
-	if qos.GetPodQOS(oldPod) != qos.ComputePodQOS(newPod) {
-		allErrs = append(allErrs, field.Invalid(fldPath, newPod.Status.QOSClass, "Pod QoS is immutable"))
-	}
-
 	// handle updateable fields by munging those fields prior to deep equal comparison.
 	mungedPodSpec := *newPod.Spec.DeepCopy()
 	// munge spec.containers[*].image
 	var newContainers []core.Container
 	for ix, container := range mungedPodSpec.Containers {
 		container.Image = oldPod.Spec.Containers[ix].Image // +k8s:verify-mutation:reason=clone
-		// When the feature-gate is turned off, any new requests attempting to update CPU or memory
-		// resource values will result in validation failure.
-		if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScaling) {
-			// Resources are mutable for CPU & memory only
-			//   - user can now modify Resources to express new desired Resources
-			mungeCpuMemResources := func(resourceList, oldResourceList core.ResourceList) core.ResourceList {
-				if oldResourceList == nil {
-					return nil
-				}
-				var mungedResourceList core.ResourceList
-				if resourceList == nil {
-					mungedResourceList = make(core.ResourceList)
-				} else {
-					mungedResourceList = resourceList.DeepCopy()
-				}
-				delete(mungedResourceList, core.ResourceCPU)
-				delete(mungedResourceList, core.ResourceMemory)
-				if cpu, found := oldResourceList[core.ResourceCPU]; found {
-					mungedResourceList[core.ResourceCPU] = cpu
-				}
-				if mem, found := oldResourceList[core.ResourceMemory]; found {
-					mungedResourceList[core.ResourceMemory] = mem
-				}
-				return mungedResourceList
-			}
-			lim := mungeCpuMemResources(container.Resources.Limits, oldPod.Spec.Containers[ix].Resources.Limits)
-			req := mungeCpuMemResources(container.Resources.Requests, oldPod.Spec.Containers[ix].Resources.Requests)
-			container.Resources = core.ResourceRequirements{Limits: lim, Requests: req}
-		}
 		newContainers = append(newContainers, container)
 	}
 	mungedPodSpec.Containers = newContainers
@@ -5321,10 +5278,7 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod, opts PodValidationOptions) fiel
 		// This diff isn't perfect, but it's a helluva lot better an "I'm not going to tell you what the difference is".
 		// TODO: Pinpoint the specific field that causes the invalid error after we have strategic merge diff
 		specDiff := cmp.Diff(oldPod.Spec, mungedPodSpec)
-		errs := field.Forbidden(specPath, fmt.Sprintf("pod updates may not change fields other than %s\n%v", strings.Join(updatablePodSpecFieldsNoResources, ","), specDiff))
-		if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScaling) {
-			errs = field.Forbidden(specPath, fmt.Sprintf("pod updates may not change fields other than %s\n%v", strings.Join(updatablePodSpecFields, ","), specDiff))
-		}
+		errs := field.Forbidden(specPath, fmt.Sprintf("pod updates may not change fields other than %s\n%v", strings.Join(updatablePodSpecFields, ","), specDiff))
 		allErrs = append(allErrs, errs)
 	}
 	return allErrs
@@ -5416,6 +5370,10 @@ func ValidatePodStatusUpdate(newPod, oldPod *core.Pod, opts PodValidationOptions
 	// Pod QoS is immutable
 	allErrs = append(allErrs, ValidateImmutableField(newPod.Status.QOSClass, oldPod.Status.QOSClass, fldPath.Child("qosClass"))...)
 
+	// Note: there is no check that ContainerStatuses, InitContainerStatuses, and EphemeralContainerStatuses doesn't have duplicate conatainer names
+	// or statuses of containers that are not defined in the pod spec. Changing this may lead to a breaking changes. So consumers of those fields
+	// must account for unexpected data. Kubelet will never report statuses like this.
+	//
 	// If pod should not restart, make sure the status update does not transition
 	// any terminated containers to a non-terminated state.
 	allErrs = append(allErrs, ValidateContainerStateTransition(newPod.Status.ContainerStatuses, oldPod.Status.ContainerStatuses, fldPath.Child("containerStatuses"), oldPod.Spec.RestartPolicy)...)
@@ -5528,6 +5486,67 @@ func ValidatePodEphemeralContainersUpdate(newPod, oldPod *core.Pod, opts PodVali
 		}
 	}
 
+	return allErrs
+}
+
+// ValidatePodResize tests that a user update to pod container resources is valid.
+// newPod and oldPod must only differ in their Containers[*].Resources and
+// Containers[*].ResizePolicy field.
+func ValidatePodResize(newPod, oldPod *core.Pod, opts PodValidationOptions) field.ErrorList {
+	// Part 1: Validate newPod's spec and updates to metadata
+	fldPath := field.NewPath("metadata")
+	allErrs := ValidateImmutableField(&newPod.ObjectMeta, &oldPod.ObjectMeta, fldPath)
+	allErrs = append(allErrs, validatePodMetadataAndSpec(newPod, opts)...)
+
+	// static pods cannot be resized.
+	if _, ok := oldPod.Annotations[core.MirrorPodAnnotationKey]; ok {
+		return field.ErrorList{field.Forbidden(field.NewPath(""), "static pods cannot be resized")}
+	}
+
+	// Part 2: Validate that the changes between oldPod.Spec.Containers[].Resources and
+	// newPod.Spec.Containers[].Resources are allowed.
+	specPath := field.NewPath("spec")
+	if qos.GetPodQOS(oldPod) != qos.ComputePodQOS(newPod) {
+		allErrs = append(allErrs, field.Invalid(specPath, newPod.Status.QOSClass, "Pod QOS Class may not change as a result of resizing"))
+	}
+
+	// Ensure that only CPU and memory resources are mutable.
+	originalCPUMemPodSpec := *newPod.Spec.DeepCopy()
+	var newContainers []core.Container
+	for ix, container := range originalCPUMemPodSpec.Containers {
+		dropCPUMemoryUpdates := func(resourceList, oldResourceList core.ResourceList) core.ResourceList {
+			if oldResourceList == nil {
+				return nil
+			}
+			var mungedResourceList core.ResourceList
+			if resourceList == nil {
+				mungedResourceList = make(core.ResourceList)
+			} else {
+				mungedResourceList = resourceList.DeepCopy()
+			}
+			delete(mungedResourceList, core.ResourceCPU)
+			delete(mungedResourceList, core.ResourceMemory)
+			if cpu, found := oldResourceList[core.ResourceCPU]; found {
+				mungedResourceList[core.ResourceCPU] = cpu
+			}
+			if mem, found := oldResourceList[core.ResourceMemory]; found {
+				mungedResourceList[core.ResourceMemory] = mem
+			}
+			return mungedResourceList
+		}
+		lim := dropCPUMemoryUpdates(container.Resources.Limits, oldPod.Spec.Containers[ix].Resources.Limits)
+		req := dropCPUMemoryUpdates(container.Resources.Requests, oldPod.Spec.Containers[ix].Resources.Requests)
+		container.Resources = core.ResourceRequirements{Limits: lim, Requests: req}
+		container.ResizePolicy = oldPod.Spec.Containers[ix].ResizePolicy // +k8s:verify-mutation:reason=clone
+		newContainers = append(newContainers, container)
+	}
+	originalCPUMemPodSpec.Containers = newContainers
+	if !apiequality.Semantic.DeepEqual(originalCPUMemPodSpec, oldPod.Spec) {
+		// This likely means that the user has made changes to resources other than CPU and Memory.
+		specDiff := cmp.Diff(oldPod.Spec, originalCPUMemPodSpec)
+		errs := field.Forbidden(specPath, fmt.Sprintf("only cpu and memory resources are mutable\n%v", specDiff))
+		allErrs = append(allErrs, errs)
+	}
 	return allErrs
 }
 
@@ -6589,7 +6608,7 @@ func ValidateSecret(secret *core.Secret) field.ErrorList {
 		totalSize += len(value)
 	}
 	if totalSize > core.MaxSecretSize {
-		allErrs = append(allErrs, field.TooLong(dataPath, "", core.MaxSecretSize))
+		allErrs = append(allErrs, field.TooLong(dataPath, "" /*unused*/, core.MaxSecretSize))
 	}
 
 	switch secret.Type {
@@ -6704,7 +6723,7 @@ func ValidateConfigMap(cfg *core.ConfigMap) field.ErrorList {
 	}
 	if totalSize > core.MaxSecretSize {
 		// pass back "" to indicate that the error refers to the whole object.
-		allErrs = append(allErrs, field.TooLong(field.NewPath(""), cfg, core.MaxSecretSize))
+		allErrs = append(allErrs, field.TooLong(field.NewPath(""), "" /*unused*/, core.MaxSecretSize))
 	}
 
 	return allErrs

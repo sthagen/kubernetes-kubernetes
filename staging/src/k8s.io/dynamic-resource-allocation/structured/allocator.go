@@ -24,14 +24,20 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
-	resourceapi "k8s.io/api/resource/v1alpha3"
+	resourceapi "k8s.io/api/resource/v1beta1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	resourcelisters "k8s.io/client-go/listers/resource/v1alpha3"
 	draapi "k8s.io/dynamic-resource-allocation/api"
 	"k8s.io/dynamic-resource-allocation/cel"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 )
+
+type deviceClassLister interface {
+	// List returns a list of all DeviceClasses.
+	List() ([]*resourceapi.DeviceClass, error)
+	// Get returns the DeviceClass with the given className.
+	Get(className string) (*resourceapi.DeviceClass, error)
+}
 
 // Allocator calculates how to allocate a set of unallocated claims which use
 // structured parameters.
@@ -43,7 +49,7 @@ type Allocator struct {
 	adminAccessEnabled bool
 	claimsToAllocate   []*resourceapi.ResourceClaim
 	allocatedDevices   sets.Set[DeviceID]
-	classLister        resourcelisters.DeviceClassLister
+	classLister        deviceClassLister
 	slices             []*resourceapi.ResourceSlice
 	celCache           *cel.Cache
 }
@@ -56,7 +62,7 @@ func NewAllocator(ctx context.Context,
 	adminAccessEnabled bool,
 	claimsToAllocate []*resourceapi.ResourceClaim,
 	allocatedDevices sets.Set[DeviceID],
-	classLister resourcelisters.DeviceClassLister,
+	classLister deviceClassLister,
 	slices []*resourceapi.ResourceSlice,
 	celCache *cel.Cache,
 ) (*Allocator, error) {
@@ -707,7 +713,7 @@ func (alloc *allocator) selectorsMatch(r requestIndices, device *draapi.BasicDev
 		// If this conversion turns out to be expensive, the CEL package could be converted
 		// to use unique strings.
 		var d resourceapi.BasicDevice
-		if err := draapi.Convert_api_BasicDevice_To_v1alpha3_BasicDevice(device, &d, nil); err != nil {
+		if err := draapi.Convert_api_BasicDevice_To_v1beta1_BasicDevice(device, &d, nil); err != nil {
 			return false, fmt.Errorf("convert BasicDevice: %w", err)
 		}
 		matches, details, err := expr.DeviceMatches(alloc.ctx, cel.Device{Driver: deviceID.Driver.String(), Attributes: d.Attributes, Capacity: d.Capacity})

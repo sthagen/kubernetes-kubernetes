@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	v1 "k8s.io/api/core/v1"
-	resourceapi "k8s.io/api/resource/v1alpha3"
+	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -145,7 +145,7 @@ func TestControllerSyncPool(t *testing.T) {
 		},
 		"remove-pool": {
 			nodeUID:   nodeUID,
-			syncDelay: ptr.To(time.Duration(0)),
+			syncDelay: ptr.To(time.Duration(0)), // Ensure that the initial object causes an immediate sync of the pool.
 			initialObjects: []runtime.Object{
 				MakeResourceSlice().Name(resourceSlice1).UID(resourceSlice1).
 					NodeOwnerReferences(ownerName, string(nodeUID)).NodeName(ownerName).
@@ -668,7 +668,7 @@ func TestControllerSyncPool(t *testing.T) {
 			ctrl.run(ctx)
 
 			// Check ResourceSlices
-			resourceSlices, err := kubeClient.ResourceV1alpha3().ResourceSlices().List(ctx, metav1.ListOptions{})
+			resourceSlices, err := kubeClient.ResourceV1beta1().ResourceSlices().List(ctx, metav1.ListOptions{})
 			require.NoError(t, err, "list resource slices")
 
 			sortResourceSlices(test.expectedResourceSlices)
@@ -683,6 +683,11 @@ func TestControllerSyncPool(t *testing.T) {
 			// from informer event handler).
 			actualState := queue.State()
 			actualState.Later = nil
+			// If we let the event handler schedule syncs immediately, then that also races
+			// and then Ready cannot be compared either.
+			if test.syncDelay != nil && *test.syncDelay == 0 {
+				actualState.Ready = nil
+			}
 			var expectState workqueue.MockState[string]
 			assert.Equal(t, expectState, actualState)
 		})

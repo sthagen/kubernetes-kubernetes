@@ -34,6 +34,7 @@ import (
 	"time"
 
 	cadvisorapi "github.com/google/cadvisor/info/v1"
+	inuserns "github.com/moby/sys/userns"
 	"github.com/opencontainers/selinux/go-selinux"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -46,7 +47,6 @@ import (
 	utilfs "k8s.io/kubernetes/pkg/util/filesystem"
 	netutils "k8s.io/utils/net"
 
-	inuserns "github.com/moby/sys/userns"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -114,7 +114,6 @@ import (
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/kubelet/userns"
 	"k8s.io/kubernetes/pkg/kubelet/util"
-	"k8s.io/kubernetes/pkg/kubelet/util/format"
 	"k8s.io/kubernetes/pkg/kubelet/util/manager"
 	"k8s.io/kubernetes/pkg/kubelet/util/queue"
 	"k8s.io/kubernetes/pkg/kubelet/util/sliceutils"
@@ -970,7 +969,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	if utilfeature.DefaultFeatureGate.Enabled(features.SystemdWatchdog) {
 		// NewHealthChecker returns an error indicating that the watchdog is configured but the configuration is incorrect,
 		// the kubelet will not be started.
-		klet.healthChecker, err = watchdog.NewHealthChecker(klet)
+		checkers := klet.containerManager.GetHealthCheckers()
+		klet.healthChecker, err = watchdog.NewHealthChecker(klet, watchdog.WithExtendedCheckers(checkers))
 		if err != nil {
 			return nil, fmt.Errorf("create health checker: %w", err)
 		}
@@ -1213,6 +1213,12 @@ type Kubelet struct {
 	// nodeStatusReportFrequency is the frequency that kubelet posts node
 	// status to master. It is only used when node lease feature is enabled.
 	nodeStatusReportFrequency time.Duration
+
+	// delayAfterNodeStatusChange is the one-time random duration that we add to the next node status report interval
+	// every time when there's an actual node status change. But all future node status update that is not caused by
+	// real status change will stick with nodeStatusReportFrequency. The random duration is a uniform distribution over
+	// [-0.5*nodeStatusReportFrequency, 0.5*nodeStatusReportFrequency]
+	delayAfterNodeStatusChange time.Duration
 
 	// lastStatusReportTime is the time when node status was last reported.
 	lastStatusReportTime time.Time
@@ -1828,7 +1834,7 @@ func (kl *Kubelet) SyncPod(ctx context.Context, updateType kubetypes.SyncPodType
 		// this conveniently retries any Deferred resize requests
 		// TODO(vinaykul,InPlacePodVerticalScaling): Investigate doing this in HandlePodUpdates + periodic SyncLoop scan
 		//     See: https://github.com/kubernetes/kubernetes/pull/102884#discussion_r663160060
-		pod, err = kl.handlePodResourcesResize(pod)
+		pod, err = kl.handlePodResourcesResize(pod, podStatus)
 		if err != nil {
 			return false, err
 		}
@@ -2793,23 +2799,28 @@ func (kl *Kubelet) canResizePod(pod *v1.Pod) (bool, v1.PodResizeStatus) {
 	return true, v1.PodResizeStatusInProgress
 }
 
-func (kl *Kubelet) handlePodResourcesResize(pod *v1.Pod) (*v1.Pod, error) {
+// handlePodResourcesResize returns the "allocated pod", which should be used for all resource
+// calculations after this function is called. It also updates the cached ResizeStatus according to
+// the allocation decision and pod status.
+func (kl *Kubelet) handlePodResourcesResize(pod *v1.Pod, podStatus *kubecontainer.PodStatus) (*v1.Pod, error) {
 	allocatedPod, updated := kl.statusManager.UpdatePodFromAllocation(pod)
 	if !updated {
-		// Unless a resize is in-progress, clear the resize status.
-		resizeStatus, _ := kl.statusManager.GetPodResizeStatus(string(pod.UID))
-		if resizeStatus != v1.PodResizeStatusInProgress {
-			if err := kl.statusManager.SetPodResizeStatus(pod.UID, ""); err != nil {
-				klog.ErrorS(err, "Failed to clear resize status", "pod", format.Pod(pod))
-			}
+		// Desired resources == allocated resources. Check whether a resize is in progress.
+		resizeInProgress := !allocatedResourcesMatchStatus(allocatedPod, podStatus)
+		if resizeInProgress {
+			// If a resize is in progress, make sure the cache has the correct state in case the Kubelet restarted.
+			kl.statusManager.SetPodResizeStatus(pod.UID, v1.PodResizeStatusInProgress)
+		} else {
+			// (Desired == Allocated == Actual) => clear the resize status.
+			kl.statusManager.SetPodResizeStatus(pod.UID, "")
 		}
-
-		// Pod is not resizing, nothing more to do here.
+		// Pod allocation does not need to be updated.
 		return allocatedPod, nil
 	}
 
 	kl.podResizeMutex.Lock()
 	defer kl.podResizeMutex.Unlock()
+	// Desired resources != allocated resources. Can we update the allocation to the desired resources?
 	fit, resizeStatus := kl.canResizePod(pod)
 	if fit {
 		// Update pod resource allocation checkpoint
@@ -2819,11 +2830,7 @@ func (kl *Kubelet) handlePodResourcesResize(pod *v1.Pod) (*v1.Pod, error) {
 		allocatedPod = pod
 	}
 	if resizeStatus != "" {
-		// Save resize decision to checkpoint
-		if err := kl.statusManager.SetPodResizeStatus(allocatedPod.UID, resizeStatus); err != nil {
-			//TODO(vinaykul,InPlacePodVerticalScaling): Can we recover from this in some way? Investigate
-			klog.ErrorS(err, "SetPodResizeStatus failed", "pod", klog.KObj(allocatedPod))
-		}
+		kl.statusManager.SetPodResizeStatus(pod.UID, resizeStatus)
 	}
 	return allocatedPod, nil
 }
@@ -2913,12 +2920,12 @@ func (kl *Kubelet) BirthCry() {
 // ListenAndServe runs the kubelet HTTP server.
 func (kl *Kubelet) ListenAndServe(kubeCfg *kubeletconfiginternal.KubeletConfiguration, tlsOptions *server.TLSOptions,
 	auth server.AuthInterface, tp trace.TracerProvider) {
-	server.ListenAndServeKubeletServer(kl, kl.resourceAnalyzer, kubeCfg, tlsOptions, auth, tp)
+	server.ListenAndServeKubeletServer(kl, kl.resourceAnalyzer, kl.containerManager.GetHealthCheckers(), kubeCfg, tlsOptions, auth, tp)
 }
 
 // ListenAndServeReadOnly runs the kubelet HTTP server in read-only mode.
 func (kl *Kubelet) ListenAndServeReadOnly(address net.IP, port uint, tp trace.TracerProvider) {
-	server.ListenAndServeKubeletReadOnlyServer(kl, kl.resourceAnalyzer, address, port, tp)
+	server.ListenAndServeKubeletReadOnlyServer(kl, kl.resourceAnalyzer, kl.containerManager.GetHealthCheckers(), address, port, tp)
 }
 
 // ListenAndServePodResources runs the kubelet podresources grpc service
