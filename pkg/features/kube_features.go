@@ -585,6 +585,13 @@ const (
 	// Decouples Taint Eviction Controller, performing taint-based Pod eviction, from Node Lifecycle Controller.
 	SeparateTaintEvictionController featuregate.Feature = "SeparateTaintEvictionController"
 
+	// owner: @aramase
+	// kep: https://kep.k8s.io/4412
+	//
+	// ServiceAccountNodeAudienceRestriction is used to restrict the audience for which the
+	// kubelet can request a service account token for.
+	ServiceAccountNodeAudienceRestriction featuregate.Feature = "ServiceAccountNodeAudienceRestriction"
+
 	// owner: @munnerz
 	// kep: http://kep.k8s.io/4193
 	//
@@ -812,6 +819,13 @@ const (
 	// instead of changing each file on the volumes recursively.
 	// Enables the SELinuxChangePolicy field in PodSecurityContext before SELinuxMount featgure gate is enabled.
 	SELinuxChangePolicy featuregate.Feature = "SELinuxChangePolicy"
+
+	// owner: @HarshalNeelkamal
+	// alpha: v1.32
+	//
+	// Enables external service account JWT signing and key management.
+	// If enabled, it allows passing --service-account-signing-endpoint flag to configure external signer.
+	ExternalServiceAccountTokenSigner featuregate.Feature = "ExternalServiceAccountTokenSigner"
 )
 
 func init() {

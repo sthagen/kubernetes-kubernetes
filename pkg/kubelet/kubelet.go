@@ -29,6 +29,7 @@ import (
 	sysruntime "runtime"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -46,6 +47,7 @@ import (
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 	utilfs "k8s.io/kubernetes/pkg/util/filesystem"
 	netutils "k8s.io/utils/net"
+	"k8s.io/utils/ptr"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,6 +83,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/cloudresource"
 	"k8s.io/kubernetes/pkg/kubelet/clustertrustbundle"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
+	"k8s.io/kubernetes/pkg/kubelet/cm/topologymanager"
 	"k8s.io/kubernetes/pkg/kubelet/config"
 	"k8s.io/kubernetes/pkg/kubelet/configmap"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
@@ -120,6 +123,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/volumemanager"
 	"k8s.io/kubernetes/pkg/kubelet/watchdog"
 	httpprobe "k8s.io/kubernetes/pkg/probe/http"
+	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/tainttoleration"
 	"k8s.io/kubernetes/pkg/security/apparmor"
 	"k8s.io/kubernetes/pkg/util/oom"
 	"k8s.io/kubernetes/pkg/volume"
@@ -220,10 +224,33 @@ var (
 	// ContainerLogsDir can be overwritten for testing usage
 	ContainerLogsDir = DefaultContainerLogsDir
 	etcHostsPath     = getContainerEtcHostsPath()
+
+	admissionRejectionReasons = sets.New[string](
+		lifecycle.AppArmorNotAdmittedReason,
+		lifecycle.PodOSSelectorNodeLabelDoesNotMatch,
+		lifecycle.PodOSNotSupported,
+		lifecycle.InvalidNodeInfo,
+		lifecycle.InitContainerRestartPolicyForbidden,
+		lifecycle.UnexpectedAdmissionError,
+		lifecycle.UnknownReason,
+		lifecycle.UnexpectedPredicateFailureType,
+		lifecycle.OutOfCPU,
+		lifecycle.OutOfMemory,
+		lifecycle.OutOfEphemeralStorage,
+		lifecycle.OutOfPods,
+		tainttoleration.ErrReasonNotMatch,
+		eviction.Reason,
+		sysctl.ForbiddenReason,
+		topologymanager.ErrorTopologyAffinity,
+		nodeshutdown.NodeShutdownNotAdmittedReason,
+	)
+
+	// This is exposed for unit tests.
+	goos = sysruntime.GOOS
 )
 
 func getContainerEtcHostsPath() string {
-	if sysruntime.GOOS == "windows" {
+	if goos == "windows" {
 		return windowsEtcHostsPath
 	}
 	return linuxEtcHostsPath
@@ -668,6 +695,20 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		klet.podCache,
 	)
 
+	var singleProcessOOMKill *bool
+	if sysruntime.GOOS == "linux" {
+		if !util.IsCgroup2UnifiedMode() {
+			// This is a default behavior for cgroups v1.
+			singleProcessOOMKill = ptr.To(true)
+		} else {
+			if kubeCfg.SingleProcessOOMKill == nil {
+				singleProcessOOMKill = ptr.To(false)
+			} else {
+				singleProcessOOMKill = kubeCfg.SingleProcessOOMKill
+			}
+		}
+	}
+
 	runtime, err := kuberuntime.NewKubeGenericRuntimeManager(
 		kubecontainer.FilterEventRecorder(kubeDeps.Recorder),
 		klet.livenessManager,
@@ -687,6 +728,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		int(kubeCfg.RegistryBurst),
 		imageCredentialProviderConfigFile,
 		imageCredentialProviderBinDir,
+		singleProcessOOMKill,
 		kubeCfg.CPUCFSQuota,
 		kubeCfg.CPUCFSQuotaPeriod,
 		kubeDeps.RemoteRuntimeService,
@@ -917,7 +959,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		opt(klet)
 	}
 
-	if sysruntime.GOOS == "linux" {
+	if goos == "linux" {
 		// AppArmor is a Linux kernel security module and it does not support other operating systems.
 		klet.appArmorValidator = apparmor.NewValidator()
 		klet.admitHandlers.AddPodAdmitHandler(lifecycle.NewAppArmorAdmitHandler(klet.appArmorValidator))
@@ -1213,12 +1255,6 @@ type Kubelet struct {
 	// nodeStatusReportFrequency is the frequency that kubelet posts node
 	// status to master. It is only used when node lease feature is enabled.
 	nodeStatusReportFrequency time.Duration
-
-	// delayAfterNodeStatusChange is the one-time random duration that we add to the next node status report interval
-	// every time when there's an actual node status change. But all future node status update that is not caused by
-	// real status change will stick with nodeStatusReportFrequency. The random duration is a uniform distribution over
-	// [-0.5*nodeStatusReportFrequency, 0.5*nodeStatusReportFrequency]
-	delayAfterNodeStatusChange time.Duration
 
 	// lastStatusReportTime is the time when node status was last reported.
 	lastStatusReportTime time.Time
@@ -1541,7 +1577,7 @@ func (kl *Kubelet) initializeModules() error {
 		}
 	}
 
-	if sysruntime.GOOS == "windows" {
+	if goos == "windows" {
 		// On Windows we should not allow other users to read the logs directory
 		// to avoid allowing non-root containers from reading the logs of other containers.
 		if err := utilfs.Chmod(ContainerLogsDir, 0750); err != nil {
@@ -2310,7 +2346,6 @@ func (kl *Kubelet) canAdmitPod(allocatedPods []*v1.Pod, pod *v1.Pod) (bool, stri
 	attrs := &lifecycle.PodAdmitAttributes{Pod: pod, OtherPods: allocatedPods}
 	for _, podAdmitHandler := range kl.admitHandlers {
 		if result := podAdmitHandler.Admit(attrs); !result.Admit {
-
 			klog.InfoS("Pod admission denied", "podUID", attrs.Pod.UID, "pod", klog.KObj(attrs.Pod), "reason", result.Reason, "message", result.Message)
 
 			return false, result.Reason, result.Message
@@ -2318,6 +2353,22 @@ func (kl *Kubelet) canAdmitPod(allocatedPods []*v1.Pod, pod *v1.Pod) (bool, stri
 	}
 
 	return true, "", ""
+}
+
+func recordAdmissionRejection(reason string) {
+	// It is possible that the "reason" label can have high cardinality.
+	// To avoid this metric from exploding, we create an allowlist of known
+	// reasons, and only record reasons from this list. Use "Other" reason
+	// for the rest.
+	if admissionRejectionReasons.Has(reason) {
+		metrics.AdmissionRejectionsTotal.WithLabelValues(reason).Inc()
+	} else if strings.HasPrefix(reason, lifecycle.InsufficientResourcePrefix) {
+		// non-extended resources (like cpu, memory, ephemeral-storage, pods)
+		// are already included in admissionRejectionReasons.
+		metrics.AdmissionRejectionsTotal.WithLabelValues("OutOfExtendedResources").Inc()
+	} else {
+		metrics.AdmissionRejectionsTotal.WithLabelValues("Other").Inc()
+	}
 }
 
 // syncLoop is the main loop for processing changes. It watches for changes from
@@ -2590,6 +2641,11 @@ func (kl *Kubelet) HandlePodAdditions(pods []*v1.Pod) {
 				// Check if we can admit the pod; if not, reject it.
 				if ok, reason, message := kl.canAdmitPod(allocatedPods, allocatedPod); !ok {
 					kl.rejectPod(pod, reason, message)
+					// We avoid recording the metric in canAdmitPod because it's called
+					// repeatedly during a resize, which would inflate the metric.
+					// Instead, we record the metric here in HandlePodAdditions for new pods
+					// and capture resize events separately.
+					recordAdmissionRejection(reason)
 					continue
 				}
 				// For new pod, checkpoint the resource values at which the Pod has been admitted
@@ -2601,6 +2657,11 @@ func (kl *Kubelet) HandlePodAdditions(pods []*v1.Pod) {
 				// Check if we can admit the pod; if not, reject it.
 				if ok, reason, message := kl.canAdmitPod(allocatedPods, pod); !ok {
 					kl.rejectPod(pod, reason, message)
+					// We avoid recording the metric in canAdmitPod because it's called
+					// repeatedly during a resize, which would inflate the metric.
+					// Instead, we record the metric here in HandlePodAdditions for new pods
+					// and capture resize events separately.
+					recordAdmissionRejection(reason)
 					continue
 				}
 			}
@@ -2815,6 +2876,10 @@ func (kl *Kubelet) handlePodResourcesResize(pod *v1.Pod, podStatus *kubecontaine
 			kl.statusManager.SetPodResizeStatus(pod.UID, "")
 		}
 		// Pod allocation does not need to be updated.
+		return allocatedPod, nil
+	}
+	if goos == "windows" {
+		kl.statusManager.SetPodResizeStatus(pod.UID, v1.PodResizeStatusInfeasible)
 		return allocatedPod, nil
 	}
 

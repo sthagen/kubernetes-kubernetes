@@ -452,6 +452,12 @@
     lockToDefault: false
     preRelease: GA
     version: "1.20"
+- name: ExternalServiceAccountTokenSigner
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.32"
 - name: GracefulNodeShutdown
   versionedSpecs:
   - default: false
@@ -906,10 +912,6 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.30"
-  - default: true
-    lockToDefault: true
-    preRelease: GA
-    version: "1.32"
 - name: PodLifecycleSleepActionAllowZero
   versionedSpecs:
   - default: false
@@ -1108,6 +1110,12 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.29"
+- name: ServiceAccountNodeAudienceRestriction
+  versionedSpecs:
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.32"
 - name: ServiceAccountTokenJTI
   versionedSpecs:
   - default: false
