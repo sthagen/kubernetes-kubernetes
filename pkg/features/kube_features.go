@@ -21,6 +21,7 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientfeatures "k8s.io/client-go/features"
 	"k8s.io/component-base/featuregate"
+	zpagesfeatures "k8s.io/component-base/zpages/features"
 )
 
 const (
@@ -222,6 +223,14 @@ const (
 	// that is independent of a Pod. Resource allocation is done by the scheduler
 	// based on "structured parameters".
 	DynamicResourceAllocation featuregate.Feature = "DynamicResourceAllocation"
+
+	// owner: @LionelJouin
+	// kep: http://kep.k8s.io/4817
+	// alpha: v1.32
+	//
+	// Enables support the ResourceClaim.status.devices field and for setting this
+	// status from DRA drivers.
+	DRAResourceClaimDeviceStatus featuregate.Feature = "DRAResourceClaimDeviceStatus"
 
 	// owner: @harche
 	// kep: http://kep.k8s.io/3386
@@ -466,17 +475,18 @@ const (
 	// Set pod completion index as a pod label for Indexed Jobs.
 	PodIndexLabel featuregate.Feature = "PodIndexLabel"
 
+	// owner: @knight42
+	// kep: https://kep.k8s.io/3288
+	// alpha: v1.32
+	//
+	// Enables only stdout or stderr of the container to be retrievd.
+	PodLogsQuerySplitStreams featuregate.Feature = "PodLogsQuerySplitStreams"
+
 	// owner: @ddebroy, @kannon92
 	//
 	// Enables reporting of PodReadyToStartContainersCondition condition in pod status after pod
 	// sandbox creation and network configuration completes successfully
 	PodReadyToStartContainersCondition featuregate.Feature = "PodReadyToStartContainersCondition"
-
-	// owner: @wzshiming
-	// kep: http://kep.k8s.io/2681
-	//
-	// Adds pod.status.hostIPs and downward API
-	PodHostIPs featuregate.Feature = "PodHostIPs"
 
 	// owner: @AxeZhan
 	// kep: http://kep.k8s.io/3960
@@ -578,6 +588,14 @@ const (
 	// Enables the scheduler's enhancement called QueueingHints,
 	// which benefits to reduce the useless requeueing.
 	SchedulerQueueingHints featuregate.Feature = "SchedulerQueueingHints"
+
+	// owner: @sanposhiho
+	// kep: http://kep.k8s.io/4832
+	// alpha: v1.32
+	//
+	// Running some expensive operation within the scheduler's preemption asynchronously,
+	// which improves the scheduling latency when the preemption involves in.
+	SchedulerAsyncPreemption featuregate.Feature = "SchedulerAsyncPreemption"
 
 	// owner: @atosatto @yuanchen8911
 	// kep: http://kep.k8s.io/3902
@@ -831,6 +849,7 @@ const (
 func init() {
 	runtime.Must(utilfeature.DefaultMutableFeatureGate.Add(defaultKubernetesFeatureGates))
 	runtime.Must(utilfeature.DefaultMutableFeatureGate.AddVersioned(defaultVersionedKubernetesFeatureGates))
+	runtime.Must(zpagesfeatures.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 
 	// Register all client-go features with kube's feature gate instance and make all client-go
 	// feature checks use kube's instance. The effect is that for kube binaries, client-go

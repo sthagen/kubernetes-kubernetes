@@ -21022,29 +21022,79 @@ func TestValidPodLogOptions(t *testing.T) {
 	negative := int64(-1)
 	zero := int64(0)
 	positive := int64(1)
+	stdoutStream := core.LogStreamStdout
+	stderrStream := core.LogStreamStderr
+	allStream := core.LogStreamAll
+	invalidStream := "invalid"
 	tests := []struct {
-		opt  core.PodLogOptions
-		errs int
+		opt                  core.PodLogOptions
+		errs                 int
+		allowStreamSelection bool
 	}{
-		{core.PodLogOptions{}, 0},
-		{core.PodLogOptions{Previous: true}, 0},
-		{core.PodLogOptions{Follow: true}, 0},
-		{core.PodLogOptions{TailLines: &zero}, 0},
-		{core.PodLogOptions{TailLines: &negative}, 1},
-		{core.PodLogOptions{TailLines: &positive}, 0},
-		{core.PodLogOptions{LimitBytes: &zero}, 1},
-		{core.PodLogOptions{LimitBytes: &negative}, 1},
-		{core.PodLogOptions{LimitBytes: &positive}, 0},
-		{core.PodLogOptions{SinceSeconds: &negative}, 1},
-		{core.PodLogOptions{SinceSeconds: &positive}, 0},
-		{core.PodLogOptions{SinceSeconds: &zero}, 1},
-		{core.PodLogOptions{SinceTime: &now}, 0},
+		{core.PodLogOptions{}, 0, false},
+		{core.PodLogOptions{Previous: true}, 0, false},
+		{core.PodLogOptions{Follow: true}, 0, false},
+		{core.PodLogOptions{TailLines: &zero}, 0, false},
+		{core.PodLogOptions{TailLines: &negative}, 1, false},
+		{core.PodLogOptions{TailLines: &positive}, 0, false},
+		{core.PodLogOptions{LimitBytes: &zero}, 1, false},
+		{core.PodLogOptions{LimitBytes: &negative}, 1, false},
+		{core.PodLogOptions{LimitBytes: &positive}, 0, false},
+		{core.PodLogOptions{SinceSeconds: &negative}, 1, false},
+		{core.PodLogOptions{SinceSeconds: &positive}, 0, false},
+		{core.PodLogOptions{SinceSeconds: &zero}, 1, false},
+		{core.PodLogOptions{SinceTime: &now}, 0, false},
+		{
+			opt: core.PodLogOptions{
+				Stream: &stdoutStream,
+			},
+			allowStreamSelection: false,
+			errs:                 1,
+		},
+		{
+			opt: core.PodLogOptions{
+				Stream: &stdoutStream,
+			},
+			allowStreamSelection: true,
+		},
+		{
+			opt: core.PodLogOptions{
+				Stream: &invalidStream,
+			},
+			allowStreamSelection: true,
+			errs:                 1,
+		},
+		{
+			opt: core.PodLogOptions{
+				Stream:    &stderrStream,
+				TailLines: &positive,
+			},
+			allowStreamSelection: true,
+			errs:                 1,
+		},
+		{
+			opt: core.PodLogOptions{
+				Stream:    &allStream,
+				TailLines: &positive,
+			},
+			allowStreamSelection: true,
+		},
+		{
+			opt: core.PodLogOptions{
+				Stream:     &stdoutStream,
+				LimitBytes: &positive,
+				SinceTime:  &now,
+			},
+			allowStreamSelection: true,
+		},
 	}
 	for i, test := range tests {
-		errs := ValidatePodLogOptions(&test.opt)
-		if test.errs != len(errs) {
-			t.Errorf("%d: Unexpected errors: %v", i, errs)
-		}
+		t.Run(fmt.Sprintf("case-%d", i), func(t *testing.T) {
+			errs := ValidatePodLogOptions(&test.opt, test.allowStreamSelection)
+			if test.errs != len(errs) {
+				t.Errorf("%d: Unexpected errors: %v", i, errs)
+			}
+		})
 	}
 }
 
@@ -23736,41 +23786,6 @@ func TestValidateAppArmorProfileFormat(t *testing.T) {
 	}
 }
 
-func TestValidateDownwardAPIHostIPs(t *testing.T) {
-	testCases := []struct {
-		name           string
-		expectError    bool
-		featureEnabled bool
-		fieldSel       *core.ObjectFieldSelector
-	}{
-		{
-			name:           "has no hostIPs field, featuregate enabled",
-			expectError:    false,
-			featureEnabled: true,
-			fieldSel:       &core.ObjectFieldSelector{FieldPath: "status.hostIP"},
-		},
-		{
-			name:           "has hostIPs field, featuregate enabled",
-			expectError:    false,
-			featureEnabled: true,
-			fieldSel:       &core.ObjectFieldSelector{FieldPath: "status.hostIPs"},
-		},
-	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.PodHostIPs, testCase.featureEnabled)
-
-			errs := validateDownwardAPIHostIPs(testCase.fieldSel, field.NewPath("fieldSel"), PodValidationOptions{AllowHostIPsField: testCase.featureEnabled})
-			if testCase.expectError && len(errs) == 0 {
-				t.Errorf("Unexpected success")
-			}
-			if !testCase.expectError && len(errs) != 0 {
-				t.Errorf("Unexpected error(s): %v", errs)
-			}
-		})
-	}
-}
-
 func TestValidatePVSecretReference(t *testing.T) {
 	rootFld := field.NewPath("name")
 	type args struct {
@@ -25187,6 +25202,74 @@ func TestValidatePodResize(t *testing.T) {
 			old:  mkPod(core.ResourceList{}, getResources("100m", "0", "1Gi", ""), podtest.SetOS(core.Windows)),
 			new:  mkPod(core.ResourceList{}, getResources("200m", "0", "1Gi", ""), podtest.SetOS(core.Windows)),
 			err:  "Forbidden: windows pods cannot be resized",
+		},
+		{
+			test: "Pod with nil Resource field in Status",
+			old: mkPod(core.ResourceList{}, getResources("100m", "0", "1Gi", ""), podtest.SetStatus(core.PodStatus{
+				ContainerStatuses: []core.ContainerStatus{{
+					ContainerID: "docker://numbers",
+					Image:       "nginx:alpine",
+					Name:        "main",
+					Ready:       true,
+					Started:     proto.Bool(true),
+					Resources:   nil,
+					State: core.ContainerState{
+						Running: &core.ContainerStateRunning{
+							StartedAt: metav1.NewTime(time.Now()),
+						},
+					},
+				}},
+			})),
+			new: mkPod(core.ResourceList{}, getResources("200m", "0", "1Gi", "")),
+			err: "Forbidden: Pod running on node without support for resize",
+		},
+		{
+			test: "Pod with non-nil Resources field in Status",
+			old: mkPod(core.ResourceList{}, getResources("100m", "0", "1Gi", ""), podtest.SetStatus(core.PodStatus{
+				ContainerStatuses: []core.ContainerStatus{{
+					ContainerID: "docker://numbers",
+					Image:       "nginx:alpine",
+					Name:        "main",
+					Ready:       true,
+					Started:     proto.Bool(true),
+					Resources:   &core.ResourceRequirements{},
+					State: core.ContainerState{
+						Running: &core.ContainerStateRunning{
+							StartedAt: metav1.NewTime(time.Now()),
+						},
+					},
+				}},
+			})),
+			new: mkPod(core.ResourceList{}, getResources("200m", "0", "1Gi", "")),
+			err: "",
+		},
+		{
+			test: "Pod without running containers",
+			old: mkPod(core.ResourceList{}, getResources("100m", "0", "1Gi", ""), podtest.SetStatus(core.PodStatus{
+				ContainerStatuses: []core.ContainerStatus{},
+			})),
+			new: mkPod(core.ResourceList{}, getResources("200m", "0", "1Gi", "")),
+			err: "",
+		},
+		{
+			test: "Pod with containers which are not running yet",
+			old: mkPod(core.ResourceList{}, getResources("100m", "0", "1Gi", ""), podtest.SetStatus(core.PodStatus{
+				ContainerStatuses: []core.ContainerStatus{{
+					ContainerID: "docker://numbers",
+					Image:       "nginx:alpine",
+					Name:        "main",
+					Ready:       true,
+					Started:     proto.Bool(true),
+					Resources:   &core.ResourceRequirements{},
+					State: core.ContainerState{
+						Waiting: &core.ContainerStateWaiting{
+							Reason: "PodInitializing",
+						},
+					},
+				}},
+			})),
+			new: mkPod(core.ResourceList{}, getResources("200m", "0", "1Gi", "")),
+			err: "",
 		},
 	}
 

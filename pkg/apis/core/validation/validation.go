@@ -31,6 +31,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/go-cmp/cmp"
+	netutils "k8s.io/utils/net"
+
 	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -47,6 +49,7 @@ import (
 	utilsysctl "k8s.io/component-helpers/node/util/sysctl"
 	schedulinghelper "k8s.io/component-helpers/scheduling/corev1"
 	kubeletapis "k8s.io/kubelet/pkg/apis"
+
 	apiservice "k8s.io/kubernetes/pkg/api/service"
 	"k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/core/helper"
@@ -57,7 +60,6 @@ import (
 	"k8s.io/kubernetes/pkg/cluster/ports"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/fieldpath"
-	netutils "k8s.io/utils/net"
 )
 
 const isNegativeErrorMsg string = apimachineryvalidation.IsNegativeErrorMsg
@@ -1073,7 +1075,6 @@ func validateDownwardAPIVolumeFile(file *core.DownwardAPIVolumeFile, fldPath *fi
 		if file.ResourceFieldRef != nil {
 			allErrs = append(allErrs, field.Invalid(fldPath, "resource", "fieldRef and resourceFieldRef can not be specified simultaneously"))
 		}
-		allErrs = append(allErrs, validateDownwardAPIHostIPs(file.FieldRef, fldPath.Child("fieldRef"), opts)...)
 	} else if file.ResourceFieldRef != nil {
 		localValidContainerResourceFieldPathPrefixes := validContainerResourceFieldPathPrefixesWithDownwardAPIHugePages
 		allErrs = append(allErrs, validateContainerResourceFieldSelector(file.ResourceFieldRef, &validContainerResourceFieldPathExpressions, &localValidContainerResourceFieldPathPrefixes, fldPath.Child("resourceFieldRef"), true)...)
@@ -2655,7 +2656,6 @@ func validateEnvVarValueFrom(ev core.EnvVar, fldPath *field.Path, opts PodValida
 	if ev.ValueFrom.FieldRef != nil {
 		numSources++
 		allErrs = append(allErrs, validateObjectFieldSelector(ev.ValueFrom.FieldRef, &validEnvDownwardAPIFieldPathExpressions, fldPath.Child("fieldRef"))...)
-		allErrs = append(allErrs, validateDownwardAPIHostIPs(ev.ValueFrom.FieldRef, fldPath.Child("fieldRef"), opts)...)
 	}
 	if ev.ValueFrom.ResourceFieldRef != nil {
 		numSources++
@@ -2716,16 +2716,6 @@ func validateObjectFieldSelector(fs *core.ObjectFieldSelector, expressions *sets
 		return allErrs
 	}
 
-	return allErrs
-}
-
-func validateDownwardAPIHostIPs(fieldSel *core.ObjectFieldSelector, fldPath *field.Path, opts PodValidationOptions) field.ErrorList {
-	allErrs := field.ErrorList{}
-	if !opts.AllowHostIPsField {
-		if fieldSel.FieldPath == "status.hostIPs" {
-			allErrs = append(allErrs, field.Forbidden(fldPath, "may not be set when feature gate 'PodHostIPs' is not enabled"))
-		}
-	}
 	return allErrs
 }
 
@@ -4041,8 +4031,6 @@ type PodValidationOptions struct {
 	AllowInvalidLabelValueInSelector bool
 	// Allow pod spec to use non-integer multiple of huge page unit size
 	AllowIndivisibleHugePagesValues bool
-	// Allow pod spec to use status.hostIPs in downward API if feature is enabled
-	AllowHostIPsField bool
 	// Allow invalid topologySpreadConstraint labelSelector for backward compatibility
 	AllowInvalidTopologySpreadConstraintLabelSelector bool
 	// Allow projected token volumes with non-local paths
@@ -5515,6 +5503,10 @@ func ValidatePodResize(newPod, oldPod *core.Pod, opts PodValidationOptions) fiel
 		allErrs = append(allErrs, field.Invalid(specPath, newPod.Status.QOSClass, "Pod QOS Class may not change as a result of resizing"))
 	}
 
+	if !isPodResizeRequestSupported(*oldPod) {
+		allErrs = append(allErrs, field.Forbidden(specPath, "Pod running on node without support for resize"))
+	}
+
 	// Ensure that only CPU and memory resources are mutable.
 	originalCPUMemPodSpec := *newPod.Spec.DeepCopy()
 	var newContainers []core.Container
@@ -5553,6 +5545,23 @@ func ValidatePodResize(newPod, oldPod *core.Pod, opts PodValidationOptions) fiel
 		allErrs = append(allErrs, errs)
 	}
 	return allErrs
+}
+
+// isPodResizeRequestSupported checks whether the pod is running on a node with InPlacePodVerticalScaling enabled.
+func isPodResizeRequestSupported(pod core.Pod) bool {
+	// TODO: Remove this after GA+3 releases of InPlacePodVerticalScaling
+	// This code handles the version skew as described in the KEP.
+	// For handling version skew we're only allowing to update the Pod's Resources
+	// if the Pod already has Pod.Status.ContainerStatuses[i].Resources. This means
+	// that the apiserver would only allow updates to Pods running on Nodes with
+	// the InPlacePodVerticalScaling feature gate enabled.
+	for _, c := range pod.Status.ContainerStatuses {
+		if c.State.Running != nil {
+			return c.Resources != nil
+		}
+	}
+	// No running containers. We cannot tell whether the node supports resize at this point, so we assume it does.
+	return true
 }
 
 // ValidatePodBinding tests if required fields in the pod binding are legal.
@@ -7531,7 +7540,13 @@ func validateOS(podSpec *core.PodSpec, fldPath *field.Path, opts PodValidationOp
 	return allErrs
 }
 
-func ValidatePodLogOptions(opts *core.PodLogOptions) field.ErrorList {
+var validLogStreams = sets.New[string](
+	core.LogStreamStdout,
+	core.LogStreamStderr,
+	core.LogStreamAll,
+)
+
+func ValidatePodLogOptions(opts *core.PodLogOptions, allowStreamSelection bool) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if opts.TailLines != nil && *opts.TailLines < 0 {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("tailLines"), *opts.TailLines, isNegativeErrorMsg))
@@ -7546,6 +7561,20 @@ func ValidatePodLogOptions(opts *core.PodLogOptions) field.ErrorList {
 		if *opts.SinceSeconds < 1 {
 			allErrs = append(allErrs, field.Invalid(field.NewPath("sinceSeconds"), *opts.SinceSeconds, "must be greater than 0"))
 		}
+	}
+	if allowStreamSelection {
+		if opts.Stream == nil {
+			allErrs = append(allErrs, field.Required(field.NewPath("stream"), "must be specified"))
+		} else {
+			if !validLogStreams.Has(*opts.Stream) {
+				allErrs = append(allErrs, field.NotSupported(field.NewPath("stream"), *opts.Stream, validLogStreams.UnsortedList()))
+			}
+			if *opts.Stream != core.LogStreamAll && opts.TailLines != nil {
+				allErrs = append(allErrs, field.Forbidden(field.NewPath(""), "`tailLines` and specific `stream` are mutually exclusive for now"))
+			}
+		}
+	} else if opts.Stream != nil {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("stream"), "may not be specified"))
 	}
 	return allErrs
 }

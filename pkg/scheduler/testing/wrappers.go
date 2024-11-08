@@ -310,6 +310,12 @@ func (p *PodWrapper) Name(s string) *PodWrapper {
 	return p
 }
 
+// Name sets `s` as the name of the inner pod.
+func (p *PodWrapper) GenerateName(s string) *PodWrapper {
+	p.SetGenerateName(s)
+	return p
+}
+
 // UID sets `s` as the UID of the inner pod.
 func (p *PodWrapper) UID(s string) *PodWrapper {
 	p.SetUID(types.UID(s))
@@ -982,6 +988,12 @@ func (p *PersistentVolumeWrapper) Capacity(capacity v1.ResourceList) *Persistent
 // PersistentVolume.
 func (p *PersistentVolumeWrapper) HostPathVolumeSource(src *v1.HostPathVolumeSource) *PersistentVolumeWrapper {
 	p.PersistentVolume.Spec.HostPath = src
+	return p
+}
+
+// PersistentVolumeSource sets `src` as the pv source of the inner
+func (p *PersistentVolumeWrapper) PersistentVolumeSource(src v1.PersistentVolumeSource) *PersistentVolumeWrapper {
+	p.PersistentVolume.Spec.PersistentVolumeSource = src
 	return p
 }
 

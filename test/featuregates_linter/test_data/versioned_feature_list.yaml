@@ -54,6 +54,12 @@
     lockToDefault: true
     preRelease: Deprecated
     version: "1.32"
+- name: AllowUnsafeMalformedObjectDeletion
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.32"
 - name: AnonymousAuthConfigurableEndpoints
   versionedSpecs:
   - default: false
@@ -194,6 +200,12 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.29"
+- name: ComponentFlagz
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.32"
 - name: ComponentSLIs
   versionedSpecs:
   - default: false
@@ -207,6 +219,12 @@
   - default: true
     lockToDefault: true
     preRelease: GA
+    version: "1.32"
+- name: ComponentStatusz
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
     version: "1.32"
 - name: ConcurrentWatchObjectDecode
   versionedSpecs:
@@ -401,6 +419,12 @@
     preRelease: Deprecated
     version: "1.31"
 - name: DRAAdminAccess
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.32"
+- name: DRAResourceClaimDeviceStatus
   versionedSpecs:
   - default: false
     lockToDefault: false
@@ -878,20 +902,6 @@
     lockToDefault: true
     preRelease: GA
     version: "1.31"
-- name: PodHostIPs
-  versionedSpecs:
-  - default: false
-    lockToDefault: false
-    preRelease: Alpha
-    version: "1.28"
-  - default: true
-    lockToDefault: false
-    preRelease: Beta
-    version: "1.29"
-  - default: true
-    lockToDefault: true
-    preRelease: GA
-    version: "1.30"
 - name: PodIndexLabel
   versionedSpecs:
   - default: true
@@ -918,6 +928,12 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.32"
+- name: PodLogsQuerySplitStreams
+  versionedSpecs:
+    - default: false
+      lockToDefault: false
+      preRelease: Alpha
+      version: "1.32"
 - name: PodReadyToStartContainersCondition
   versionedSpecs:
   - default: false
@@ -1066,12 +1082,22 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.29"
+- name: SchedulerAsyncPreemption
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.32"
 - name: SchedulerQueueingHints
   versionedSpecs:
   - default: false
     lockToDefault: false
     preRelease: Beta
     version: "1.28"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.32"
 - name: SELinuxChangePolicy
   versionedSpecs:
   - default: false
@@ -1212,6 +1238,10 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.27"
+  - default: true
+    lockToDefault: true
+    preRelease: GA
+    version: "1.32"
 - name: StatefulSetStartOrdinal
   versionedSpecs:
   - default: false

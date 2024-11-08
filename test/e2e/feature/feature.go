@@ -34,6 +34,10 @@ var (
 	// TODO: document the feature (owning SIG, when to use this feature for a test)
 	BoundServiceAccountTokenVolume = framework.WithFeature(framework.ValidFeatures.Add("BoundServiceAccountTokenVolume"))
 
+	// Owner: sig-api-machinery
+	// Marks tests that exercise the CBOR data format for serving or storage.
+	CBOR = framework.WithFeature(framework.ValidFeatures.Add("CBOR"))
+
 	// TODO: document the feature (owning SIG, when to use this feature for a test)
 	CloudProvider = framework.WithFeature(framework.ValidFeatures.Add("CloudProvider"))
 
@@ -90,6 +94,15 @@ var (
 
 	// TODO: document the feature (owning SIG, when to use this feature for a test)
 	Downgrade = framework.WithFeature(framework.ValidFeatures.Add("Downgrade"))
+
+	// owning-sig: sig-node
+	// kep: https://kep.k8s.io/4817
+	// test-infra jobs:
+	// - "dra-alpha" in https://testgrid.k8s.io/sig-node-dynamic-resource-allocation
+	//
+	// This label is used for tests which need:
+	// - the DynamicResourceAllocation *and* DRAResourceClaimDeviceStatus feature gates
+	DRAResourceClaimDeviceStatus = framework.WithFeature(framework.ValidFeatures.Add("DRAResourceClaimDeviceStatus"))
 
 	// owning-sig: sig-node
 	// kep: https://kep.k8s.io/4381
@@ -271,6 +284,11 @@ var (
 	// Marks a single test that tests Pod Lifecycle Sleep action with zero duration. Requires feature gate PodLifecycleSleepActionAllowZero to be enabled.
 	PodLifecycleSleepActionAllowZero = framework.WithFeature(framework.ValidFeatures.Add("PodLifecycleSleepActionAllowZero"))
 
+	// Owner: sig-node
+	// Marks tests that require a cluster with PodLogsQuerySplitStreams
+	// (used for testing specific log stream <https://kep.k8s.io/3288>)
+	PodLogsQuerySplitStreams = framework.WithFeature(framework.ValidFeatures.Add("PodLogsQuerySplitStreams"))
+
 	// TODO: document the feature (owning SIG, when to use this feature for a test)
 	PodPriority = framework.WithFeature(framework.ValidFeatures.Add("PodPriority"))
 
@@ -302,6 +320,10 @@ var (
 
 	// TODO: document the feature (owning SIG, when to use this feature for a test)
 	RegularResourceUsageTracking = framework.WithFeature(framework.ValidFeatures.Add("RegularResourceUsageTracking"))
+
+	// Owner: sig-scheduling
+	// Marks tests of the asynchronous preemption (KEP-4832) that require the `SchedulerAsyncPreemption` feature gate.
+	SchedulerAsyncPreemption = framework.WithFeature(framework.ValidFeatures.Add("SchedulerAsyncPreemption"))
 
 	// Owner: sig-network
 	// Marks tests that require a pod networking implementation that supports SCTP

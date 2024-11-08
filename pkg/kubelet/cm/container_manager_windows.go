@@ -25,10 +25,11 @@ package cm
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	kubefeatures "k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/cm/memorymanager"
-	"sync"
 
 	"k8s.io/klog/v2"
 	"k8s.io/mount-utils"
@@ -67,6 +68,7 @@ type containerManagerImpl struct {
 	// Interface for Topology resource co-ordination
 	topologyManager topologymanager.Manager
 	cpuManager      cpumanager.Manager
+	memoryManager   memorymanager.Manager
 	nodeInfo        *v1.Node
 	sync.RWMutex
 }
@@ -94,16 +96,21 @@ func (cm *containerManagerImpl) Start(ctx context.Context, node *v1.Node,
 
 	containerMap, containerRunningSet := buildContainerMapAndRunningSetFromRuntime(ctx, runtimeService)
 
-	// Initialize CPU manager
 	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.WindowsCPUAndMemoryAffinity) {
-		err := cm.cpuManager.Start(cpumanager.ActivePodsFunc(activePods), sourcesReady, podStatusProvider, runtimeService, containerMap)
+		err := cm.cpuManager.Start(cpumanager.ActivePodsFunc(activePods), sourcesReady, podStatusProvider, runtimeService, containerMap.Clone())
 		if err != nil {
 			return fmt.Errorf("start cpu manager error: %v", err)
+		}
+
+		// Initialize memory manager
+		err = cm.memoryManager.Start(memorymanager.ActivePodsFunc(activePods), sourcesReady, podStatusProvider, runtimeService, containerMap.Clone())
+		if err != nil {
+			return fmt.Errorf("start memory manager error: %v", err)
 		}
 	}
 
 	// Starts device manager.
-	if err := cm.deviceManager.Start(devicemanager.ActivePodsFunc(activePods), sourcesReady, containerMap, containerRunningSet); err != nil {
+	if err := cm.deviceManager.Start(devicemanager.ActivePodsFunc(activePods), sourcesReady, containerMap.Clone(), containerRunningSet); err != nil {
 		return err
 	}
 
@@ -126,6 +133,10 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 		nodeConfig:        nodeConfig,
 		cadvisorInterface: cadvisorInterface,
 	}
+
+	cm.topologyManager = topologymanager.NewFakeManager()
+	cm.cpuManager = cpumanager.NewFakeManager()
+	cm.memoryManager = memorymanager.NewFakeManager()
 
 	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.WindowsCPUAndMemoryAffinity) {
 		klog.InfoS("Creating topology manager")
@@ -154,9 +165,21 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 			return nil, err
 		}
 		cm.topologyManager.AddHintProvider(cm.cpuManager)
-	} else {
-		cm.topologyManager = topologymanager.NewFakeManager()
-		cm.cpuManager = cpumanager.NewFakeManager()
+
+		klog.InfoS("Creating memory manager")
+		cm.memoryManager, err = memorymanager.NewManager(
+			nodeConfig.ExperimentalMemoryManagerPolicy,
+			machineInfo,
+			cm.GetNodeAllocatableReservation(),
+			nodeConfig.ExperimentalMemoryManagerReservedMemory,
+			nodeConfig.KubeletRootDir,
+			cm.topologyManager,
+		)
+		if err != nil {
+			klog.ErrorS(err, "Failed to initialize memory manager")
+			return nil, err
+		}
+		cm.topologyManager.AddHintProvider(cm.memoryManager)
 	}
 
 	klog.InfoS("Creating device plugin manager")
@@ -272,7 +295,7 @@ func (cm *containerManagerImpl) UpdatePluginResources(node *schedulerframework.N
 }
 
 func (cm *containerManagerImpl) InternalContainerLifecycle() InternalContainerLifecycle {
-	return &internalContainerLifecycleImpl{cm.cpuManager, memorymanager.NewFakeManager(), cm.topologyManager}
+	return &internalContainerLifecycleImpl{cm.cpuManager, cm.memoryManager, cm.topologyManager}
 }
 
 func (cm *containerManagerImpl) GetPodCgroupRoot() string {
