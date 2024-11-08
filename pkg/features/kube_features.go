@@ -279,6 +279,14 @@ const (
 	// InPlacePodVerticalScaling also be enabled.
 	InPlacePodVerticalScalingAllocatedStatus featuregate.Feature = "InPlacePodVerticalScalingAllocatedStatus"
 
+	// owner: @tallclair @esotsal
+	// alpha: v1.32
+	//
+	// Allow resource resize for containers in Guaranteed pods with integer CPU requests ( default false ).
+	// Applies only in nodes with InPlacePodVerticalScaling and CPU Manager features enabled, and
+	// CPU Manager Static Policy option set.
+	InPlacePodVerticalScalingExclusiveCPUs featuregate.Feature = "InPlacePodVerticalScalingExclusiveCPUs"
+
 	// owner: @trierra
 	//
 	// Disables the Portworx in-tree driver.
@@ -844,6 +852,13 @@ const (
 	// Enables external service account JWT signing and key management.
 	// If enabled, it allows passing --service-account-signing-endpoint flag to configure external signer.
 	ExternalServiceAccountTokenSigner featuregate.Feature = "ExternalServiceAccountTokenSigner"
+
+	// owner: @ndixita
+	// key: https://kep.k8s.io/2837
+	// alpha: 1.32
+	//
+	// Enables specifying resources at pod-level.
+	PodLevelResources featuregate.Feature = "PodLevelResources"
 )
 
 func init() {

@@ -567,6 +567,24 @@ func doPodResizeTests(f *framework.Framework) {
 			},
 		},
 		{
+			name: "Burstable QoS pod, one container with cpu requests - resize with equivalent request",
+			containers: []e2epod.ResizableContainerInfo{
+				{
+					Name:      "c1",
+					Resources: &e2epod.ContainerResources{CPUReq: "2m"},
+				},
+			},
+			patchString: `{"spec":{"containers":[
+						{"name":"c1", "resources":{"requests":{"cpu":"1m"}}}
+					]}}`,
+			expected: []e2epod.ResizableContainerInfo{
+				{
+					Name:      "c1",
+					Resources: &e2epod.ContainerResources{CPUReq: "1m"},
+				},
+			},
+		},
+		{
 			name:         "Guaranteed QoS pod, one container - increase CPU (NotRequired) & memory (RestartContainer)",
 			testRollback: true,
 			containers: []e2epod.ResizableContainerInfo{
@@ -783,6 +801,22 @@ func doPodResizeTests(f *framework.Framework) {
 			},
 			addExtendedResource: true,
 		},
+		{
+			name: "BestEffort QoS pod - empty resize",
+			containers: []e2epod.ResizableContainerInfo{
+				{
+					Name:      "c1",
+					Resources: &e2epod.ContainerResources{},
+				},
+			},
+			patchString: `{}`,
+			expected: []e2epod.ResizableContainerInfo{
+				{
+					Name:      "c1",
+					Resources: &e2epod.ContainerResources{},
+				},
+			},
+		},
 	}
 
 	for idx := range tests {
@@ -885,10 +919,86 @@ func doPodResizeErrorTests(f *framework.Framework) {
 			patchString: `{"spec":{"containers":[
 						{"name":"c1", "resources":{"requests":{"memory":"400Mi"}}}
 					]}}`,
-			patchError: "Pod QoS is immutable",
+			patchError: "Pod QOS Class may not change as a result of resizing",
 			expected: []e2epod.ResizableContainerInfo{
 				{
 					Name: "c1",
+				},
+			},
+		},
+		{
+			name: "Burstable QoS pod, one container with cpu & memory requests + limits - remove memory limits",
+			containers: []e2epod.ResizableContainerInfo{
+				{
+					Name:      "c1",
+					Resources: &e2epod.ContainerResources{CPUReq: "200m", CPULim: "400m", MemReq: "250Mi", MemLim: "500Mi"},
+				},
+			},
+			patchString: `{"spec":{"containers":[
+						{"name":"c1", "resources":{"limits":{"memory": null}}}
+					]}}`,
+			patchError: "resource limits cannot be removed",
+			expected: []e2epod.ResizableContainerInfo{
+				{
+					Name:      "c1",
+					Resources: &e2epod.ContainerResources{CPUReq: "200m", CPULim: "400m", MemReq: "250Mi", MemLim: "500Mi"},
+				},
+			},
+		},
+		{
+			name: "Burstable QoS pod, one container with cpu & memory requests + limits - remove CPU limits",
+			containers: []e2epod.ResizableContainerInfo{
+				{
+					Name:      "c1",
+					Resources: &e2epod.ContainerResources{CPUReq: "200m", CPULim: "400m", MemReq: "250Mi", MemLim: "500Mi"},
+				},
+			},
+			patchString: `{"spec":{"containers":[
+						{"name":"c1", "resources":{"limits":{"cpu": null}}}
+					]}}`,
+			patchError: "resource limits cannot be removed",
+			expected: []e2epod.ResizableContainerInfo{
+				{
+					Name:      "c1",
+					Resources: &e2epod.ContainerResources{CPUReq: "200m", CPULim: "400m", MemReq: "250Mi", MemLim: "500Mi"},
+				},
+			},
+		},
+		{
+			name: "Burstable QoS pod, one container with memory requests + limits, cpu requests - remove CPU requests",
+			containers: []e2epod.ResizableContainerInfo{
+				{
+					Name:      "c1",
+					Resources: &e2epod.ContainerResources{CPUReq: "200m", MemReq: "250Mi", MemLim: "500Mi"},
+				},
+			},
+			patchString: `{"spec":{"containers":[
+						{"name":"c1", "resources":{"requests":{"cpu": null}}}
+					]}}`,
+			patchError: "resource requests cannot be removed",
+			expected: []e2epod.ResizableContainerInfo{
+				{
+					Name:      "c1",
+					Resources: &e2epod.ContainerResources{CPUReq: "200m", MemReq: "250Mi", MemLim: "500Mi"},
+				},
+			},
+		},
+		{
+			name: "Burstable QoS pod, one container with CPU requests + limits, cpu requests - remove memory requests",
+			containers: []e2epod.ResizableContainerInfo{
+				{
+					Name:      "c1",
+					Resources: &e2epod.ContainerResources{CPUReq: "200m", CPULim: "400m", MemReq: "250Mi"},
+				},
+			},
+			patchString: `{"spec":{"containers":[
+						{"name":"c1", "resources":{"requests":{"memory": null}}}
+					]}}`,
+			patchError: "resource requests cannot be removed",
+			expected: []e2epod.ResizableContainerInfo{
+				{
+					Name:      "c1",
+					Resources: &e2epod.ContainerResources{CPUReq: "200m", CPULim: "400m", MemReq: "250Mi"},
 				},
 			},
 		},
@@ -925,7 +1035,8 @@ func doPodResizeErrorTests(f *framework.Framework) {
 			if tc.patchError == "" {
 				framework.ExpectNoError(pErr, "failed to patch pod for resize")
 			} else {
-				gomega.Expect(pErr).To(gomega.HaveOccurred(), tc.patchError)
+				gomega.Expect(pErr).To(gomega.HaveOccurred())
+				gomega.Expect(pErr.Error()).To(gomega.ContainSubstring(tc.patchError))
 				patchedPod = newPod
 			}
 

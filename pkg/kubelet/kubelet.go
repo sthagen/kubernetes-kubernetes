@@ -2830,6 +2830,21 @@ func isPodResizeInProgress(pod *v1.Pod, podStatus *kubecontainer.PodStatus) bool
 // pod should hold the desired (pre-allocated) spec.
 // Returns true if the resize can proceed.
 func (kl *Kubelet) canResizePod(pod *v1.Pod) (bool, v1.PodResizeStatus) {
+	if v1qos.GetPodQOS(pod) == v1.PodQOSGuaranteed && !utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScalingExclusiveCPUs) {
+		if utilfeature.DefaultFeatureGate.Enabled(features.CPUManager) {
+			if kl.containerManager.GetNodeConfig().CPUManagerPolicy == "static" {
+				klog.V(3).InfoS("Resize is infeasible for Guaranteed Pods alongside CPU Manager static policy")
+				return false, v1.PodResizeStatusInfeasible
+			}
+		}
+		if utilfeature.DefaultFeatureGate.Enabled(features.MemoryManager) {
+			if kl.containerManager.GetNodeConfig().ExperimentalMemoryManagerPolicy == "static" {
+				klog.V(3).InfoS("Resize is infeasible for Guaranteed Pods alongside Memory Manager static policy")
+				return false, v1.PodResizeStatusInfeasible
+			}
+		}
+	}
+
 	node, err := kl.getNodeAnyWay()
 	if err != nil {
 		klog.ErrorS(err, "getNodeAnyway function failed")
@@ -2897,6 +2912,16 @@ func (kl *Kubelet) handlePodResourcesResize(pod *v1.Pod, podStatus *kubecontaine
 			}
 		}
 		allocatedPod = pod
+
+		// Special case when the updated allocation matches the actual resources. This can occur
+		// when reverting a resize that hasn't been actuated, or when making an equivalent change
+		// (such as CPU requests below MinShares). This is an optimization to clear the resize
+		// status immediately, rather than waiting for the next SyncPod iteration.
+		if allocatedResourcesMatchStatus(allocatedPod, podStatus) {
+			// In this case, consider the resize complete.
+			kl.statusManager.SetPodResizeStatus(pod.UID, "")
+			return allocatedPod, nil
+		}
 	}
 	if resizeStatus != "" {
 		kl.statusManager.SetPodResizeStatus(pod.UID, resizeStatus)
