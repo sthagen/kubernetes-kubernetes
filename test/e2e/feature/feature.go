@@ -271,6 +271,10 @@ var (
 	// TODO: document the feature (owning SIG, when to use this feature for a test)
 	MemoryManager = framework.WithFeature(framework.ValidFeatures.Add("MemoryManager"))
 
+	// Owner: sig-api-machinery
+	// Marks tests that enforce ordered namespace deletion.
+	MutatingAdmissionPolicy = framework.WithFeature(framework.ValidFeatures.Add("MutatingAdmissionPolicy"))
+
 	// Owner: sig-network
 	// Marks tests that require working external DNS.
 	NetworkingDNS = framework.WithFeature(framework.ValidFeatures.Add("Networking-DNS"))
@@ -370,9 +374,6 @@ var (
 
 	// TODO: document the feature (owning SIG, when to use this feature for a test)
 	RecoverVolumeExpansionFailure = framework.WithFeature(framework.ValidFeatures.Add("RecoverVolumeExpansionFailure"))
-
-	// RecursiveReadOnlyMounts (SIG-node, used for testing recursive read-only mounts <https://kep.k8s.io/3857>)
-	RecursiveReadOnlyMounts = framework.WithFeature(framework.ValidFeatures.Add("RecursiveReadOnlyMounts"))
 
 	// RelaxedEnvironmentVariableValidation used when we verify whether the pod can consume all printable ASCII characters as environment variable names,
 	// and whether the pod can consume configmap/secret that key starts with a number.
