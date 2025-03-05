@@ -1748,10 +1748,6 @@ func getPhase(pod *v1.Pod, info []v1.ContainerStatus, podIsTerminal bool) v1.Pod
 }
 
 func (kl *Kubelet) determinePodResizeStatus(allocatedPod *v1.Pod, podStatus *kubecontainer.PodStatus, podIsTerminal bool) v1.PodResizeStatus {
-	if kubetypes.IsStaticPod(allocatedPod) {
-		return ""
-	}
-
 	// If pod is terminal, clear the resize status.
 	if podIsTerminal {
 		kl.statusManager.SetPodResizeStatus(allocatedPod.UID, "")
@@ -2153,7 +2149,7 @@ func (kl *Kubelet) convertToAPIContainerStatuses(pod *v1.Pod, podStatus *kubecon
 
 		// Always set the status to the latest allocated resources, even if it differs from the
 		// allocation used by the current sync loop.
-		alloc, found := kl.allocationManager.GetContainerResourceAllocation(string(pod.UID), cName)
+		alloc, found := kl.allocationManager.GetContainerResourceAllocation(pod.UID, cName)
 		if !found {
 			// This case is expected for non-resizable containers (ephemeral & non-restartable init containers).
 			// Don't set status.Resources in this case.
@@ -2373,7 +2369,7 @@ func (kl *Kubelet) convertToAPIContainerStatuses(pod *v1.Pod, podStatus *kubecon
 			status.Resources = convertContainerStatusResources(cName, status, cStatus, oldStatuses)
 
 			if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScalingAllocatedStatus) {
-				if alloc, found := kl.allocationManager.GetContainerResourceAllocation(string(pod.UID), cName); found {
+				if alloc, found := kl.allocationManager.GetContainerResourceAllocation(pod.UID, cName); found {
 					status.AllocatedResources = alloc.Requests
 				}
 			}
