@@ -2643,15 +2643,25 @@ func TestPodResizePrepareForUpdate(t *testing.T) {
 			),
 			expected: podtest.MakePod("test-pod",
 				podtest.SetResourceVersion("2"),
-				podtest.SetContainers(podtest.MakeContainer("container1",
-					podtest.SetContainerResources(api.ResourceRequirements{
-						Requests: api.ResourceList{
-							api.ResourceCPU:    resource.MustParse("100m"),
-							api.ResourceMemory: resource.MustParse("1Gi"),
-						},
-					}),
-				)),
-				podtest.SetGeneration(1),
+				podtest.SetContainers(
+					podtest.MakeContainer("container1",
+						podtest.SetContainerResources(api.ResourceRequirements{
+							Requests: api.ResourceList{
+								api.ResourceCPU:    resource.MustParse("100m"),
+								api.ResourceMemory: resource.MustParse("1Gi"),
+							},
+						}),
+					),
+					podtest.MakeContainer("container2",
+						podtest.SetContainerResources(api.ResourceRequirements{
+							Requests: api.ResourceList{
+								api.ResourceCPU:    resource.MustParse("100m"),
+								api.ResourceMemory: resource.MustParse("1Gi"),
+							},
+						}),
+					),
+				),
+				podtest.SetGeneration(2),
 				podtest.SetStatus(podtest.MakePodStatus(
 					podtest.SetContainerStatuses(podtest.MakeContainerStatus("container1",
 						api.ResourceList{
@@ -2713,17 +2723,26 @@ func TestPodResizePrepareForUpdate(t *testing.T) {
 			),
 			expected: podtest.MakePod("test-pod",
 				podtest.SetResourceVersion("2"),
-				podtest.SetContainers(podtest.MakeContainer("container1",
-					podtest.SetContainerResources(api.ResourceRequirements{
-						Requests: api.ResourceList{
-							api.ResourceCPU:    resource.MustParse("100m"),
-							api.ResourceMemory: resource.MustParse("2Gi"), // Updated resource
-						},
-					}),
-				)),
+				podtest.SetContainers(
+					podtest.MakeContainer("container1",
+						podtest.SetContainerResources(api.ResourceRequirements{
+							Requests: api.ResourceList{
+								api.ResourceCPU:    resource.MustParse("100m"),
+								api.ResourceMemory: resource.MustParse("2Gi"), // Updated resource
+							},
+						}),
+					),
+					podtest.MakeContainer("container2",
+						podtest.SetContainerResources(api.ResourceRequirements{
+							Requests: api.ResourceList{
+								api.ResourceCPU:    resource.MustParse("100m"),
+								api.ResourceMemory: resource.MustParse("1Gi"),
+							},
+						}),
+					),
+				),
 				podtest.SetGeneration(2),
 				podtest.SetStatus(podtest.MakePodStatus(
-					podtest.SetResizeStatus(api.PodResizeStatusProposed), // Resize status set
 					podtest.SetContainerStatuses(podtest.MakeContainerStatus("container1",
 						api.ResourceList{
 							api.ResourceCPU:    resource.MustParse("100m"),
@@ -2809,15 +2828,7 @@ func TestPodResizePrepareForUpdate(t *testing.T) {
 			expected: podtest.MakePod("test-pod",
 				podtest.SetResourceVersion("2"),
 				podtest.SetContainers(
-					podtest.MakeContainer("container1",
-						podtest.SetContainerResources(api.ResourceRequirements{
-							Requests: api.ResourceList{
-								api.ResourceCPU:    resource.MustParse("200m"), // Updated resource
-								api.ResourceMemory: resource.MustParse("4Gi"),  // Updated resource
-							},
-						}),
-					),
-					podtest.MakeContainer("container2",
+					podtest.MakeContainer("container2", // Order changed
 						podtest.SetContainerResources(api.ResourceRequirements{
 							Requests: api.ResourceList{
 								api.ResourceCPU:    resource.MustParse("200m"), // Updated resource
@@ -2825,10 +2836,17 @@ func TestPodResizePrepareForUpdate(t *testing.T) {
 							},
 						}),
 					),
+					podtest.MakeContainer("container1", // Order changed
+						podtest.SetContainerResources(api.ResourceRequirements{
+							Requests: api.ResourceList{
+								api.ResourceCPU:    resource.MustParse("200m"), // Updated resource
+								api.ResourceMemory: resource.MustParse("4Gi"),  // Updated resource
+							},
+						}),
+					),
 				),
 				podtest.SetGeneration(2),
 				podtest.SetStatus(podtest.MakePodStatus(
-					podtest.SetResizeStatus(api.PodResizeStatusProposed), // Resize status set
 					podtest.SetContainerStatuses(
 						podtest.MakeContainerStatus("container1",
 							api.ResourceList{
@@ -3303,6 +3321,88 @@ func TestEphemeralContainersPrepareForUpdate(t *testing.T) {
 			actual := tc.newPod.Generation
 			if actual != tc.expectedGeneration {
 				t.Errorf("invalid generation for pod %s, expected: %d, actual: %d", tc.oldPod.Name, tc.expectedGeneration, actual)
+			}
+		})
+	}
+}
+
+func TestStatusPrepareForUpdate(t *testing.T) {
+	testCases := []struct {
+		description string
+		oldPod      *api.Pod
+		newPod      *api.Pod
+		expected    *api.Pod
+	}{
+		{
+			description: "preserve old owner references",
+			oldPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pod",
+					OwnerReferences: []metav1.OwnerReference{{APIVersion: "v1", Kind: "ReplicaSet", Name: "rs-1"}},
+				},
+			},
+			newPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pod",
+					OwnerReferences: []metav1.OwnerReference{{APIVersion: "v1", Kind: "ReplicaSet", Name: "rs-2"}},
+				},
+			},
+			expected: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "pod",
+					OwnerReferences: []metav1.OwnerReference{{APIVersion: "v1", Kind: "ReplicaSet", Name: "rs-1"}},
+				},
+			},
+		},
+		{
+			description: "preserve old qos if empty",
+			oldPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "pod"},
+				Status: api.PodStatus{
+					QOSClass: "Guaranteed",
+				},
+			},
+			newPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "pod"},
+			},
+			expected: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "pod"},
+				Status: api.PodStatus{
+					QOSClass: "Guaranteed",
+				},
+			},
+		},
+		{
+			description: "drop disabled status fields",
+			oldPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "pod"},
+				Status:     api.PodStatus{},
+			},
+			newPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "pod"},
+				Status: api.PodStatus{
+					ResourceClaimStatuses: []api.PodResourceClaimStatus{
+						{Name: "my-claim", ResourceClaimName: ptr.To("pod-my-claim")},
+					},
+					ContainerStatuses: []api.ContainerStatus{
+						{Resources: &api.ResourceRequirements{}},
+					},
+				},
+			},
+			expected: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "pod"},
+				Status: api.PodStatus{
+					ContainerStatuses: []api.ContainerStatus{{}},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			StatusStrategy.PrepareForUpdate(genericapirequest.NewContext(), tc.newPod, tc.oldPod)
+			if !cmp.Equal(tc.expected, tc.newPod) {
+				t.Errorf("StatusStrategy.PrepareForUpdate() diff = %v", cmp.Diff(tc.expected, tc.newPod))
 			}
 		})
 	}
