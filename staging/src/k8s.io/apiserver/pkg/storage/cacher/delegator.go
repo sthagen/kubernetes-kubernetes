@@ -49,12 +49,12 @@ var (
 	// List latency SLO (30 seconds) and timeout (1 minute).
 	ConsistencyCheckPeriod = 5 * time.Minute
 	// ConsistencyCheckerEnabled enables the consistency checking mechanism for cache.
-	// Based on KUBE_WATCHCACHE_CONSISTANCY_CHECKER environment variable.
+	// Based on KUBE_WATCHCACHE_CONSISTENCY_CHECKER environment variable.
 	ConsistencyCheckerEnabled = false
 )
 
 func init() {
-	ConsistencyCheckerEnabled, _ = strconv.ParseBool(os.Getenv("KUBE_WATCHCACHE_CONSISTANCY_CHECKER"))
+	ConsistencyCheckerEnabled, _ = strconv.ParseBool(os.Getenv("KUBE_WATCHCACHE_CONSISTENCY_CHECKER"))
 }
 
 func NewCacheDelegator(cacher *Cacher, storage storage.Interface) *CacheDelegator {
@@ -176,7 +176,8 @@ func (c *CacheDelegator) Get(ctx context.Context, key string, opts storage.GetOp
 }
 
 func (c *CacheDelegator) GetList(ctx context.Context, key string, opts storage.ListOptions, listObj runtime.Object) error {
-	if shouldDelegateList(opts) {
+	shouldDelegate, consistentRead := shouldDelegateList(opts)
+	if shouldDelegate {
 		return c.storage.GetList(ctx, key, opts, listObj)
 	}
 
@@ -198,8 +199,6 @@ func (c *CacheDelegator) GetList(ctx context.Context, key string, opts storage.L
 			return c.storage.GetList(ctx, key, opts, listObj)
 		}
 	}
-	requestWatchProgressSupported := etcdfeature.DefaultFeatureSupportChecker.Supports(storage.RequestWatchProgress)
-	consistentRead := opts.ResourceVersion == "" && utilfeature.DefaultFeatureGate.Enabled(features.ConsistentListFromCache) && requestWatchProgressSupported
 	if consistentRead {
 		listRV, err = c.storage.GetCurrentResourceVersion(ctx)
 		if err != nil {
@@ -243,31 +242,33 @@ func shouldDelegateListOnNotReadyCache(opts storage.ListOptions) bool {
 // NOTICE: Keep in sync with shouldListFromStorage function in
 //
 //	staging/src/k8s.io/apiserver/pkg/util/flowcontrol/request/list_work_estimator.go
-func shouldDelegateList(opts storage.ListOptions) bool {
+func shouldDelegateList(opts storage.ListOptions) (shouldDeletage, consistentRead bool) {
 	// see https://kubernetes.io/docs/reference/using-api/api-concepts/#semantics-for-get-and-list
+	consistentRead = false
 	switch opts.ResourceVersionMatch {
 	case metav1.ResourceVersionMatchExact:
-		return true
+		return true, consistentRead
 	case metav1.ResourceVersionMatchNotOlderThan:
-		return false
+		return false, consistentRead
 	case "":
 		// Legacy exact match
 		if opts.Predicate.Limit > 0 && len(opts.ResourceVersion) > 0 && opts.ResourceVersion != "0" {
-			return true
+			return true, consistentRead
 		}
 		// Continue
 		if len(opts.Predicate.Continue) > 0 {
-			return true
+			return true, consistentRead
 		}
 		// Consistent Read
 		if opts.ResourceVersion == "" {
+			consistentRead = true
 			consistentListFromCacheEnabled := utilfeature.DefaultFeatureGate.Enabled(features.ConsistentListFromCache)
 			requestWatchProgressSupported := etcdfeature.DefaultFeatureSupportChecker.Supports(storage.RequestWatchProgress)
-			return !consistentListFromCacheEnabled || !requestWatchProgressSupported
+			return !consistentListFromCacheEnabled || !requestWatchProgressSupported, consistentRead
 		}
-		return false
+		return false, consistentRead
 	default:
-		return true
+		return true, consistentRead
 	}
 }
 

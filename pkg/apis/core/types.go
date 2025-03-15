@@ -3958,7 +3958,7 @@ type AppArmorProfile struct {
 	//   Localhost - a profile pre-loaded on the node.
 	//   RuntimeDefault - the container runtime's default profile.
 	//   Unconfined - no AppArmor enforcement.
-	// +unionDescriminator
+	// +unionDiscriminator
 	Type AppArmorProfileType
 
 	// localhostProfile indicates a profile loaded on the node that should be used.
@@ -4332,7 +4332,7 @@ type PodTemplateList struct {
 // a TemplateRef or a Template set.
 type ReplicationControllerSpec struct {
 	// Replicas is the number of desired replicas.
-	Replicas int32
+	Replicas *int32
 
 	// Minimum number of seconds for which a newly created pod should be ready
 	// without any of its container crashing, for it to be considered available.

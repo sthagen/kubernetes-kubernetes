@@ -28,6 +28,7 @@ import (
 	apitesting "k8s.io/kubernetes/pkg/api/testing"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/features"
+	"k8s.io/utils/ptr"
 )
 
 func TestDeclarativeValidateForDeclarative(t *testing.T) {
@@ -39,10 +40,50 @@ func TestDeclarativeValidateForDeclarative(t *testing.T) {
 		input        api.ReplicationController
 		expectedErrs field.ErrorList
 	}{
+		// baseline
 		"empty resource": {
 			input: mkValidReplicationController(),
 		},
-		// TODO: Add test cases
+		// spec.replicas
+		"nil replicas": {
+			input: mkValidReplicationController(func(rc *api.ReplicationController) {
+				rc.Spec.Replicas = nil
+			}),
+			expectedErrs: field.ErrorList{
+				field.Required(field.NewPath("spec.replicas"), ""),
+			},
+		},
+		"0 replicas": {
+			input: mkValidReplicationController(setSpecReplicas(0)),
+		},
+		"1 replicas": {
+			input: mkValidReplicationController(setSpecReplicas(1)),
+		},
+		"positive replicas": {
+			input: mkValidReplicationController(setSpecReplicas(100)),
+		},
+		"negative replicas": {
+			input: mkValidReplicationController(setSpecReplicas(-1)),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("spec.replicas"), nil, "").WithOrigin("minimum"),
+			},
+		},
+		// spec.minReadySeconds
+		"0 minReadySeconds": {
+			input: mkValidReplicationController(setSpecMinReadySeconds(0)),
+		},
+		"1 minReadySeconds": {
+			input: mkValidReplicationController(setSpecMinReadySeconds(1)),
+		},
+		"positive minReadySeconds": {
+			input: mkValidReplicationController(setSpecMinReadySeconds(100)),
+		},
+		"negative minReadySeconds": {
+			input: mkValidReplicationController(setSpecMinReadySeconds(-1)),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("spec.minReadySeconds"), nil, "").WithOrigin("minimum"),
+			},
+		},
 	}
 	for k, tc := range testCases {
 		t.Run(k, func(t *testing.T) {
@@ -89,7 +130,60 @@ func TestValidateUpdateForDeclarative(t *testing.T) {
 		update       api.ReplicationController
 		expectedErrs field.ErrorList
 	}{
-		// TODO: Add test cases
+		// baseline
+		"baseline": {
+			old:    mkValidReplicationController(),
+			update: mkValidReplicationController(),
+		},
+		// spec.replicas
+		"nil replicas": {
+			old: mkValidReplicationController(),
+			update: mkValidReplicationController(func(rc *api.ReplicationController) {
+				rc.Spec.Replicas = nil
+			}),
+			expectedErrs: field.ErrorList{
+				field.Required(field.NewPath("spec.replicas"), ""),
+			},
+		},
+		"0 replicas": {
+			old:    mkValidReplicationController(),
+			update: mkValidReplicationController(setSpecReplicas(0)),
+		},
+		"1 replicas": {
+			old:    mkValidReplicationController(),
+			update: mkValidReplicationController(setSpecReplicas(1)),
+		},
+		"positive replicas": {
+			old:    mkValidReplicationController(),
+			update: mkValidReplicationController(setSpecReplicas(100)),
+		},
+		"negative replicas": {
+			old:    mkValidReplicationController(),
+			update: mkValidReplicationController(setSpecReplicas(-1)),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("spec.replicas"), nil, "").WithOrigin("minimum"),
+			},
+		},
+		// spec.minReadySeconds
+		"0 minReadySeconds": {
+			old:    mkValidReplicationController(),
+			update: mkValidReplicationController(setSpecMinReadySeconds(0)),
+		},
+		"1 minReadySeconds": {
+			old:    mkValidReplicationController(),
+			update: mkValidReplicationController(setSpecMinReadySeconds(1)),
+		},
+		"positive minReadySeconds": {
+			old:    mkValidReplicationController(),
+			update: mkValidReplicationController(setSpecMinReadySeconds(3)),
+		},
+		"negative minReadySeconds": {
+			old:    mkValidReplicationController(),
+			update: mkValidReplicationController(setSpecMinReadySeconds(-1)),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("spec.minReadySeconds"), nil, "").WithOrigin("minimum"),
+			},
+		},
 	}
 	for k, tc := range testCases {
 		t.Run(k, func(t *testing.T) {
@@ -121,7 +215,7 @@ func TestValidateUpdateForDeclarative(t *testing.T) {
 			// The equivalenceMatcher is used to verify the output errors from hand-written imperative validation
 			// are equivalent to the output errors when DeclarativeValidationTakeover is enabled.
 			equivalenceMatcher := field.ErrorMatcher{}.ByType().ByField().ByOrigin()
-			// TODO: remove this once ErrorMatcher has been extended to handle this form of deduplication.
+			// TODO: remove this once RC's validation is fixed to not return duplicate errors.
 			dedupedImperativeErrs := field.ErrorList{}
 			for _, err := range imperativeErrs {
 				found := false
@@ -142,12 +236,13 @@ func TestValidateUpdateForDeclarative(t *testing.T) {
 	}
 }
 
-// Helper function for RC tests.
+// mkValidReplicationController produces a ReplicationController which passes
+// validation with no tweaks.
 func mkValidReplicationController(tweaks ...func(rc *api.ReplicationController)) api.ReplicationController {
 	rc := api.ReplicationController{
 		ObjectMeta: metav1.ObjectMeta{Name: "abc", Namespace: metav1.NamespaceDefault},
 		Spec: api.ReplicationControllerSpec{
-			Replicas: 1,
+			Replicas: ptr.To[int32](1),
 			Selector: map[string]string{"a": "b"},
 			Template: &api.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
@@ -161,4 +256,16 @@ func mkValidReplicationController(tweaks ...func(rc *api.ReplicationController))
 		tweak(&rc)
 	}
 	return rc
+}
+
+func setSpecReplicas(val int32) func(rc *api.ReplicationController) {
+	return func(rc *api.ReplicationController) {
+		rc.Spec.Replicas = ptr.To(val)
+	}
+}
+
+func setSpecMinReadySeconds(val int32) func(rc *api.ReplicationController) {
+	return func(rc *api.ReplicationController) {
+		rc.Spec.MinReadySeconds = val
+	}
 }
