@@ -30,6 +30,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp" //nolint:depguard
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -1491,6 +1493,73 @@ func RunTestList(ctx context.Context, t *testing.T, store storage.Interface, inc
 			expectContinueExact:        encodeContinueOrDie(createdPods[1].Namespace+"/"+createdPods[1].Name+"\x00", int64(continueRV+1)),
 			expectedRemainingItemCount: utilpointer.Int64(3),
 		},
+		{
+			name:   "test List with continue from second pod, negative resource version gives consistent read",
+			prefix: "/pods/",
+			pred: storage.SelectionPredicate{
+				Label:    labels.Everything(),
+				Field:    fields.Everything(),
+				Continue: encodeContinueOrDie(createdPods[0].Namespace+"/"+createdPods[0].Name+"\x00", -1),
+			},
+			expectedOut: []example.Pod{*createdPods[1], *createdPods[2], *createdPods[3], *createdPods[4]},
+			expectRV:    currentRV,
+		},
+		{
+			name:   "test List with continue from second pod and limit, negative resource version gives consistent read",
+			prefix: "/pods/",
+			pred: storage.SelectionPredicate{
+				Label:    labels.Everything(),
+				Field:    fields.Everything(),
+				Limit:    2,
+				Continue: encodeContinueOrDie(createdPods[0].Namespace+"/"+createdPods[0].Name+"\x00", -1),
+			},
+			expectedOut:                []example.Pod{*createdPods[1], *createdPods[2]},
+			expectContinue:             true,
+			expectContinueExact:        encodeContinueOrDie(createdPods[2].Namespace+"/"+createdPods[2].Name+"\x00", int64(continueRV+1)),
+			expectRV:                   currentRV,
+			expectedRemainingItemCount: utilpointer.Int64(2),
+		},
+		{
+			name:   "test List with continue from third pod, negative resource version gives consistent read",
+			prefix: "/pods/",
+			pred: storage.SelectionPredicate{
+				Label:    labels.Everything(),
+				Field:    fields.Everything(),
+				Continue: encodeContinueOrDie(createdPods[2].Namespace+"/"+createdPods[2].Name+"\x00", -1),
+			},
+			expectedOut: []example.Pod{*createdPods[3], *createdPods[4]},
+			expectRV:    currentRV,
+		},
+		{
+			name:   "test List with continue from empty fails",
+			prefix: "/pods/",
+			pred: storage.SelectionPredicate{
+				Label:    labels.Everything(),
+				Field:    fields.Everything(),
+				Continue: encodeContinueOrDie("", int64(continueRV)),
+			},
+			expectError: true,
+		},
+		{
+			name:   "test List with continue from first pod, empty resource version fails",
+			prefix: "/pods/",
+			pred: storage.SelectionPredicate{
+				Label:    labels.Everything(),
+				Field:    fields.Everything(),
+				Continue: encodeContinueOrDie(createdPods[0].Namespace+"/"+createdPods[0].Name+"\x00", 0),
+			},
+			expectError: true,
+		},
+		{
+			name:   "test List with negative rv fails",
+			prefix: "/pods/",
+			rv:     "-1",
+			pred: storage.SelectionPredicate{
+				Label: labels.Everything(),
+				Field: fields.Everything(),
+			},
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1593,43 +1662,49 @@ func RunTestConsistentList(ctx context.Context, t *testing.T, store storage.Inte
 	outPod := &example.Pod{}
 	inPod := &example.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}}
 	err := store.Create(ctx, computePodKey(inPod), inPod, outPod, 0)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	lastObjecRV := outPod.ResourceVersion
+	require.NoError(t, err)
+	writeRV, err := strconv.Atoi(outPod.ResourceVersion)
+	require.NoError(t, err)
+
 	increaseRV(ctx, t)
-	parsedRV, _ := strconv.Atoi(outPod.ResourceVersion)
-	currentRV := fmt.Sprintf("%d", parsedRV+1)
-
-	firstNonConsistentReadRV := lastObjecRV
-	if consistentReadsSupported && !cacheEnabled {
-		firstNonConsistentReadRV = currentRV
-	}
-
-	secondNonConsistentReadRV := lastObjecRV
-	if !cacheEnabled || consistentReadsSupported {
-		secondNonConsistentReadRV = currentRV
-	}
+	consistentRV := writeRV + 1
 
 	tcs := []struct {
-		name             string
-		requestRV        string
-		expectResponseRV string
+		name               string
+		requestRV          string
+		validateResponseRV func(*testing.T, int)
 	}{
 		{
-			name:             "Non-consistent list before sync",
-			requestRV:        "0",
-			expectResponseRV: firstNonConsistentReadRV,
+			name:      "Non-consistent list before sync",
+			requestRV: "0",
+			validateResponseRV: func(t *testing.T, rv int) {
+				if cacheEnabled {
+					// Cache might not yet observed write
+					assert.LessOrEqual(t, rv, writeRV)
+				} else {
+					// Etcd should always be up to date with consistent RV
+					assert.Equal(t, consistentRV, rv)
+				}
+			},
 		},
 		{
-			name:             "Consistent request returns currentRV",
-			requestRV:        "",
-			expectResponseRV: currentRV,
+			name:      "Consistent request returns currentRV",
+			requestRV: "",
+			validateResponseRV: func(t *testing.T, rv int) {
+				assert.Equal(t, consistentRV, rv)
+			},
 		},
 		{
-			name:             "Non-consistent request after sync returns currentRV",
-			requestRV:        "0",
-			expectResponseRV: secondNonConsistentReadRV,
+			name:      "Non-consistent request after sync",
+			requestRV: "0",
+			validateResponseRV: func(t *testing.T, rv int) {
+				// Consistent read is required to sync cache
+				if cacheEnabled && !consistentReadsSupported {
+					assert.LessOrEqual(t, rv, writeRV)
+				} else {
+					assert.Equal(t, consistentRV, rv)
+				}
+			},
 		},
 	}
 	for _, tc := range tcs {
@@ -1640,12 +1715,11 @@ func RunTestConsistentList(ctx context.Context, t *testing.T, store storage.Inte
 				Predicate:       storage.Everything,
 			}
 			err = store.GetList(ctx, "/pods/empty", opts, out)
-			if err != nil {
-				t.Fatalf("GetList failed: %v", err)
-			}
-			if out.ResourceVersion != tc.expectResponseRV {
-				t.Errorf("resourceVersion in list response want=%s, got=%s", tc.expectResponseRV, out.ResourceVersion)
-			}
+			require.NoError(t, err)
+
+			parsedOutRV, err := strconv.Atoi(out.ResourceVersion)
+			require.NoError(t, err)
+			tc.validateResponseRV(t, parsedOutRV)
 		})
 	}
 }
