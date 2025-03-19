@@ -14,17 +14,30 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package userns
+package topologyspreading
 
-import "k8s.io/apimachinery/pkg/types"
+import (
+	"fmt"
+	"os"
+	"testing"
 
-// Here go types that are common for all supported OS (windows, linux).
+	_ "k8s.io/component-base/logs/json/register"
+	perf "k8s.io/kubernetes/test/integration/scheduler_perf"
+)
 
-type userNsPodsManager interface {
-	HandlerSupportsUserNamespaces(runtimeHandler string) (bool, error)
-	GetPodDir(podUID types.UID) string
-	ListPodsFromDisk() ([]types.UID, error)
-	GetKubeletMappings() (uint32, uint32, error)
-	GetMaxPods() int
-	GetUserNamespacesIDsPerPod() uint32
+func TestMain(m *testing.M) {
+	if err := perf.InitTests(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	m.Run()
+}
+
+func TestSchedulerPerf(t *testing.T) {
+	perf.RunIntegrationPerfScheduling(t, "performance-config.yaml")
+}
+
+func BenchmarkPerfScheduling(b *testing.B) {
+	perf.RunBenchmarkPerfScheduling(b, "performance-config.yaml", "topologyspreading", nil)
 }

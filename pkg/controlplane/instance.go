@@ -63,7 +63,6 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	clientdiscovery "k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	discoveryclient "k8s.io/client-go/kubernetes/typed/discovery/v1"
@@ -117,8 +116,6 @@ const (
 	//   2. which component owns this lease
 	// TODO(sttts): remove this indirection
 	IdentityLeaseComponentLabelKey = controlplaneapiserver.IdentityLeaseComponentLabelKey
-	// KubeAPIServer defines variable used internally when referring to kube-apiserver component
-	KubeAPIServer = "kube-apiserver"
 	// repairLoopInterval defines the interval used to run the Services ClusterIP and NodePort repair loops
 	repairLoopInterval = 3 * time.Minute
 )
@@ -314,7 +311,7 @@ func (c CompletedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		return nil, fmt.Errorf("Master.New() called with empty config.KubeletClientConfig")
 	}
 
-	cp, err := c.ControlPlane.New(KubeAPIServer, delegationTarget)
+	cp, err := c.ControlPlane.New(controlplaneapiserver.KubeAPIServer, delegationTarget)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +325,7 @@ func (c CompletedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		return nil, err
 	}
 
-	restStorageProviders, err := c.StorageProviders(client.Discovery())
+	restStorageProviders, err := c.StorageProviders(client)
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +376,7 @@ func (c CompletedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 
 }
 
-func (c CompletedConfig) StorageProviders(discovery clientdiscovery.DiscoveryInterface) ([]controlplaneapiserver.RESTStorageProvider, error) {
+func (c CompletedConfig) StorageProviders(client *kubernetes.Clientset) ([]controlplaneapiserver.RESTStorageProvider, error) {
 	legacyRESTStorageProvider, err := corerest.New(corerest.Config{
 		GenericConfig: *c.ControlPlane.NewCoreGenericConfig(),
 		Proxy: corerest.ProxyConfig{
@@ -425,9 +422,9 @@ func (c CompletedConfig) StorageProviders(discovery clientdiscovery.DiscoveryInt
 		// keep apps after extensions so legacy clients resolve the extensions versions of shared resource names.
 		// See https://github.com/kubernetes/kubernetes/issues/42392
 		appsrest.StorageProvider{},
-		admissionregistrationrest.RESTStorageProvider{Authorizer: c.ControlPlane.Generic.Authorization.Authorizer, DiscoveryClient: discovery},
+		admissionregistrationrest.RESTStorageProvider{Authorizer: c.ControlPlane.Generic.Authorization.Authorizer, DiscoveryClient: client.Discovery()},
 		eventsrest.RESTStorageProvider{TTL: c.ControlPlane.EventTTL},
-		resourcerest.RESTStorageProvider{},
+		resourcerest.RESTStorageProvider{NamespaceClient: client.CoreV1().Namespaces()},
 	}, nil
 }
 
