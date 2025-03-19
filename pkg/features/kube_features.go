@@ -458,6 +458,13 @@ const (
 	// Enables the dynamic configuration of Service IP ranges
 	MultiCIDRServiceAllocator featuregate.Feature = "MultiCIDRServiceAllocator"
 
+	// owner: torredil
+	// kep: https://kep.k8s.io/4876
+	//
+	// Makes CSINode.Spec.Drivers[*].Allocatable.Count mutable, allowing CSI drivers to
+	// update the number of volumes that can be allocated on a node
+	MutableCSINodeAllocatableCount featuregate.Feature = "MutableCSINodeAllocatableCount"
+
 	// owner: @danwinship
 	// kep: https://kep.k8s.io/3866
 	//
@@ -692,6 +699,13 @@ const (
 	// Enables trafficDistribution field on Services.
 	ServiceTrafficDistribution featuregate.Feature = "ServiceTrafficDistribution"
 
+	// owner: @cupnes
+	// kep: https://kep.k8s.io/4049
+	//
+	// Enables scoring nodes by available storage capacity with
+	// StorageCapacityScoring feature gate.
+	StorageCapacityScoring featuregate.Feature = "StorageCapacityScoring"
+
 	// owner: @gjkim42 @SergeyKanzhelev @matthyx @tzneal
 	// kep: http://kep.k8s.io/753
 	//
@@ -797,9 +811,6 @@ const (
 	//
 	// Enables user specified volume attributes for persistent volumes, like iops and throughput.
 	VolumeAttributesClass featuregate.Feature = "VolumeAttributesClass"
-
-	// owner: @cofyc
-	VolumeCapacityPriority featuregate.Feature = "VolumeCapacityPriority"
 
 	// owner: @ksubrmnn
 	//
