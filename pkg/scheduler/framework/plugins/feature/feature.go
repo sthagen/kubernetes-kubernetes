@@ -22,6 +22,7 @@ package feature
 type Features struct {
 	EnableDRAPrioritizedList                     bool
 	EnableDRAAdminAccess                         bool
+	EnableDRADeviceTaints                        bool
 	EnableDynamicResourceAllocation              bool
 	EnableVolumeAttributesClass                  bool
 	EnableCSIMigrationPortworx                   bool
@@ -32,5 +33,6 @@ type Features struct {
 	EnableSchedulingQueueHint                    bool
 	EnableAsyncPreemption                        bool
 	EnablePodLevelResources                      bool
+	EnablePartitionableDevices                   bool
 	EnableStorageCapacityScoring                 bool
 }

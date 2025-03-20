@@ -429,12 +429,28 @@
     lockToDefault: false
     preRelease: Deprecated
     version: "1.31"
+  - default: true
+    lockToDefault: false
+    preRelease: Deprecated
+    version: "1.33"
 - name: DRAAdminAccess
   versionedSpecs:
   - default: false
     lockToDefault: false
     preRelease: Alpha
     version: "1.32"
+- name: DRADeviceTaints
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.33"
+- name: DRAPartitionableDevices
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.33"
 - name: DRAPrioritizedList
   versionedSpecs:
   - default: false
@@ -575,6 +591,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.32"
+  - default: false
+    lockToDefault: false
+    preRelease: Deprecated
+    version: "1.33"
 - name: InPlacePodVerticalScalingExclusiveCPUs
   versionedSpecs:
   - default: false
@@ -1053,6 +1073,12 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.31"
+- name: PreferSameTrafficDistribution
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.33"
 - name: ProcMountType
   versionedSpecs:
   - default: false
@@ -1659,6 +1685,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.14"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.33"
 - name: WinOverlay
   versionedSpecs:
   - default: false

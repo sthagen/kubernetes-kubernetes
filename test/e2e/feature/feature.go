@@ -112,6 +112,16 @@ var (
 	//   is enabled such that passing CDI device IDs through CRI fields is supported
 	DRAAdminAccess = framework.WithFeature(framework.ValidFeatures.Add("DRAAdminAccess"))
 
+	// owning-sig: sig-scheduling
+	// kep: https://kep.k8s.io/5055
+	// test-infra jobs:
+	// - "ci-kind-dra-all" in https://testgrid.k8s.io/sig-node-dynamic-resource-allocation
+	//
+	// This label is used for tests which need:
+	// - the DynamicResourceAllocation *and* DRADeviceTaints feature gates
+	// - the resource.k8s.io API group, including version v1alpha3
+	DRADeviceTaints = framework.WithFeature(framework.ValidFeatures.Add("DRADeviceTaints"))
+
 	// TODO: document the feature (owning SIG, when to use this feature for a test)
 	// OWNER: sig-node
 	// Testing downward API huge pages
@@ -434,6 +444,10 @@ var (
 	// This is a temporary feature to allow testing of metrics when SELinuxMount is disabled.
 	// TODO: remove when SELinuxMount feature gate is enabled by default.
 	SELinuxMountReadWriteOncePodOnly = framework.WithFeature(framework.ValidFeatures.Add("SELinuxMountReadWriteOncePodOnly"))
+
+	// SeparateDiskTest (SIG-node, used for testing separate container runtime filesystem)
+	// The tests need separate disk settings on nodes and separate filesystems in storage.conf
+	SeparateDisk = framework.WithFeature(framework.ValidFeatures.Add("SeparateDisk"))
 
 	// Owner: sig-network
 	// Marks tests of KEP-1880 that require the `MultiCIDRServiceAllocator` feature gate

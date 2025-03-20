@@ -102,10 +102,12 @@ type informationForClaim struct {
 
 // DynamicResources is a plugin that ensures that ResourceClaims are allocated.
 type DynamicResources struct {
-	enabled                   bool
-	enableAdminAccess         bool
-	enablePrioritizedList     bool
-	enableSchedulingQueueHint bool
+	enabled                    bool
+	enableAdminAccess          bool
+	enablePrioritizedList      bool
+	enableSchedulingQueueHint  bool
+	enablePartitionableDevices bool
+	enableDeviceTaints         bool
 
 	fh         framework.Handle
 	clientset  kubernetes.Interface
@@ -121,10 +123,12 @@ func New(ctx context.Context, plArgs runtime.Object, fh framework.Handle, fts fe
 	}
 
 	pl := &DynamicResources{
-		enabled:                   true,
-		enableAdminAccess:         fts.EnableDRAAdminAccess,
-		enablePrioritizedList:     fts.EnableDRAPrioritizedList,
-		enableSchedulingQueueHint: fts.EnableSchedulingQueueHint,
+		enabled:                    true,
+		enableAdminAccess:          fts.EnableDRAAdminAccess,
+		enableDeviceTaints:         fts.EnableDRADeviceTaints,
+		enablePrioritizedList:      fts.EnableDRAPrioritizedList,
+		enableSchedulingQueueHint:  fts.EnableSchedulingQueueHint,
+		enablePartitionableDevices: fts.EnablePartitionableDevices,
 
 		fh:        fh,
 		clientset: fh.ClientSet(),
@@ -448,11 +452,17 @@ func (pl *DynamicResources) PreFilter(ctx context.Context, state *framework.Cycl
 		if err != nil {
 			return nil, statusError(logger, err)
 		}
-		slices, err := pl.draManager.ResourceSlices().List()
+		slices, err := pl.draManager.ResourceSlices().ListWithDeviceTaintRules()
 		if err != nil {
 			return nil, statusError(logger, err)
 		}
-		allocator, err := structured.NewAllocator(ctx, pl.enableAdminAccess, pl.enablePrioritizedList, allocateClaims, allAllocatedDevices, pl.draManager.DeviceClasses(), slices, pl.celCache)
+		features := structured.Features{
+			AdminAccess:          pl.enableAdminAccess,
+			PrioritizedList:      pl.enablePrioritizedList,
+			PartitionableDevices: pl.enablePartitionableDevices,
+			DeviceTaints:         pl.enableDeviceTaints,
+		}
+		allocator, err := structured.NewAllocator(ctx, features, allocateClaims, allAllocatedDevices, pl.draManager.DeviceClasses(), slices, pl.celCache)
 		if err != nil {
 			return nil, statusError(logger, err)
 		}
