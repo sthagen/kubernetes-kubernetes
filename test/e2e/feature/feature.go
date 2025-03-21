@@ -70,7 +70,13 @@ var (
 	// Marks tests that require coordinated leader election
 	CoordinatedLeaderElection = framework.WithFeature(framework.ValidFeatures.Add("CoordinatedLeaderElection"))
 
-	// TODO: document the feature (owning SIG, when to use this feature for a test)
+	// owning-sig: sig-node
+	// kep: https://kep.k8s.io/3570
+	// test-infra jobs:
+	// - https://testgrid.k8s.io/sig-node-kubelet#kubelet-serial-gce-e2e-cpu-manager
+	//
+	// This label is used for tests which need:
+	// - run only CPU Manager tests on specific jobs, i.e., ci-kubernetes-node-kubelet-serial-cpu-manager and pull-kubernetes-node-kubelet-serial-cpu-manager
 	CPUManager = framework.WithFeature(framework.ValidFeatures.Add("CPUManager"))
 
 	// OWNER: sig-node
@@ -230,9 +236,6 @@ var (
 	// Marks tests that require a conforming implementation of
 	// Ingress.networking.k8s.io to be present.
 	Ingress = framework.WithFeature(framework.ValidFeatures.Add("Ingress"))
-
-	// TODO: document the feature (owning SIG, when to use this feature for a test)
-	InPlacePodVerticalScaling = framework.WithFeature(framework.ValidFeatures.Add("InPlacePodVerticalScaling"))
 
 	// Owner: sig-network
 	// Marks tests that require a cluster with dual-stack pod and service networks.
@@ -444,10 +447,6 @@ var (
 	// This is a temporary feature to allow testing of metrics when SELinuxMount is disabled.
 	// TODO: remove when SELinuxMount feature gate is enabled by default.
 	SELinuxMountReadWriteOncePodOnly = framework.WithFeature(framework.ValidFeatures.Add("SELinuxMountReadWriteOncePodOnly"))
-
-	// SeparateDiskTest (SIG-node, used for testing separate container runtime filesystem)
-	// The tests need separate disk settings on nodes and separate filesystems in storage.conf
-	SeparateDisk = framework.WithFeature(framework.ValidFeatures.Add("SeparateDisk"))
 
 	// Owner: sig-network
 	// Marks tests of KEP-1880 that require the `MultiCIDRServiceAllocator` feature gate
