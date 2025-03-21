@@ -1576,7 +1576,7 @@ func (kl *Kubelet) GetKubeletContainerLogs(ctx context.Context, podFullName, con
 }
 
 // getPhase returns the phase of a pod given its container info.
-func getPhase(pod *v1.Pod, info []v1.ContainerStatus, podIsTerminal bool) v1.PodPhase {
+func getPhase(pod *v1.Pod, info []v1.ContainerStatus, podIsTerminal, podHasInitialized bool) v1.PodPhase {
 	spec := pod.Spec
 	pendingRestartableInitContainers := 0
 	pendingRegularInitContainers := 0
@@ -1695,7 +1695,7 @@ func getPhase(pod *v1.Pod, info []v1.ContainerStatus, podIsTerminal bool) v1.Pod
 			// This is needed to handle the case where the pod has been initialized but
 			// the restartable init containers are restarting and the pod should not be
 			// placed back into v1.PodPending since the regular containers have run.
-			!kubecontainer.HasAnyRegularContainerStarted(&spec, info)):
+			!podHasInitialized):
 		fallthrough
 	case waiting > 0:
 		klog.V(5).InfoS("Pod waiting > 0, pending")
@@ -1768,7 +1768,7 @@ func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.Po
 	s := kl.convertStatusToAPIStatus(pod, podStatus, oldPodStatus)
 	// calculate the next phase and preserve reason
 	allStatus := append(append([]v1.ContainerStatus{}, s.ContainerStatuses...), s.InitContainerStatuses...)
-	s.Phase = getPhase(pod, allStatus, podIsTerminal)
+	s.Phase = getPhase(pod, allStatus, podIsTerminal, kubecontainer.HasAnyActiveRegularContainerStarted(&pod.Spec, podStatus))
 	klog.V(4).InfoS("Got phase for pod", "pod", klog.KObj(pod), "oldPhase", oldPodStatus.Phase, "phase", s.Phase)
 
 	// Perform a three-way merge between the statuses from the status manager,
@@ -2110,6 +2110,13 @@ func (kl *Kubelet) convertToAPIContainerStatuses(pod *v1.Pod, podStatus *kubecon
 				}
 			} else {
 				preserveOldResourcesValue(v1.ResourceCPU, oldStatus.Resources.Requests, resources.Requests)
+			}
+			// TODO(tallclair,vinaykul,InPlacePodVerticalScaling): Investigate defaulting to actuated resources instead of allocated resources above
+			if _, exists := resources.Requests[v1.ResourceMemory]; exists {
+				// Get memory requests from actuated resources
+				if actuatedResources, found := kl.allocationManager.GetActuatedResources(pod.UID, allocatedContainer.Name); found {
+					resources.Requests[v1.ResourceMemory] = *actuatedResources.Requests.Memory()
+				}
 			}
 		}
 

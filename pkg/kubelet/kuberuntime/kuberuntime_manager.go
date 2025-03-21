@@ -634,8 +634,8 @@ func (m *kubeGenericRuntimeManager) computePodResizeAction(pod *v1.Pod, containe
 		return true
 	}
 
-	determineContainerResize := func(rName v1.ResourceName, specValue, statusValue int64) (resize, restart bool) {
-		if specValue == statusValue {
+	determineContainerResize := func(rName v1.ResourceName, desiredValue, currentValue int64) (resize, restart bool) {
+		if desiredValue == currentValue {
 			return false, false
 		}
 		for _, policy := range container.ResizePolicy {
@@ -646,7 +646,7 @@ func (m *kubeGenericRuntimeManager) computePodResizeAction(pod *v1.Pod, containe
 		// If a resource policy isn't set, the implicit default is NotRequired.
 		return true, false
 	}
-	markContainerForUpdate := func(rName v1.ResourceName, specValue, statusValue int64) {
+	markContainerForUpdate := func(rName v1.ResourceName, desiredValue, currentValue int64) {
 		cUpdateInfo := containerToUpdateInfo{
 			container:                 &container,
 			kubeContainerID:           kubeContainerStatus.ID,
@@ -655,18 +655,19 @@ func (m *kubeGenericRuntimeManager) computePodResizeAction(pod *v1.Pod, containe
 		}
 		// Order the container updates such that resource decreases are applied before increases
 		switch {
-		case specValue > statusValue: // append
+		case desiredValue > currentValue: // append
 			changes.ContainersToUpdate[rName] = append(changes.ContainersToUpdate[rName], cUpdateInfo)
-		case specValue < statusValue: // prepend
+		case desiredValue < currentValue: // prepend
 			changes.ContainersToUpdate[rName] = append(changes.ContainersToUpdate[rName], containerToUpdateInfo{})
 			copy(changes.ContainersToUpdate[rName][1:], changes.ContainersToUpdate[rName])
 			changes.ContainersToUpdate[rName][0] = cUpdateInfo
 		}
 	}
 	resizeMemLim, restartMemLim := determineContainerResize(v1.ResourceMemory, desiredResources.memoryLimit, currentResources.memoryLimit)
+	resizeMemReq, restartMemReq := determineContainerResize(v1.ResourceMemory, desiredResources.memoryRequest, currentResources.memoryRequest)
 	resizeCPULim, restartCPULim := determineContainerResize(v1.ResourceCPU, desiredResources.cpuLimit, currentResources.cpuLimit)
 	resizeCPUReq, restartCPUReq := determineContainerResize(v1.ResourceCPU, desiredResources.cpuRequest, currentResources.cpuRequest)
-	if restartCPULim || restartCPUReq || restartMemLim {
+	if restartCPULim || restartCPUReq || restartMemLim || restartMemReq {
 		// resize policy requires this container to restart
 		changes.ContainersToKill[kubeContainerStatus.ID] = containerToKillInfo{
 			name:      kubeContainerStatus.Name,
@@ -683,6 +684,8 @@ func (m *kubeGenericRuntimeManager) computePodResizeAction(pod *v1.Pod, containe
 	} else {
 		if resizeMemLim {
 			markContainerForUpdate(v1.ResourceMemory, desiredResources.memoryLimit, currentResources.memoryLimit)
+		} else if resizeMemReq {
+			markContainerForUpdate(v1.ResourceMemory, desiredResources.memoryRequest, currentResources.memoryRequest)
 		}
 		if resizeCPULim {
 			markContainerForUpdate(v1.ResourceCPU, desiredResources.cpuLimit, currentResources.cpuLimit)
@@ -1642,9 +1645,11 @@ func (m *kubeGenericRuntimeManager) GetPodStatus(ctx context.Context, uid kubety
 
 	sandboxStatuses := []*runtimeapi.PodSandboxStatus{}
 	containerStatuses := []*kubecontainer.Status{}
+	activeContainerStatuses := []*kubecontainer.Status{}
 	timestamp := time.Now()
 
 	podIPs := []string{}
+	var activePodSandboxID string
 	for idx, podSandboxID := range podSandboxIDs {
 		resp, err := m.runtimeService.PodSandboxStatus(ctx, podSandboxID, false)
 		// Between List (getSandboxIDByPodUID) and check (PodSandboxStatus) another thread might remove a container, and that is normal.
@@ -1666,6 +1671,7 @@ func (m *kubeGenericRuntimeManager) GetPodStatus(ctx context.Context, uid kubety
 		// Only get pod IP from latest sandbox
 		if idx == 0 && resp.Status.State == runtimeapi.PodSandboxState_SANDBOX_READY {
 			podIPs = m.determinePodSandboxIPs(namespace, name, resp.Status)
+			activePodSandboxID = podSandboxID
 		}
 
 		if idx == 0 && utilfeature.DefaultFeatureGate.Enabled(features.EventedPLEG) {
@@ -1676,7 +1682,7 @@ func (m *kubeGenericRuntimeManager) GetPodStatus(ctx context.Context, uid kubety
 				// features gate enabled, which includes Evented PLEG, but uses the
 				// runtime without Evented PLEG support.
 				klog.V(4).InfoS("Runtime does not set pod status timestamp", "pod", klog.KObj(pod))
-				containerStatuses, err = m.getPodContainerStatuses(ctx, uid, name, namespace)
+				containerStatuses, activeContainerStatuses, err = m.getPodContainerStatuses(ctx, uid, name, namespace, activePodSandboxID)
 				if err != nil {
 					if m.logReduction.ShouldMessageBePrinted(err.Error(), podFullName) {
 						klog.ErrorS(err, "getPodContainerStatuses for pod failed", "pod", klog.KObj(pod))
@@ -1697,7 +1703,7 @@ func (m *kubeGenericRuntimeManager) GetPodStatus(ctx context.Context, uid kubety
 
 	if !utilfeature.DefaultFeatureGate.Enabled(features.EventedPLEG) {
 		// Get statuses of all containers visible in the pod.
-		containerStatuses, err = m.getPodContainerStatuses(ctx, uid, name, namespace)
+		containerStatuses, activeContainerStatuses, err = m.getPodContainerStatuses(ctx, uid, name, namespace, activePodSandboxID)
 		if err != nil {
 			if m.logReduction.ShouldMessageBePrinted(err.Error(), podFullName) {
 				klog.ErrorS(err, "getPodContainerStatuses for pod failed", "pod", klog.KObj(pod))
@@ -1708,13 +1714,14 @@ func (m *kubeGenericRuntimeManager) GetPodStatus(ctx context.Context, uid kubety
 
 	m.logReduction.ClearID(podFullName)
 	return &kubecontainer.PodStatus{
-		ID:                uid,
-		Name:              name,
-		Namespace:         namespace,
-		IPs:               podIPs,
-		SandboxStatuses:   sandboxStatuses,
-		ContainerStatuses: containerStatuses,
-		TimeStamp:         timestamp,
+		ID:                      uid,
+		Name:                    name,
+		Namespace:               namespace,
+		IPs:                     podIPs,
+		SandboxStatuses:         sandboxStatuses,
+		ContainerStatuses:       containerStatuses,
+		ActiveContainerStatuses: activeContainerStatuses,
+		TimeStamp:               timestamp,
 	}, nil
 }
 

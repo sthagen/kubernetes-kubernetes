@@ -826,14 +826,6 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 			return fmt.Errorf("--qos-reserved value failed to parse: %w", err)
 		}
 
-		var cpuManagerPolicyOptions map[string]string
-		if utilfeature.DefaultFeatureGate.Enabled(features.CPUManagerPolicyOptions) {
-			cpuManagerPolicyOptions = s.CPUManagerPolicyOptions
-		} else if s.CPUManagerPolicyOptions != nil {
-			return fmt.Errorf("CPU Manager policy options %v require feature gates %q, %q enabled",
-				s.CPUManagerPolicyOptions, features.CPUManager, features.CPUManagerPolicyOptions)
-		}
-
 		var topologyManagerPolicyOptions map[string]string
 		if utilfeature.DefaultFeatureGate.Enabled(features.TopologyManagerPolicyOptions) {
 			topologyManagerPolicyOptions = s.TopologyManagerPolicyOptions
@@ -842,7 +834,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 				s.TopologyManagerPolicyOptions, features.TopologyManagerPolicyOptions)
 		}
 		if utilfeature.DefaultFeatureGate.Enabled(features.NodeSwap) {
-			if !kubeletutil.IsCgroup2UnifiedMode() && s.MemorySwap.SwapBehavior == kubelettypes.LimitedSwap {
+			if !kubeletutil.IsCgroup2UnifiedMode() && s.MemorySwap.SwapBehavior == string(kubelettypes.LimitedSwap) {
 				// This feature is not supported for cgroupv1 so we are failing early.
 				return fmt.Errorf("swap feature is enabled and LimitedSwap but it is only supported with cgroupv2")
 			}
@@ -877,7 +869,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 				},
 				QOSReserved:                  *experimentalQOSReserved,
 				CPUManagerPolicy:             s.CPUManagerPolicy,
-				CPUManagerPolicyOptions:      cpuManagerPolicyOptions,
+				CPUManagerPolicyOptions:      s.CPUManagerPolicyOptions,
 				CPUManagerReconcilePeriod:    s.CPUManagerReconcilePeriod.Duration,
 				MemoryManagerPolicy:          s.MemoryManagerPolicy,
 				MemoryManagerReservedMemory:  s.ReservedMemory,

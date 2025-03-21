@@ -134,6 +134,7 @@ type SchedulingQueue interface {
 	PodsInActiveQ() []*v1.Pod
 	// PodsInBackoffQ returns all the Pods in the backoffQ.
 	PodsInBackoffQ() []*v1.Pod
+	UnschedulablePods() []*v1.Pod
 }
 
 // NewSchedulingQueue initializes a priority queue as a new scheduling queue.
@@ -160,8 +161,8 @@ type PriorityQueue struct {
 	clock clock.WithTicker
 
 	// lock takes precedence and should be taken first,
-	// before any other locks in the queue (activeQueue.lock or nominator.nLock).
-	// Correct locking order is: lock > activeQueue.lock > nominator.nLock.
+	// before any other locks in the queue (activeQueue.lock or backoffQueue.lock or nominator.nLock).
+	// Correct locking order is: lock > activeQueue.lock > backoffQueue.lock > nominator.nLock.
 	lock sync.RWMutex
 
 	// the maximum time a pod can stay in the unschedulablePods.
@@ -331,12 +332,12 @@ func NewPriorityQueue(
 	isSchedulingQueueHintEnabled := utilfeature.DefaultFeatureGate.Enabled(features.SchedulerQueueingHints)
 	isPopFromBackoffQEnabled := utilfeature.DefaultFeatureGate.Enabled(features.SchedulerPopFromBackoffQ)
 
+	backoffQ := newBackoffQueue(options.clock, options.podInitialBackoffDuration, options.podMaxBackoffDuration, lessFn, isPopFromBackoffQEnabled)
 	pq := &PriorityQueue{
 		clock:                             options.clock,
 		stop:                              make(chan struct{}),
 		podMaxInUnschedulablePodsDuration: options.podMaxInUnschedulablePodsDuration,
-		activeQ:                           newActiveQueue(heap.NewWithRecorder(podInfoKeyFunc, heap.LessFunc[*framework.QueuedPodInfo](lessFn), metrics.NewActivePodsRecorder()), isSchedulingQueueHintEnabled, options.metricsRecorder),
-		backoffQ:                          newBackoffQueue(options.clock, options.podInitialBackoffDuration, options.podMaxBackoffDuration, lessFn, isPopFromBackoffQEnabled),
+		backoffQ:                          backoffQ,
 		unschedulablePods:                 newUnschedulablePods(metrics.NewUnschedulablePodsRecorder(), metrics.NewGatedPodsRecorder()),
 		preEnqueuePluginMap:               options.preEnqueuePluginMap,
 		queueingHintMap:                   options.queueingHintMap,
@@ -346,6 +347,11 @@ func NewPriorityQueue(
 		isSchedulingQueueHintEnabled:      isSchedulingQueueHintEnabled,
 		isPopFromBackoffQEnabled:          isPopFromBackoffQEnabled,
 	}
+	var backoffQPopper backoffQPopper
+	if isPopFromBackoffQEnabled {
+		backoffQPopper = backoffQ
+	}
+	pq.activeQ = newActiveQueue(heap.NewWithRecorder(podInfoKeyFunc, heap.LessFunc[*framework.QueuedPodInfo](lessFn), metrics.NewActivePodsRecorder()), isSchedulingQueueHintEnabled, options.metricsRecorder, backoffQPopper)
 	pq.nsLister = informerFactory.Core().V1().Namespaces().Lister()
 	pq.nominator = newPodNominator(options.podLister)
 
@@ -672,6 +678,12 @@ func (p *PriorityQueue) activate(logger klog.Logger, pod *v1.Pod) bool {
 		if !exists {
 			return false
 		}
+		// Delete pod from the backoffQ now to make sure it won't be popped from the backoffQ
+		// just before moving it to the activeQ
+		if deleted := p.backoffQ.delete(pInfo); !deleted {
+			// Pod was popped from the backoffQ in the meantime. Don't activate it.
+			return false
+		}
 	}
 
 	if pInfo == nil {
@@ -756,7 +768,11 @@ func (p *PriorityQueue) addUnschedulableWithoutQueueingHint(logger klog.Logger, 
 		// - No unschedulable plugins are associated with this Pod,
 		//   meaning something unusual (a temporal failure on kube-apiserver, etc) happened and this Pod gets moved back to the queue.
 		//   In this case, we should retry scheduling it because this Pod may not be retried until the next flush.
-		_ = p.moveToBackoffQ(logger, pInfo, framework.ScheduleAttemptFailure)
+		if added := p.moveToBackoffQ(logger, pInfo, framework.ScheduleAttemptFailure); added {
+			if p.isPopFromBackoffQEnabled {
+				p.activeQ.broadcast()
+			}
+		}
 	} else {
 		p.unschedulablePods.addOrUpdate(pInfo, framework.ScheduleAttemptFailure)
 		logger.V(5).Info("Pod moved to an internal scheduling queue", "pod", klog.KObj(pod), "event", framework.ScheduleAttemptFailure, "queue", unschedulablePods)
@@ -809,7 +825,7 @@ func (p *PriorityQueue) AddUnschedulableIfNotPresent(logger klog.Logger, pInfo *
 	// In this case, we try to requeue this Pod to activeQ/backoffQ.
 	queue := p.requeuePodViaQueueingHint(logger, pInfo, schedulingHint, framework.ScheduleAttemptFailure)
 	logger.V(3).Info("Pod moved to an internal scheduling queue", "pod", klog.KObj(pod), "event", framework.ScheduleAttemptFailure, "queue", queue, "schedulingCycle", podSchedulingCycle, "hint", schedulingHint, "unschedulable plugins", rejectorPlugins)
-	if queue == activeQ {
+	if queue == activeQ || (p.isPopFromBackoffQEnabled && queue == backoffQ) {
 		// When the Pod is moved to activeQ, need to let p.cond know so that the Pod will be pop()ed out.
 		p.activeQ.broadcast()
 	}
@@ -822,11 +838,12 @@ func (p *PriorityQueue) flushBackoffQCompleted(logger klog.Logger) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	activated := false
-	p.backoffQ.popEachBackoffCompleted(logger, func(pInfo *framework.QueuedPodInfo) {
+	podsCompletedBackoff := p.backoffQ.popAllBackoffCompleted(logger)
+	for _, pInfo := range podsCompletedBackoff {
 		if added := p.moveToActiveQ(logger, pInfo, framework.BackoffComplete); added {
 			activated = true
 		}
-	})
+	}
 	if activated {
 		p.activeQ.broadcast()
 	}
@@ -954,7 +971,7 @@ func (p *PriorityQueue) Update(logger klog.Logger, oldPod, newPod *v1.Pod) {
 					logger.V(5).Info("Pod moved to an internal scheduling queue because the Pod is updated", "pod", klog.KObj(newPod), "event", evt.Label(), "queue", queue)
 					p.unschedulablePods.delete(pInfo.Pod, gated)
 				}
-				if queue == activeQ {
+				if queue == activeQ || (p.isPopFromBackoffQEnabled && queue == backoffQ) {
 					p.activeQ.broadcast()
 					break
 				}
@@ -967,6 +984,9 @@ func (p *PriorityQueue) Update(logger klog.Logger, oldPod, newPod *v1.Pod) {
 			if p.backoffQ.isPodBackingoff(pInfo) {
 				if added := p.moveToBackoffQ(logger, pInfo, framework.EventUnscheduledPodUpdate.Label()); added {
 					p.unschedulablePods.delete(pInfo.Pod, gated)
+					if p.isPopFromBackoffQEnabled {
+						p.activeQ.broadcast()
+					}
 				}
 				return
 			}
@@ -995,12 +1015,14 @@ func (p *PriorityQueue) Delete(pod *v1.Pod) {
 	defer p.lock.Unlock()
 	p.DeleteNominatedPodIfExists(pod)
 	pInfo := newQueuedPodInfoForLookup(pod)
-	if err := p.activeQ.delete(pInfo); err != nil {
-		// The item was probably not found in the activeQ.
-		p.backoffQ.delete(pInfo)
-		if pInfo = p.unschedulablePods.get(pod); pInfo != nil {
-			p.unschedulablePods.delete(pod, pInfo.Gated)
-		}
+	if err := p.activeQ.delete(pInfo); err == nil {
+		return
+	}
+	if deleted := p.backoffQ.delete(pInfo); deleted {
+		return
+	}
+	if pInfo = p.unschedulablePods.get(pod); pInfo != nil {
+		p.unschedulablePods.delete(pod, pInfo.Gated)
 	}
 }
 
@@ -1127,7 +1149,7 @@ func (p *PriorityQueue) movePodsToActiveOrBackoffQueue(logger klog.Logger, podIn
 		p.unschedulablePods.delete(pInfo.Pod, pInfo.Gated)
 		queue := p.requeuePodViaQueueingHint(logger, pInfo, schedulingHint, event.Label())
 		logger.V(4).Info("Pod moved to an internal scheduling queue", "pod", klog.KObj(pInfo.Pod), "event", event.Label(), "queue", queue, "hint", schedulingHint)
-		if queue == activeQ {
+		if queue == activeQ || (p.isPopFromBackoffQEnabled && queue == backoffQ) {
 			activated = true
 		}
 	}
@@ -1184,6 +1206,15 @@ func (p *PriorityQueue) PodsInBackoffQ() []*v1.Pod {
 	return p.backoffQ.list()
 }
 
+// UnschedulablePods returns all the pods in unschedulable state.
+func (p *PriorityQueue) UnschedulablePods() []*v1.Pod {
+	var result []*v1.Pod
+	for _, pInfo := range p.unschedulablePods.podInfoMap {
+		result = append(result, pInfo.Pod)
+	}
+	return result
+}
+
 var pendingPodsSummary = "activeQ:%v; backoffQ:%v; unschedulablePods:%v"
 
 // GetPod searches for a pod in the activeQ, backoffQ, and unschedulablePods.
@@ -1220,13 +1251,15 @@ func (p *PriorityQueue) GetPod(name, namespace string) (pInfo *framework.QueuedP
 func (p *PriorityQueue) PendingPods() ([]*v1.Pod, string) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
-	result := p.activeQ.list()
+	result := p.PodsInActiveQ()
 	activeQLen := len(result)
-	result = append(result, p.backoffQ.list()...)
+	backoffQPods := p.PodsInBackoffQ()
+	backoffQLen := len(backoffQPods)
+	result = append(result, backoffQPods...)
 	for _, pInfo := range p.unschedulablePods.podInfoMap {
 		result = append(result, pInfo.Pod)
 	}
-	return result, fmt.Sprintf(pendingPodsSummary, activeQLen, p.backoffQ.len(), len(p.unschedulablePods.podInfoMap))
+	return result, fmt.Sprintf(pendingPodsSummary, activeQLen, backoffQLen, len(p.unschedulablePods.podInfoMap))
 }
 
 // Note: this function assumes the caller locks both p.lock.RLock and p.activeQ.getLock().RLock.
