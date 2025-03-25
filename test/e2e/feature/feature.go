@@ -66,6 +66,10 @@ var (
 	// TODO: document the feature (owning SIG, when to use this feature for a test)
 	ComprehensiveNamespaceDraining = framework.WithFeature(framework.ValidFeatures.Add("ComprehensiveNamespaceDraining"))
 
+	// Owner: sig-node
+	// Enables configuring custom stop signals for containers from container lifecycle
+	ContainerStopSignals = framework.WithFeature(framework.ValidFeatures.Add("ContainerStopSignals"))
+
 	// Owner: sig-api-machinery
 	// Marks tests that require coordinated leader election
 	CoordinatedLeaderElection = framework.WithFeature(framework.ValidFeatures.Add("CoordinatedLeaderElection"))
@@ -218,6 +222,10 @@ var (
 
 	// TODO: document the feature (owning SIG, when to use this feature for a test)
 	HPA = framework.WithFeature(framework.ValidFeatures.Add("HPA"))
+
+	// OWNER: sig-autoscaling
+	// Marks tests that require HPA configurable tolerance (https://kep.k8s.io/4951).
+	HPAConfigurableTolerance = framework.WithFeature(framework.ValidFeatures.Add("HPAConfigurableTolerance"))
 
 	// owner: sig-node
 	HostAccess = framework.WithFeature(framework.ValidFeatures.Add("HostAccess"))

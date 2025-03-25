@@ -241,6 +241,12 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.30"
+- name: ContainerStopSignals
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.33"
 - name: ContextualLogging
   versionedSpecs:
   - default: false
@@ -539,6 +545,12 @@
     lockToDefault: true
     preRelease: GA
     version: "1.33"
+- name: HPAConfigurableTolerance
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.33"
 - name: HPAScaleToZero
   versionedSpecs:
   - default: false
@@ -709,6 +721,12 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.27"
+- name: KubeletPSI
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.33"
 - name: KubeletRegistrationGetOnExistsOnly
   versionedSpecs:
   - default: true
