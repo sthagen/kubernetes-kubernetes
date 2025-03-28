@@ -29,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	helpers "k8s.io/component-helpers/resource"
+	"k8s.io/kubectl/pkg/util/podutils"
 	kubecm "k8s.io/kubernetes/pkg/kubelet/cm"
 	kubeqos "k8s.io/kubernetes/pkg/kubelet/qos"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -321,7 +322,7 @@ func VerifyPodContainersCgroupValues(ctx context.Context, f *framework.Framework
 		tc := makeResizableContainer(ci)
 		if tc.Resources.Limits != nil || tc.Resources.Requests != nil {
 			var expectedCPUShares int64
-			var expectedCPULimitString, expectedMemLimitString string
+			var expectedMemLimitString string
 			expectedMemLimitInBytes := tc.Resources.Limits.Memory().Value()
 			cpuRequest := tc.Resources.Requests.Cpu()
 			cpuLimit := tc.Resources.Limits.Cpu()
@@ -330,17 +331,10 @@ func VerifyPodContainersCgroupValues(ctx context.Context, f *framework.Framework
 			} else {
 				expectedCPUShares = int64(kubecm.MilliCPUToShares(cpuRequest.MilliValue()))
 			}
-			cpuQuota := kubecm.MilliCPUToQuota(cpuLimit.MilliValue(), kubecm.QuotaPeriod)
-			if cpuLimit.IsZero() {
-				cpuQuota = -1
-			}
-			expectedCPULimitString = strconv.FormatInt(cpuQuota, 10)
+
+			expectedCPULimits := GetCPULimitCgroupExpectations(cpuLimit)
 			expectedMemLimitString = strconv.FormatInt(expectedMemLimitInBytes, 10)
 			if *podOnCgroupv2Node {
-				if expectedCPULimitString == "-1" {
-					expectedCPULimitString = "max"
-				}
-				expectedCPULimitString = fmt.Sprintf("%s %s", expectedCPULimitString, CPUPeriod)
 				if expectedMemLimitString == "0" {
 					expectedMemLimitString = "max"
 				}
@@ -348,10 +342,11 @@ func VerifyPodContainersCgroupValues(ctx context.Context, f *framework.Framework
 				// https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/2254-cgroup-v2#phase-1-convert-from-cgroups-v1-settings-to-v2
 				expectedCPUShares = int64(1 + ((expectedCPUShares-2)*9999)/262142)
 			}
+
 			if expectedMemLimitString != "0" {
 				errs = append(errs, VerifyCgroupValue(f, pod, ci.Name, cgroupMemLimit, expectedMemLimitString))
 			}
-			errs = append(errs, VerifyCgroupValue(f, pod, ci.Name, cgroupCPULimit, expectedCPULimitString))
+			errs = append(errs, VerifyCgroupValue(f, pod, ci.Name, cgroupCPULimit, expectedCPULimits...))
 			errs = append(errs, VerifyCgroupValue(f, pod, ci.Name, cgroupCPURequest, strconv.FormatInt(expectedCPUShares, 10)))
 			// TODO(vinaykul,InPlacePodVerticalScaling): Verify oom_score_adj when runc adds support for updating it
 			// See https://github.com/opencontainers/runc/pull/4669
@@ -443,6 +438,10 @@ func WaitForPodResizeActuation(ctx context.Context, f *framework.Framework, podC
 						return fmt.Sprintf("resize status %v is still present in the pod status", c)
 					}, nil
 				}
+			}
+			// Wait for the pod to be ready.
+			if !podutils.IsPodReady(pod) {
+				return func() string { return "pod is not ready" }, nil
 			}
 			return nil, nil
 		})),
