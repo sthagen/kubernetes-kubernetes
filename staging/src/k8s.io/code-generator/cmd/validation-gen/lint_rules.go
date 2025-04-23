@@ -1,8 +1,5 @@
-//go:build !linux
-// +build !linux
-
 /*
-Copyright 2024 The Kubernetes Authors.
+Copyright 2025 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,15 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package nfacct
+package main
 
-import (
-	"fmt"
-	"runtime"
-)
+var ruleOptionalAndRequired = conflictingTagsRule(
+	"fields cannot be both optional and required",
+	"+k8s:optional", "+k8s:required")
 
-var unsupportedError = fmt.Errorf(runtime.GOOS + "/" + runtime.GOARCH + " is unsupported")
+var ruleRequiredAndDefault = conflictingTagsRule(
+	"fields with default values are always optional",
+	"+k8s:required", "+default")
 
-func New() (Interface, error) {
-	return nil, unsupportedError
+var defaultLintRules = []lintRule{
+	ruleOptionalAndRequired,
+	ruleRequiredAndDefault,
 }
