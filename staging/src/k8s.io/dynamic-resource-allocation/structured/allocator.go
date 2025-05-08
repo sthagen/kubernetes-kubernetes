@@ -745,9 +745,10 @@ func (alloc *allocator) allocateOne(r deviceIndices, allocateSubRequest bool) (b
 		return alloc.allocateOne(deviceIndices{claimIndex: r.claimIndex, requestIndex: r.requestIndex + 1}, false)
 	}
 
-	// Before trying to allocate devices, check if allocating the devices
-	// in the current request will put us over the threshold.
-	numDevicesAfterAlloc := len(alloc.result[r.claimIndex].devices) + requestData.numDevices
+	// We can calculate this by adding the number of already allocated devices with the number
+	// of devices in the current request, and then finally subtract the deviceIndex since we
+	// don't want to double count any devices already allocated for the current request.
+	numDevicesAfterAlloc := len(alloc.result[r.claimIndex].devices) + requestData.numDevices - r.deviceIndex
 	if numDevicesAfterAlloc > resourceapi.AllocationResultsMaxSize {
 		// Don't return an error here since we want to keep searching for
 		// a solution that works.
@@ -759,7 +760,7 @@ func (alloc *allocator) allocateOne(r deviceIndices, allocateSubRequest bool) (b
 		// For "all" devices we already know which ones we need. We
 		// just need to check whether we can use them.
 		deviceWithID := requestData.allDevices[r.deviceIndex]
-		success, _, err := alloc.allocateDevice(r, deviceWithID, true)
+		success, deallocate, err := alloc.allocateDevice(r, deviceWithID, true)
 		if err != nil {
 			return false, err
 		}
@@ -775,6 +776,7 @@ func (alloc *allocator) allocateOne(r deviceIndices, allocateSubRequest bool) (b
 		}
 		if !done {
 			// Backtrack.
+			deallocate()
 			return false, nil
 		}
 		return done, nil
