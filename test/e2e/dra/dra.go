@@ -1540,12 +1540,19 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), feature.Dynami
 			b.create(ctx, pod, template)
 			b.testPod(ctx, f, pod)
 			ginkgo.DeferCleanup(func(ctx context.Context) {
-				// Unblock shutdown by removing the finalizer.
-				pod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(ctx, pod.Name, metav1.GetOptions{})
-				framework.ExpectNoError(err, "get pod")
-				pod.Finalizers = nil
-				_, err = f.ClientSet.CoreV1().Pods(f.Namespace.Name).Update(ctx, pod, metav1.UpdateOptions{})
-				framework.ExpectNoError(err, "remove finalizers from pod")
+				gomega.Eventually(ctx, func(ctx context.Context) error {
+					// Unblock shutdown by removing the finalizer.
+					pod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(ctx, pod.Name, metav1.GetOptions{})
+					if err != nil {
+						return fmt.Errorf("get pod: %w", err)
+					}
+					pod.Finalizers = nil
+					_, err = f.ClientSet.CoreV1().Pods(f.Namespace.Name).Update(ctx, pod, metav1.UpdateOptions{})
+					if err != nil {
+						return fmt.Errorf("remove finalizers from pod: %w", err)
+					}
+					return nil
+				}).WithTimeout(30*time.Second).WithPolling(1*time.Second).Should(gomega.Succeed(), "Failed to remove finalizers")
 			})
 
 			// Now evict it.
@@ -2185,7 +2192,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), feature.Dynami
 		framework.ExpectNoError(e2epod.WaitForPodNotFoundInNamespace(ctx, f.ClientSet, pod.Name, pod.Namespace, f.Timeouts.PodDelete))
 	})
 
-	f.It("sequential update with pods replacing each other", framework.WithSlow(), func(ctx context.Context) {
+	f.It("sequential update with pods replacing each other", f.WithLabel("KubeletMinVersion:1.33"), framework.WithSlow(), func(ctx context.Context) {
 		nodes := NewNodesNow(ctx, f, 1, 1)
 
 		// Same driver name, same socket path.
