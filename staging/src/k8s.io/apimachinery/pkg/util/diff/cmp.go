@@ -1,5 +1,8 @@
+//go:build usegocmp
+// +build usegocmp
+
 /*
-Copyright 2024 The Kubernetes Authors.
+Copyright 2025 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,22 +17,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package watchdog
+package diff
 
 import (
-	"context"
-	"net/http"
-
-	"k8s.io/apiserver/pkg/server/healthz"
+	"github.com/google/go-cmp/cmp" //nolint:depguard
 )
 
-// HealthChecker defines the interface of health checkers.
-type HealthChecker interface {
-	Start(ctx context.Context)
-	SetHealthCheckers(syncLoop syncLoopHealthChecker, checkers []healthz.HealthChecker)
-}
-
-// syncLoopHealthChecker contains the health check method for syncLoop.
-type syncLoopHealthChecker interface {
-	SyncLoopHealthCheck(req *http.Request) error
+// Diff returns a string representation of the difference between two objects.
+// When built with the usegocmp tag, it uses go-cmp/cmp to generate a diff
+// between the objects.
+func Diff(a, b any) string {
+	return cmp.Diff(a, b)
 }
