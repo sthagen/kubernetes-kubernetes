@@ -39,7 +39,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20250628140032-d90c4fd18f59
 	k8s.io/metrics v0.0.0
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
-	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3
+	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8
 	sigs.k8s.io/kustomize/kustomize/v5 v5.6.0
 	sigs.k8s.io/kustomize/kyaml v0.19.0
 	sigs.k8s.io/randfill v1.0.0
@@ -51,7 +51,7 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
+	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 	github.com/fxamacker/cbor/v2 v2.8.0 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
