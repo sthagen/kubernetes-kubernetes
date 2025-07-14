@@ -218,10 +218,17 @@ func (d *dummyStorage) GetCurrentResourceVersion(ctx context.Context) (uint64, e
 type dummyCacher struct {
 	dummyStorage
 	ready bool
+
+	lastCompactedResourceVersion string
 }
 
 func (d *dummyCacher) Ready() bool {
 	return d.ready
+}
+
+func (d *dummyCacher) Compact(resourceVersion string) error {
+	d.lastCompactedResourceVersion = resourceVersion
+	return nil
 }
 
 func TestShouldDelegateList(t *testing.T) {
@@ -404,6 +411,7 @@ func TestShouldDelegateList(t *testing.T) {
 	snapshotAvailableOverrides[opts{Recursive: true, ResourceVersion: oldRV, ResourceVersionMatch: metav1.ResourceVersionMatchExact, Limit: 100}] = false
 
 	t.Run("ConsistentListFromCache=false", func(t *testing.T) {
+		featuregatetesting.SetFeatureGateEmulationVersionDuringTest(t, utilfeature.DefaultFeatureGate, version.MustParse("1.33"))
 		featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.ConsistentListFromCache, false)
 		t.Run("ListFromCacheSnapshot=false", func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.ListFromCacheSnapshot, false)
@@ -542,9 +550,11 @@ apiserver_watch_cache_consistent_read_total{fallback="true", group="", resource=
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.ConsistentListFromCache, tc.consistentReadsEnabled)
 			if tc.consistentReadsEnabled {
 				forceRequestWatchProgressSupport(t)
+			} else {
+				featuregatetesting.SetFeatureGateEmulationVersionDuringTest(t, utilfeature.DefaultFeatureGate, version.MustParse("1.33"))
+				featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.ConsistentListFromCache, false)
 			}
 
 			registry := k8smetrics.NewKubeRegistry()
@@ -727,6 +737,7 @@ func TestMatchExactResourceVersionFallback(t *testing.T) {
 }
 
 func TestGetListNonRecursiveCacheBypass(t *testing.T) {
+	featuregatetesting.SetFeatureGateEmulationVersionDuringTest(t, utilfeature.DefaultFeatureGate, version.MustParse("1.33"))
 	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.ConsistentListFromCache, false)
 	backingStorage := &dummyStorage{}
 	cacher, _, err := newTestCacher(backingStorage)
