@@ -68,7 +68,7 @@ type stateData struct {
 	claims []*resourceapi.ResourceClaim
 
 	// Allocator handles claims with structured parameters.
-	allocator *structured.Allocator
+	allocator structured.Allocator
 
 	// mutex must be locked while accessing any of the fields below.
 	mutex sync.Mutex
@@ -794,6 +794,22 @@ func (pl *DynamicResources) PreBind(ctx context.Context, cs fwk.CycleState, pod 
 	}
 	// If we get here, we know that reserving the claim for
 	// the pod worked and we can proceed with binding it.
+	return nil
+}
+
+// PreBindPreFlight is called before PreBind, and determines whether PreBind is going to do something for this pod, or not.
+// It just checks state.claims to determine whether there are any claims and hence the plugin has to handle them at PreBind.
+func (pl *DynamicResources) PreBindPreFlight(ctx context.Context, cs fwk.CycleState, p *v1.Pod, nodeName string) *fwk.Status {
+	if !pl.enabled {
+		return fwk.NewStatus(fwk.Skip)
+	}
+	state, err := getStateData(cs)
+	if err != nil {
+		return statusError(klog.FromContext(ctx), err)
+	}
+	if len(state.claims) == 0 {
+		return fwk.NewStatus(fwk.Skip)
+	}
 	return nil
 }
 
