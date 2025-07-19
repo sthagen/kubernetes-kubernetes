@@ -44,10 +44,12 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/util/flowcontrol"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
+	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/component-base/metrics/testutil"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 	apitest "k8s.io/cri-api/pkg/apis/testing"
 	crierror "k8s.io/cri-api/pkg/errors"
+	statsapi "k8s.io/kubelet/pkg/apis/stats/v1alpha1"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
@@ -57,7 +59,6 @@ import (
 	imagetypes "k8s.io/kubernetes/pkg/kubelet/images"
 	"k8s.io/kubernetes/pkg/kubelet/metrics"
 	proberesults "k8s.io/kubernetes/pkg/kubelet/prober/results"
-	kubelettypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/utils/ptr"
 )
 
@@ -1496,246 +1497,6 @@ func TestComputePodActionsWithInitContainers(t *testing.T) {
 	}
 }
 
-func TestComputePodActionsWithInitContainersWithLegacySidecarContainers(t *testing.T) {
-	_, _, m, err := createTestRuntimeManager()
-	require.NoError(t, err)
-
-	// Creating a pair reference pod and status for the test cases to refer
-	// the specific fields.
-	basePod, baseStatus := makeBasePodAndStatusWithInitContainers()
-	noAction := podActions{
-		SandboxID:         baseStatus.SandboxStatuses[0].Id,
-		ContainersToStart: []int{},
-		ContainersToKill:  map[kubecontainer.ContainerID]containerToKillInfo{},
-	}
-
-	for desc, test := range map[string]struct {
-		mutatePodFn    func(*v1.Pod)
-		mutateStatusFn func(*kubecontainer.PodStatus)
-		actions        podActions
-	}{
-		"initialization completed; start all containers": {
-			actions: podActions{
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				ContainersToStart: []int{0, 1, 2},
-				ContainersToKill:  getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-		"no init containers have been started; start the first one": {
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses = nil
-			},
-			actions: podActions{
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				NextInitContainerToStart: &basePod.Spec.InitContainers[0],
-				InitContainersToStart:    []int{0},
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-		"initialization in progress; do nothing": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyAlways },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses[2].State = kubecontainer.ContainerStateRunning
-			},
-			actions: noAction,
-		},
-		"Kill pod and restart the first init container if the pod sandbox is dead": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyAlways },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.SandboxStatuses[0].State = runtimeapi.PodSandboxState_SANDBOX_NOTREADY
-			},
-			actions: podActions{
-				KillPod:                  true,
-				CreateSandbox:            true,
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				Attempt:                  uint32(1),
-				NextInitContainerToStart: &basePod.Spec.InitContainers[0],
-				InitContainersToStart:    []int{0},
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-		"initialization failed; restart the last init container if RestartPolicy == Always": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyAlways },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses[2].ExitCode = 137
-			},
-			actions: podActions{
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				NextInitContainerToStart: &basePod.Spec.InitContainers[2],
-				InitContainersToStart:    []int{2},
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-		"initialization failed; restart the last init container if RestartPolicy == OnFailure": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyOnFailure },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses[2].ExitCode = 137
-			},
-			actions: podActions{
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				NextInitContainerToStart: &basePod.Spec.InitContainers[2],
-				InitContainersToStart:    []int{2},
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-		"initialization failed; kill pod if RestartPolicy == Never": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyNever },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses[2].ExitCode = 137
-			},
-			actions: podActions{
-				KillPod:           true,
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				ContainersToStart: []int{},
-				ContainersToKill:  getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-		"init container state unknown; kill and recreate the last init container if RestartPolicy == Always": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyAlways },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses[2].State = kubecontainer.ContainerStateUnknown
-			},
-			actions: podActions{
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				NextInitContainerToStart: &basePod.Spec.InitContainers[2],
-				InitContainersToStart:    []int{2},
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMapWithInitContainers(basePod, baseStatus, []int{2}),
-			},
-		},
-		"init container state unknown; kill and recreate the last init container if RestartPolicy == OnFailure": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyOnFailure },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses[2].State = kubecontainer.ContainerStateUnknown
-			},
-			actions: podActions{
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				NextInitContainerToStart: &basePod.Spec.InitContainers[2],
-				InitContainersToStart:    []int{2},
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMapWithInitContainers(basePod, baseStatus, []int{2}),
-			},
-		},
-		"init container state unknown; kill pod if RestartPolicy == Never": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyNever },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses[2].State = kubecontainer.ContainerStateUnknown
-			},
-			actions: podActions{
-				KillPod:           true,
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				ContainersToStart: []int{},
-				ContainersToKill:  getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-		"Pod sandbox not ready, init container failed, but RestartPolicy == Never; kill pod only": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyNever },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.SandboxStatuses[0].State = runtimeapi.PodSandboxState_SANDBOX_NOTREADY
-			},
-			actions: podActions{
-				KillPod:           true,
-				CreateSandbox:     false,
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				Attempt:           uint32(1),
-				ContainersToStart: []int{},
-				ContainersToKill:  getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-		"Pod sandbox not ready, and RestartPolicy == Never, but no visible init containers;  create a new pod sandbox": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyNever },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.SandboxStatuses[0].State = runtimeapi.PodSandboxState_SANDBOX_NOTREADY
-				status.ContainerStatuses = []*kubecontainer.Status{}
-			},
-			actions: podActions{
-				KillPod:                  true,
-				CreateSandbox:            true,
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				Attempt:                  uint32(1),
-				NextInitContainerToStart: &basePod.Spec.InitContainers[0],
-				InitContainersToStart:    []int{0},
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-		"Pod sandbox not ready, init container failed, and RestartPolicy == OnFailure; create a new pod sandbox": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyOnFailure },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.SandboxStatuses[0].State = runtimeapi.PodSandboxState_SANDBOX_NOTREADY
-				status.ContainerStatuses[2].ExitCode = 137
-			},
-			actions: podActions{
-				KillPod:                  true,
-				CreateSandbox:            true,
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				Attempt:                  uint32(1),
-				NextInitContainerToStart: &basePod.Spec.InitContainers[0],
-				InitContainersToStart:    []int{0},
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-		"some of the init container statuses are missing but the last init container is running, don't restart preceding ones": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyAlways },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses[2].State = kubecontainer.ContainerStateRunning
-				status.ContainerStatuses = status.ContainerStatuses[2:]
-			},
-			actions: podActions{
-				KillPod:           false,
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				ContainersToStart: []int{},
-				ContainersToKill:  getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-		"an init container is in the created state due to an unknown error when starting container; restart it": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyAlways },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses[2].State = kubecontainer.ContainerStateCreated
-			},
-			actions: podActions{
-				KillPod:                  false,
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				NextInitContainerToStart: &basePod.Spec.InitContainers[2],
-				InitContainersToStart:    []int{2},
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-	} {
-		t.Run(desc, func(t *testing.T) {
-			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.LegacySidecarContainers, true)
-			pod, status := makeBasePodAndStatusWithInitContainers()
-			if test.mutatePodFn != nil {
-				test.mutatePodFn(pod)
-			}
-			if test.mutateStatusFn != nil {
-				test.mutateStatusFn(status)
-			}
-			ctx := context.Background()
-			actions := m.computePodActions(ctx, pod, status)
-			handleRestartableInitContainers := kubelettypes.HasRestartableInitContainer(pod)
-			if !handleRestartableInitContainers {
-				// If sidecar containers are disabled or the pod does not have any
-				// restartable init container, we should not see any
-				// InitContainersToStart in the actions.
-				test.actions.InitContainersToStart = nil
-			} else {
-				// If sidecar containers are enabled and the pod has any
-				// restartable init container, we should not see any
-				// NextInitContainerToStart in the actions.
-				test.actions.NextInitContainerToStart = nil
-			}
-			verifyActions(t, &test.actions, &actions, desc)
-		})
-	}
-}
-
 func makeBasePodAndStatusWithInitContainers() (*v1.Pod, *kubecontainer.PodStatus) {
 	pod, status := makeBasePodAndStatus()
 	pod.Spec.InitContainers = []v1.Container{
@@ -2331,168 +2092,6 @@ func TestComputePodActionsWithInitAndEphemeralContainers(t *testing.T) {
 			}
 			ctx := context.Background()
 			actions := m.computePodActions(ctx, pod, status)
-			verifyActions(t, &test.actions, &actions, desc)
-		})
-	}
-}
-
-func TestComputePodActionsWithInitAndEphemeralContainersWithLegacySidecarContainers(t *testing.T) {
-	// Make sure existing test cases pass with feature enabled
-	TestComputePodActions(t)
-	TestComputePodActionsWithInitContainersWithLegacySidecarContainers(t)
-
-	_, _, m, err := createTestRuntimeManager()
-	require.NoError(t, err)
-
-	basePod, baseStatus := makeBasePodAndStatusWithInitAndEphemeralContainers()
-	noAction := podActions{
-		SandboxID:         baseStatus.SandboxStatuses[0].Id,
-		ContainersToStart: []int{},
-		ContainersToKill:  map[kubecontainer.ContainerID]containerToKillInfo{},
-	}
-
-	for desc, test := range map[string]struct {
-		mutatePodFn    func(*v1.Pod)
-		mutateStatusFn func(*kubecontainer.PodStatus)
-		actions        podActions
-	}{
-		"steady state; do nothing; ignore ephemeral container": {
-			actions: noAction,
-		},
-		"No ephemeral containers running; start one": {
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses = status.ContainerStatuses[:4]
-			},
-			actions: podActions{
-				SandboxID:                  baseStatus.SandboxStatuses[0].Id,
-				ContainersToStart:          []int{},
-				ContainersToKill:           map[kubecontainer.ContainerID]containerToKillInfo{},
-				EphemeralContainersToStart: []int{0},
-			},
-		},
-		"Start second ephemeral container": {
-			mutatePodFn: func(pod *v1.Pod) {
-				pod.Spec.EphemeralContainers = append(pod.Spec.EphemeralContainers, v1.EphemeralContainer{
-					EphemeralContainerCommon: v1.EphemeralContainerCommon{
-						Name:  "debug2",
-						Image: "busybox",
-					},
-				})
-			},
-			actions: podActions{
-				SandboxID:                  baseStatus.SandboxStatuses[0].Id,
-				ContainersToStart:          []int{},
-				ContainersToKill:           map[kubecontainer.ContainerID]containerToKillInfo{},
-				EphemeralContainersToStart: []int{1},
-			},
-		},
-		"Ephemeral container exited; do not restart": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyAlways },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses[4].State = kubecontainer.ContainerStateExited
-			},
-			actions: podActions{
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				ContainersToStart: []int{},
-				ContainersToKill:  map[kubecontainer.ContainerID]containerToKillInfo{},
-			},
-		},
-		"initialization in progress; start ephemeral container": {
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses[3].State = kubecontainer.ContainerStateRunning
-				status.ContainerStatuses = status.ContainerStatuses[:4]
-			},
-			actions: podActions{
-				SandboxID:                  baseStatus.SandboxStatuses[0].Id,
-				ContainersToStart:          []int{},
-				ContainersToKill:           map[kubecontainer.ContainerID]containerToKillInfo{},
-				EphemeralContainersToStart: []int{0},
-			},
-		},
-		"Create a new pod sandbox if the pod sandbox is dead, init container failed and RestartPolicy == OnFailure": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyOnFailure },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.SandboxStatuses[0].State = runtimeapi.PodSandboxState_SANDBOX_NOTREADY
-				status.ContainerStatuses = status.ContainerStatuses[3:]
-				status.ContainerStatuses[0].ExitCode = 137
-			},
-			actions: podActions{
-				KillPod:                  true,
-				CreateSandbox:            true,
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				Attempt:                  uint32(1),
-				NextInitContainerToStart: &basePod.Spec.InitContainers[0],
-				InitContainersToStart:    []int{0},
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-		"Kill pod and do not restart ephemeral container if the pod sandbox is dead": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyAlways },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.SandboxStatuses[0].State = runtimeapi.PodSandboxState_SANDBOX_NOTREADY
-			},
-			actions: podActions{
-				KillPod:                  true,
-				CreateSandbox:            true,
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				Attempt:                  uint32(1),
-				NextInitContainerToStart: &basePod.Spec.InitContainers[0],
-				InitContainersToStart:    []int{0},
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMapWithInitContainers(basePod, baseStatus, []int{}),
-			},
-		},
-		"Kill pod if all containers exited except ephemeral container": {
-			mutatePodFn: func(pod *v1.Pod) {
-				pod.Spec.RestartPolicy = v1.RestartPolicyNever
-			},
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				// all regular containers exited
-				for i := 0; i < 3; i++ {
-					status.ContainerStatuses[i].State = kubecontainer.ContainerStateExited
-					status.ContainerStatuses[i].ExitCode = 0
-				}
-			},
-			actions: podActions{
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				CreateSandbox:     false,
-				KillPod:           true,
-				ContainersToStart: []int{},
-				ContainersToKill:  map[kubecontainer.ContainerID]containerToKillInfo{},
-			},
-		},
-		"Ephemeral container is in unknown state; leave it alone": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyNever },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.ContainerStatuses[4].State = kubecontainer.ContainerStateUnknown
-			},
-			actions: noAction,
-		},
-	} {
-		t.Run(desc, func(t *testing.T) {
-			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.LegacySidecarContainers, true)
-			pod, status := makeBasePodAndStatusWithInitAndEphemeralContainers()
-			if test.mutatePodFn != nil {
-				test.mutatePodFn(pod)
-			}
-			if test.mutateStatusFn != nil {
-				test.mutateStatusFn(status)
-			}
-			ctx := context.Background()
-			actions := m.computePodActions(ctx, pod, status)
-			handleRestartableInitContainers := kubelettypes.HasRestartableInitContainer(pod)
-			if !handleRestartableInitContainers {
-				// If sidecar containers are disabled or the pod does not have any
-				// restartable init container, we should not see any
-				// InitContainersToStart in the actions.
-				test.actions.InitContainersToStart = nil
-			} else {
-				// If sidecar containers are enabled and the pod has any
-				// restartable init container, we should not see any
-				// NextInitContainerToStart in the actions.
-				test.actions.NextInitContainerToStart = nil
-			}
 			verifyActions(t, &test.actions, &actions, desc)
 		})
 	}
@@ -3284,8 +2883,10 @@ func TestDoPodResizeAction(t *testing.T) {
 	}
 
 	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.InPlacePodVerticalScaling, true)
+	metrics.Register()
+	metrics.PodResizeDurationMilliseconds.Reset()
 
-	for _, tc := range []struct {
+	for i, tc := range []struct {
 		testName                  string
 		currentResources          containerResources
 		desiredResources          containerResources
@@ -3465,6 +3066,26 @@ func TestDoPodResizeAction(t *testing.T) {
 				pod.Spec.Containers[2].Resources = resources
 			}
 
+			m.runtimeHelper = &containertest.FakeRuntimeHelper{
+				PodStats: map[types.UID]*statsapi.PodStats{
+					pod.UID: {
+						PodRef: statsapi.PodReference{
+							Name:      pod.Name,
+							Namespace: pod.Namespace,
+							UID:       string(pod.UID),
+						},
+						Memory: &statsapi.MemoryStats{
+							UsageBytes: ptr.To[uint64](20),
+						},
+						Containers: []statsapi.ContainerStats{{
+							Name: pod.Spec.Containers[0].Name,
+							Memory: &statsapi.MemoryStats{
+								UsageBytes: ptr.To[uint64](10),
+							},
+						}},
+					}},
+			}
+
 			updateInfo := containerToUpdateInfo{
 				container:                 &pod.Spec.Containers[0],
 				kubeContainerID:           kps.ContainerStatuses[0].ID,
@@ -3479,24 +3100,283 @@ func TestDoPodResizeAction(t *testing.T) {
 			actions := podActions{
 				ContainersToUpdate: containersToUpdate,
 			}
-			resizeResult := m.doPodResizeAction(pod, actions)
+			resizeResult := m.doPodResizeAction(t.Context(), pod, kps, actions)
 
 			if tc.expectedError != "" {
 				require.Error(t, resizeResult.Error)
 				require.EqualError(t, resizeResult.Error, tc.expectedError)
 				require.Equal(t, tc.expectedErrorMessage, resizeResult.Message)
 			} else {
-				require.NoError(t, resizeResult.Error)
+				require.NoError(t, resizeResult.Error, resizeResult.Message)
 			}
 
 			mock.AssertExpectationsForObjects(t, mockPCM)
+
+			testutil.AssertHistogramTotalCount(t, "kubelet_pod_resize_duration_milliseconds", map[string]string{}, i+1)
+		})
+	}
+	metrics.PodResizeDurationMilliseconds.Reset()
+}
+
+func TestCheckPodResize(t *testing.T) {
+	if goruntime.GOOS != "linux" {
+		t.Skip("unsupported OS")
+	}
+
+	for _, tc := range []struct {
+		testName                               string
+		currentResources, desiredResources     containerResources
+		currentPodMemLimit, desiredPodMemLimit *int64
+		containerMemoryUsage, podMemoryUsage   *uint64
+		expectedError                          bool
+	}{
+		{
+			testName: "Resize memory request no limits",
+			currentResources: containerResources{
+				cpuRequest:    100,
+				memoryRequest: 100,
+			},
+			desiredResources: containerResources{
+				cpuRequest:    100,
+				memoryRequest: 200,
+			},
+			expectedError: false,
+		},
+		{
+			testName: "Add container limits, low usage",
+			currentResources: containerResources{
+				memoryRequest: 100,
+			},
+			desiredResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			containerMemoryUsage: ptr.To[uint64](10),
+			podMemoryUsage:       ptr.To[uint64](10),
+			expectedError:        false,
+		},
+		{
+			testName: "Add container limits, high usage",
+			currentResources: containerResources{
+				memoryRequest: 100,
+			},
+			desiredResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			containerMemoryUsage: ptr.To[uint64](200),
+			podMemoryUsage:       ptr.To[uint64](200),
+			expectedError:        true,
+		},
+		{
+			testName: "Add container limits, missing container usage",
+			currentResources: containerResources{
+				memoryRequest: 100,
+			},
+			desiredResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			podMemoryUsage: ptr.To[uint64](10),
+			expectedError:  true,
+		},
+		{
+			testName: "Add container limits, missing pod usage",
+			currentResources: containerResources{
+				memoryRequest: 100,
+			},
+			desiredResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			containerMemoryUsage: ptr.To[uint64](10),
+			expectedError:        false,
+		},
+		{
+			testName: "Increase container limits",
+			currentResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			desiredResources: containerResources{
+				memoryRequest: 100, memoryLimit: 200,
+			},
+			expectedError: false,
+		},
+		{
+			testName: "Decrease container limits, low usage",
+			currentResources: containerResources{
+				memoryRequest: 100, memoryLimit: 200,
+			},
+			desiredResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			containerMemoryUsage: ptr.To[uint64](20),
+			podMemoryUsage:       ptr.To[uint64](20),
+			expectedError:        false,
+		},
+		{
+			testName: "Decrease container limits, high usage",
+			currentResources: containerResources{
+				memoryRequest: 100, memoryLimit: 200,
+			},
+			desiredResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			containerMemoryUsage: ptr.To[uint64](150),
+			podMemoryUsage:       ptr.To[uint64](150),
+			expectedError:        true,
+		},
+		{
+			testName: "Add pod limit, low usage",
+			currentResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			desiredResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			desiredPodMemLimit:   ptr.To[int64](100),
+			containerMemoryUsage: ptr.To[uint64](20),
+			podMemoryUsage:       ptr.To[uint64](20),
+			expectedError:        false,
+		},
+		{
+			testName: "Add pod limit, high usage",
+			currentResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			desiredResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			desiredPodMemLimit:   ptr.To[int64](100),
+			containerMemoryUsage: ptr.To[uint64](20),
+			podMemoryUsage:       ptr.To[uint64](200),
+			expectedError:        true,
+		},
+		{
+			testName: "Increase pod limits",
+			currentResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			desiredResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			currentPodMemLimit:   ptr.To[int64](100),
+			desiredPodMemLimit:   ptr.To[int64](200),
+			containerMemoryUsage: ptr.To[uint64](20),
+			podMemoryUsage:       ptr.To[uint64](20),
+			expectedError:        false,
+		},
+		{
+			testName: "Decrease pod limits, low usage",
+			currentResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			desiredResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			currentPodMemLimit:   ptr.To[int64](200),
+			desiredPodMemLimit:   ptr.To[int64](100),
+			containerMemoryUsage: ptr.To[uint64](20),
+			podMemoryUsage:       ptr.To[uint64](20),
+			expectedError:        false,
+		},
+		{
+			testName: "Decrease pod limits, high usage",
+			currentResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			desiredResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			currentPodMemLimit:   ptr.To[int64](200),
+			desiredPodMemLimit:   ptr.To[int64](100),
+			containerMemoryUsage: ptr.To[uint64](50),
+			podMemoryUsage:       ptr.To[uint64](150),
+			expectedError:        true,
+		},
+		{
+			testName: "Decrease pod limits, missing usage",
+			currentResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			desiredResources: containerResources{
+				memoryRequest: 100, memoryLimit: 100,
+			},
+			currentPodMemLimit:   ptr.To[int64](200),
+			desiredPodMemLimit:   ptr.To[int64](100),
+			containerMemoryUsage: ptr.To[uint64](50),
+			podMemoryUsage:       nil,
+			expectedError:        true,
+		},
+	} {
+		t.Run(tc.testName, func(t *testing.T) {
+			_, _, m, err := createTestRuntimeManager()
+			require.NoError(t, err)
+
+			pod, kps := makeBasePodAndStatus()
+			// pod spec and allocated resources are already updated as desired when doPodResizeAction() is called.
+			pod.Spec.Containers[0].Resources = v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceCPU:    *resource.NewMilliQuantity(tc.desiredResources.cpuRequest, resource.DecimalSI),
+					v1.ResourceMemory: *resource.NewQuantity(tc.desiredResources.memoryRequest, resource.DecimalSI),
+				},
+				Limits: v1.ResourceList{
+					v1.ResourceCPU:    *resource.NewMilliQuantity(tc.desiredResources.cpuLimit, resource.DecimalSI),
+					v1.ResourceMemory: *resource.NewQuantity(tc.desiredResources.memoryLimit, resource.DecimalSI),
+				},
+			}
+
+			updateInfo := containerToUpdateInfo{
+				container:                 &pod.Spec.Containers[0],
+				kubeContainerID:           kps.ContainerStatuses[0].ID,
+				desiredContainerResources: tc.desiredResources,
+				currentContainerResources: &tc.currentResources,
+			}
+			containersToUpdate := map[v1.ResourceName][]containerToUpdateInfo{
+				v1.ResourceMemory: {updateInfo},
+			}
+
+			actions := podActions{
+				ContainersToUpdate: containersToUpdate,
+			}
+
+			podStats := &statsapi.PodStats{
+				PodRef: statsapi.PodReference{
+					Name:      pod.Name,
+					Namespace: pod.Namespace,
+					UID:       string(pod.UID),
+				},
+				Memory: &statsapi.MemoryStats{
+					UsageBytes: tc.podMemoryUsage,
+				},
+			}
+			for _, container := range pod.Spec.Containers {
+				podStats.Containers = append(podStats.Containers, statsapi.ContainerStats{
+					Name: container.Name,
+					Memory: &statsapi.MemoryStats{
+						UsageBytes: tc.containerMemoryUsage,
+					},
+				})
+			}
+			m.runtimeHelper = &containertest.FakeRuntimeHelper{
+				PodStats: map[types.UID]*statsapi.PodStats{pod.UID: podStats},
+			}
+
+			currentPodResources := &cm.ResourceConfig{Memory: tc.currentPodMemLimit}
+			desiredPodResources := &cm.ResourceConfig{Memory: tc.desiredPodMemLimit}
+
+			err = m.validatePodResizeAction(t.Context(), pod, kps, currentPodResources, desiredPodResources, actions)
+
+			if tc.expectedError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }
 
 func TestIncrementImageVolumeMetrics(t *testing.T) {
 	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.ImageVolume, true)
-	metrics.Register()
+	legacyregistry.MustRegister(metrics.ImageVolumeRequestedTotal)
+	legacyregistry.MustRegister(metrics.ImageVolumeMountedSucceedTotal)
+	legacyregistry.MustRegister(metrics.ImageVolumeMountedErrorsTotal)
 
 	testCases := map[string]struct {
 		err          error

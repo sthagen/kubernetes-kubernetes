@@ -19,6 +19,7 @@ package allocation
 import (
 	"fmt"
 	goruntime "runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,7 +32,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/record"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
+	"k8s.io/component-base/metrics/legacyregistry"
+	"k8s.io/component-base/metrics/testutil"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/allocation/state"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
@@ -39,6 +43,7 @@ import (
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	containertest "k8s.io/kubernetes/pkg/kubelet/container/testing"
 	"k8s.io/kubernetes/pkg/kubelet/lifecycle"
+	"k8s.io/kubernetes/pkg/kubelet/metrics"
 	kubepod "k8s.io/kubernetes/pkg/kubelet/pod"
 	"k8s.io/kubernetes/pkg/kubelet/status"
 	statustest "k8s.io/kubernetes/pkg/kubelet/status/testing"
@@ -124,50 +129,44 @@ func TestUpdatePodFromAllocation(t *testing.T) {
 	tests := []struct {
 		name         string
 		pod          *v1.Pod
-		allocs       state.PodResourceInfoMap
+		allocated    state.PodResourceInfo
 		expectPod    *v1.Pod
 		expectUpdate bool
 	}{{
 		name: "steady state",
 		pod:  pod,
-		allocs: state.PodResourceInfoMap{
-			pod.UID: state.PodResourceInfo{
-				ContainerResources: map[string]v1.ResourceRequirements{
-					"c1":                  *pod.Spec.Containers[0].Resources.DeepCopy(),
-					"c2":                  *pod.Spec.Containers[1].Resources.DeepCopy(),
-					"c1-restartable-init": *pod.Spec.InitContainers[0].Resources.DeepCopy(),
-					"c1-init":             *pod.Spec.InitContainers[1].Resources.DeepCopy(),
-				},
+		allocated: state.PodResourceInfo{
+			ContainerResources: map[string]v1.ResourceRequirements{
+				"c1":                  *pod.Spec.Containers[0].Resources.DeepCopy(),
+				"c2":                  *pod.Spec.Containers[1].Resources.DeepCopy(),
+				"c1-restartable-init": *pod.Spec.InitContainers[0].Resources.DeepCopy(),
+				"c1-init":             *pod.Spec.InitContainers[1].Resources.DeepCopy(),
 			},
 		},
 		expectUpdate: false,
 	}, {
 		name:         "no allocations",
 		pod:          pod,
-		allocs:       state.PodResourceInfoMap{},
+		allocated:    state.PodResourceInfo{},
 		expectUpdate: false,
 	}, {
 		name: "missing container allocation",
 		pod:  pod,
-		allocs: state.PodResourceInfoMap{
-			pod.UID: state.PodResourceInfo{
-				ContainerResources: map[string]v1.ResourceRequirements{
-					"c2": *pod.Spec.Containers[1].Resources.DeepCopy(),
-				},
+		allocated: state.PodResourceInfo{
+			ContainerResources: map[string]v1.ResourceRequirements{
+				"c2": *pod.Spec.Containers[1].Resources.DeepCopy(),
 			},
 		},
 		expectUpdate: false,
 	}, {
 		name: "resized container",
 		pod:  pod,
-		allocs: state.PodResourceInfoMap{
-			pod.UID: state.PodResourceInfo{
-				ContainerResources: map[string]v1.ResourceRequirements{
-					"c1":                  *resizedPod.Spec.Containers[0].Resources.DeepCopy(),
-					"c2":                  *resizedPod.Spec.Containers[1].Resources.DeepCopy(),
-					"c1-restartable-init": *resizedPod.Spec.InitContainers[0].Resources.DeepCopy(),
-					"c1-init":             *resizedPod.Spec.InitContainers[1].Resources.DeepCopy(),
-				},
+		allocated: state.PodResourceInfo{
+			ContainerResources: map[string]v1.ResourceRequirements{
+				"c1":                  *resizedPod.Spec.Containers[0].Resources.DeepCopy(),
+				"c2":                  *resizedPod.Spec.Containers[1].Resources.DeepCopy(),
+				"c1-restartable-init": *resizedPod.Spec.InitContainers[0].Resources.DeepCopy(),
+				"c1-init":             *resizedPod.Spec.InitContainers[1].Resources.DeepCopy(),
 			},
 		},
 		expectUpdate: true,
@@ -177,7 +176,7 @@ func TestUpdatePodFromAllocation(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			pod := test.pod.DeepCopy()
-			allocatedPod, updated := updatePodFromAllocation(pod, test.allocs)
+			allocatedPod, updated := updatePodFromAllocation(pod, test.allocated)
 
 			if test.expectUpdate {
 				assert.True(t, updated, "updated")
@@ -191,7 +190,16 @@ func TestUpdatePodFromAllocation(t *testing.T) {
 	}
 }
 
-func TestIsPodResizeInProgress(t *testing.T) {
+func getEventsFromFakeRecorder(t *testing.T, am Manager) string {
+	select {
+	case e := <-am.(*manager).recorder.(*record.FakeRecorder).Events:
+		return e
+	default:
+		return ""
+	}
+}
+
+func TestCheckPodResizeInProgress(t *testing.T) {
 	type testResources struct {
 		cpuReq, cpuLim, memReq, memLim int64
 	}
@@ -204,9 +212,11 @@ func TestIsPodResizeInProgress(t *testing.T) {
 	}
 
 	tests := []struct {
-		name            string
-		containers      []testContainer
-		expectHasResize bool
+		name                            string
+		containers                      []testContainer
+		oldPodResizeInProgressCondition bool
+		expectHasResize                 bool
+		expectPodResizeCompletedMsg     string
 	}{{
 		name: "simple running container",
 		containers: []testContainer{{
@@ -214,14 +224,17 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{100, 100, 100, 100},
 			isRunning: true,
 		}},
-		expectHasResize: false,
+		oldPodResizeInProgressCondition: true,
+		expectHasResize:                 false,
+		expectPodResizeCompletedMsg:     `Normal ResizeCompleted Pod resize completed: {"containers":[{"name":"c0","resources":{"limits":{"cpu":"100m","memory":"100"},"requests":{"cpu":"100m","memory":"100"}}}]}`,
 	}, {
 		name: "simple unstarted container",
 		containers: []testContainer{{
 			allocated: testResources{100, 100, 100, 100},
 			unstarted: true,
 		}},
-		expectHasResize: false,
+		oldPodResizeInProgressCondition: false,
+		expectHasResize:                 false,
 	}, {
 		name: "simple resized container/cpu req",
 		containers: []testContainer{{
@@ -229,7 +242,8 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{150, 200, 100, 200},
 			isRunning: true,
 		}},
-		expectHasResize: true,
+		oldPodResizeInProgressCondition: false,
+		expectHasResize:                 true,
 	}, {
 		name: "simple resized container/cpu limit",
 		containers: []testContainer{{
@@ -237,7 +251,8 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{100, 300, 100, 200},
 			isRunning: true,
 		}},
-		expectHasResize: true,
+		oldPodResizeInProgressCondition: false,
+		expectHasResize:                 true,
 	}, {
 		name: "simple resized container/mem req",
 		containers: []testContainer{{
@@ -245,7 +260,8 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{100, 200, 150, 200},
 			isRunning: true,
 		}},
-		expectHasResize: true,
+		oldPodResizeInProgressCondition: false,
+		expectHasResize:                 true,
 	}, {
 		name: "simple resized container/cpu+mem req",
 		containers: []testContainer{{
@@ -253,7 +269,8 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{150, 200, 150, 200},
 			isRunning: true,
 		}},
-		expectHasResize: true,
+		oldPodResizeInProgressCondition: false,
+		expectHasResize:                 true,
 	}, {
 		name: "simple resized container/mem limit",
 		containers: []testContainer{{
@@ -261,7 +278,8 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{100, 200, 100, 300},
 			isRunning: true,
 		}},
-		expectHasResize: true,
+		oldPodResizeInProgressCondition: false,
+		expectHasResize:                 true,
 	}, {
 		name: "terminated resized container",
 		containers: []testContainer{{
@@ -269,7 +287,8 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{200, 200, 100, 200},
 			isRunning: false,
 		}},
-		expectHasResize: false,
+		oldPodResizeInProgressCondition: false,
+		expectHasResize:                 false,
 	}, {
 		name: "non-sidecar init container",
 		containers: []testContainer{{
@@ -281,7 +300,8 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{100, 200, 100, 200},
 			isRunning: true,
 		}},
-		expectHasResize: false,
+		oldPodResizeInProgressCondition: false,
+		expectHasResize:                 false,
 	}, {
 		name: "non-resized sidecar",
 		containers: []testContainer{{
@@ -294,7 +314,8 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{100, 200, 100, 200},
 			isRunning: true,
 		}},
-		expectHasResize: false,
+		oldPodResizeInProgressCondition: false,
+		expectHasResize:                 false,
 	}, {
 		name: "resized sidecar",
 		containers: []testContainer{{
@@ -307,7 +328,8 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{100, 200, 100, 200},
 			isRunning: true,
 		}},
-		expectHasResize: true,
+		oldPodResizeInProgressCondition: false,
+		expectHasResize:                 true,
 	}, {
 		name: "several containers and a resize",
 		containers: []testContainer{{
@@ -326,7 +348,27 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{200, 200, 100, 200}, // Resized
 			isRunning: true,
 		}},
-		expectHasResize: true,
+		oldPodResizeInProgressCondition: false,
+		expectHasResize:                 true,
+	}, {
+		name: "several containers",
+		containers: []testContainer{{
+			allocated: testResources{cpuReq: 100, cpuLim: 200},
+			actuated:  &testResources{cpuReq: 100, cpuLim: 200},
+			sidecar:   true,
+			isRunning: true,
+		}, {
+			allocated: testResources{memReq: 100, memLim: 200},
+			actuated:  &testResources{memReq: 100, memLim: 200},
+			isRunning: true,
+		}, {
+			allocated: testResources{cpuReq: 200, memReq: 100},
+			actuated:  &testResources{cpuReq: 200, memReq: 100},
+			isRunning: true,
+		}},
+		oldPodResizeInProgressCondition: true,
+		expectHasResize:                 false,
+		expectPodResizeCompletedMsg:     `Normal ResizeCompleted Pod resize completed: {"initContainers":[{"name":"c0","resources":{"limits":{"cpu":"200m"},"requests":{"cpu":"100m"}}}],"containers":[{"name":"c1","resources":{"limits":{"memory":"200"},"requests":{"memory":"100"}}},{"name":"c2","resources":{"requests":{"cpu":"200m","memory":"100"}}}]}`,
 	}, {
 		name: "best-effort pod",
 		containers: []testContainer{{
@@ -334,7 +376,9 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{},
 			isRunning: true,
 		}},
-		expectHasResize: false,
+		oldPodResizeInProgressCondition: true,
+		expectHasResize:                 false,
+		expectPodResizeCompletedMsg:     `Normal ResizeCompleted Pod resize completed: {"containers":[{"name":"c0","resources":{}}]}`,
 	}, {
 		name: "burstable pod/not resizing",
 		containers: []testContainer{{
@@ -342,7 +386,8 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{cpuReq: 100},
 			isRunning: true,
 		}},
-		expectHasResize: false,
+		oldPodResizeInProgressCondition: false,
+		expectHasResize:                 false,
 	}, {
 		name: "burstable pod/resized",
 		containers: []testContainer{{
@@ -350,7 +395,8 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			actuated:  &testResources{cpuReq: 500},
 			isRunning: true,
 		}},
-		expectHasResize: true,
+		oldPodResizeInProgressCondition: false,
+		expectHasResize:                 true,
 	}}
 
 	mkRequirements := func(r testResources) v1.ResourceRequirements {
@@ -437,8 +483,32 @@ func TestIsPodResizeInProgress(t *testing.T) {
 			}
 			require.NoError(t, am.SetAllocatedResources(pod))
 
-			hasResizedResources := am.(*manager).isPodResizeInProgress(pod, podStatus)
-			require.Equal(t, test.expectHasResize, hasResizedResources, "hasResizedResources")
+			am.(*manager).recorder = record.NewFakeRecorder(200)
+
+			// Set old Pod condition as Inprogress, so that ClearPodResizeInProgressCondition is true and emit resize completed event
+			if test.oldPodResizeInProgressCondition {
+				am.(*manager).statusManager.SetPodResizeInProgressCondition(pod.UID, "", "", int64(1))
+			}
+
+			am.CheckPodResizeInProgress(pod, podStatus)
+
+			// Verify pod resize completed event is emitted
+			podResizeCompletionEvent := getEventsFromFakeRecorder(t, am)
+			assert.Equal(t, test.expectPodResizeCompletedMsg, podResizeCompletionEvent)
+
+			if test.expectHasResize {
+				// Verify the status manager has the InProgress condition set on it
+				gotResizeConditions := am.(*manager).statusManager.GetPodResizeConditions(pod.UID)
+				for _, c := range gotResizeConditions {
+					require.Equal(t, v1.PodResizeInProgress, c.Type, "ResizeConditions Type should be PodResizeInProgress")
+					require.Empty(t, c.Reason, "ResizeConditions Error")
+					require.Empty(t, c.Message, "ResizeConditions Message")
+				}
+			} else {
+				// Verify pod resize Inprogress condition is cleared
+				gotResizeConditions := am.(*manager).statusManager.GetPodResizeConditions(pod.UID)
+				require.Empty(t, gotResizeConditions, "ResizeConditions Error")
+			}
 		})
 	}
 }
@@ -447,6 +517,9 @@ func TestHandlePodResourcesResize(t *testing.T) {
 	if goruntime.GOOS == "windows" {
 		t.Skip("InPlacePodVerticalScaling is not currently supported for Windows")
 	}
+	metrics.Register()
+	metrics.PodInfeasibleResizes.Reset()
+
 	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.InPlacePodVerticalScaling, true)
 	containerRestartPolicyAlways := v1.ContainerRestartPolicyAlways
 
@@ -794,7 +867,7 @@ func TestHandlePodResourcesResize(t *testing.T) {
 					return newPod, true
 				}
 				allocationManager.PushPendingResize(originalPod.UID)
-				allocationManager.RetryPendingResizes()
+				allocationManager.RetryPendingResizes(TriggerReasonPodUpdated)
 				allocatedPod, _ := allocationManager.UpdatePodFromAllocation(newPod)
 				allocationManager.CheckPodResizeInProgress(allocatedPod, podStatus)
 
@@ -834,12 +907,25 @@ func TestHandlePodResourcesResize(t *testing.T) {
 			})
 		}
 	}
+
+	expectedMetrics := `
+		# HELP kubelet_pod_infeasible_resizes_total [ALPHA] Number of infeasible resizes for pods.
+        # TYPE kubelet_pod_infeasible_resizes_total counter
+        kubelet_pod_infeasible_resizes_total{reason_detail="insufficient_node_allocatable"} 4
+        kubelet_pod_infeasible_resizes_total{reason_detail="static_pod"} 2
+	`
+	assert.NoError(t, testutil.GatherAndCompare(
+		legacyregistry.DefaultGatherer, strings.NewReader(expectedMetrics), "kubelet_pod_infeasible_resizes_total",
+	))
 }
 
 func TestHandlePodResourcesResizeWithSwap(t *testing.T) {
 	if goruntime.GOOS == "windows" {
 		t.Skip("InPlacePodVerticalScaling is not currently supported for Windows")
 	}
+	metrics.Register()
+	metrics.PodInfeasibleResizes.Reset()
+
 	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.InPlacePodVerticalScaling, true)
 	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.NodeSwap, true)
 	noSwapContainerName, swapContainerName := "test-container-noswap", "test-container-limitedswap"
@@ -884,6 +970,7 @@ func TestHandlePodResourcesResizeWithSwap(t *testing.T) {
 		resizePolicy          v1.ContainerResizePolicy
 		swapBehavior          kubetypes.SwapBehavior
 		expectedResize        []*v1.PodCondition
+		expectedMetrics       string
 	}{
 		{
 			name:                  "NoSwap Request Memory decrease ResizePolicy RestartContainer - expect InProgress",
@@ -925,6 +1012,11 @@ func TestHandlePodResourcesResizeWithSwap(t *testing.T) {
 					Message: "In-place resize of containers with swap is not supported",
 				},
 			},
+			expectedMetrics: `
+			    # HELP kubelet_pod_infeasible_resizes_total [ALPHA] Number of infeasible resizes for pods.
+				# TYPE kubelet_pod_infeasible_resizes_total counter
+				kubelet_pod_infeasible_resizes_total{reason_detail="swap_limitation"} 1
+			`,
 		},
 	}
 	for _, tt := range tests {
@@ -966,7 +1058,7 @@ func TestHandlePodResourcesResizeWithSwap(t *testing.T) {
 				return newPod, true
 			}
 			allocationManager.PushPendingResize(testPod.UID)
-			allocationManager.RetryPendingResizes()
+			allocationManager.RetryPendingResizes(TriggerReasonPodUpdated)
 			allocatedPod, _ := allocationManager.UpdatePodFromAllocation(newPod)
 			allocationManager.CheckPodResizeInProgress(allocatedPod, podStatus)
 
@@ -994,6 +1086,10 @@ func TestHandlePodResourcesResizeWithSwap(t *testing.T) {
 			}
 			assert.Equal(t, tt.expectedResize, resizeStatus)
 			assert.Equal(t, "true", newPod.Annotations["pod-sync-triggered"], "pod sync annotation should be set")
+
+			assert.NoError(t, testutil.GatherAndCompare(
+				legacyregistry.DefaultGatherer, strings.NewReader(tt.expectedMetrics), "kubelet_pod_infeasible_resizes_total",
+			))
 		})
 	}
 }
@@ -1149,7 +1245,7 @@ func TestHandlePodResourcesResizeMultipleConditions(t *testing.T) {
 			}
 
 			allocationManager.PushPendingResize(testPod.UID)
-			allocationManager.RetryPendingResizes()
+			allocationManager.RetryPendingResizes(TriggerReasonPodUpdated)
 			allocatedPod, _ := allocationManager.UpdatePodFromAllocation(testPod)
 			allocationManager.CheckPodResizeInProgress(allocatedPod, podStatus)
 
@@ -1611,6 +1707,108 @@ func TestSortPendingResizes(t *testing.T) {
 		allocationManager.PushPendingResize(testPods[i].UID)
 	}
 	require.Equal(t, expected, allocationManager.(*manager).podsWithPendingResizes)
+}
+
+func TestRecordPodDeferredAcceptedResizes(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("InPlacePodVerticalScaling is not currently supported for Windows")
+	}
+
+	metrics.Register()
+	metrics.PodDeferredAcceptedResizes.Reset()
+
+	cpu500m := resource.MustParse("500m")
+	cpu1000m := resource.MustParse("1")
+	mem500M := resource.MustParse("500Mi")
+	mem1000M := resource.MustParse("1Gi")
+
+	for _, tc := range []struct {
+		name                string
+		trigger             string
+		hasPendingCondition bool
+		expectedMetrics     string
+	}{
+		{
+			name:    "trigger reason: pod updated, no pending condition",
+			trigger: TriggerReasonPodUpdated,
+		},
+		{
+			name:                "trigger reason: pod resized, pending condition",
+			trigger:             TriggerReasonPodResized,
+			hasPendingCondition: true,
+			expectedMetrics: `
+					# HELP kubelet_pod_deferred_accepted_resizes_total [ALPHA] Cumulative number of resizes that were accepted after being deferred.
+					# TYPE kubelet_pod_deferred_accepted_resizes_total counter
+					kubelet_pod_deferred_accepted_resizes_total{retry_trigger="pod_resized"} 1
+			`,
+		},
+		{
+			name:                "trigger reason: periodic retry, pending condition",
+			trigger:             triggerReasonPeriodic,
+			hasPendingCondition: true,
+			expectedMetrics: `
+					# HELP kubelet_pod_deferred_accepted_resizes_total [ALPHA] Cumulative number of resizes that were accepted after being deferred.
+					# TYPE kubelet_pod_deferred_accepted_resizes_total counter
+					kubelet_pod_deferred_accepted_resizes_total{retry_trigger="periodic_retry"} 1
+					kubelet_pod_deferred_accepted_resizes_total{retry_trigger="pod_resized"} 1
+			`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			original := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "1111",
+					Name:      "pod1",
+					Namespace: "ns1",
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:  "c1",
+							Image: "i1",
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{v1.ResourceCPU: cpu1000m, v1.ResourceMemory: mem1000M},
+							},
+						},
+					},
+				},
+				Status: v1.PodStatus{
+					Phase: v1.PodRunning,
+					ContainerStatuses: []v1.ContainerStatus{
+						{
+							Name:               "c1",
+							AllocatedResources: v1.ResourceList{v1.ResourceCPU: cpu1000m, v1.ResourceMemory: mem1000M},
+							Resources:          &v1.ResourceRequirements{},
+						},
+					},
+				},
+			}
+
+			resizedPod := original.DeepCopy()
+			resizedPod.Spec.Containers[0].Resources.Requests = v1.ResourceList{v1.ResourceCPU: cpu500m, v1.ResourceMemory: mem500M}
+
+			am := makeAllocationManager(t, &containertest.FakeRuntime{}, []*v1.Pod{original})
+			require.NoError(t, am.SetAllocatedResources(original))
+			require.NoError(t, am.SetActuatedResources(original, nil))
+			if tc.hasPendingCondition {
+				am.(*manager).statusManager.SetPodResizePendingCondition(original.UID, v1.PodReasonDeferred, "message", 1)
+			}
+
+			am.(*manager).getPodByUID = func(uid types.UID) (*v1.Pod, bool) {
+				return resizedPod, true
+			}
+			am.PushPendingResize(original.UID)
+			resizedPods := am.(*manager).retryPendingResizes(tc.trigger)
+
+			require.Len(t, resizedPods, 1)
+			require.Equal(t, original.UID, resizedPods[0].UID)
+
+			require.NoError(t, testutil.GatherAndCompare(
+				legacyregistry.DefaultGatherer, strings.NewReader(tc.expectedMetrics), "kubelet_pod_deferred_accepted_resizes_total",
+			))
+		})
+	}
+
 }
 
 func makeAllocationManager(t *testing.T, runtime *containertest.FakeRuntime, allocatedPods []*v1.Pod) Manager {
