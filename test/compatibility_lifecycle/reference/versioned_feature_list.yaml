@@ -125,6 +125,10 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.27"
+  - default: true
+    lockToDefault: true
+    preRelease: GA
+    version: "1.34"
 - name: APIServingWithRoutine
   versionedSpecs:
   - default: false
@@ -407,20 +411,6 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.34"
-- name: DevicePluginCDIDevices
-  versionedSpecs:
-  - default: false
-    lockToDefault: false
-    preRelease: Alpha
-    version: "1.28"
-  - default: true
-    lockToDefault: false
-    preRelease: Beta
-    version: "1.29"
-  - default: true
-    lockToDefault: true
-    preRelease: GA
-    version: "1.31"
 - name: DisableAllocatorDualWrite
   versionedSpecs:
   - default: false
@@ -799,6 +789,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.33"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.34"
 - name: KubeletTracing
   versionedSpecs:
   - default: false
@@ -1121,6 +1115,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.33"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.34"
 - name: PodReadyToStartContainersCondition
   versionedSpecs:
   - default: false
@@ -1819,6 +1817,10 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.33"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.34"
 - name: WindowsCPUAndMemoryAffinity
   versionedSpecs:
   - default: false
