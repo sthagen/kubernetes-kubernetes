@@ -632,6 +632,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), framework.With
 			framework.ExpectNoError(e2epod.WaitForPodNotFoundInNamespace(ctx, f.ClientSet, pod.Name, pod.Namespace, f.Timeouts.PodDelete))
 		})
 
+		// Seamless upgrade support was added in Kubernetes 1.33.
 		f.It("sequential update with pods replacing each other", f.WithLabel("KubeletMinVersion:1.33"), framework.WithSlow(), func(ctx context.Context) {
 			nodes := drautils.NewNodesNow(ctx, f, 1, 1)
 
@@ -920,74 +921,6 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), framework.With
 			}).WithTimeout(f.Timeouts.PodDelete).Should(gomega.HaveField("Status.Allocation", (*resourceapi.AllocationResult)(nil)))
 		})
 
-		f.It("must be possible for the driver to update the ResourceClaim.Status.Devices once allocated", f.WithFeatureGate(features.DRAResourceClaimDeviceStatus), func(ctx context.Context) {
-			pod := b.PodExternal()
-			claim := b.ExternalClaim()
-			b.Create(ctx, claim, pod)
-
-			// Waits for the ResourceClaim to be allocated and the pod to be scheduled.
-			b.TestPod(ctx, f, pod)
-
-			allocatedResourceClaim, err := f.ClientSet.ResourceV1beta2().ResourceClaims(f.Namespace.Name).Get(ctx, claim.Name, metav1.GetOptions{})
-			framework.ExpectNoError(err)
-			gomega.Expect(allocatedResourceClaim).ToNot(gomega.BeNil())
-			gomega.Expect(allocatedResourceClaim.Status.Allocation).ToNot(gomega.BeNil())
-			gomega.Expect(allocatedResourceClaim.Status.Allocation.Devices.Results).To(gomega.HaveLen(1))
-
-			scheduledPod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(ctx, pod.Name, metav1.GetOptions{})
-			framework.ExpectNoError(err)
-			gomega.Expect(scheduledPod).ToNot(gomega.BeNil())
-
-			ginkgo.By("Setting the device status a first time")
-			allocatedResourceClaim.Status.Devices = append(allocatedResourceClaim.Status.Devices,
-				resourceapi.AllocatedDeviceStatus{
-					Driver:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Driver,
-					Pool:       allocatedResourceClaim.Status.Allocation.Devices.Results[0].Pool,
-					Device:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Device,
-					Conditions: []metav1.Condition{{Type: "a", Status: "True", Message: "c", Reason: "d", LastTransitionTime: metav1.NewTime(time.Now().Truncate(time.Second))}},
-					Data:       &runtime.RawExtension{Raw: []byte(`{"foo":"bar"}`)},
-					NetworkData: &resourceapi.NetworkDeviceData{
-						InterfaceName:   "inf1",
-						IPs:             []string{"10.9.8.0/24", "2001:db8::/64"},
-						HardwareAddress: "bc:1c:b6:3e:b8:25",
-					},
-				})
-
-			// Updates the ResourceClaim from the driver on the same node as the pod.
-			plugin, ok := driver.Nodes[scheduledPod.Spec.NodeName]
-			if !ok {
-				framework.Failf("pod got scheduled to node %s without a plugin", scheduledPod.Spec.NodeName)
-			}
-			updatedResourceClaim, err := plugin.UpdateStatus(ctx, allocatedResourceClaim)
-			framework.ExpectNoError(err)
-			gomega.Expect(updatedResourceClaim).ToNot(gomega.BeNil())
-			gomega.Expect(updatedResourceClaim.Status.Devices).To(gomega.Equal(allocatedResourceClaim.Status.Devices))
-
-			ginkgo.By("Updating the device status")
-			updatedResourceClaim.Status.Devices[0] = resourceapi.AllocatedDeviceStatus{
-				Driver:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Driver,
-				Pool:       allocatedResourceClaim.Status.Allocation.Devices.Results[0].Pool,
-				Device:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Device,
-				Conditions: []metav1.Condition{{Type: "e", Status: "True", Message: "g", Reason: "h", LastTransitionTime: metav1.NewTime(time.Now().Truncate(time.Second))}},
-				Data:       &runtime.RawExtension{Raw: []byte(`{"bar":"foo"}`)},
-				NetworkData: &resourceapi.NetworkDeviceData{
-					InterfaceName:   "inf2",
-					IPs:             []string{"10.9.8.1/24", "2001:db8::1/64"},
-					HardwareAddress: "bc:1c:b6:3e:b8:26",
-				},
-			}
-
-			updatedResourceClaim2, err := plugin.UpdateStatus(ctx, updatedResourceClaim)
-			framework.ExpectNoError(err)
-			gomega.Expect(updatedResourceClaim2).ToNot(gomega.BeNil())
-			gomega.Expect(updatedResourceClaim2.Status.Devices).To(gomega.Equal(updatedResourceClaim.Status.Devices))
-
-			getResourceClaim, err := f.ClientSet.ResourceV1beta2().ResourceClaims(f.Namespace.Name).Get(ctx, claim.Name, metav1.GetOptions{})
-			framework.ExpectNoError(err)
-			gomega.Expect(getResourceClaim).ToNot(gomega.BeNil())
-			gomega.Expect(getResourceClaim.Status.Devices).To(gomega.Equal(updatedResourceClaim.Status.Devices))
-		})
-
 		if withKubelet {
 			// Serial because the example device plugin can only be deployed with one instance at a time.
 			f.It("supports extended resources together with ResourceClaim", f.WithSerial(), func(ctx context.Context) {
@@ -1007,7 +940,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), framework.With
 	// The following tests only make sense when there is more than one node.
 	// They get skipped when there's only one node.
 	multiNodeTests := func(withKubelet bool) {
-		nodes := drautils.NewNodes(f, 3, 8)
+		nodes := drautils.NewNodes(f, 2, 8)
 
 		ginkgo.Context("with different ResourceSlices", func() {
 			firstDevice := "pre-defined-device-01"
@@ -1817,18 +1750,13 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), framework.With
 		})
 	}
 
-	// Deleting a pending pod that cannot start because there is no driver was fixed in
-	// in https://github.com/kubernetes/kubernetes/pull/131968 for 1.34. Older kubelets
-	// cause tests to get stuck because the pod cannot be deleted.
-	//
-	// Besides, tests covering only the control plane are not useful in a
-	// job which is meant to cover kubelet version skew. We might want to
-	// filter them out differently at some point.
+	// It is okay to use the same context multiple times (like "control plane"),
+	// as long as the test names the still remain unique overall.
 
-	framework.Context("control plane with single node", framework.WithLabel("ConformanceCandidate") /* TODO: replace with framework.WithConformance() */, f.WithLabel("KubeletMinVersion:1.34"), func() { singleNodeTests(false) })
+	framework.Context("control plane", framework.WithLabel("ConformanceCandidate") /* TODO: replace with framework.WithConformance() */, func() { singleNodeTests(false) })
 	framework.Context("kubelet", feature.DynamicResourceAllocation, "on single node", func() { singleNodeTests(true) })
 
-	framework.Context("control plane with multiple nodes", framework.WithLabel("ConformanceCandidate") /* TODO: replace with framework.WithConformance() */, f.WithLabel("KubeletMinVersion:1.34"), func() { multiNodeTests(false) })
+	framework.Context("control plane", framework.WithLabel("ConformanceCandidate") /* TODO: replace with framework.WithConformance() */, func() { multiNodeTests(false) })
 	framework.Context("kubelet", feature.DynamicResourceAllocation, "on multiple nodes", func() { multiNodeTests(true) })
 
 	framework.Context("kubelet", feature.DynamicResourceAllocation, f.WithFeatureGate(features.DRAPrioritizedList), prioritizedListTests)
@@ -1932,7 +1860,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), framework.With
 		//
 		// Could become a conformance test because it only depends
 		// on the apiserver.
-		f.It("creates slices", func(ctx context.Context) {
+		f.It("creates slices", framework.WithLabel("ConformanceCandidate") /* TODO: replace with framework.WithConformance() */, func(ctx context.Context) {
 			// Define desired resource slices.
 			driverName := f.Namespace.Name
 			numSlices := 100
@@ -2022,7 +1950,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), framework.With
 		})
 	})
 
-	framework.Context("control plane", feature.DynamicResourceAllocation, func() {
+	framework.Context("control plane", func() {
 		nodes := drautils.NewNodes(f, 1, 1)
 		driver := drautils.NewDriver(f, nodes, drautils.NetworkResources(10, false))
 		driver.WithKubelet = false
@@ -2068,7 +1996,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), framework.With
 			}).Should(gomega.Succeed())
 		})
 
-		f.It("truncates the name of a generated resource claim", f.WithLabel("KubeletMinVersion:1.34"), func(ctx context.Context) {
+		f.It("truncates the name of a generated resource claim", framework.WithLabel("ConformanceCandidate") /* TODO: replace with framework.WithConformance() */, func(ctx context.Context) {
 			pod, template := b.PodInline()
 			pod.Name = strings.Repeat("p", 63)
 			pod.Spec.ResourceClaims[0].Name = strings.Repeat("c", 63)
@@ -2078,7 +2006,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), framework.With
 			b.TestPod(ctx, f, pod)
 		})
 
-		ginkgo.It("supports count/resourceclaims.resource.k8s.io ResourceQuota", func(ctx context.Context) {
+		f.It("supports count/resourceclaims.resource.k8s.io ResourceQuota", framework.WithLabel("ConformanceCandidate") /* TODO: replace with framework.WithConformance() */, func(ctx context.Context) {
 			claim := &resourceapi.ResourceClaim{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "claim-0",
@@ -2131,14 +2059,82 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), framework.With
 				return err
 			}).Should(gomega.MatchError(gomega.ContainSubstring("exceeded quota: object-count, requested: count/resourceclaims.resource.k8s.io=1, used: count/resourceclaims.resource.k8s.io=1, limited: count/resourceclaims.resource.k8s.io=1")), "creating second claim not allowed")
 		})
+
+		f.It("must be possible for the driver to update the ResourceClaim.Status.Devices once allocated", f.WithFeatureGate(features.DRAResourceClaimDeviceStatus), func(ctx context.Context) {
+			pod := b.PodExternal()
+			claim := b.ExternalClaim()
+			b.Create(ctx, claim, pod)
+
+			// Waits for the ResourceClaim to be allocated and the pod to be scheduled.
+			b.TestPod(ctx, f, pod)
+
+			allocatedResourceClaim, err := f.ClientSet.ResourceV1beta2().ResourceClaims(f.Namespace.Name).Get(ctx, claim.Name, metav1.GetOptions{})
+			framework.ExpectNoError(err)
+			gomega.Expect(allocatedResourceClaim).ToNot(gomega.BeNil())
+			gomega.Expect(allocatedResourceClaim.Status.Allocation).ToNot(gomega.BeNil())
+			gomega.Expect(allocatedResourceClaim.Status.Allocation.Devices.Results).To(gomega.HaveLen(1))
+
+			scheduledPod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(ctx, pod.Name, metav1.GetOptions{})
+			framework.ExpectNoError(err)
+			gomega.Expect(scheduledPod).ToNot(gomega.BeNil())
+
+			ginkgo.By("Setting the device status a first time")
+			allocatedResourceClaim.Status.Devices = append(allocatedResourceClaim.Status.Devices,
+				resourceapi.AllocatedDeviceStatus{
+					Driver:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Driver,
+					Pool:       allocatedResourceClaim.Status.Allocation.Devices.Results[0].Pool,
+					Device:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Device,
+					Conditions: []metav1.Condition{{Type: "a", Status: "True", Message: "c", Reason: "d", LastTransitionTime: metav1.NewTime(time.Now().Truncate(time.Second))}},
+					Data:       &runtime.RawExtension{Raw: []byte(`{"foo":"bar"}`)},
+					NetworkData: &resourceapi.NetworkDeviceData{
+						InterfaceName:   "inf1",
+						IPs:             []string{"10.9.8.0/24", "2001:db8::/64"},
+						HardwareAddress: "bc:1c:b6:3e:b8:25",
+					},
+				})
+
+			// Updates the ResourceClaim from the driver on the same node as the pod.
+			plugin, ok := driver.Nodes[scheduledPod.Spec.NodeName]
+			if !ok {
+				framework.Failf("pod got scheduled to node %s without a plugin", scheduledPod.Spec.NodeName)
+			}
+			updatedResourceClaim, err := plugin.UpdateStatus(ctx, allocatedResourceClaim)
+			framework.ExpectNoError(err)
+			gomega.Expect(updatedResourceClaim).ToNot(gomega.BeNil())
+			gomega.Expect(updatedResourceClaim.Status.Devices).To(gomega.Equal(allocatedResourceClaim.Status.Devices))
+
+			ginkgo.By("Updating the device status")
+			updatedResourceClaim.Status.Devices[0] = resourceapi.AllocatedDeviceStatus{
+				Driver:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Driver,
+				Pool:       allocatedResourceClaim.Status.Allocation.Devices.Results[0].Pool,
+				Device:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Device,
+				Conditions: []metav1.Condition{{Type: "e", Status: "True", Message: "g", Reason: "h", LastTransitionTime: metav1.NewTime(time.Now().Truncate(time.Second))}},
+				Data:       &runtime.RawExtension{Raw: []byte(`{"bar":"foo"}`)},
+				NetworkData: &resourceapi.NetworkDeviceData{
+					InterfaceName:   "inf2",
+					IPs:             []string{"10.9.8.1/24", "2001:db8::1/64"},
+					HardwareAddress: "bc:1c:b6:3e:b8:26",
+				},
+			}
+
+			updatedResourceClaim2, err := plugin.UpdateStatus(ctx, updatedResourceClaim)
+			framework.ExpectNoError(err)
+			gomega.Expect(updatedResourceClaim2).ToNot(gomega.BeNil())
+			gomega.Expect(updatedResourceClaim2.Status.Devices).To(gomega.Equal(updatedResourceClaim.Status.Devices))
+
+			getResourceClaim, err := f.ClientSet.ResourceV1beta2().ResourceClaims(f.Namespace.Name).Get(ctx, claim.Name, metav1.GetOptions{})
+			framework.ExpectNoError(err)
+			gomega.Expect(getResourceClaim).ToNot(gomega.BeNil())
+			gomega.Expect(getResourceClaim.Status.Devices).To(gomega.Equal(updatedResourceClaim.Status.Devices))
+		})
 	})
 
-	framework.Context("control plane", feature.DynamicResourceAllocation, func() {
+	framework.Context("control plane", func() {
 		nodes := drautils.NewNodes(f, 1, 4)
 		driver := drautils.NewDriver(f, nodes, drautils.DriverResources(1))
 		driver.WithKubelet = false
 
-		f.It("must apply per-node permission checks", func(ctx context.Context) {
+		f.It("must apply per-node permission checks", framework.WithLabel("ConformanceCandidate") /* TODO: replace with framework.WithConformance() */, func(ctx context.Context) {
 			// All of the operations use the client set of a kubelet plugin for
 			// a fictional node which both don't exist, so nothing interferes
 			// when we actually manage to create a slice.

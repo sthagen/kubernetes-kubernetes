@@ -495,6 +495,12 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.32"
+- name: EnvFiles
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.34"
 - name: EventedPLEG
   versionedSpecs:
   - default: false
@@ -947,6 +953,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.33"
+  - default: false
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.34"
 - name: MutatingAdmissionPolicy
   versionedSpecs:
   - default: false
@@ -1859,6 +1869,10 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.33"
+  - default: true
+    lockToDefault: true
+    preRelease: GA
+    version: "1.34"
 - name: WinOverlay
   versionedSpecs:
   - default: false
@@ -1869,3 +1883,7 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.20"
+  - default: true
+    lockToDefault: true
+    preRelease: GA
+    version: "1.34"
