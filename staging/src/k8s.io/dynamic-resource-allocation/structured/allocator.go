@@ -21,10 +21,11 @@ import (
 	"fmt"
 
 	v1 "k8s.io/api/core/v1"
-	resourceapi "k8s.io/api/resource/v1beta1"
+	resourceapi "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/dynamic-resource-allocation/cel"
 	"k8s.io/dynamic-resource-allocation/structured/internal"
+	"k8s.io/dynamic-resource-allocation/structured/internal/experimental"
 	"k8s.io/dynamic-resource-allocation/structured/internal/incubating"
 	"k8s.io/dynamic-resource-allocation/structured/internal/stable"
 )
@@ -156,6 +157,18 @@ var availableAllocators = []struct {
 			celCache *cel.Cache,
 		) (Allocator, error) {
 			return incubating.NewAllocator(ctx, features, allocatedDevices, classLister, slices, celCache)
+		},
+	},
+	{
+		supportedFeatures: experimental.SupportedFeatures,
+		newAllocator: func(ctx context.Context,
+			features Features,
+			allocatedDevices sets.Set[DeviceID],
+			classLister DeviceClassLister,
+			slices []*resourceapi.ResourceSlice,
+			celCache *cel.Cache,
+		) (Allocator, error) {
+			return experimental.NewAllocator(ctx, features, allocatedDevices, classLister, slices, celCache)
 		},
 	},
 }

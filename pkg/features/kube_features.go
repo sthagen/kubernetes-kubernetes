@@ -159,16 +159,13 @@ const (
 	// Enable usage of Provision of PVCs from snapshots in other namespaces
 	CrossNamespaceVolumeDataSource featuregate.Feature = "CrossNamespaceVolumeDataSource"
 
-	// owner: @pohly
-	// kep: http://kep.k8s.io/4381
+	// owner: @ritazh
+	// kep: http://kep.k8s.io/5018
 	//
 	// Enables support for requesting admin access in a ResourceClaim.
 	// Admin access is granted even if a device is already in use and,
 	// depending on the DRA driver, may enable additional permissions
 	// when a container uses the allocated device.
-	//
-	// This feature gate is currently defined in KEP #4381. The intent
-	// is to move it into a separate KEP.
 	DRAAdminAccess featuregate.Feature = "DRAAdminAccess"
 
 	// owner: @pohly
@@ -335,6 +332,12 @@ const (
 	// Honor Persistent Volume Reclaim Policy when it is "Delete" irrespective of PV-PVC
 	// deletion ordering.
 	HonorPVReclaimPolicy featuregate.Feature = "HonorPVReclaimPolicy"
+
+	// owner: @HirazawaUi
+	// kep: https://kep.k8s.io/4762
+	//
+	// Allows setting any FQDN as the pod's hostname
+	HostnameOverride featuregate.Feature = "HostnameOverride"
 
 	// owner: @haircommander
 	// kep: http://kep.k8s.io/4210
@@ -1143,6 +1146,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	DRAAdminAccess: {
 		{Version: version.MustParse("1.32"), Default: false, PreRelease: featuregate.Alpha},
+		{Version: version.MustParse("1.34"), Default: true, PreRelease: featuregate.Beta},
 	},
 
 	DRADeviceTaints: {
@@ -1197,6 +1201,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	DynamicResourceAllocation: {
 		{Version: version.MustParse("1.26"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.32"), Default: false, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.34"), Default: true, PreRelease: featuregate.GA}, // lock to default in 1.35
 	},
 	EnvFiles: {
 		{Version: version.MustParse("1.34"), Default: false, PreRelease: featuregate.Alpha},
@@ -1241,6 +1246,10 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.23"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.31"), Default: true, PreRelease: featuregate.Beta},
 		{Version: version.MustParse("1.33"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.36
+	},
+
+	HostnameOverride: {
+		{Version: version.MustParse("1.34"), Default: false, PreRelease: featuregate.Alpha},
 	},
 
 	ImageMaximumGCAge: {
