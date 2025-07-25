@@ -261,6 +261,12 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.30"
+- name: ContainerRestartRules
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.34"
 - name: ContainerStopSignals
   versionedSpecs:
   - default: false
@@ -473,6 +479,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.33"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.34"
 - name: DRAResourceClaimDeviceStatus
   versionedSpecs:
   - default: false
@@ -727,6 +737,10 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.31"
+  - default: true
+    lockToDefault: true
+    preRelease: GA
+    version: "1.34"
 - name: KubeletCrashLoopBackOffMax
   versionedSpecs:
   - default: false
@@ -761,12 +775,20 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.27"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.34"
 - name: KubeletPodResourcesGet
   versionedSpecs:
   - default: false
     lockToDefault: false
     preRelease: Alpha
     version: "1.27"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.34"
 - name: KubeletPodResourcesListUseActivePods
   versionedSpecs:
   - default: false
@@ -783,6 +805,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.33"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.34"
 - name: KubeletRegistrationGetOnExistsOnly
   versionedSpecs:
   - default: true
@@ -1204,6 +1230,12 @@
   - default: true
     lockToDefault: false
     preRelease: Beta
+    version: "1.34"
+- name: ProbeHostPodSecurityStandards
+  versionedSpecs:
+  - default: true
+    lockToDefault: true
+    preRelease: GA
     version: "1.34"
 - name: ProcMountType
   versionedSpecs:
@@ -1817,6 +1849,10 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.31"
+  - default: true
+    lockToDefault: false
+    preRelease: GA
+    version: "1.34"
 - name: WatchCacheInitializationPostStartHook
   versionedSpecs:
   - default: false
@@ -1863,6 +1899,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.32"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.34"
 - name: WindowsHostNetwork
   versionedSpecs:
   - default: false

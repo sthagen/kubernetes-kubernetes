@@ -726,6 +726,10 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &applyconfigurationscorev1.ContainerPortApplyConfiguration{}
 	case corev1.SchemeGroupVersion.WithKind("ContainerResizePolicy"):
 		return &applyconfigurationscorev1.ContainerResizePolicyApplyConfiguration{}
+	case corev1.SchemeGroupVersion.WithKind("ContainerRestartRule"):
+		return &applyconfigurationscorev1.ContainerRestartRuleApplyConfiguration{}
+	case corev1.SchemeGroupVersion.WithKind("ContainerRestartRuleOnExitCodes"):
+		return &applyconfigurationscorev1.ContainerRestartRuleOnExitCodesApplyConfiguration{}
 	case corev1.SchemeGroupVersion.WithKind("ContainerState"):
 		return &applyconfigurationscorev1.ContainerStateApplyConfiguration{}
 	case corev1.SchemeGroupVersion.WithKind("ContainerStateRunning"):
@@ -1892,6 +1896,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &applyconfigurationsstoragev1.VolumeAttachmentSpecApplyConfiguration{}
 	case storagev1.SchemeGroupVersion.WithKind("VolumeAttachmentStatus"):
 		return &applyconfigurationsstoragev1.VolumeAttachmentStatusApplyConfiguration{}
+	case storagev1.SchemeGroupVersion.WithKind("VolumeAttributesClass"):
+		return &applyconfigurationsstoragev1.VolumeAttributesClassApplyConfiguration{}
 	case storagev1.SchemeGroupVersion.WithKind("VolumeError"):
 		return &applyconfigurationsstoragev1.VolumeErrorApplyConfiguration{}
 	case storagev1.SchemeGroupVersion.WithKind("VolumeNodeResources"):
