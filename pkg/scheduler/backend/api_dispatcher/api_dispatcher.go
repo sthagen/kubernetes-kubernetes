@@ -18,12 +18,14 @@ package apidispatcher
 
 import (
 	"context"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	fwk "k8s.io/kube-scheduler/framework"
+	"k8s.io/kubernetes/pkg/scheduler/metrics"
 )
 
 // APIDispatcher implements the fwk.APIDispatcher interface and allows for queueing and dispatching API calls asynchronously.
@@ -65,11 +67,11 @@ func (ad *APIDispatcher) SyncObject(obj metav1.Object) (metav1.Object, error) {
 // Run starts the main processing loop of the APIDispatcher, which pops calls
 // from the queue and dispatches them to worker goroutines for execution.
 func (ad *APIDispatcher) Run(logger klog.Logger) {
-	go func() {
-		// Create a new context to allow to cancel the APICalls' execution when the APIDispatcher is closed.
-		ctx, cancel := context.WithCancel(context.Background())
-		ad.cancel = cancel
+	// Create a new context to allow to cancel the APICalls' execution when the APIDispatcher is closed.
+	ctx, cancel := context.WithCancel(context.Background())
+	ad.cancel = cancel
 
+	go func() {
 		for {
 			select {
 			case <-ctx.Done():
@@ -100,7 +102,18 @@ func (ad *APIDispatcher) Run(logger klog.Logger) {
 			go func() {
 				defer ad.goroutinesLimiter.release()
 
+				startTime := time.Now()
+
 				err := apiCall.Execute(ctx, ad.client)
+
+				result := metrics.GoroutineResultSuccess
+				if err != nil {
+					result = metrics.GoroutineResultError
+				}
+				callType := string(apiCall.CallType())
+				metrics.AsyncAPICallsTotal.WithLabelValues(callType, result).Inc()
+				metrics.AsyncAPICallDuration.WithLabelValues(callType, result).Observe(time.Since(startTime).Seconds())
+
 				ad.callQueue.finalize(apiCall)
 				apiCall.sendOnFinish(err)
 			}()
