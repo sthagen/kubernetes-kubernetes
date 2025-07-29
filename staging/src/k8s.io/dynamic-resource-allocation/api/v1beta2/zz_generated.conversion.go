@@ -478,6 +478,7 @@ func autoConvert_v1_AllocationResult_To_v1beta2_AllocationResult(in *v1.Allocati
 		return err
 	}
 	out.NodeSelector = (*corev1.NodeSelector)(unsafe.Pointer(in.NodeSelector))
+	out.AllocationTimestamp = (*metav1.Time)(unsafe.Pointer(in.AllocationTimestamp))
 	return nil
 }
 
@@ -491,6 +492,7 @@ func autoConvert_v1beta2_AllocationResult_To_v1_AllocationResult(in *resourcev1b
 		return err
 	}
 	out.NodeSelector = (*corev1.NodeSelector)(unsafe.Pointer(in.NodeSelector))
+	out.AllocationTimestamp = (*metav1.Time)(unsafe.Pointer(in.AllocationTimestamp))
 	return nil
 }
 
@@ -570,6 +572,9 @@ func autoConvert_v1_Device_To_v1beta2_Device(in *v1.Device, out *resourcev1beta2
 	out.NodeSelector = (*corev1.NodeSelector)(unsafe.Pointer(in.NodeSelector))
 	out.AllNodes = (*bool)(unsafe.Pointer(in.AllNodes))
 	out.Taints = *(*[]resourcev1beta2.DeviceTaint)(unsafe.Pointer(&in.Taints))
+	out.BindsToNode = (*bool)(unsafe.Pointer(in.BindsToNode))
+	out.BindingConditions = *(*[]string)(unsafe.Pointer(&in.BindingConditions))
+	out.BindingFailureConditions = *(*[]string)(unsafe.Pointer(&in.BindingFailureConditions))
 	return nil
 }
 
@@ -587,6 +592,9 @@ func autoConvert_v1beta2_Device_To_v1_Device(in *resourcev1beta2.Device, out *v1
 	out.NodeSelector = (*corev1.NodeSelector)(unsafe.Pointer(in.NodeSelector))
 	out.AllNodes = (*bool)(unsafe.Pointer(in.AllNodes))
 	out.Taints = *(*[]v1.DeviceTaint)(unsafe.Pointer(&in.Taints))
+	out.BindsToNode = (*bool)(unsafe.Pointer(in.BindsToNode))
+	out.BindingConditions = *(*[]string)(unsafe.Pointer(&in.BindingConditions))
+	out.BindingFailureConditions = *(*[]string)(unsafe.Pointer(&in.BindingFailureConditions))
 	return nil
 }
 
@@ -816,6 +824,7 @@ func Convert_v1beta2_DeviceClassList_To_v1_DeviceClassList(in *resourcev1beta2.D
 func autoConvert_v1_DeviceClassSpec_To_v1beta2_DeviceClassSpec(in *v1.DeviceClassSpec, out *resourcev1beta2.DeviceClassSpec, s conversion.Scope) error {
 	out.Selectors = *(*[]resourcev1beta2.DeviceSelector)(unsafe.Pointer(&in.Selectors))
 	out.Config = *(*[]resourcev1beta2.DeviceClassConfiguration)(unsafe.Pointer(&in.Config))
+	out.ExtendedResourceName = (*string)(unsafe.Pointer(in.ExtendedResourceName))
 	return nil
 }
 
@@ -827,6 +836,7 @@ func Convert_v1_DeviceClassSpec_To_v1beta2_DeviceClassSpec(in *v1.DeviceClassSpe
 func autoConvert_v1beta2_DeviceClassSpec_To_v1_DeviceClassSpec(in *resourcev1beta2.DeviceClassSpec, out *v1.DeviceClassSpec, s conversion.Scope) error {
 	out.Selectors = *(*[]v1.DeviceSelector)(unsafe.Pointer(&in.Selectors))
 	out.Config = *(*[]v1.DeviceClassConfiguration)(unsafe.Pointer(&in.Config))
+	out.ExtendedResourceName = (*string)(unsafe.Pointer(in.ExtendedResourceName))
 	return nil
 }
 
@@ -930,6 +940,8 @@ func autoConvert_v1_DeviceRequestAllocationResult_To_v1beta2_DeviceRequestAlloca
 	out.Device = in.Device
 	out.AdminAccess = (*bool)(unsafe.Pointer(in.AdminAccess))
 	out.Tolerations = *(*[]resourcev1beta2.DeviceToleration)(unsafe.Pointer(&in.Tolerations))
+	out.BindingConditions = *(*[]string)(unsafe.Pointer(&in.BindingConditions))
+	out.BindingFailureConditions = *(*[]string)(unsafe.Pointer(&in.BindingFailureConditions))
 	return nil
 }
 
@@ -945,6 +957,8 @@ func autoConvert_v1beta2_DeviceRequestAllocationResult_To_v1_DeviceRequestAlloca
 	out.Device = in.Device
 	out.AdminAccess = (*bool)(unsafe.Pointer(in.AdminAccess))
 	out.Tolerations = *(*[]v1.DeviceToleration)(unsafe.Pointer(&in.Tolerations))
+	out.BindingConditions = *(*[]string)(unsafe.Pointer(&in.BindingConditions))
+	out.BindingFailureConditions = *(*[]string)(unsafe.Pointer(&in.BindingFailureConditions))
 	return nil
 }
 

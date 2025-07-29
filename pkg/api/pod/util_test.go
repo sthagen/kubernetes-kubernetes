@@ -895,15 +895,35 @@ func TestDropDynamicResourceAllocation(t *testing.T) {
 			EphemeralContainers: []api.EphemeralContainer{{}},
 		},
 	}
+	podWithExtendedResource := &api.Pod{
+		Spec: api.PodSpec{
+			Containers:          []api.Container{{}},
+			InitContainers:      []api.Container{{}},
+			EphemeralContainers: []api.EphemeralContainer{{}},
+		},
+		Status: api.PodStatus{
+			ExtendedResourceClaimStatus: &api.PodExtendedResourceClaimStatus{
+				ResourceClaimName: "resource-claim-name",
+				RequestMappings: []api.ContainerExtendedResourceRequest{
+					{
+						ContainerName: "c",
+						ResourceName:  "e",
+						RequestName:   "c-0-r-0",
+					},
+				},
+			},
+		},
+	}
 
 	var noPod *api.Pod
 
 	testcases := []struct {
-		description string
-		enabled     bool
-		oldPod      *api.Pod
-		newPod      *api.Pod
-		wantPod     *api.Pod
+		description     string
+		enabled         bool
+		extendedEnabled bool
+		oldPod          *api.Pod
+		newPod          *api.Pod
+		wantPod         *api.Pod
 	}{
 		{
 			description: "old with claims / new with claims / disabled",
@@ -986,11 +1006,60 @@ func TestDropDynamicResourceAllocation(t *testing.T) {
 			newPod:      podWithoutClaims,
 			wantPod:     podWithoutClaims,
 		},
+		{
+			description:     "extended resource / no old pod/ new with extended resource / disabled",
+			enabled:         false,
+			extendedEnabled: false,
+			oldPod:          noPod,
+			newPod:          podWithExtendedResource,
+			wantPod:         podWithoutClaims,
+		},
+		{
+			description:     "extended resource / old without claim / new with extended resource / disabled",
+			enabled:         false,
+			extendedEnabled: false,
+			oldPod:          podWithoutClaims,
+			newPod:          podWithExtendedResource,
+			wantPod:         podWithoutClaims,
+		},
+		{
+			description:     "extended resource / no old pod/ new with extended resource / extended disabled only",
+			enabled:         true,
+			extendedEnabled: false,
+			oldPod:          noPod,
+			newPod:          podWithExtendedResource,
+			wantPod:         podWithoutClaims,
+		},
+		{
+			description:     "extended resource / old without claim / new with extended resource / extended disabled only",
+			enabled:         true,
+			extendedEnabled: false,
+			oldPod:          podWithoutClaims,
+			newPod:          podWithExtendedResource,
+			wantPod:         podWithoutClaims,
+		},
+		{
+			description:     "extended resource / no old pod/ new with extended resource / enabled",
+			enabled:         true,
+			extendedEnabled: true,
+			oldPod:          noPod,
+			newPod:          podWithExtendedResource,
+			wantPod:         podWithExtendedResource,
+		},
+		{
+			description:     "extended resource / old without claim / new with extended resource / enabled",
+			enabled:         true,
+			extendedEnabled: true,
+			oldPod:          podWithoutClaims,
+			newPod:          podWithExtendedResource,
+			wantPod:         podWithExtendedResource,
+		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.description, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.DynamicResourceAllocation, tc.enabled)
+			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.DRAExtendedResource, tc.extendedEnabled)
 
 			oldPod := tc.oldPod.DeepCopy()
 			newPod := tc.newPod.DeepCopy()
@@ -6087,6 +6156,99 @@ func Test_dropContainerRestartRules(t *testing.T) {
 
 			if diff := cmp.Diff(wantPod, newPod); diff != "" {
 				t.Errorf("new pod changed (- want, + got): %s", diff)
+			}
+		})
+	}
+}
+
+func TestHasUserNamespacesWithVolumeDevices(t *testing.T) {
+	falseVar := false
+	trueVar := true
+
+	tests := []struct {
+		name     string
+		spec     *api.PodSpec
+		expected bool
+	}{
+		{
+			name: "hostUsers=nil",
+			spec: &api.PodSpec{},
+		}, {
+			name: "hostUsers=false & no volume devices",
+			spec: &api.PodSpec{
+				SecurityContext: &api.PodSecurityContext{
+					HostUsers: &falseVar,
+				},
+			},
+		}, {
+			name: "hostUsers=true & container volumeDevice",
+			spec: &api.PodSpec{
+				SecurityContext: &api.PodSecurityContext{
+					HostUsers: &trueVar,
+				},
+				Containers: []api.Container{{
+					Name: "test-container",
+					VolumeDevices: []api.VolumeDevice{{
+						Name:       "test-volume",
+						DevicePath: "/dev/test-device",
+					}},
+				}},
+			},
+		}, {
+			name:     "hostUsers=false & container volumeDevice",
+			expected: true,
+			spec: &api.PodSpec{
+				SecurityContext: &api.PodSecurityContext{
+					HostUsers: &falseVar,
+				},
+				Containers: []api.Container{{
+					Name: "test-container",
+					VolumeDevices: []api.VolumeDevice{{
+						Name:       "test-volume",
+						DevicePath: "/dev/test-device",
+					}},
+				}},
+			},
+		}, {
+
+			name:     "hostUsers=false & initContainer volumeDevice",
+			expected: true,
+			spec: &api.PodSpec{
+				SecurityContext: &api.PodSecurityContext{
+					HostUsers: &falseVar,
+				},
+				InitContainers: []api.Container{{
+					Name: "test-container",
+					VolumeDevices: []api.VolumeDevice{{
+						Name:       "test-volume",
+						DevicePath: "/dev/test-device",
+					}},
+				}},
+			},
+		}, {
+			name:     "hostUsers=false & ephemeralContainer volumeDevice",
+			expected: true,
+			spec: &api.PodSpec{
+				SecurityContext: &api.PodSecurityContext{
+					HostUsers: &falseVar,
+				},
+				EphemeralContainers: []api.EphemeralContainer{{
+					EphemeralContainerCommon: api.EphemeralContainerCommon{
+						Name: "test-container",
+						VolumeDevices: []api.VolumeDevice{{
+							Name:       "test-volume",
+							DevicePath: "/dev/test-device",
+						}}},
+				}},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := hasUserNamespacesWithVolumeDevices(test.spec)
+			if test.expected != actual {
+				t.Errorf("expected %v, got %v", test.expected, actual)
 			}
 		})
 	}

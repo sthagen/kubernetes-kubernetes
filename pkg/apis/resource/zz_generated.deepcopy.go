@@ -69,6 +69,10 @@ func (in *AllocationResult) DeepCopyInto(out *AllocationResult) {
 		*out = new(core.NodeSelector)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.AllocationTimestamp != nil {
+		in, out := &in.AllocationTimestamp, &out.AllocationTimestamp
+		*out = (*in).DeepCopy()
+	}
 	return
 }
 
@@ -183,6 +187,21 @@ func (in *Device) DeepCopyInto(out *Device) {
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
+	}
+	if in.BindsToNode != nil {
+		in, out := &in.BindsToNode, &out.BindsToNode
+		*out = new(bool)
+		**out = **in
+	}
+	if in.BindingConditions != nil {
+		in, out := &in.BindingConditions, &out.BindingConditions
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.BindingFailureConditions != nil {
+		in, out := &in.BindingFailureConditions, &out.BindingFailureConditions
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 	return
 }
@@ -455,6 +474,11 @@ func (in *DeviceClassSpec) DeepCopyInto(out *DeviceClassSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.ExtendedResourceName != nil {
+		in, out := &in.ExtendedResourceName, &out.ExtendedResourceName
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 
@@ -580,6 +604,16 @@ func (in *DeviceRequestAllocationResult) DeepCopyInto(out *DeviceRequestAllocati
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
+	}
+	if in.BindingConditions != nil {
+		in, out := &in.BindingConditions, &out.BindingConditions
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.BindingFailureConditions != nil {
+		in, out := &in.BindingFailureConditions, &out.BindingFailureConditions
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 	return
 }
