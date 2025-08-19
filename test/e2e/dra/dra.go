@@ -921,9 +921,14 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			}).WithTimeout(f.Timeouts.PodDelete).Should(gomega.HaveField("Status.Allocation", (*resourceapi.AllocationResult)(nil)))
 		})
 
+		// https://github.com/kubernetes/kubernetes/issues/133488
+		// It conflicts with "must run pods with extended resource on dra nodes and device plugin nodes" test case,
+		// because device plugin does not clean up the extended resource "example.com/resource", and kubelet still
+		// keeps "example.com/resource" : 0 in node.status.Capacity.
+		// add WithFlaky to filter out the following test until we can clean up the leaked "example.com/resource" in node.status.
 		if withKubelet {
 			// Serial because the example device plugin can only be deployed with one instance at a time.
-			f.It("supports extended resources together with ResourceClaim", f.WithSerial(), func(ctx context.Context) {
+			f.It("supports extended resources together with ResourceClaim", f.WithSerial(), f.WithFlaky(), func(ctx context.Context) {
 				extendedResourceName := deployDevicePlugin(ctx, f, nodes.NodeNames[0:1])
 
 				pod := b.PodExternal()
@@ -2167,6 +2172,14 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			emptySlice := gomega.HaveField("Spec.Devices", gomega.BeEmpty())
 			gomega.Eventually(ctx, listSlices).WithTimeout(2 * time.Minute).Should(gomega.HaveField("Items", gomega.HaveExactElements(emptySlice)))
 			expectStats = resourceslice.Stats{NumCreates: int64(numSlices) + 1, NumDeletes: int64(numSlices)}
+
+			// There is a window of time where the ResourceSlice exists and is
+			// returned in a list but before that ResourceSlice is accounted for
+			// in the controller's stats, consisting mostly of network latency
+			// between this test process and the API server. Wait for the stats
+			// to converge before asserting there are no further changes.
+			gomega.Eventually(ctx, controller.GetStats).WithTimeout(30 * time.Second).Should(gomega.Equal(expectStats))
+
 			gomega.Consistently(ctx, controller.GetStats).WithTimeout(2 * mutationCacheTTL).Should(gomega.Equal(expectStats))
 		})
 	})
