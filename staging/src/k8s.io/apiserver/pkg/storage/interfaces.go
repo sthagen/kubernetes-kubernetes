@@ -147,18 +147,21 @@ func (p *Preconditions) Check(key string, obj runtime.Object) error {
 				err))
 	}
 	if p.UID != nil && *p.UID != objMeta.GetUID() {
-		return NewPreconditionError(key, PreconditionUID, string(*p.UID), string(objMeta.GetUID()))
+		err := fmt.Sprintf(
+			"Precondition failed: UID in precondition: %v, UID in object meta: %v",
+			*p.UID,
+			objMeta.GetUID())
+		return NewInvalidObjError(key, err)
 	}
 	if p.ResourceVersion != nil && *p.ResourceVersion != objMeta.GetResourceVersion() {
-		return NewPreconditionError(key, PreconditionResourceVersion, *p.ResourceVersion, objMeta.GetResourceVersion())
+		err := fmt.Sprintf(
+			"Precondition failed: ResourceVersion in precondition: %v, ResourceVersion in object meta: %v",
+			*p.ResourceVersion,
+			objMeta.GetResourceVersion())
+		return NewInvalidObjError(key, err)
 	}
 	return nil
 }
-
-const (
-	PreconditionUID             = "UID"
-	PreconditionResourceVersion = "ResourceVersion"
-)
 
 // Interface offers a common interface for object marshaling/unmarshaling operations and
 // hides all the storage-related operations behind it.
@@ -265,9 +268,8 @@ type Interface interface {
 	// This method issues an empty list request and reads only the ResourceVersion from the object metadata
 	GetCurrentResourceVersion(ctx context.Context) (uint64, error)
 
-	// SetKeysFunc allows to override the function used to get keys from storage.
-	// This allows to replace default function that fetches keys from storage with one using cache.
-	SetKeysFunc(KeysFunc)
+	// EnableResourceSizeEstimation enables estimating resource size by providing function get keys from storage.
+	EnableResourceSizeEstimation(KeysFunc) error
 
 	// CompactRevision returns latest observed revision that was compacted.
 	// Without ListFromCacheSnapshot enabled only locally executed compaction will be observed.

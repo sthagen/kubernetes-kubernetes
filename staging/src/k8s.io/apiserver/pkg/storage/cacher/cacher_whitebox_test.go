@@ -196,7 +196,8 @@ func (d *dummyStorage) GuaranteedUpdate(_ context.Context, _ string, _ runtime.O
 func (d *dummyStorage) Stats(_ context.Context) (storage.Stats, error) {
 	return storage.Stats{}, fmt.Errorf("unimplemented")
 }
-func (d *dummyStorage) SetKeysFunc(storage.KeysFunc) {
+func (d *dummyStorage) EnableResourceSizeEstimation(storage.KeysFunc) error {
+	return nil
 }
 func (d *dummyStorage) ReadinessCheck() error {
 	return nil
@@ -3154,6 +3155,7 @@ func TestGetBookmarkAfterResourceVersionLockedFunc(t *testing.T) {
 }
 
 func TestWatchStreamSeparation(t *testing.T) {
+	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.SizeBasedListCostEstimate, false)
 	server, etcdStorage := newEtcdTestStorage(t, etcd3testing.PathPrefix())
 	t.Cleanup(func() {
 		server.Terminate(t)
@@ -3225,21 +3227,9 @@ func TestWatchStreamSeparation(t *testing.T) {
 			defer cancel()
 			waitForEtcdBookmark := watchAndWaitForBookmark(t, waitContext, cacher.storage)
 
-			var out example.Pod
-			err = cacher.storage.Create(context.Background(), "foo", &example.Pod{}, &out, 0)
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = cacher.storage.Delete(context.Background(), "foo", &out, nil, storage.ValidateAllObjectFunc, &example.Pod{}, storage.DeleteOptions{})
-			if err != nil {
-				t.Fatal(err)
-			}
-			versioner := storage.APIObjectVersioner{}
-			var lastResourceVersion uint64
-			lastResourceVersion, err = versioner.ObjectResourceVersion(&out)
-			if err != nil {
-				t.Fatal(err)
-			}
+			increaseRV := increaseRVFunc(server.V3Client.Client)
+			increaseRV(context.Background(), t)
+			lastResourceVersion := uint64(increaseRV(context.Background(), t))
 
 			var contextMetadata metadata.MD
 			if tc.useWatchCacheContextMetadata {

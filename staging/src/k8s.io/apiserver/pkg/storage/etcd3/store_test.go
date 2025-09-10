@@ -177,7 +177,7 @@ func TestListPaging(t *testing.T) {
 
 func TestGetListNonRecursive(t *testing.T) {
 	ctx, store, client := testSetup(t)
-	storagetesting.RunTestGetListNonRecursive(ctx, t, increaseRV(client.Client), store)
+	storagetesting.RunTestGetListNonRecursive(ctx, t, increaseRVFunc(client.Client), store)
 }
 
 func TestGetListRecursivePrefix(t *testing.T) {
@@ -259,14 +259,14 @@ func TestList(t *testing.T) {
 
 func TestConsistentList(t *testing.T) {
 	ctx, store, client := testSetup(t)
-	storagetesting.RunTestConsistentList(ctx, t, store, increaseRV(client.Client), false, true, false)
+	storagetesting.RunTestConsistentList(ctx, t, store, increaseRVFunc(client.Client), false, true, false)
 }
 
 func TestCompactRevision(t *testing.T) {
 	// Test requires store to observe extenal changes to compaction revision, requiring dedicated watch on compact key which is enabled by ListFromCacheSnapshot.
 	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.ListFromCacheSnapshot, true)
 	ctx, store, client := testSetup(t)
-	storagetesting.RunTestCompactRevision(ctx, t, store, increaseRV(client.Client), compactStorage(store, client.Client))
+	storagetesting.RunTestCompactRevision(ctx, t, store, increaseRVFunc(client.Client), compactStorage(store, client.Client))
 }
 
 func checkStorageCallsInvariants(transformer *storagetesting.PrefixTransformer, recorder *storagetesting.KVRecorder) storagetesting.CallsValidation {
@@ -360,11 +360,13 @@ func compactStorage(s *store, client *clientv3.Client) storagetesting.Compaction
 	}
 }
 
-func increaseRV(client *clientv3.Client) storagetesting.IncreaseRVFunc {
-	return func(ctx context.Context, t *testing.T) {
-		if _, err := client.KV.Put(ctx, "increaseRV", "ok"); err != nil {
+func increaseRVFunc(client *clientv3.Client) storagetesting.IncreaseRVFunc {
+	return func(ctx context.Context, t *testing.T) int64 {
+		resp, err := client.KV.Put(ctx, "increaseRV", "ok")
+		if err != nil {
 			t.Fatalf("Could not update increaseRV: %v", err)
 		}
+		return resp.Header.Revision
 	}
 }
 
@@ -381,10 +383,13 @@ func TestListResourceVersionMatch(t *testing.T) {
 func TestStats(t *testing.T) {
 	for _, sizeBasedListCostEstimate := range []bool{true, false} {
 		t.Run(fmt.Sprintf("SizeBasedListCostEstimate=%v", sizeBasedListCostEstimate), func(t *testing.T) {
-			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.SizeBasedListCostEstimate, sizeBasedListCostEstimate)
-			// Match transformer with cacher tests.
 			ctx, store, _ := testSetup(t)
-			store.SetKeysFunc(store.getKeys)
+			if sizeBasedListCostEstimate {
+				err := store.EnableResourceSizeEstimation(store.getKeys)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
 			storagetesting.RunTestStats(ctx, t, store, store.codec, store.transformer, sizeBasedListCostEstimate)
 		})
 	}
@@ -991,8 +996,8 @@ func BenchmarkStatsCacheCleanKeys(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	if len(store.stats.keys) < namespaceCount*podPerNamespaceCount {
-		b.Fatalf("Unexpected number of keys in stats, want: %d, got: %d", namespaceCount*podPerNamespaceCount, len(store.stats.keys))
+	if len(store.resourceSizeEstimator.keys) < namespaceCount*podPerNamespaceCount {
+		b.Fatalf("Unexpected number of keys in stats, want: %d, got: %d", namespaceCount*podPerNamespaceCount, len(store.resourceSizeEstimator.keys))
 	}
 	// Get keys to measure only cleanupKeys time
 	keys, err := store.getKeys(ctx)
@@ -1001,10 +1006,10 @@ func BenchmarkStatsCacheCleanKeys(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		store.stats.cleanKeys(keys)
+		store.resourceSizeEstimator.cleanKeys(keys)
 	}
-	if len(store.stats.keys) < namespaceCount*podPerNamespaceCount {
-		b.Fatalf("Unexpected number of keys in stats, want: %d, got: %d", namespaceCount*podPerNamespaceCount, len(store.stats.keys))
+	if len(store.resourceSizeEstimator.keys) < namespaceCount*podPerNamespaceCount {
+		b.Fatalf("Unexpected number of keys in stats, want: %d, got: %d", namespaceCount*podPerNamespaceCount, len(store.resourceSizeEstimator.keys))
 	}
 }
 
@@ -1045,40 +1050,27 @@ func TestPrefixStats(t *testing.T) {
 	tcs := []struct {
 		name        string
 		estimate    bool
-		setKeys     bool
 		expectStats storage.Stats
 	}{
 		{
-			name:        "SizeBasedListCostEstimate=false,SetKeys=false",
-			setKeys:     false,
+			name:        "Estimate=false",
 			estimate:    false,
 			expectStats: storage.Stats{ObjectCount: 1},
 		},
 		{
-			name:        "SizeBasedListCostEstimate=false,SetKeys=true",
-			setKeys:     true,
-			estimate:    false,
-			expectStats: storage.Stats{ObjectCount: 1},
-		},
-		{
-			name:        "SizeBasedListCostEstimate=true,SetKeys=false",
-			setKeys:     false,
-			estimate:    true,
-			expectStats: storage.Stats{ObjectCount: 1},
-		},
-		{
-			name:        "SizeBasedListCostEstimate=true,SetKeys=true",
-			setKeys:     true,
+			name:        "Estimate=true",
 			estimate:    true,
 			expectStats: storage.Stats{ObjectCount: 1, EstimatedAverageObjectSizeBytes: 3},
 		},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.SizeBasedListCostEstimate, tc.estimate)
 			ctx, store, c := testSetup(t, withPrefix("/registry"), withResourcePrefix("pods"))
-			if tc.setKeys {
-				store.SetKeysFunc(store.getKeys)
+			if tc.estimate {
+				err := store.EnableResourceSizeEstimation(store.getKeys)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 			_, err := c.KV.Put(ctx, "key", "a")
 			if err != nil {
