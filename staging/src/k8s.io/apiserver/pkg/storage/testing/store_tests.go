@@ -3777,3 +3777,112 @@ func RunTestCompactRevision(ctx context.Context, t *testing.T, store storage.Int
 		t.Errorf("CompactRevision()=%d, expected: %d", store.CompactRevision(), expectCompactedRV)
 	}
 }
+
+func RunTestKeySchema(ctx context.Context, t *testing.T, store storage.Interface) {
+	createObj := &example.Pod{}
+	createOut := &example.Pod{}
+	require.ErrorContains(t, store.Create(ctx, "", createObj, createOut, 0), "empty key")
+	require.ErrorContains(t, store.Create(ctx, "/", createObj, createOut, 0), "empty key")
+	require.ErrorContains(t, store.Create(ctx, ".", createObj, createOut, 0), "invalid key")
+	require.ErrorContains(t, store.Create(ctx, "..", createObj, createOut, 0), "invalid key")
+	require.ErrorContains(t, store.Create(ctx, "pods", createObj, createOut, 0), "lacks resource prefix")
+	require.ErrorContains(t, store.Create(ctx, "/pods", createObj, createOut, 0), "lacks resource prefix")
+	require.ErrorContains(t, store.Create(ctx, "/pods.apps", createObj, createOut, 0), "lacks resource prefix")
+	require.ErrorContains(t, store.Create(ctx, "/foo/", createObj, createOut, 0), "lacks resource prefix")
+	require.NoError(t, store.Create(ctx, "/pods/", createObj, createOut, 0))
+	require.NoError(t, store.Create(ctx, "/pods/name", createObj, createOut, 0))
+	require.NoError(t, store.Create(ctx, "/pods/namespace", createObj, createOut, 0))
+	require.NoError(t, store.Create(ctx, "/pods/namespace/name", createObj, createOut, 0))
+
+	listOut := &example.PodList{}
+	recursiveListOpts := storage.ListOptions{Predicate: storage.Everything, Recursive: true}
+	nonRecursiveListOpts := storage.ListOptions{Predicate: storage.Everything, Recursive: false}
+	require.ErrorContains(t, store.GetList(ctx, "", recursiveListOpts, listOut), "empty key")
+	require.ErrorContains(t, store.GetList(ctx, "/", recursiveListOpts, listOut), "empty key")
+	require.ErrorContains(t, store.GetList(ctx, ".", recursiveListOpts, listOut), "invalid key")
+	require.ErrorContains(t, store.GetList(ctx, "..", recursiveListOpts, listOut), "invalid key")
+	require.ErrorContains(t, store.GetList(ctx, "pods", recursiveListOpts, listOut), "lacks resource prefix")
+	require.ErrorContains(t, store.GetList(ctx, "/pods.apps", recursiveListOpts, listOut), "lacks resource prefix")
+	require.ErrorContains(t, store.GetList(ctx, "/foo/", recursiveListOpts, listOut), "lacks resource prefix")
+	require.ErrorContains(t, store.GetList(ctx, "/pods", nonRecursiveListOpts, listOut), "lacks resource prefix")
+	require.NoError(t, store.GetList(ctx, "/pods", recursiveListOpts, listOut))
+	require.NoError(t, store.GetList(ctx, "/pods/", recursiveListOpts, listOut))
+	require.NoError(t, store.GetList(ctx, "/pods/namespace", recursiveListOpts, listOut))
+	require.NoError(t, store.GetList(ctx, "/pods/namespace/name", recursiveListOpts, listOut))
+
+	getOut := &example.Pod{}
+	getOpts := storage.GetOptions{}
+	require.ErrorContains(t, store.Get(ctx, "", getOpts, getOut), "empty key")
+	require.ErrorContains(t, store.Get(ctx, "/", getOpts, getOut), "empty key")
+	require.ErrorContains(t, store.Get(ctx, ".", getOpts, getOut), "invalid key")
+	require.ErrorContains(t, store.Get(ctx, "..", getOpts, getOut), "invalid key")
+	require.ErrorContains(t, store.Get(ctx, "pods", getOpts, getOut), "lacks resource prefix")
+	require.ErrorContains(t, store.Get(ctx, "/pods", getOpts, getOut), "lacks resource prefix")
+	require.ErrorContains(t, store.Get(ctx, "/pods.apps", getOpts, getOut), "lacks resource prefix")
+	require.ErrorContains(t, store.Get(ctx, "/foo/", getOpts, getOut), "lacks resource prefix")
+	require.NoError(t, store.Get(ctx, "/pods/", getOpts, getOut))
+	require.NoError(t, store.Get(ctx, "/pods/namespace", getOpts, getOut))
+	require.NoError(t, store.Get(ctx, "/pods/namespace/name", getOpts, getOut))
+
+	_, err := store.Watch(ctx, "", recursiveListOpts)
+	require.ErrorContains(t, err, "empty key")
+	_, err = store.Watch(ctx, "/", recursiveListOpts)
+	require.ErrorContains(t, err, "empty key")
+	_, err = store.Watch(ctx, ".", recursiveListOpts)
+	require.ErrorContains(t, err, "invalid key")
+	_, err = store.Watch(ctx, "..", recursiveListOpts)
+	require.ErrorContains(t, err, "invalid key")
+	_, err = store.Watch(ctx, "pods", recursiveListOpts)
+	require.ErrorContains(t, err, "lacks resource prefix")
+	_, err = store.Watch(ctx, "/pods.apps", recursiveListOpts)
+	require.ErrorContains(t, err, "lacks resource prefix")
+	_, err = store.Watch(ctx, "/foo/", recursiveListOpts)
+	require.ErrorContains(t, err, "lacks resource prefix")
+	_, err = store.Watch(ctx, "/pods", nonRecursiveListOpts)
+	require.ErrorContains(t, err, "lacks resource prefix")
+	w, err := store.Watch(ctx, "/pods", recursiveListOpts)
+	require.NoError(t, err)
+	w.Stop()
+	require.NoError(t, err)
+	w.Stop()
+	w, err = store.Watch(ctx, "/pods/namespace", recursiveListOpts)
+	require.NoError(t, err)
+	w.Stop()
+	w, err = store.Watch(ctx, "/pods/namespace/name", recursiveListOpts)
+	require.NoError(t, err)
+	w.Stop()
+
+	updateIn := &example.Pod{}
+	updateOut := &example.Pod{}
+	updateFunc := func(input runtime.Object, res storage.ResponseMeta) (output runtime.Object, ttl *uint64, err error) {
+		return updateIn, nil, nil
+	}
+	require.ErrorContains(t, store.GuaranteedUpdate(ctx, "", updateOut, false, nil, updateFunc, nil), "empty key")
+	require.ErrorContains(t, store.GuaranteedUpdate(ctx, "/", updateOut, false, nil, updateFunc, nil), "empty key")
+	require.ErrorContains(t, store.GuaranteedUpdate(ctx, ".", updateOut, false, nil, updateFunc, nil), "invalid key")
+	require.ErrorContains(t, store.GuaranteedUpdate(ctx, "..", updateOut, false, nil, updateFunc, nil), "invalid key")
+	require.ErrorContains(t, store.GuaranteedUpdate(ctx, "pods", updateOut, false, nil, updateFunc, nil), "lacks resource prefix")
+	require.ErrorContains(t, store.GuaranteedUpdate(ctx, "/pods", updateOut, false, nil, updateFunc, nil), "lacks resource prefix")
+	require.ErrorContains(t, store.GuaranteedUpdate(ctx, "/pods.apps", updateOut, false, nil, updateFunc, nil), "lacks resource prefix")
+	require.ErrorContains(t, store.GuaranteedUpdate(ctx, "/foo/", updateOut, false, nil, updateFunc, nil), "lacks resource prefix")
+	require.NoError(t, store.GuaranteedUpdate(ctx, "/pods/", updateOut, false, nil, updateFunc, nil))
+	require.NoError(t, store.GuaranteedUpdate(ctx, "/pods/namespace", updateOut, false, nil, updateFunc, nil))
+	require.NoError(t, store.GuaranteedUpdate(ctx, "/pods/namespace/name", updateOut, false, nil, updateFunc, nil))
+
+	deleteOut := &example.Pod{}
+	deleteFunc := func(ctx context.Context, obj runtime.Object) error {
+		return nil
+	}
+	deleteOpts := storage.DeleteOptions{}
+	require.ErrorContains(t, store.Delete(ctx, "", deleteOut, nil, deleteFunc, nil, deleteOpts), "empty key")
+	require.ErrorContains(t, store.Delete(ctx, "/", deleteOut, nil, deleteFunc, nil, deleteOpts), "empty key")
+	require.ErrorContains(t, store.Delete(ctx, ".", deleteOut, nil, deleteFunc, nil, deleteOpts), "invalid key")
+	require.ErrorContains(t, store.Delete(ctx, "..", deleteOut, nil, deleteFunc, nil, deleteOpts), "invalid key")
+	require.ErrorContains(t, store.Delete(ctx, "pods", deleteOut, nil, deleteFunc, nil, deleteOpts), "lacks resource prefix")
+	require.ErrorContains(t, store.Delete(ctx, "/pods", deleteOut, nil, deleteFunc, nil, deleteOpts), "lacks resource prefix")
+	require.ErrorContains(t, store.Delete(ctx, "/pods.apps", deleteOut, nil, deleteFunc, nil, deleteOpts), "lacks resource prefix")
+	require.ErrorContains(t, store.Delete(ctx, "/foo", deleteOut, nil, deleteFunc, nil, deleteOpts), "lacks resource prefix")
+	require.NoError(t, store.Delete(ctx, "/pods/", deleteOut, nil, deleteFunc, nil, deleteOpts))
+	require.NoError(t, store.Delete(ctx, "/pods/namespace", deleteOut, nil, deleteFunc, nil, deleteOpts))
+	require.NoError(t, store.Delete(ctx, "/pods/namespace/name", deleteOut, nil, deleteFunc, nil, deleteOpts))
+}
