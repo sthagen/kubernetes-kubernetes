@@ -23,6 +23,7 @@ import (
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/kubernetes/fake"
@@ -84,11 +85,58 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 				field.TooMany(field.NewPath("spec", "devices", "config"), 33, 32).WithOrigin("maxItems"),
 			},
 		},
+		"invalid firstAvailable, too many": {
+			input: mkValidResourceClaim(tweakFirstAvailable(9)),
+			expectedErrs: field.ErrorList{
+				field.TooMany(field.NewPath("spec", "devices", "requests").Index(0).Child("firstAvailable"), 9, 8).WithOrigin("maxItems"),
+			},
+		},
+		"invalid selectors, too many": {
+			input: mkValidResourceClaim(tweakExactlySelectors(33)),
+			expectedErrs: field.ErrorList{
+				field.TooMany(field.NewPath("spec", "devices", "requests").Index(0).Child("exactly", "selectors"), 33, 32).WithOrigin("maxItems").MarkCoveredByDeclarative(),
+			},
+		},
+		"invalid subrequest selectors, too many": {
+			input: mkValidResourceClaim(tweakSubRequestSelectors(33)),
+			expectedErrs: field.ErrorList{
+				field.TooMany(field.NewPath("spec", "devices", "requests").Index(0).Child("firstAvailable").Index(0).Child("selectors"), 33, 32).WithOrigin("maxItems"),
+			},
+		},
+		"invalid constraint requests, too many": {
+			input: mkValidResourceClaim(tweakConstraintRequests(33)),
+			expectedErrs: field.ErrorList{
+				field.TooMany(field.NewPath("spec", "devices", "requests"), 33, 32).WithOrigin("maxItems"),
+				field.TooMany(field.NewPath("spec", "devices", "constraints").Index(0).Child("requests"), 33, 32).WithOrigin("maxItems"),
+			},
+		},
+		"invalid config requests, too many": {
+			input: mkValidResourceClaim(tweakConfigRequests(33)),
+			expectedErrs: field.ErrorList{
+				field.TooMany(field.NewPath("spec", "devices", "requests"), 33, 32).WithOrigin("maxItems"),
+				field.TooMany(field.NewPath("spec", "devices", "config").Index(0).Child("requests"), 33, 32).WithOrigin("maxItems"),
+			},
+		},
+		"valid firstAvailable, max allowed": {
+			input: mkValidResourceClaim(tweakFirstAvailable(8)),
+		},
+		"valid selectors, max allowed": {
+			input: mkValidResourceClaim(tweakExactlySelectors(32)),
+		},
+		"valid subrequest selectors, max allowed": {
+			input: mkValidResourceClaim(tweakSubRequestSelectors(32)),
+		},
+		"valid constraint requests, max allowed": {
+			input: mkValidResourceClaim(tweakConstraintRequests(32)),
+		},
+		"valid config requests, max allowed": {
+			input: mkValidResourceClaim(tweakConfigRequests(32)),
+		},
 		// TODO: Add more test cases
 	}
 	for k, tc := range testCases {
 		t.Run(k, func(t *testing.T) {
-			apitesting.VerifyValidationEquivalence(t, ctx, &tc.input, Strategy.Validate, tc.expectedErrs)
+			apitesting.VerifyValidationEquivalence(t, ctx, &tc.input, Strategy.Validate, tc.expectedErrs, apitesting.WithNormalizationRules(resourceClaimNormalizationRules...))
 		})
 	}
 }
@@ -114,6 +162,83 @@ func tweakDevicesRequests(items int) func(*resource.ResourceClaim) {
 		// The first request already exists in the valid template
 		for i := 1; i < items; i++ {
 			rc.Spec.Devices.Requests = append(rc.Spec.Devices.Requests, mkDeviceRequest(fmt.Sprintf("req-%d", i)))
+		}
+	}
+}
+
+func tweakExactlySelectors(items int) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		for i := 0; i < items; i++ {
+			rc.Spec.Devices.Requests[0].Exactly.Selectors = append(rc.Spec.Devices.Requests[0].Exactly.Selectors,
+				resource.DeviceSelector{
+					CEL: &resource.CELDeviceSelector{
+						Expression: fmt.Sprintf("device.driver == \"test.driver.io%d\"", i),
+					},
+				},
+			)
+		}
+	}
+}
+
+func tweakSubRequestSelectors(items int) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		rc.Spec.Devices.Requests[0].Exactly = nil
+		rc.Spec.Devices.Requests[0].FirstAvailable = []resource.DeviceSubRequest{
+			{
+				Name:            "sub-0",
+				DeviceClassName: "class",
+				AllocationMode:  resource.DeviceAllocationModeAll,
+			},
+		}
+		for i := 0; i < items; i++ {
+			rc.Spec.Devices.Requests[0].FirstAvailable[0].Selectors = append(rc.Spec.Devices.Requests[0].FirstAvailable[0].Selectors,
+				resource.DeviceSelector{
+					CEL: &resource.CELDeviceSelector{
+						Expression: fmt.Sprintf("device.driver == \"test.driver.io%d\"", i),
+					},
+				},
+			)
+		}
+	}
+}
+
+func tweakConstraintRequests(count int) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		tweakDevicesRequests(count)(rc)
+		if len(rc.Spec.Devices.Constraints) == 0 {
+			rc.Spec.Devices.Constraints = append(rc.Spec.Devices.Constraints, mkDeviceConstraint())
+		}
+		rc.Spec.Devices.Constraints[0].Requests = []string{}
+		for i := 0; i < count; i++ {
+			rc.Spec.Devices.Constraints[0].Requests = append(rc.Spec.Devices.Constraints[0].Requests, fmt.Sprintf("req-%d", i))
+		}
+	}
+}
+
+func tweakConfigRequests(count int) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		tweakDevicesRequests(count)(rc)
+		if len(rc.Spec.Devices.Config) == 0 {
+			rc.Spec.Devices.Config = append(rc.Spec.Devices.Config, mkDeviceClaimConfiguration())
+		}
+		rc.Spec.Devices.Config[0].Requests = []string{}
+		for i := 0; i < count; i++ {
+			rc.Spec.Devices.Config[0].Requests = append(rc.Spec.Devices.Config[0].Requests, fmt.Sprintf("req-%d", i))
+		}
+	}
+}
+
+func tweakFirstAvailable(items int) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		rc.Spec.Devices.Requests[0].Exactly = nil
+		for i := 0; i < items; i++ {
+			rc.Spec.Devices.Requests[0].FirstAvailable = append(rc.Spec.Devices.Requests[0].FirstAvailable,
+				resource.DeviceSubRequest{
+					Name:            fmt.Sprintf("sub-%d", i),
+					DeviceClassName: "class",
+					AllocationMode:  resource.DeviceAllocationModeAll,
+				},
+			)
 		}
 	}
 }
@@ -181,7 +306,7 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 		t.Run(k, func(t *testing.T) {
 			tc.old.ResourceVersion = "1"
 			tc.update.ResourceVersion = "2"
-			apitesting.VerifyUpdateValidationEquivalence(t, ctx, &tc.update, &tc.old, Strategy.ValidateUpdate, tc.expectedErrs)
+			apitesting.VerifyUpdateValidationEquivalence(t, ctx, &tc.update, &tc.old, Strategy.ValidateUpdate, tc.expectedErrs, apitesting.WithNormalizationRules(resourceClaimNormalizationRules...))
 		})
 	}
 }
@@ -195,6 +320,7 @@ func TestValidateStatusUpdateForDeclarative(t *testing.T) {
 	ctx := genericapirequest.WithRequestInfo(genericapirequest.NewDefaultContext(), &genericapirequest.RequestInfo{
 		APIGroup:    "resource.k8s.io",
 		APIVersion:  "v1",
+		Resource:    "resourceclaims",
 		Subresource: "status",
 	})
 	poolPath := field.NewPath("status", "allocation", "devices", "results").Index(0).Child("pool")
@@ -203,6 +329,7 @@ func TestValidateStatusUpdateForDeclarative(t *testing.T) {
 		update       resource.ResourceClaim
 		expectedErrs field.ErrorList
 	}{
+		// .Status.Allocation.Devices.Results[%d].Pool
 		"valid pool name": {
 			old:    mkValidResourceClaim(),
 			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultPool("dra.example.com/pool-a")),
@@ -253,12 +380,64 @@ func TestValidateStatusUpdateForDeclarative(t *testing.T) {
 				field.Invalid(poolPath, "", "").WithOrigin("format=k8s-resource-pool-name"),
 			},
 		},
+		// .Status.Allocation.Devices.Results[%d].ShareID
+		"valid status.Allocation.Devices.Results[].ShareID": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultShareID("123e4567-e89b-12d3-a456-426614174000")),
+		},
+		"invalid status.Allocation.Devices.Results[].ShareID": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultShareID("invalid-uid")),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("status", "allocation", "devices", "results").Index(0).Child("shareID"), "invalid-uid", "").WithOrigin("format=k8s-uuid"),
+			},
+		},
+		"invalid uppercase status.Allocation.Devices.Results[].ShareID ": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultShareID("123e4567-E89b-12d3-A456-426614174000")),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("status", "allocation", "devices", "results").Index(0).Child("shareID"), "invalid-uid", "").WithOrigin("format=k8s-uuid"),
+			},
+		},
+		// .Status.Devices[%d].ShareID
+		"valid status.Devices[].ShareID": {
+			old: mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(
+				tweakStatusDevices(standardAllocatedDeviceStatus()),
+				tweakStatusDeviceRequestAllocationResultShareID("123e4567-e89b-12d3-a456-426614174000"),
+				tweakStatusAllocatedDeviceStatusShareID("123e4567-e89b-12d3-a456-426614174000"),
+			),
+		},
+		"invalid status.Devices[].ShareID": {
+			old: mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(
+				tweakStatusDevices(standardAllocatedDeviceStatus()),
+				tweakStatusDeviceRequestAllocationResultShareID("invalid-uid"),
+				tweakStatusAllocatedDeviceStatusShareID("invalid-uid"),
+			),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("status", "allocation", "devices", "results").Index(0).Child("shareID"), "invalid-uid", "must be a lowercase UUID in 8-4-4-4-12 format").WithOrigin("format=k8s-uuid"),
+				field.Invalid(field.NewPath("status", "devices").Index(0).Child("shareID"), "invalid-uid", "must be a lowercase UUID in 8-4-4-4-12 format").WithOrigin("format=k8s-uuid"),
+			},
+		},
+		"invalid upper case status.Devices[].ShareID": {
+			old: mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(
+				tweakStatusDevices(standardAllocatedDeviceStatus()),
+				tweakStatusDeviceRequestAllocationResultShareID("123e4567-E89b-12d3-A456-426614174000"),
+				tweakStatusAllocatedDeviceStatusShareID("123e4567-E89b-12d3-A456-426614174000"),
+			),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("status", "allocation", "devices", "results").Index(0).Child("shareID"), "invalid-uid", "must be a lowercase UUID in 8-4-4-4-12 format").WithOrigin("format=k8s-uuid"),
+				field.Invalid(field.NewPath("status", "devices").Index(0).Child("shareID"), "invalid-uid", "must be a lowercase UUID in 8-4-4-4-12 format").WithOrigin("format=k8s-uuid"),
+			},
+		},
 	}
 	for k, tc := range testCases {
 		t.Run(k, func(t *testing.T) {
 			tc.old.ObjectMeta.ResourceVersion = "1"
 			tc.update.ObjectMeta.ResourceVersion = "1"
-			apitesting.VerifyUpdateValidationEquivalence(t, ctx, &tc.update, &tc.old, strategy.ValidateUpdate, tc.expectedErrs, "status")
+			apitesting.VerifyUpdateValidationEquivalence(t, ctx, &tc.update, &tc.old, strategy.ValidateUpdate, tc.expectedErrs, apitesting.WithSubResources("status"))
 		})
 	}
 }
@@ -330,10 +509,40 @@ func mkResourceClaimWithStatus(tweaks ...func(rc *resource.ResourceClaim)) resou
 	return rc
 }
 
+func tweakStatusDevices(devices ...resource.AllocatedDeviceStatus) func(rc *resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		rc.Status.Devices = devices
+	}
+}
+
 func tweakStatusDeviceRequestAllocationResultPool(pool string) func(rc *resource.ResourceClaim) {
 	return func(rc *resource.ResourceClaim) {
 		for i := range rc.Status.Allocation.Devices.Results {
 			rc.Status.Allocation.Devices.Results[i].Pool = pool
 		}
+	}
+}
+
+func tweakStatusDeviceRequestAllocationResultShareID(shareID types.UID) func(rc *resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		for i := range rc.Status.Allocation.Devices.Results {
+			rc.Status.Allocation.Devices.Results[i].ShareID = &shareID
+		}
+	}
+}
+
+func tweakStatusAllocatedDeviceStatusShareID(shareID string) func(rc *resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		for i := range rc.Status.Devices {
+			rc.Status.Devices[i].ShareID = &shareID
+		}
+	}
+}
+
+func standardAllocatedDeviceStatus() resource.AllocatedDeviceStatus {
+	return resource.AllocatedDeviceStatus{
+		Driver: "dra.example.com",
+		Pool:   "pool-0",
+		Device: "device-0",
 	}
 }

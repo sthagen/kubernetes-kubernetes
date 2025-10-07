@@ -648,7 +648,7 @@ func TestValidateClaim(t *testing.T) {
 		},
 		"prioritized-list-too-many-subrequests": {
 			wantFailures: field.ErrorList{
-				field.TooMany(field.NewPath("spec", "devices", "requests").Index(0).Child("firstAvailable"), 9, 8),
+				field.TooMany(field.NewPath("spec", "devices", "requests").Index(0).Child("firstAvailable"), 9, 8).MarkCoveredByDeclarative(),
 			},
 			claim: func() *resource.ResourceClaim {
 				claim := testClaim(goodName, goodNS, validClaimSpec)
@@ -2157,10 +2157,10 @@ func TestValidateClaimStatusUpdate(t *testing.T) {
 		},
 		"invalid-add-allocated-status-invalid-share-id": {
 			wantFailures: field.ErrorList{
-				field.Invalid(field.NewPath("status", "devices").Index(0).Child("shareID"), badLengthShareIDStr, "error validating uid: invalid UUID length: 1"),
-				field.Invalid(field.NewPath("status", "devices").Index(1).Child("shareID"), badFormatShareIDStr, "uid must be in RFC 4122 normalized form, `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` with lowercase hexadecimal characters"),
-				field.Invalid(field.NewPath("status", "allocation", "devices", "results").Index(0).Child("shareID"), badLengthShareIDStr, "error validating uid: invalid UUID length: 1"),
-				field.Invalid(field.NewPath("status", "allocation", "devices", "results").Index(1).Child("shareID"), badFormatShareIDStr, "uid must be in RFC 4122 normalized form, `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` with lowercase hexadecimal characters"),
+				field.Invalid(field.NewPath("status", "devices").Index(0).Child("shareID"), badLengthShareIDStr, "error validating uid: invalid UUID length: 1").MarkCoveredByDeclarative(),
+				field.Invalid(field.NewPath("status", "devices").Index(1).Child("shareID"), badFormatShareIDStr, "uid must be in RFC 4122 normalized form, `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` with lowercase hexadecimal characters").MarkCoveredByDeclarative(),
+				field.Invalid(field.NewPath("status", "allocation", "devices", "results").Index(0).Child("shareID"), badLengthShareIDStr, "error validating uid: invalid UUID length: 1").MarkCoveredByDeclarative(),
+				field.Invalid(field.NewPath("status", "allocation", "devices", "results").Index(1).Child("shareID"), badFormatShareIDStr, "uid must be in RFC 4122 normalized form, `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` with lowercase hexadecimal characters").MarkCoveredByDeclarative(),
 			},
 			oldClaim: testClaim(goodName, goodNS, validClaimSpec),
 			update: func(claim *resource.ResourceClaim) *resource.ResourceClaim {

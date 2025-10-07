@@ -84,7 +84,7 @@ func validateUID(uid string, fldPath *field.Path) field.ErrorList {
 	} else if len(uid) != 36 || uid != strings.ToLower(uid) {
 		allErrs = append(allErrs, field.Invalid(fldPath, uid, "uid must be in RFC 4122 normalized form, `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` with lowercase hexadecimal characters"))
 	}
-	return allErrs
+	return allErrs.WithOrigin("format=k8s-uuid")
 }
 
 // ValidateResourceClaim validates a ResourceClaim.
@@ -203,7 +203,7 @@ func validateDeviceRequest(request resource.DeviceRequest, fldPath *field.Path, 
 			func(subRequest resource.DeviceSubRequest) (string, string) {
 				return subRequest.Name, "name"
 			},
-			fldPath.Child("firstAvailable"))...)
+			fldPath.Child("firstAvailable"), sizeCovered)...)
 	}
 
 	if request.Exactly != nil {
@@ -275,7 +275,7 @@ func validateSelectorSlice(selectors []resource.DeviceSelector, fldPath *field.P
 		func(selector resource.DeviceSelector, fldPath *field.Path) field.ErrorList {
 			return validateSelector(selector, fldPath, stored)
 		},
-		fldPath)
+		fldPath, sizeCovered)
 }
 
 func validateSelector(selector resource.DeviceSelector, fldPath *field.Path, stored bool) field.ErrorList {
@@ -331,7 +331,7 @@ func validateDeviceConstraint(constraint resource.DeviceConstraint, fldPath *fie
 		func(name string, fldPath *field.Path) field.ErrorList {
 			return validateRequestNameRef(name, fldPath, requestNames)
 		},
-		stringKey, fldPath.Child("requests"))...)
+		stringKey, fldPath.Child("requests"), sizeCovered)...)
 	if constraint.MatchAttribute != nil {
 		allErrs = append(allErrs, validateFullyQualifiedName(*constraint.MatchAttribute, fldPath.Child("matchAttribute"))...)
 	} else if constraint.DistinctAttribute != nil {
@@ -349,7 +349,7 @@ func validateDeviceClaimConfiguration(config resource.DeviceClaimConfiguration, 
 	allErrs = append(allErrs, validateSet(config.Requests, resource.DeviceRequestsMaxSize,
 		func(name string, fldPath *field.Path) field.ErrorList {
 			return validateRequestNameRef(name, fldPath, requestNames)
-		}, stringKey, fldPath.Child("requests"))...)
+		}, stringKey, fldPath.Child("requests"), sizeCovered)...)
 	allErrs = append(allErrs, validateDeviceConfiguration(config.DeviceConfiguration, fldPath, stored)...)
 	return allErrs
 }
@@ -489,7 +489,7 @@ func validateDeviceRequestAllocationResult(result resource.DeviceRequestAllocati
 	allErrs = append(allErrs, validateDeviceName(result.Device, fldPath.Child("device"))...)
 	allErrs = append(allErrs, validateDeviceBindingParameters(result.BindingConditions, result.BindingFailureConditions, fldPath)...)
 	if result.ShareID != nil {
-		allErrs = append(allErrs, validateUID(string(*result.ShareID), fldPath.Child("shareID"))...)
+		allErrs = append(allErrs, validateUID(string(*result.ShareID), fldPath.Child("shareID")).MarkCoveredByDeclarative()...)
 	}
 	return allErrs
 }
@@ -1212,7 +1212,7 @@ func validateDeviceStatus(device resource.AllocatedDeviceStatus, fldPath *field.
 	allErrs = append(allErrs, validatePoolName(device.Pool, fldPath.Child("pool"))...)
 	allErrs = append(allErrs, validateDeviceName(device.Device, fldPath.Child("device"))...)
 	if device.ShareID != nil {
-		allErrs = append(allErrs, validateUID(*device.ShareID, fldPath.Child("shareID"))...)
+		allErrs = append(allErrs, validateUID(*device.ShareID, fldPath.Child("shareID")).MarkCoveredByDeclarative()...)
 	}
 	deviceID := structured.MakeDeviceID(device.Driver, device.Pool, device.Device)
 	sharedDeviceID := structured.MakeSharedDeviceID(deviceID, (*types.UID)(device.ShareID))
