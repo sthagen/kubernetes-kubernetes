@@ -697,6 +697,7 @@ type ResourceClaim struct {
 
 	// Spec describes what is being requested and how to configure it.
 	// The spec is immutable.
+	// +k8s:immutable
 	Spec ResourceClaimSpec `json:"spec" protobuf:"bytes,2,name=spec"`
 
 	// Status describes whether the claim is ready to use and what has been allocated.
@@ -1382,11 +1383,13 @@ type ResourceClaimStatus struct {
 	// the future, but not reduced.
 	//
 	// +optional
-	// +k8s:optional
 	// +listType=map
 	// +listMapKey=uid
 	// +patchStrategy=merge
 	// +patchMergeKey=uid
+	// +k8s:optional
+	// +k8s:listType=map
+	// +k8s:listMapKey=uid
 	ReservedFor []ResourceClaimConsumerReference `json:"reservedFor,omitempty" protobuf:"bytes,2,opt,name=reservedFor" patchStrategy:"merge" patchMergeKey:"uid"`
 
 	// DeallocationRequested is tombstoned since Kubernetes 1.32 where
