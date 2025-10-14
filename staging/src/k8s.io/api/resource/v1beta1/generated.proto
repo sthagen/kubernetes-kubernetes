@@ -494,6 +494,7 @@ message DeviceAllocationResult {
   //
   // +optional
   // +listType=atomic
+  // +k8s:maxItems=32
   repeated DeviceRequestAllocationResult results = 1;
 
   // This field is a combination of all the claim and class configuration parameters.
@@ -506,6 +507,7 @@ message DeviceAllocationResult {
   //
   // +optional
   // +listType=atomic
+  // +k8s:maxItems=64
   repeated DeviceAllocationConfiguration config = 2;
 }
 
@@ -570,6 +572,9 @@ message DeviceClaim {
   //
   // +optional
   // +listType=atomic
+  // +k8s:listType=atomic
+  // +k8s:unique=map
+  // +k8s:listMapKey=name
   // +k8s:maxItems=32
   repeated DeviceRequest requests = 1;
 
@@ -602,6 +607,8 @@ message DeviceClaimConfiguration {
   //
   // +optional
   // +listType=atomic
+  // +k8s:listType=atomic
+  // +k8s:unique=set
   // +k8s:maxItems=32
   repeated string requests = 1;
 
@@ -710,6 +717,8 @@ message DeviceConstraint {
   //
   // +optional
   // +listType=atomic
+  // +k8s:listType=atomic
+  // +k8s:unique=set
   // +k8s:maxItems=32
   repeated string requests = 1;
 
@@ -884,6 +893,9 @@ message DeviceRequest {
   // +oneOf=deviceRequestType
   // +listType=atomic
   // +featureGate=DRAPrioritizedList
+  // +k8s:listType=atomic
+  // +k8s:unique=map
+  // +k8s:listMapKey=name
   // +k8s:maxItems=8
   repeated DeviceSubRequest firstAvailable = 7;
 
@@ -1376,6 +1388,7 @@ message ResourceClaimStatus {
   //
   // +optional
   // +k8s:optional
+  // +k8s:update=NoModify
   optional AllocationResult allocation = 1;
 
   // ReservedFor indicates which entities are currently allowed to use
@@ -1406,6 +1419,7 @@ message ResourceClaimStatus {
   // +k8s:optional
   // +k8s:listType=map
   // +k8s:listMapKey=uid
+  // +k8s:maxItems=256
   repeated ResourceClaimConsumerReference reservedFor = 2;
 
   // Devices contains the status of each device allocated for this

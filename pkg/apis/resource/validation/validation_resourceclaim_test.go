@@ -414,7 +414,7 @@ func TestValidateClaim(t *testing.T) {
 				field.Invalid(field.NewPath("spec", "devices", "requests").Index(2).Child("exactly", "count"), int64(-1), "must be greater than zero"),
 				field.NotSupported(field.NewPath("spec", "devices", "requests").Index(3).Child("exactly", "allocationMode"), resource.DeviceAllocationMode("other"), []resource.DeviceAllocationMode{resource.DeviceAllocationModeAll, resource.DeviceAllocationModeExactCount}),
 				field.Invalid(field.NewPath("spec", "devices", "requests").Index(4).Child("exactly", "count"), int64(2), "must not be specified when allocationMode is 'All'"),
-				field.Duplicate(field.NewPath("spec", "devices", "requests").Index(5), "foo"),
+				field.Duplicate(field.NewPath("spec", "devices", "requests").Index(5), "foo").MarkCoveredByDeclarative(),
 			},
 			claim: func() *resource.ResourceClaim {
 				claim := testClaim(goodName, goodNS, validClaimSpec)
@@ -648,7 +648,7 @@ func TestValidateClaim(t *testing.T) {
 		},
 		"prioritized-list-nested-requests-same-name": {
 			wantFailures: field.ErrorList{
-				field.Duplicate(field.NewPath("spec", "devices", "requests").Index(0).Child("firstAvailable").Index(1), "foo"),
+				field.Duplicate(field.NewPath("spec", "devices", "requests").Index(0).Child("firstAvailable").Index(1), "foo").MarkCoveredByDeclarative(),
 			},
 			claim: func() *resource.ResourceClaim {
 				claim := testClaim(goodName, goodNS, validClaimSpecWithFirstAvailable)
@@ -1059,7 +1059,7 @@ func TestValidateClaimStatusUpdate(t *testing.T) {
 			},
 		},
 		"invalid-reserved-for-too-large": {
-			wantFailures: field.ErrorList{field.TooMany(field.NewPath("status", "reservedFor"), resource.ResourceClaimReservedForMaxSize+1, resource.ResourceClaimReservedForMaxSize)},
+			wantFailures: field.ErrorList{field.TooMany(field.NewPath("status", "reservedFor"), resource.ResourceClaimReservedForMaxSize+1, resource.ResourceClaimReservedForMaxSize).MarkCoveredByDeclarative()},
 			oldClaim:     validAllocatedClaim,
 			update: func(claim *resource.ResourceClaim) *resource.ResourceClaim {
 				for i := 0; i < resource.ResourceClaimReservedForMaxSize+1; i++ {
@@ -1165,7 +1165,7 @@ func TestValidateClaimStatusUpdate(t *testing.T) {
 				claim := validAllocatedClaim.DeepCopy()
 				claim.Status.Allocation.Devices.Results[0].Driver += "-2"
 				return claim.Status.Allocation
-			}(), "field is immutable")},
+			}(), "field is immutable").MarkCoveredByDeclarative()},
 			oldClaim: validAllocatedClaim,
 			update: func(claim *resource.ResourceClaim) *resource.ResourceClaim {
 				claim.Status.Allocation.Devices.Results[0].Driver += "-2"
@@ -2249,10 +2249,12 @@ func TestValidateClaimStatusUpdate(t *testing.T) {
 
 	for name, scenario := range scenarios {
 		t.Run(name, func(t *testing.T) {
-			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.DRAAdminAccess, scenario.adminAccess)
-			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.DRAResourceClaimDeviceStatus, scenario.deviceStatusFeatureGate)
-			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.DRAPrioritizedList, scenario.prioritizedListFeatureGate)
-			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.DRAConsumableCapacity, scenario.consumableCapacityFeatureGate)
+			featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
+				features.DRAAdminAccess:               scenario.adminAccess,
+				features.DRAResourceClaimDeviceStatus: scenario.deviceStatusFeatureGate,
+				features.DRAPrioritizedList:           scenario.prioritizedListFeatureGate,
+				features.DRAConsumableCapacity:        scenario.consumableCapacityFeatureGate,
+			})
 
 			scenario.oldClaim.ResourceVersion = "1"
 			errs := ValidateResourceClaimStatusUpdate(scenario.update(scenario.oldClaim.DeepCopy()), scenario.oldClaim)

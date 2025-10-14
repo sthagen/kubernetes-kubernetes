@@ -60,6 +60,8 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 
 	opaqueDriverPath := field.NewPath("spec", "devices", "config").Index(0).Child("opaque", "driver")
 
+	// TODO: As we accumulate more and more test cases, consider breaking this
+	// up into smaller tests for maintainability.
 	testCases := map[string]struct {
 		input        resource.ResourceClaim
 		expectedErrs field.ErrorList
@@ -82,6 +84,12 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 				field.TooMany(field.NewPath("spec", "devices", "requests"), 33, 32).WithOrigin("maxItems"),
 			},
 		},
+		"invalid requests, duplicate name": {
+			input: mkValidResourceClaim(tweakAddDeviceRequest(mkDeviceRequest("req-0"))),
+			expectedErrs: field.ErrorList{
+				field.Duplicate(field.NewPath("spec", "devices", "requests").Index(1), "req-0"),
+			},
+		},
 		"invalid constraints, too many": {
 			input: mkValidResourceClaim(tweakDevicesConstraints(33)),
 			expectedErrs: field.ErrorList{
@@ -98,6 +106,12 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 			input: mkValidResourceClaim(tweakFirstAvailable(9)),
 			expectedErrs: field.ErrorList{
 				field.TooMany(field.NewPath("spec", "devices", "requests").Index(0).Child("firstAvailable"), 9, 8).WithOrigin("maxItems"),
+			},
+		},
+		"invalid firstAvailable, duplicate name": {
+			input: mkValidResourceClaim(tweakDuplicateFirstAvailableName("sub-0")),
+			expectedErrs: field.ErrorList{
+				field.Duplicate(field.NewPath("spec", "devices", "requests").Index(0).Child("firstAvailable").Index(1), "sub-0"),
 			},
 		},
 		"invalid selectors, too many": {
@@ -124,6 +138,18 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 			expectedErrs: field.ErrorList{
 				field.TooMany(field.NewPath("spec", "devices", "requests"), 33, 32).WithOrigin("maxItems"),
 				field.TooMany(field.NewPath("spec", "devices", "config").Index(0).Child("requests"), 33, 32).WithOrigin("maxItems"),
+			},
+		},
+		"invalid constraint requests, duplicate name": {
+			input: mkValidResourceClaim(tweakDuplicateConstraintRequest("req-0")),
+			expectedErrs: field.ErrorList{
+				field.Duplicate(field.NewPath("spec", "devices", "constraints").Index(0).Child("requests").Index(1), "req-0"),
+			},
+		},
+		"invalid config requests, duplicate name": {
+			input: mkValidResourceClaim(tweakDuplicateConfigRequest("req-0")),
+			expectedErrs: field.ErrorList{
+				field.Duplicate(field.NewPath("spec", "devices", "config").Index(0).Child("requests").Index(1), "req-0"),
 			},
 		},
 		"valid firstAvailable, max allowed": {
@@ -262,6 +288,24 @@ func tweakDevicesRequests(items int) func(*resource.ResourceClaim) {
 	}
 }
 
+func tweakDuplicateFirstAvailableName(name string) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		rc.Spec.Devices.Requests[0].Exactly = nil
+		rc.Spec.Devices.Requests[0].FirstAvailable = []resource.DeviceSubRequest{
+			{
+				Name:            name,
+				DeviceClassName: "class",
+				AllocationMode:  resource.DeviceAllocationModeAll,
+			},
+			{
+				Name:            name,
+				DeviceClassName: "class",
+				AllocationMode:  resource.DeviceAllocationModeAll,
+			},
+		}
+	}
+}
+
 func tweakExactlySelectors(items int) func(*resource.ResourceClaim) {
 	return func(rc *resource.ResourceClaim) {
 		for i := 0; i < items; i++ {
@@ -321,6 +365,24 @@ func tweakConfigRequests(count int) func(*resource.ResourceClaim) {
 		for i := 0; i < count; i++ {
 			rc.Spec.Devices.Config[0].Requests = append(rc.Spec.Devices.Config[0].Requests, fmt.Sprintf("req-%d", i))
 		}
+	}
+}
+
+func tweakDuplicateConstraintRequest(name string) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		if len(rc.Spec.Devices.Constraints) == 0 {
+			rc.Spec.Devices.Constraints = append(rc.Spec.Devices.Constraints, mkDeviceConstraint())
+		}
+		rc.Spec.Devices.Constraints[0].Requests = append(rc.Spec.Devices.Constraints[0].Requests, name)
+	}
+}
+
+func tweakDuplicateConfigRequest(name string) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		if len(rc.Spec.Devices.Config) == 0 {
+			rc.Spec.Devices.Config = append(rc.Spec.Devices.Config, mkDeviceClaimConfiguration())
+		}
+		rc.Spec.Devices.Config[0].Requests = append(rc.Spec.Devices.Config[0].Requests, name)
 	}
 }
 
@@ -387,6 +449,8 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 	mockNSClient := fakeClient.CoreV1().Namespaces()
 	Strategy := NewStrategy(mockNSClient)
 	validClaim := mkValidResourceClaim()
+	// TODO: As we accumulate more and more test cases, consider breaking this
+	// up into smaller tests for maintainability.
 	testCases := map[string]struct {
 		update       resource.ResourceClaim
 		old          resource.ResourceClaim
@@ -404,7 +468,7 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 			},
 		},
 		"spec immutable: add request": {
-			update: mkValidResourceClaim(tweakSpecAddRequest(mkDeviceRequest("req-1"))),
+			update: mkValidResourceClaim(tweakAddDeviceRequest(mkDeviceRequest("req-1"))),
 			old:    validClaim,
 			expectedErrs: field.ErrorList{
 				field.Invalid(field.NewPath("spec"), "field is immutable", "").WithOrigin("immutable"),
@@ -632,6 +696,98 @@ func TestValidateStatusUpdateForDeclarative(t *testing.T) {
 				field.Duplicate(field.NewPath("status", "reservedFor").Index(4), ""),
 			},
 		},
+		"invalid status.ReservedFor, too many": {
+			old: mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(
+				tweakStatusReservedFor(generateResourceClaimReferences(257)...),
+			),
+			expectedErrs: field.ErrorList{
+				field.TooMany(field.NewPath("status", "reservedFor"), 257, 256).WithOrigin("maxItems"),
+			},
+		},
+		"valid status.ReservedFor, max items": {
+			old: mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(
+				tweakStatusReservedFor(generateResourceClaimReferences(256)...),
+			),
+		},
+		"valid status.allocation.devices.results, max items": {
+			old: mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(
+				tweakStatusAllocationDevicesResults(32),
+			),
+		},
+		"valid status.allocation unchanged": {
+			old:    mkResourceClaimWithStatus(),
+			update: mkResourceClaimWithStatus(),
+		},
+		"valid status.allocation set from nil": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(),
+		},
+		"valid status.allocation cleared (Unset is allowed)": {
+			old:    mkResourceClaimWithStatus(),
+			update: mkValidResourceClaim(),
+		},
+		"invalid status.allocation changed device (NoModify)": {
+			old:    mkResourceClaimWithStatus(),
+			update: tweakStatusAllocationDevice(mkResourceClaimWithStatus(), "device-different"),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("status", "allocation"), nil, "field is immutable").WithOrigin("update"),
+			},
+		},
+		"invalid status.allocation changed driver (NoModify)": {
+			old:    mkResourceClaimWithStatus(),
+			update: tweakStatusAllocationDriver(mkResourceClaimWithStatus(), "different.example.com"),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("status", "allocation"), nil, "field is immutable").WithOrigin("update"),
+			},
+		},
+		"invalid status.allocation changed pool (NoModify)": {
+			old:    mkResourceClaimWithStatus(),
+			update: tweakStatusAllocationPool(mkResourceClaimWithStatus(), "different-pool"),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("status", "allocation"), nil, "field is immutable").WithOrigin("update"),
+			},
+		},
+		"invalid status.allocation added result (NoModify)": {
+			old:    mkResourceClaimWithStatus(),
+			update: addStatusAllocationResult(mkResourceClaimWithStatus()),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("status", "allocation"), nil, "field is immutable").WithOrigin("update"),
+			},
+		},
+		"invalid status.allocation removed result (NoModify)": {
+			old:    addStatusAllocationResult(mkResourceClaimWithStatus()),
+			update: mkResourceClaimWithStatus(),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("status", "allocation"), nil, "field is immutable").WithOrigin("update"),
+			},
+		},
+		"invalid status.allocation.devices.results, too many": {
+			old: mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(
+				tweakStatusAllocationDevicesResults(33),
+			),
+			expectedErrs: field.ErrorList{
+				field.TooMany(field.NewPath("status", "allocation", "devices", "results"), 33, 32).WithOrigin("maxItems"),
+			},
+		},
+		"valid status.allocation.devices.config, max items": {
+			old: mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(
+				tweakStatusAllocationDevicesConfig(64),
+			),
+		},
+		"invalid status.allocation.devices.config, too many": {
+			old: mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(
+				tweakStatusAllocationDevicesConfig(65),
+			),
+			expectedErrs: field.ErrorList{
+				field.TooMany(field.NewPath("status", "allocation", "devices", "config"), 33, 32).WithOrigin("maxItems"),
+			},
+		},
 	}
 	for k, tc := range testCases {
 		t.Run(k, func(t *testing.T) {
@@ -747,7 +903,7 @@ func tweakStatusAllocatedDeviceStatusShareID(shareID string) func(rc *resource.R
 	}
 }
 
-func tweakSpecAddRequest(req resource.DeviceRequest) func(rc *resource.ResourceClaim) {
+func tweakAddDeviceRequest(req resource.DeviceRequest) func(rc *resource.ResourceClaim) {
 	return func(rc *resource.ResourceClaim) {
 		rc.Spec.Devices.Requests = append(rc.Spec.Devices.Requests, req)
 	}
@@ -777,9 +933,58 @@ func resourceClaimReference(uid string) resource.ResourceClaimConsumerReference 
 	}
 }
 
+func generateResourceClaimReferences(count int) []resource.ResourceClaimConsumerReference {
+	refs := make([]resource.ResourceClaimConsumerReference, count)
+	for i := 0; i < count; i++ {
+		refs[i] = resource.ResourceClaimConsumerReference{
+			Resource: "pods",
+			Name:     fmt.Sprintf("pod-%d", i),
+			UID:      types.UID(uuid.New().String()),
+		}
+	}
+	return refs
+}
+
 func tweakStatusReservedFor(refs ...resource.ResourceClaimConsumerReference) func(rc *resource.ResourceClaim) {
 	return func(rc *resource.ResourceClaim) {
 		rc.Status.ReservedFor = refs
+	}
+}
+
+func tweakStatusAllocationDevicesResults(count int) func(rc *resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		rc.Status.Allocation.Devices.Results = []resource.DeviceRequestAllocationResult{}
+		for i := 0; i < count; i++ {
+			rc.Status.Allocation.Devices.Results = append(rc.Status.Allocation.Devices.Results, resource.DeviceRequestAllocationResult{
+				Request: "req-0",
+				Driver:  "dra.example.com",
+				Pool:    fmt.Sprintf("pool-%d", i),
+				Device:  fmt.Sprintf("device-%d", i),
+			})
+		}
+	}
+}
+
+func tweakStatusAllocationDevicesConfig(count int) func(rc *resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		if rc.Status.Allocation == nil {
+			return
+		}
+		rc.Status.Allocation.Devices.Config = []resource.DeviceAllocationConfiguration{}
+		for i := 0; i < count; i++ {
+			rc.Status.Allocation.Devices.Config = append(rc.Status.Allocation.Devices.Config, resource.DeviceAllocationConfiguration{
+				Source:   resource.AllocationConfigSourceClaim,
+				Requests: []string{"req-0"},
+				DeviceConfiguration: resource.DeviceConfiguration{
+					Opaque: &resource.OpaqueDeviceConfiguration{
+						Driver: "dra.example.com",
+						Parameters: runtime.RawExtension{
+							Raw: []byte(fmt.Sprintf(`{"item": %d}`, i)),
+						},
+					},
+				},
+			})
+		}
 	}
 }
 
@@ -821,4 +1026,38 @@ func tweakFirstAvailableTolerations(tolerations []resource.DeviceToleration) fun
 			}
 		}
 	}
+}
+
+func tweakStatusAllocationDevice(obj resource.ResourceClaim, device string) resource.ResourceClaim {
+	if obj.Status.Allocation != nil && len(obj.Status.Allocation.Devices.Results) > 0 {
+		obj.Status.Allocation.Devices.Results[0].Device = device
+	}
+	return obj
+}
+
+func tweakStatusAllocationDriver(obj resource.ResourceClaim, driver string) resource.ResourceClaim {
+	if obj.Status.Allocation != nil && len(obj.Status.Allocation.Devices.Results) > 0 {
+		obj.Status.Allocation.Devices.Results[0].Driver = driver
+	}
+	return obj
+}
+
+func tweakStatusAllocationPool(obj resource.ResourceClaim, pool string) resource.ResourceClaim {
+	if obj.Status.Allocation != nil && len(obj.Status.Allocation.Devices.Results) > 0 {
+		obj.Status.Allocation.Devices.Results[0].Pool = pool
+	}
+	return obj
+}
+
+func addStatusAllocationResult(obj resource.ResourceClaim) resource.ResourceClaim {
+	if obj.Status.Allocation != nil {
+		obj.Status.Allocation.Devices.Results = append(obj.Status.Allocation.Devices.Results,
+			resource.DeviceRequestAllocationResult{
+				Request: "req-0",
+				Driver:  "another.example.com",
+				Pool:    "pool-1",
+				Device:  "device-1",
+			})
+	}
+	return obj
 }
