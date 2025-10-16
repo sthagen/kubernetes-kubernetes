@@ -61,6 +61,8 @@ KUBE_CROSS_IMAGE="${KUBE_CROSS_IMAGE:-"${KUBE_BASE_IMAGE_REGISTRY}/kube-cross"}"
 readonly KUBE_CROSS_IMAGE
 KUBE_CROSS_VERSION="${KUBE_CROSS_VERSION:-"${KUBE_BUILD_IMAGE_CROSS_TAG}"}"
 readonly KUBE_CROSS_VERSION
+KUBE_CROSS_CONTAINER_ROOT="/go/src/k8s.io/kubernetes"
+readonly KUBE_CROSS_CONTAINER_ROOT
 
 # Here we map the output directories across both the local and remote _output
 # directories:
@@ -89,9 +91,9 @@ readonly REMOTE_OUTPUT_BINPATH="${REMOTE_OUTPUT_SUBPATH}/bin"
 readonly REMOTE_OUTPUT_GOPATH="${REMOTE_OUTPUT_SUBPATH}/go"
 
 # These are the default versions (image tags) for their respective base images.
-readonly __default_distroless_iptables_version=v0.8.2
-readonly __default_go_runner_version=v2.4.0-go1.25.1-bookworm.0
-readonly __default_setcap_version=bookworm-v1.0.4
+readonly __default_distroless_iptables_version=v0.8.4
+readonly __default_go_runner_version=v2.4.0-go1.25.3-bookworm.0
+readonly __default_setcap_version=bookworm-v1.0.6
 
 # The default image for all binaries which are dynamically linked.
 # Includes everything that is required by kube-proxy, which uses it
@@ -462,10 +464,10 @@ function kube::build::run_build_command_ex() {
     --env "GOGCFLAGS=${GOGCFLAGS:-}"
     --env "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-}"
     # mount source code / output dir
-    --volume "${KUBE_ROOT}:/go/src/k8s.io/kubernetes"
+    --volume "${KUBE_ROOT}:${KUBE_CROSS_CONTAINER_ROOT}"
     # env migrated from build-image, we could consider setting this in kube-cross
     --env 'KUBE_OUTPUT_SUBPATH=_output/dockerized'
-    --workdir /go/src/k8s.io/kubernetes
+    --workdir "${KUBE_CROSS_CONTAINER_ROOT}"
     --env 'GIT_AUTHOR_EMAIL=nobody@k8s.io'
     --env 'GIT_AUTHOR_NAME=kube-build-image'
   )
@@ -487,6 +489,12 @@ function kube::build::run_build_command_ex() {
   if [[ -n "${DOCKER_CGROUP_PARENT:-}" ]]; then
     kube::log::status "Using ${DOCKER_CGROUP_PARENT} as container cgroup parent"
     docker_run_opts+=(--cgroup-parent "${DOCKER_CGROUP_PARENT}")
+  fi
+
+  # copy KUBE_GIT_VERSION_FILE to .dockerized-kube-version-defs and set environment variable.
+  if [[ -n "${KUBE_GIT_VERSION_FILE:-}" ]]; then
+    cp "${KUBE_GIT_VERSION_FILE}" "${KUBE_ROOT}/.dockerized-kube-version-defs"
+    docker_run_opts+=(--env "KUBE_GIT_VERSION_FILE=${KUBE_CROSS_CONTAINER_ROOT}/.dockerized-kube-version-defs")
   fi
 
   # If we have stdin we can run interactive.  This allows things like 'shell.sh'
