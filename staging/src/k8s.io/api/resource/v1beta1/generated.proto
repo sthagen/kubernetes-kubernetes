@@ -472,6 +472,7 @@ message DeviceAllocationConfiguration {
   // or from a claim.
   //
   // +required
+  // +k8s:required
   optional string source = 1;
 
   // Requests lists the names of requests where the configuration applies.
@@ -844,6 +845,7 @@ message DeviceRequest {
   // requests with unknown modes.
   //
   // +optional
+  // +k8s:optional
   optional string allocationMode = 4;
 
   // Count is used only when the count mode is "ExactCount". Must be greater than zero.
@@ -1097,6 +1099,8 @@ message DeviceSubRequest {
   // to reference.
   //
   // +required
+  // +k8s:required
+  // +k8s:format=k8s-long-name
   optional string deviceClassName = 2;
 
   // Selectors define criteria which must be satisfied by a specific
@@ -1434,6 +1438,11 @@ message ResourceClaimStatus {
   // +listMapKey=pool
   // +listMapKey=shareID
   // +featureGate=DRAResourceClaimDeviceStatus
+  // +k8s:listType=map
+  // +k8s:listMapKey=driver
+  // +k8s:listMapKey=device
+  // +k8s:listMapKey=pool
+  // +k8s:listMapKey=shareID
   repeated AllocatedDeviceStatus devices = 4;
 }
 

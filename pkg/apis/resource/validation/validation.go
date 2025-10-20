@@ -48,6 +48,15 @@ import (
 	"k8s.io/kubernetes/pkg/features"
 )
 
+// ResourceNormalizationRules handles the structural differences between v1beta1
+// (flattened fields) and v1/v1beta2 (fields under 'exactly') for validation error paths.
+var ResourceNormalizationRules = []field.NormalizationRule{
+	{
+		Regexp:      regexp.MustCompile(`spec.devices\.requests\[(\d+)\]\.(deviceClassName|selectors|allocationMode|count|adminAccess|tolerations)`),
+		Replacement: "spec.devices.requests[$1].exactly.$2",
+	},
+}
+
 var (
 	// validateResourceDriverName reuses the validation of a CSI driver because
 	// the allowed values are exactly the same.
@@ -227,7 +236,7 @@ func validateDeviceRequest(request resource.DeviceRequest, fldPath *field.Path, 
 
 func validateDeviceSubRequest(subRequest resource.DeviceSubRequest, fldPath *field.Path, stored bool) field.ErrorList {
 	allErrs := validateRequestName(subRequest.Name, fldPath.Child("name"))
-	allErrs = append(allErrs, validateDeviceClass(subRequest.DeviceClassName, fldPath.Child("deviceClassName"))...)
+	allErrs = append(allErrs, validateDeviceClass(subRequest.DeviceClassName, fldPath.Child("deviceClassName")).MarkCoveredByDeclarative()...)
 	allErrs = append(allErrs, validateSelectorSlice(subRequest.Selectors, fldPath.Child("selectors"), stored)...)
 	allErrs = append(allErrs, validateDeviceAllocationMode(subRequest.AllocationMode, subRequest.Count, fldPath.Child("allocationMode"), fldPath.Child("count"))...)
 	for i, toleration := range subRequest.Tolerations {
@@ -259,7 +268,10 @@ func validateDeviceAllocationMode(deviceAllocationMode resource.DeviceAllocation
 			allErrs = append(allErrs, field.Invalid(countFldPath, count, "must be greater than zero"))
 		}
 	default:
-		allErrs = append(allErrs, field.NotSupported(allocModeFldPath, deviceAllocationMode, []resource.DeviceAllocationMode{resource.DeviceAllocationModeAll, resource.DeviceAllocationModeExactCount}))
+		// NOTE: Declarative validation does not (yet) enforce the real requiredness of this field
+		// because v1beta1 uses a bespoke form of union which makes this field truly optional
+		// in some cases and truly required in others. DO NOT REMOVE THIS CODE UNLESS THAT IS RESOLVED.
+		allErrs = append(allErrs, field.NotSupported(allocModeFldPath, deviceAllocationMode, []resource.DeviceAllocationMode{resource.DeviceAllocationModeAll, resource.DeviceAllocationModeExactCount}).MarkCoveredByDeclarative())
 	}
 	return allErrs
 }
@@ -412,7 +424,7 @@ func validateResourceClaimStatusUpdate(status, oldStatus *resource.ResourceClaim
 			deviceID := structured.MakeDeviceID(device.Driver, device.Pool, device.Device)
 			return structured.MakeSharedDeviceID(deviceID, (*types.UID)(device.ShareID))
 		},
-		fldPath.Child("devices"))...)
+		fldPath.Child("devices"), uniquenessCovered)...)
 
 	// Now check for invariants that must be valid for a ResourceClaim.
 	if len(status.ReservedFor) > 0 {
@@ -513,10 +525,10 @@ func validateAllocationConfigSource(source resource.AllocationConfigSource, fldP
 	var allErrs field.ErrorList
 	switch source {
 	case "":
-		allErrs = append(allErrs, field.Required(fldPath, ""))
+		allErrs = append(allErrs, field.Required(fldPath, "").MarkCoveredByDeclarative())
 	case resource.AllocationConfigSourceClaim, resource.AllocationConfigSourceClass:
 	default:
-		allErrs = append(allErrs, field.NotSupported(fldPath, source, []resource.AllocationConfigSource{resource.AllocationConfigSourceClaim, resource.AllocationConfigSourceClass}))
+		allErrs = append(allErrs, field.NotSupported(fldPath, source, []resource.AllocationConfigSource{resource.AllocationConfigSourceClaim, resource.AllocationConfigSourceClass}).MarkCoveredByDeclarative())
 	}
 	return allErrs
 }
