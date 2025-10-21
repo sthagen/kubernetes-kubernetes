@@ -653,11 +653,54 @@ func testValidateStatusUpdateForDeclarative(t *testing.T, apiVersion string) {
 	})
 	poolPath := field.NewPath("status", "allocation", "devices", "results").Index(0).Child("pool")
 	configSourcePath := field.NewPath("status", "allocation", "devices", "config").Index(0).Child("source")
+	driverPath := field.NewPath("status", "allocation", "devices", "results").Index(0).Child("driver")
+
 	testCases := map[string]struct {
 		old          resource.ResourceClaim
 		update       resource.ResourceClaim
 		expectedErrs field.ErrorList
 	}{
+		// .Status.Allocation.Devices.Results[%d].Driver
+		"valid driver name, lowercase": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultDriver("dra.example.com")),
+		},
+		"valid driver name, mixed case": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultDriver("DRA.Example.COM")),
+		},
+		"valid driver name, max length": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultDriver(strings.Repeat("a", 63))),
+		},
+		"invalid driver name, empty": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultDriver("")),
+			expectedErrs: field.ErrorList{
+				field.Required(driverPath, ""),
+			},
+		},
+		"invalid driver name, too long": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultDriver(strings.Repeat("a", 64))),
+			expectedErrs: field.ErrorList{
+				field.TooLong(driverPath, "", 63),
+			},
+		},
+		"invalid driver name, invalid character": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultDriver("dra_example.com")),
+			expectedErrs: field.ErrorList{
+				field.Invalid(driverPath, "dra_example.com", "").WithOrigin("format=k8s-long-name-caseless"),
+			},
+		},
+		"invalid driver name, invalid DNS name (leading dot)": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultDriver(".example.com")),
+			expectedErrs: field.ErrorList{
+				field.Invalid(driverPath, ".example.com", "").WithOrigin("format=k8s-long-name-caseless"),
+			},
+		},
 		// .Status.Allocation.Devices.Results[%d].Pool
 		"valid pool name": {
 			old:    mkValidResourceClaim(),
@@ -961,6 +1004,41 @@ func testValidateStatusUpdateForDeclarative(t *testing.T, apiVersion string) {
 				field.Duplicate(field.NewPath("status", "devices").Index(1), "driver1/pool1/device1"),
 			},
 		},
+		// .Status.Allocation.Devices.Results[%d].BindingConditions
+		"valid binding conditions, max items": {
+			old: mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(
+				tweakStatusBindingConditions(resource.BindingConditionsMaxSize),
+				tweakStatusBindingFailureConditions(1),
+			),
+		},
+		"invalid binding conditions, too many": {
+			old: mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(
+				tweakStatusBindingConditions(resource.BindingConditionsMaxSize+1),
+				tweakStatusBindingFailureConditions(1),
+			),
+			expectedErrs: field.ErrorList{
+				field.TooMany(field.NewPath("status", "allocation", "devices", "results").Index(0).Child("bindingConditions"), resource.BindingConditionsMaxSize+1, resource.BindingConditionsMaxSize).WithOrigin("maxItems"),
+			},
+		},
+		"valid binding failure conditions, max items": {
+			old: mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(
+				tweakStatusBindingConditions(1),
+				tweakStatusBindingFailureConditions(resource.BindingFailureConditionsMaxSize),
+			),
+		},
+		"invalid binding failure conditions, too many": {
+			old: mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(
+				tweakStatusBindingConditions(1),
+				tweakStatusBindingFailureConditions(resource.BindingFailureConditionsMaxSize+1),
+			),
+			expectedErrs: field.ErrorList{
+				field.TooMany(field.NewPath("status", "allocation", "devices", "results").Index(0).Child("bindingFailureConditions"), resource.BindingFailureConditionsMaxSize+1, resource.BindingFailureConditionsMaxSize).WithOrigin("maxItems"),
+			},
+		},
 	}
 
 	for k, tc := range testCases {
@@ -1038,6 +1116,14 @@ func tweakStatusDeviceRequestAllocationResultPool(pool string) func(rc *resource
 	}
 }
 
+func tweakStatusDeviceRequestAllocationResultDriver(driver string) func(rc *resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		for i := range rc.Status.Allocation.Devices.Results {
+			rc.Status.Allocation.Devices.Results[i].Driver = driver
+		}
+	}
+}
+
 func tweakStatusDeviceRequestAllocationResultShareID(shareID types.UID) func(rc *resource.ResourceClaim) {
 	return func(rc *resource.ResourceClaim) {
 		for i := range rc.Status.Allocation.Devices.Results {
@@ -1072,6 +1158,34 @@ func tweakSpecRemoveRequest(index int) func(rc *resource.ResourceClaim) {
 	return func(rc *resource.ResourceClaim) {
 		if index >= 0 && index < len(rc.Spec.Devices.Requests) {
 			rc.Spec.Devices.Requests = append(rc.Spec.Devices.Requests[:index], rc.Spec.Devices.Requests[index+1:]...)
+		}
+	}
+}
+
+func tweakStatusBindingConditions(count int) func(rc *resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		if rc.Status.Allocation == nil {
+			return
+		}
+		for i := range rc.Status.Allocation.Devices.Results {
+			rc.Status.Allocation.Devices.Results[i].BindingConditions = []string{}
+			for j := 0; j < count; j++ {
+				rc.Status.Allocation.Devices.Results[i].BindingConditions = append(rc.Status.Allocation.Devices.Results[i].BindingConditions, fmt.Sprintf("condition-%d", j))
+			}
+		}
+	}
+}
+
+func tweakStatusBindingFailureConditions(count int) func(rc *resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		if rc.Status.Allocation == nil {
+			return
+		}
+		for i := range rc.Status.Allocation.Devices.Results {
+			rc.Status.Allocation.Devices.Results[i].BindingFailureConditions = []string{}
+			for j := 0; j < count; j++ {
+				rc.Status.Allocation.Devices.Results[i].BindingFailureConditions = append(rc.Status.Allocation.Devices.Results[i].BindingFailureConditions, fmt.Sprintf("failure-condition-%d", j))
+			}
 		}
 	}
 }

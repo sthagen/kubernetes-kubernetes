@@ -1539,6 +1539,8 @@ type DeviceRequestAllocationResult struct {
 	// vendor of the driver. It should use only lower case characters.
 	//
 	// +required
+	// +k8s:format=k8s-long-name-caseless
+	// +k8s:required
 	Driver string `json:"driver" protobuf:"bytes,2,name=driver"`
 
 	// This name together with the driver name and the device name field
@@ -1592,6 +1594,7 @@ type DeviceRequestAllocationResult struct {
 	// +optional
 	// +listType=atomic
 	// +featureGate=DRADeviceBindingConditions,DRAResourceClaimDeviceStatus
+	// +k8s:maxItems=4
 	BindingConditions []string `json:"bindingConditions,omitempty" protobuf:"bytes,7,rep,name=bindingConditions"`
 
 	// BindingFailureConditions contains a copy of the BindingFailureConditions
@@ -1603,6 +1606,7 @@ type DeviceRequestAllocationResult struct {
 	// +optional
 	// +listType=atomic
 	// +featureGate=DRADeviceBindingConditions,DRAResourceClaimDeviceStatus
+	// +k8s:maxItems=4
 	BindingFailureConditions []string `json:"bindingFailureConditions,omitempty" protobuf:"bytes,8,rep,name=bindingFailureConditions"`
 
 	// ShareID uniquely identifies an individual allocation share of the device,

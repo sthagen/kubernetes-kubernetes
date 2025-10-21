@@ -966,6 +966,8 @@ message DeviceRequestAllocationResult {
   // vendor of the driver. It should use only lower case characters.
   //
   // +required
+  // +k8s:format=k8s-long-name-caseless
+  // +k8s:required
   optional string driver = 2;
 
   // This name together with the driver name and the device name field
@@ -1020,6 +1022,7 @@ message DeviceRequestAllocationResult {
   // +optional
   // +listType=atomic
   // +featureGate=DRADeviceBindingConditions,DRAResourceClaimDeviceStatus
+  // +k8s:maxItems=4
   repeated string bindingConditions = 7;
 
   // BindingFailureConditions contains a copy of the BindingFailureConditions
@@ -1031,6 +1034,7 @@ message DeviceRequestAllocationResult {
   // +optional
   // +listType=atomic
   // +featureGate=DRADeviceBindingConditions,DRAResourceClaimDeviceStatus
+  // +k8s:maxItems=4
   repeated string bindingFailureConditions = 8;
 
   // ShareID uniquely identifies an individual allocation share of the device,
