@@ -153,6 +153,12 @@
     lockToDefault: true
     preRelease: GA
     version: "1.34"
+- name: AuthorizePodWebsocketUpgradeCreatePermission
+  versionedSpecs:
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.35"
 - name: AuthorizeWithSelectors
   versionedSpecs:
   - default: false
@@ -263,6 +269,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.34"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.35"
 - name: ContainerStopSignals
   versionedSpecs:
   - default: false
