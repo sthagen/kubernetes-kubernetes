@@ -51,20 +51,6 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.33"
-- name: AllowServiceLBStatusOnNonLB
-  versionedSpecs:
-  - default: true
-    lockToDefault: false
-    preRelease: GA
-    version: "1.0"
-  - default: false
-    lockToDefault: false
-    preRelease: Deprecated
-    version: "1.29"
-  - default: false
-    lockToDefault: true
-    preRelease: Deprecated
-    version: "1.32"
 - name: AllowUnsafeMalformedObjectDeletion
   versionedSpecs:
   - default: false
@@ -369,6 +355,12 @@
     lockToDefault: true
     preRelease: GA
     version: "1.33"
+- name: CSIServiceAccountTokenSecrets
+  versionedSpecs:
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.35"
 - name: CSIVolumeHealth
   versionedSpecs:
   - default: false
@@ -893,20 +885,6 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.34"
-- name: LoadBalancerIPMode
-  versionedSpecs:
-  - default: false
-    lockToDefault: false
-    preRelease: Alpha
-    version: "1.29"
-  - default: true
-    lockToDefault: false
-    preRelease: Beta
-    version: "1.30"
-  - default: true
-    lockToDefault: true
-    preRelease: GA
-    version: "1.32"
 - name: LocalStorageCapacityIsolationFSQuotaMonitoring
   versionedSpecs:
   - default: false
@@ -1253,6 +1231,10 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.34"
+  - default: true
+    lockToDefault: true
+    preRelease: GA
+    version: "1.35"
 - name: PreventStaticPodAPIReferences
   versionedSpecs:
   - default: true
