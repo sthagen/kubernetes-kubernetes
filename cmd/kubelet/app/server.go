@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/daemon"
+	"github.com/go-logr/logr"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"go.opentelemetry.io/otel"
@@ -583,14 +584,14 @@ func makeEventRecorder(ctx context.Context, kubeDeps *kubelet.Dependencies, node
 	}
 }
 
-func getReservedCPUs(machineInfo *cadvisorapi.MachineInfo, cpus string) (cpuset.CPUSet, error) {
+func getReservedCPUs(logger logr.Logger, machineInfo *cadvisorapi.MachineInfo, cpus string) (cpuset.CPUSet, error) {
 	emptyCPUSet := cpuset.New()
 
 	if cpus == "" {
 		return emptyCPUSet, nil
 	}
 
-	topo, err := topology.Discover(machineInfo)
+	topo, err := topology.Discover(logger, machineInfo)
 	if err != nil {
 		return emptyCPUSet, fmt.Errorf("unable to discover CPU topology info: %s", err)
 	}
@@ -607,16 +608,14 @@ func getReservedCPUs(machineInfo *cadvisorapi.MachineInfo, cpus string) (cpuset.
 
 func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Dependencies, featureGate featuregate.FeatureGate) (err error) {
 	logger := klog.FromContext(ctx)
-	if utilfeature.DefaultFeatureGate.Enabled(features.SystemdWatchdog) {
-		// NewHealthChecker returns an error indicating that the watchdog is configured but the configuration is incorrect,
-		// the kubelet will not be started.
-		healthChecker, err := watchdog.NewHealthChecker(logger)
-		if err != nil {
-			return fmt.Errorf("create health checker: %w", err)
-		}
-		kubeDeps.HealthChecker = healthChecker
-		healthChecker.Start(ctx)
+	// NewHealthChecker returns an error indicating that the watchdog is configured but the configuration is incorrect,
+	// the kubelet will not be started.
+	healthChecker, err := watchdog.NewHealthChecker(logger)
+	if err != nil {
+		return fmt.Errorf("create health checker: %w", err)
 	}
+	kubeDeps.HealthChecker = healthChecker
+	healthChecker.Start(ctx)
 	// Set global feature gates based on the value on the initial KubeletServer
 	err = utilfeature.DefaultMutableFeatureGate.SetFromMap(s.KubeletConfiguration.FeatureGates)
 	if err != nil {
@@ -786,7 +785,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 		if err != nil {
 			return err
 		}
-		reservedSystemCPUs, err := getReservedCPUs(machineInfo, s.ReservedSystemCPUs)
+		reservedSystemCPUs, err := getReservedCPUs(logger, machineInfo, s.ReservedSystemCPUs)
 		if err != nil {
 			return err
 		}
