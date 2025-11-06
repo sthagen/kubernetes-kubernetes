@@ -612,6 +612,65 @@ func TestDescribePodRuntimeClass(t *testing.T) {
 	}
 }
 
+func TestDescribePodWorkloadReference(t *testing.T) {
+	testCases := []struct {
+		name     string
+		pod      *corev1.Pod
+		expected string
+	}{
+		{
+			name: "test1",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bar",
+				},
+				Spec: corev1.PodSpec{
+					WorkloadRef: &corev1.WorkloadReference{
+						Name:     "workload",
+						PodGroup: "pg",
+					},
+				},
+			},
+			expected: `WorkloadRef:
+  Name:      workload
+  PodGroup:  pg`,
+		},
+		{
+			name: "test2",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bar",
+				},
+				Spec: corev1.PodSpec{
+					WorkloadRef: &corev1.WorkloadReference{
+						Name:               "workload",
+						PodGroup:           "pg",
+						PodGroupReplicaKey: "pg1",
+					},
+				},
+			},
+			expected: `WorkloadRef:
+  Name:                workload
+  PodGroup:            pg
+  PodGroupReplicaKey:  pg1`,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := fake.NewClientset(tc.pod)
+			c := &describeClient{T: t, Interface: fake}
+			d := PodDescriber{c}
+			out, err := d.Describe("", "bar", DescriberSettings{ShowEvents: true})
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+			if !strings.Contains(out, tc.expected) {
+				t.Errorf("Expected to find %q in output: %q", tc.expected, out)
+			}
+		})
+	}
+}
+
 func TestDescribePriorityClass(t *testing.T) {
 	preemptLowerPriority := corev1.PreemptLowerPriority
 	preemptNever := corev1.PreemptNever
@@ -3492,38 +3551,6 @@ func TestDescribeJob(t *testing.T) {
 
 func TestDescribeIngress(t *testing.T) {
 	ingresClassName := "test"
-	backendV1beta1 := networkingv1beta1.IngressBackend{
-		ServiceName: "default-backend",
-		ServicePort: intstr.FromInt32(80),
-	}
-	v1beta1 := fake.NewClientset(&networkingv1beta1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "bar",
-			Labels: map[string]string{
-				"id1": "app1",
-				"id2": "app2",
-			},
-			Namespace: "foo",
-		},
-		Spec: networkingv1beta1.IngressSpec{
-			IngressClassName: &ingresClassName,
-			Rules: []networkingv1beta1.IngressRule{
-				{
-					Host: "foo.bar.com",
-					IngressRuleValue: networkingv1beta1.IngressRuleValue{
-						HTTP: &networkingv1beta1.HTTPIngressRuleValue{
-							Paths: []networkingv1beta1.HTTPIngressPath{
-								{
-									Path:    "/foo",
-									Backend: backendV1beta1,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	})
 	backendV1 := networkingv1.IngressBackend{
 		Service: &networkingv1.IngressServiceBackend{
 			Name: "default-backend",
@@ -3576,23 +3603,6 @@ func TestDescribeIngress(t *testing.T) {
 		input  *fake.Clientset
 		output string
 	}{
-		"IngressRule.HTTP.Paths.Backend.Service v1beta1": {
-			input: v1beta1,
-			output: `Name:             bar
-Labels:           id1=app1
-                  id2=app2
-Namespace:        foo
-Address:          
-Ingress Class:    test
-Default backend:  <default>
-Rules:
-  Host         Path  Backends
-  ----         ----  --------
-  foo.bar.com  
-               /foo   default-backend:80 (<error: services "default-backend" not found>)
-Annotations:   <none>
-Events:        <none>` + "\n",
-		},
 		"IngressRule.HTTP.Paths.Backend.Service v1": {
 			input: netv1,
 			output: `Name:             bar
@@ -5173,7 +5183,7 @@ func TestDescribeEvents(t *testing.T) {
 			}, events),
 		},
 		"IngressDescriber": &IngressDescriber{
-			fake.NewClientset(&networkingv1beta1.Ingress{
+			fake.NewClientset(&networkingv1.Ingress{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "bar",
 					Namespace: "foo",
