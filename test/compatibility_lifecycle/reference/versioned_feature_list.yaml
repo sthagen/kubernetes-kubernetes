@@ -195,6 +195,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.34"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.35"
 - name: CloudControllerManagerWatchBasedRoutesReconciliation
   versionedSpecs:
   - default: false
@@ -697,6 +701,10 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.30"
+  - default: true
+    lockToDefault: true
+    preRelease: GA
+    version: "1.35"
 - name: ImageVolume
   versionedSpecs:
   - default: false
@@ -839,6 +847,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.32"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.35"
 - name: KubeletEnsureSecretPulledImages
   versionedSpecs:
   - default: false
@@ -1179,6 +1191,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.34"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.35"
 - name: OpenAPIEnums
   versionedSpecs:
   - default: false
@@ -1317,6 +1333,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.33"
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.35"
 - name: PortForwardWebsockets
   versionedSpecs:
   - default: false
@@ -1913,6 +1933,12 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.28"
+- name: UserNamespacesHostNetworkSupport
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.35"
 - name: UserNamespacesSupport
   versionedSpecs:
   - default: false

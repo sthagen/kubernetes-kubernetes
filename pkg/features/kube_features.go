@@ -456,8 +456,8 @@ const (
 	// fallback to using it's cgroupDriver option.
 	KubeletCgroupDriverFromCRI featuregate.Feature = "KubeletCgroupDriverFromCRI"
 
-	// owner: @lauralorenz
-	// kep: https://kep.k8s.io/4603
+	// owner: @lauralorenz @hankfreund
+	// kep: https://kep.k8s.io/5593
 	//
 	// Enables support for configurable per-node backoff maximums for restarting
 	// containers (aka containers in CrashLoopBackOff)
@@ -736,6 +736,7 @@ const (
 	// owner: @munnerz
 	// kep: https://kep.k8s.io/4742
 	// alpha: v1.33
+	// beta: v1.35
 	//
 	// Enables the PodTopologyLabelsAdmission admission plugin that mutates `pod/binding`
 	// requests by copying the `topology.kubernetes.io/{zone,region}` labels from the assigned
@@ -1031,10 +1032,11 @@ const (
 	// version of the RemoteCommand subprotocol that supports the "close" signal.
 	TranslateStreamCloseWebsocketRequests featuregate.Feature = "TranslateStreamCloseWebsocketRequests"
 
-	// owner: @richabanker
+	// owner: @HirazawaUi
+	// kep: https://kep.k8s.io/5607
 	//
-	// Proxies client to an apiserver capable of serving the request in the event of version skew.
-	UnknownVersionInteroperabilityProxy featuregate.Feature = "UnknownVersionInteroperabilityProxy"
+	// Allow hostNetwork pods to use user namespaces
+	UserNamespacesHostNetworkSupport featuregate.Feature = "UserNamespacesHostNetworkSupport"
 
 	// owner: @rata, @giuseppe
 	// kep: https://kep.k8s.io/127
@@ -1167,6 +1169,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	ClearingNominatedNodeNameAfterBinding: {
 		{Version: version.MustParse("1.34"), Default: false, PreRelease: featuregate.Alpha},
+		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.Beta},
 	},
 
 	ClusterTrustBundle: {
@@ -1333,6 +1336,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	ImageMaximumGCAge: {
 		{Version: version.MustParse("1.29"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.30"), Default: true, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.38
 	},
 
 	ImageVolume: {
@@ -1395,6 +1399,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	KubeletCrashLoopBackOffMax: {
 		{Version: version.MustParse("1.32"), Default: false, PreRelease: featuregate.Alpha},
+		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.Beta},
 	},
 
 	KubeletEnsureSecretPulledImages: {
@@ -1547,6 +1552,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	NominatedNodeNameForExpectation: {
 		{Version: version.MustParse("1.34"), Default: false, PreRelease: featuregate.Alpha},
+		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.Beta},
 	},
 
 	OrderedNamespaceDeletion: {
@@ -1609,6 +1615,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	PodTopologyLabelsAdmission: {
 		{Version: version.MustParse("1.33"), Default: false, PreRelease: featuregate.Alpha},
+		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.Beta},
 	},
 
 	PortForwardWebsockets: {
@@ -1840,8 +1847,8 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.30"), Default: true, PreRelease: featuregate.Beta},
 	},
 
-	UnknownVersionInteroperabilityProxy: {
-		{Version: version.MustParse("1.28"), Default: false, PreRelease: featuregate.Alpha},
+	UserNamespacesHostNetworkSupport: {
+		{Version: version.MustParse("1.35"), Default: false, PreRelease: featuregate.Alpha},
 	},
 
 	UserNamespacesSupport: {
@@ -2070,6 +2077,10 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	genericfeatures.UnauthenticatedHTTP2DOSMitigation: {
 		{Version: version.MustParse("1.25"), Default: false, PreRelease: featuregate.Beta},
 		{Version: version.MustParse("1.29"), Default: true, PreRelease: featuregate.Beta},
+	},
+
+	genericfeatures.UnknownVersionInteroperabilityProxy: {
+		{Version: version.MustParse("1.28"), Default: false, PreRelease: featuregate.Alpha},
 	},
 
 	genericfeatures.WatchCacheInitializationPostStartHook: {
@@ -2411,7 +2422,7 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 
 	TranslateStreamCloseWebsocketRequests: {},
 
-	UnknownVersionInteroperabilityProxy: {},
+	UserNamespacesHostNetworkSupport: {UserNamespacesSupport},
 
 	UserNamespacesSupport: {},
 
@@ -2502,6 +2513,8 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 	genericfeatures.TokenRequestServiceAccountUIDValidation: {},
 
 	genericfeatures.UnauthenticatedHTTP2DOSMitigation: {},
+
+	genericfeatures.UnknownVersionInteroperabilityProxy: {genericfeatures.APIServerIdentity},
 
 	genericfeatures.WatchCacheInitializationPostStartHook: {},
 

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/onsi/gomega"
+	gtypes "github.com/onsi/gomega/types"
 
 	v1 "k8s.io/api/core/v1"
 	resourceapi "k8s.io/api/resource/v1"
@@ -31,6 +32,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/utils/ktesting"
 	"k8s.io/utils/ptr"
+)
+
+const (
+	driverNameSuffix = ".driver"
+	classNameSuffix  = ".class"
 )
 
 // must can be wrapped around a Create/Update/Patch/Get/Delete call and handles the error checking:
@@ -52,8 +58,10 @@ func createTestNamespace(tCtx ktesting.TContext, labels map[string]string) strin
 	tCtx.Helper()
 	name := regexp.MustCompile(`[^[:alnum:]_-]`).ReplaceAllString(tCtx.Name(), "-")
 	name = strings.ToLower(name)
-	if len(name) > 63 {
-		name = name[:30] + "--" + name[len(name)-30:]
+	// Make sure the generated name leaves enough room so we
+	// can use it as a prefix for the driver name.
+	if len(name) > (56 - len(driverNameSuffix)) {
+		name = name[:24] + "--" + name[len(name)-24:]
 	}
 	ns := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{GenerateName: name + "-"}}
 	ns.Labels = labels
@@ -81,9 +89,9 @@ func createSlice(tCtx ktesting.TContext, slice *resourceapi.ResourceSlice) *reso
 // createTestClass creates a DeviceClass with a driver name derived from the test namespace
 func createTestClass(tCtx ktesting.TContext, namespace string) (*resourceapi.DeviceClass, string) {
 	tCtx.Helper()
-	driverName := namespace + ".driver"
+	driverName := namespace + driverNameSuffix
 	class := class.DeepCopy()
-	class.Name = namespace + ".class"
+	class.Name = namespace + classNameSuffix
 	class.Spec.Selectors = []resourceapi.DeviceSelector{{
 		CEL: &resourceapi.CELDeviceSelector{
 			Expression: fmt.Sprintf("device.driver == %q", driverName),
@@ -194,4 +202,28 @@ func waitForNotFound[T any](tCtx ktesting.TContext, get func(context.Context, st
 		_, err := get(tCtx, name, metav1.GetOptions{})
 		return err
 	}).WithTimeout(60*time.Second).Should(gomega.MatchError(apierrors.IsNotFound, "IsNotFound"), "Object %T %s should have been removed.", t, name)
+}
+
+func waitForClaim(tCtx ktesting.TContext, namespace, claimName string, timeout time.Duration, match gtypes.GomegaMatcher, description ...any) *resourceapi.ResourceClaim {
+	tCtx.Helper()
+	var latestClaim *resourceapi.ResourceClaim
+	ktesting.Eventually(tCtx, func(tCtx ktesting.TContext) *resourceapi.ResourceClaim {
+		c, err := tCtx.Client().ResourceV1().ResourceClaims(namespace).Get(tCtx, claimName, metav1.GetOptions{})
+		tCtx.ExpectNoError(err, "get claim")
+		latestClaim = c
+		return latestClaim
+	}).WithTimeout(timeout).WithPolling(time.Second).Should(match, description...)
+	return latestClaim
+}
+
+func waitForClaimAllocatedToDevice(tCtx ktesting.TContext, namespace, claimName string, timeout time.Duration) *resourceapi.ResourceClaim {
+	tCtx.Helper()
+	return waitForClaim(
+		tCtx,
+		namespace,
+		claimName,
+		timeout,
+		gomega.HaveField("Status.Allocation", gomega.Not(gomega.BeNil())),
+		"Claim should have been allocated.",
+	)
 }
