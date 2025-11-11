@@ -826,6 +826,12 @@ const (
 	// Adds the AllocatedResourcesStatus to the container status.
 	ResourceHealthStatus featuregate.Feature = "ResourceHealthStatus"
 
+	// owner: @yuanwang04
+	// kep: https://kep.k8s.io/5532
+	//
+	// Restart the pod in-place on the same node.
+	RestartAllContainersOnContainerExits featuregate.Feature = "RestartAllContainersOnContainerExits"
+
 	// owner: @mikedanese
 	//
 	// Gets a server certificate for the kubelet from the Certificate Signing
@@ -1411,6 +1417,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	KubeletEnsureSecretPulledImages: {
 		{Version: version.MustParse("1.33"), Default: false, PreRelease: featuregate.Alpha},
+		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.Beta},
 	},
 
 	KubeletFineGrainedAuthz: {
@@ -1689,6 +1696,10 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	ResourceHealthStatus: {
 		{Version: version.MustParse("1.31"), Default: false, PreRelease: featuregate.Alpha},
+	},
+
+	RestartAllContainersOnContainerExits: {
+		{Version: version.MustParse("1.35"), Default: false, PreRelease: featuregate.Alpha},
 	},
 
 	RotateKubeletServerCertificate: {
@@ -2370,6 +2381,10 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 	ReloadKubeletServerCertificateFile: {},
 
 	ResourceHealthStatus: {DynamicResourceAllocation},
+
+	// RestartAllContainersOnContainerExits introduces a new container restart rule action.
+	// All restart rules will be dropped by API if ContainerRestartRules feature is not enabled.
+	RestartAllContainersOnContainerExits: {ContainerRestartRules, NodeDeclaredFeatures},
 
 	RotateKubeletServerCertificate: {},
 
