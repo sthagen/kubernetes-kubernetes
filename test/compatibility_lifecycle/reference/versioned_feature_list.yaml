@@ -2013,16 +2013,10 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.31"
-- name: WatchFromStorageWithoutResourceVersion
-  versionedSpecs:
-  - default: false
+  - default: true
     lockToDefault: false
     preRelease: Beta
-    version: "1.27"
-  - default: false
-    lockToDefault: true
-    preRelease: Deprecated
-    version: "1.33"
+    version: "1.36"
 - name: WatchList
   versionedSpecs:
   - default: false
