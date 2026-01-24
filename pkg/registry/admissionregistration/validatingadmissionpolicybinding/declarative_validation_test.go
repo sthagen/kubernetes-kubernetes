@@ -14,20 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package storageclass
+package validatingadmissionpolicybinding
 
 import (
-	"testing"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	apitesting "k8s.io/kubernetes/pkg/api/testing"
-	api "k8s.io/kubernetes/pkg/apis/core"
-	"k8s.io/kubernetes/pkg/apis/storage"
+	"k8s.io/kubernetes/pkg/apis/admissionregistration"
+	"testing"
 )
 
-var apiVersions = []string{"v1beta1", "v1"} // StorageClass.Provisioner not in v1alpha1
+var apiVersions = []string{"v1beta1", "v1", "v1alpha1"}
 
 func TestDeclarativeValidate(t *testing.T) {
 	for _, apiVersion := range apiVersions {
@@ -39,26 +37,24 @@ func TestDeclarativeValidate(t *testing.T) {
 
 func testDeclarativeValidate(t *testing.T, apiVersion string) {
 	ctx := genericapirequest.WithRequestInfo(genericapirequest.NewDefaultContext(), &genericapirequest.RequestInfo{
-		APIGroup:          "storage.k8s.io",
+		APIGroup:          "admissionregistration.k8s.io",
 		APIVersion:        apiVersion,
-		Resource:          "storageclasses",
+		Resource:          "validatingadmissionpolicybindings",
 		IsResourceRequest: true,
 		Verb:              "create",
 	})
 
 	testCases := map[string]struct {
-		input        storage.StorageClass
+		input        admissionregistration.ValidatingAdmissionPolicyBinding
 		expectedErrs field.ErrorList
 	}{
 		"valid": {
-			input: mkValidStorageClass(),
+			input: mkValidBinding(),
 		},
-		"invalid provisioner": {
-			input: mkValidStorageClass(func(obj *storage.StorageClass) {
-				obj.Provisioner = ""
-			}),
+		"invalid policyName": {
+			input: mkValidBinding(tweakPolicyName("")),
 			expectedErrs: field.ErrorList{
-				field.Required(field.NewPath("provisioner"), ""),
+				field.Required(field.NewPath("spec", "policyName"), ""),
 			},
 		},
 		// TODO: Add more test cases
@@ -80,34 +76,31 @@ func TestDeclarativeValidateUpdate(t *testing.T) {
 
 func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 	testCases := map[string]struct {
-		oldObj       storage.StorageClass
-		updateObj    storage.StorageClass
+		oldObj       admissionregistration.ValidatingAdmissionPolicyBinding
+		updateObj    admissionregistration.ValidatingAdmissionPolicyBinding
 		expectedErrs field.ErrorList
 	}{
 		"valid update": {
-			oldObj:    mkValidStorageClass(func(obj *storage.StorageClass) { obj.ResourceVersion = "1" }),
-			updateObj: mkValidStorageClass(func(obj *storage.StorageClass) { obj.ResourceVersion = "1" }),
+			oldObj:    mkValidBinding(),
+			updateObj: mkValidBinding(),
 		},
-		"invalid update provisioner": {
-			oldObj: mkValidStorageClass(func(obj *storage.StorageClass) { obj.ResourceVersion = "1" }),
-			updateObj: mkValidStorageClass(func(obj *storage.StorageClass) {
-				obj.ResourceVersion = "1"
-				obj.Provisioner = ""
-			}),
+		"invalid update name": {
+			oldObj:    mkValidBinding(func(obj *admissionregistration.ValidatingAdmissionPolicyBinding) { obj.ResourceVersion = "1" }),
+			updateObj: mkValidBinding(tweakPolicyName("")),
 			expectedErrs: field.ErrorList{
-				field.Required(field.NewPath("provisioner"), ""),
-				field.Forbidden(field.NewPath("provisioner"), "updates to provisioner are forbidden."),
+				field.Required(field.NewPath("spec", "policyName"), ""),
 			},
 		},
+		// TODO: Add more test cases
 	}
 	for k, tc := range testCases {
 		t.Run(k, func(t *testing.T) {
 			ctx := genericapirequest.WithRequestInfo(genericapirequest.NewDefaultContext(), &genericapirequest.RequestInfo{
 				APIPrefix:         "apis",
-				APIGroup:          "storage.k8s.io",
+				APIGroup:          "admissionregistration.k8s.io",
 				APIVersion:        apiVersion,
-				Resource:          "storageclasses",
-				Name:              "valid-storage-class",
+				Resource:          "validatingadmissionpolicybindings",
+				Name:              "valid-binding",
 				IsResourceRequest: true,
 				Verb:              "update",
 			})
@@ -116,19 +109,25 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 	}
 }
 
-func mkValidStorageClass(tweaks ...func(obj *storage.StorageClass)) storage.StorageClass {
-	reclaimPolicy := api.PersistentVolumeReclaimDelete
-	volumeBindingMode := storage.VolumeBindingImmediate
-	obj := storage.StorageClass{
+func mkValidBinding(tweaks ...func(obj *admissionregistration.ValidatingAdmissionPolicyBinding)) admissionregistration.ValidatingAdmissionPolicyBinding {
+	obj := admissionregistration.ValidatingAdmissionPolicyBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "valid-storage-class",
+			Name: "valid-binding",
 		},
-		Provisioner:       "kubernetes.io/gce-pd",
-		ReclaimPolicy:     &reclaimPolicy,
-		VolumeBindingMode: &volumeBindingMode,
+		Spec: admissionregistration.ValidatingAdmissionPolicyBindingSpec{
+			PolicyName:        "test-policy",
+			ValidationActions: []admissionregistration.ValidationAction{admissionregistration.Deny},
+		},
 	}
+	obj.ResourceVersion = "1"
 	for _, tweak := range tweaks {
 		tweak(&obj)
 	}
 	return obj
+}
+
+func tweakPolicyName(policyName string) func(obj *admissionregistration.ValidatingAdmissionPolicyBinding) {
+	return func(obj *admissionregistration.ValidatingAdmissionPolicyBinding) {
+		obj.Spec.PolicyName = policyName
+	}
 }
