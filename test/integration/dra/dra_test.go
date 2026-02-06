@@ -77,35 +77,21 @@ import (
 var (
 	// For more test data see pkg/scheduler/framework/plugin/dynamicresources/dynamicresources_test.go.
 
-	podName                     = "my-pod"
-	podWithExtendedResourceName = "my-pod-with-extended-resource"
-	namespace                   = "default"
-	resourceName                = "my-resource"
-	extendedResourceName        = "my-example.com/my-extended-resource"
-	claimName                   = podName + "-" + resourceName
-	className                   = "my-resource-class"
-	extendedClassName           = "my-extended-resource-class"
-	device1                     = "device-1"
-	device2                     = "device-2"
-	podWithClaimName            = st.MakePod().Name(podName).Namespace(namespace).
-					Container("my-container").
-					PodResourceClaims(v1.PodResourceClaim{Name: resourceName, ResourceClaimName: &claimName}).
-					Obj()
-	podWithExtendedResource = st.MakePod().Name(podWithExtendedResourceName).Namespace(namespace).
+	podName      = "my-pod"
+	namespace    = "default"
+	resourceName = "my-resource"
+	claimName    = podName + "-" + resourceName
+	className    = "my-resource-class"
+	device1      = "device-1"
+	device2      = "device-2"
+
+	podWithClaimName = st.MakePod().Name(podName).Namespace(namespace).
 				Container("my-container").
-				Res(map[v1.ResourceName]string{v1.ResourceName(extendedResourceName): "1"}).
+				PodResourceClaims(v1.PodResourceClaim{Name: resourceName, ResourceClaimName: &claimName}).
 				Obj()
 	class = &resourceapi.DeviceClass{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: className,
-		},
-	}
-	classWithExtendedResource = &resourceapi.DeviceClass{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: extendedClassName,
-		},
-		Spec: resourceapi.DeviceClassSpec{
-			ExtendedResourceName: &extendedResourceName,
 		},
 	}
 	claim = st.MakeResourceClaim().
@@ -177,7 +163,8 @@ func TestDRA(t *testing.T) {
 				tCtx.Run("PublishResourceSlices", func(tCtx ktesting.TContext) {
 					testPublishResourceSlices(tCtx, true, features.DRADeviceTaints, features.DRAPartitionableDevices, features.DRADeviceBindingConditions)
 				})
-				tCtx.Run("ExtendedResource", func(tCtx ktesting.TContext) { testExtendedResource(tCtx, false) })
+				tCtx.Run("ExplicitExtendedResource", func(tCtx ktesting.TContext) { testExtendedResource(tCtx, false, true) })
+				tCtx.Run("ImplicitExtendedResource", func(tCtx ktesting.TContext) { testExtendedResource(tCtx, false, false) })
 				tCtx.Run("ResourceClaimDeviceStatus", func(tCtx ktesting.TContext) { testResourceClaimDeviceStatus(tCtx, false) })
 				tCtx.Run("DeviceBindingConditions", func(tCtx ktesting.TContext) { testDeviceBindingConditions(tCtx, false) })
 				tCtx.Run("ResourceSliceController", func(tCtx ktesting.TContext) {
@@ -251,8 +238,8 @@ func TestDRA(t *testing.T) {
 				tCtx.Run("PrioritizedList", func(tCtx ktesting.TContext) { testPrioritizedList(tCtx, true) })
 				tCtx.Run("PrioritizedListScoring", func(tCtx ktesting.TContext) { testPrioritizedListScoring(tCtx) })
 				tCtx.Run("PublishResourceSlices", func(tCtx ktesting.TContext) { testPublishResourceSlices(tCtx, true) })
-				// note testExtendedResource depends on testPublishResourceSlices to provide the devices
-				tCtx.Run("ExtendedResource", func(tCtx ktesting.TContext) { testExtendedResource(tCtx, true) })
+				tCtx.Run("ExplicitExtendedResource", func(tCtx ktesting.TContext) { testExtendedResource(tCtx, true, true) })
+				tCtx.Run("ImplicitExtendedResource", func(tCtx ktesting.TContext) { testExtendedResource(tCtx, true, false) })
 				tCtx.Run("ResourceClaimDeviceStatus", func(tCtx ktesting.TContext) { testResourceClaimDeviceStatus(tCtx, true) })
 				tCtx.Run("MaxResourceSlice", testMaxResourceSlice)
 				tCtx.Run("EvictClusterWithRule", func(tCtx ktesting.TContext) { testEvictCluster(tCtx, true) })
@@ -308,7 +295,7 @@ func TestDRA(t *testing.T) {
 }
 
 func createNodes(tCtx ktesting.TContext) {
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		nodeName := fmt.Sprintf("worker-%d", i)
 		// Create node.
 		node := &v1.Node{
@@ -546,7 +533,7 @@ func testFilterTimeout(tCtx ktesting.TContext, devicesPerSlice int) {
 	namespace := createTestNamespace(tCtx, nil)
 	class, driverName := createTestClass(tCtx, namespace)
 	deviceNames := make([]string, devicesPerSlice)
-	for i := 0; i < devicesPerSlice; i++ {
+	for i := range devicesPerSlice {
 		deviceNames[i] = fmt.Sprintf("dev-%d", i)
 	}
 	slice := st.MakeResourceSlice("worker-0", driverName).Devices(deviceNames...)
@@ -800,55 +787,64 @@ func expectedAllocatedClaim(request string, nodeInfo nodeInfo) gtypes.GomegaMatc
 	})))
 }
 
-func testExtendedResource(tCtx ktesting.TContext, enabled bool) {
+func testExtendedResource(tCtx ktesting.TContext, enabled, explicit bool) {
 	tCtx.Parallel()
 
 	namespace := createTestNamespace(tCtx, nil)
-	driverName := namespace + driverNameSuffix
-	class := classWithExtendedResource.DeepCopy()
-	class.Spec.Selectors = []resourceapi.DeviceSelector{{
-		CEL: &resourceapi.CELDeviceSelector{
-			Expression: fmt.Sprintf("device.driver == %q", driverName),
-		},
-	}}
-	c, err := tCtx.Client().ResourceV1().DeviceClasses().Create(tCtx, class, metav1.CreateOptions{FieldValidation: "Strict"})
-	tCtx.ExpectNoError(err, "create class")
+
+	// Create a DeviceClass with or without ExtendedResourceName based on whether we're testing explicit or implicit extended resources.
+	var resourceName string
+	var spec *resourceapi.DeviceClassSpec
+	if explicit {
+		resourceName = "example.com/" + namespace
+		// Set extended resource name in the DeviceClass spec only for explicit resources.
+		// It's not required for implicit extended resources.
+		spec = &resourceapi.DeviceClassSpec{
+			ExtendedResourceName: &resourceName,
+		}
+	}
+	class, driverName := createTestClassWithSpec(tCtx, namespace, spec)
+	if explicit {
+		if enabled {
+			require.NotEmpty(tCtx, class.Spec.ExtendedResourceName, "should store ExtendedResourceName")
+		} else {
+			require.Empty(tCtx, class.Spec.ExtendedResourceName, "should strip ExtendedResourceName")
+		}
+	} else {
+		// For implicit extended resources, derive the resource name from the class.
+		resourceName = resourceapi.ResourceDeviceClassPrefix + class.Name
+	}
 
 	slice := st.MakeResourceSlice("worker-0", driverName).Devices(device1)
 	createSlice(tCtx, slice.Obj())
 
+	startScheduler(tCtx)
+
+	podWithOneContainer := st.MakePod().Name(podName).Namespace(namespace).Container("test-container").Obj()
+	pod := createPodWithExtendedResource(tCtx, namespace, resourceName, "1", podWithOneContainer)
+
+	var schedulingAttempted gtypes.GomegaMatcher
 	if enabled {
-		require.NotEmpty(tCtx, c.Spec.ExtendedResourceName, "should store ExtendedResourceName")
-	}
-
-	tCtx.Run("scheduler", func(tCtx ktesting.TContext) {
-		startScheduler(tCtx)
-
-		pod := podWithExtendedResource.DeepCopy()
-		pod.Namespace = namespace
-		_, err := tCtx.Client().CoreV1().Pods(namespace).Create(tCtx, pod, metav1.CreateOptions{FieldValidation: "Strict"})
-		tCtx.ExpectNoError(err, "create pod")
-		schedulingAttempted := gomega.HaveField("Status.Conditions", gomega.ContainElement(
+		// Scheduled using device1 in the slice above.
+		schedulingAttempted = gomega.HaveField("Status.Conditions", gomega.ContainElement(
+			gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
+				"Type":   gomega.Equal(v1.PodScheduled),
+				"Status": gomega.Equal(v1.ConditionTrue),
+			}),
+		))
+	} else {
+		schedulingAttempted = gomega.HaveField("Status.Conditions", gomega.ContainElement(
 			gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
 				"Type":    gomega.Equal(v1.PodScheduled),
 				"Status":  gomega.Equal(v1.ConditionFalse),
 				"Reason":  gomega.Equal("Unschedulable"),
-				"Message": gomega.Equal("0/8 nodes are available: 8 Insufficient my-example.com/my-extended-resource. no new claims to deallocate, preemption: 0/8 nodes are available: 8 Preemption is not helpful for scheduling."),
+				"Message": gomega.Equal(fmt.Sprintf("0/8 nodes are available: 8 Insufficient %s. no new claims to deallocate, preemption: 0/8 nodes are available: 8 Preemption is not helpful for scheduling.", resourceName)),
 			}),
 		))
-		if enabled {
-			// pod can be scheduled as the drivers in testPublishResourceSlices provide the devices.
-			schedulingAttempted = gomega.HaveField("Status.Conditions", gomega.ContainElement(
-				gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
-					"Type":   gomega.Equal(v1.PodScheduled),
-					"Status": gomega.Equal(v1.ConditionTrue),
-				}),
-			))
-		}
-		tCtx.Eventually(func(tCtx ktesting.TContext) (*v1.Pod, error) {
-			return tCtx.Client().CoreV1().Pods(namespace).Get(tCtx, pod.Name, metav1.GetOptions{})
-		}).WithTimeout(time.Minute).WithPolling(time.Second).Should(schedulingAttempted)
-	})
+	}
+	tCtx.Eventually(func(tCtx ktesting.TContext) (*v1.Pod, error) {
+		return tCtx.Client().CoreV1().Pods(namespace).Get(tCtx, pod.Name, metav1.GetOptions{})
+	}).WithTimeout(time.Minute).WithPolling(time.Second).Should(schedulingAttempted)
 }
 
 func testPublishResourceSlices(tCtx ktesting.TContext, haveLatestAPI bool, disabledFeatures ...featuregate.Feature) {
@@ -1167,7 +1163,7 @@ func testPublishResourceSlices(tCtx ktesting.TContext, haveLatestAPI bool, disab
 		// Stress the controller by repeatedly deleting the slices.
 		// One delete occurs after the sync period is over (because of the Consistently),
 		// the second before (because it's done as quickly as possible).
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			tCtx.Log("deleting ResourceSlices")
 			tCtx.ExpectNoError(tCtx.Client().ResourceV1().ResourceSlices().DeleteCollection(tCtx, metav1.DeleteOptions{}, listDriverSlices), "delete driver slices")
 			expectedStats.NumCreates += int64(len(expectedSlices))
@@ -1180,7 +1176,7 @@ func testPublishResourceSlices(tCtx ktesting.TContext, haveLatestAPI bool, disab
 		_, getStats, expectedStats := setup(tCtx)
 
 		// Stress the controller by repeatedly updatings the slices.
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			slices, err := tCtx.Client().ResourceV1().ResourceSlices().List(tCtx, listDriverSlices)
 			tCtx.ExpectNoError(err, "list slices")
 			for _, slice := range slices.Items {
@@ -1691,7 +1687,7 @@ func testInvalidResourceSlices(tCtx ktesting.TContext) {
 		"invalid-for-all-nodes": {
 			slices: func() []*st.ResourceSliceWrapper {
 				var slices []*st.ResourceSliceWrapper
-				for i := 0; i < 8; i++ {
+				for i := range 8 {
 					nodeName := fmt.Sprintf("worker-%d", i)
 					invalidPoolSlice1 := st.MakeResourceSlice(nodeName, driverNamePlaceholder).Devices("device-1")
 					invalidPoolSlice1.Name += "-1"
