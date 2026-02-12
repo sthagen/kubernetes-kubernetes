@@ -332,8 +332,6 @@ func newTestKubeletWithImageList(
 	}
 
 	kubelet.allocationManager = allocation.NewInMemoryManager(
-		kubelet.containerManager.GetNodeConfig(),
-		kubelet.containerManager.GetNodeAllocatableAbsolute(),
 		kubelet.statusManager,
 		func(pod *v1.Pod) { kubelet.HandlePodSyncs(tCtx, []*v1.Pod{pod}) },
 		kubelet.GetActivePods,
@@ -398,6 +396,7 @@ func newTestKubeletWithImageList(
 	kubelet.evictionManager = evictionManager
 	handlers := []lifecycle.PodAdmitHandler{}
 	handlers = append(handlers, evictionAdmitHandler)
+	handlers = append(handlers, allocation.NewPodResizesAdmitHandler(kubelet.containerManager, fakeRuntime, kubelet.allocationManager, logger))
 
 	// setup shutdown manager
 	shutdownManager := nodeshutdown.NewManager(&nodeshutdown.Config{
@@ -406,7 +405,7 @@ func newTestKubeletWithImageList(
 		NodeRef:                         nodeRef,
 		GetPodsFunc:                     kubelet.podManager.GetPods,
 		KillPodFunc:                     killPodNow(kubelet.podWorkers, fakeRecorder),
-		SyncNodeStatusFunc:              func() {},
+		SyncNodeStatusFunc:              func(context.Context) {},
 		ShutdownGracePeriodRequested:    0,
 		ShutdownGracePeriodCriticalPods: 0,
 	})
@@ -3074,6 +3073,7 @@ func TestSyncTerminatingPodKillPod(t *testing.T) {
 }
 
 func TestSyncLabels(t *testing.T) {
+	tCtx := ktesting.Init(t)
 	tests := []struct {
 		name             string
 		existingNode     *v1.Node
@@ -3111,7 +3111,7 @@ func TestSyncLabels(t *testing.T) {
 			test.existingNode.Name = string(kl.nodeName)
 
 			kl.nodeLister = testNodeLister{nodes: []*v1.Node{test.existingNode}}
-			go func() { kl.syncNodeStatus() }()
+			go func() { kl.syncNodeStatus(tCtx) }()
 
 			err := retryWithExponentialBackOff(
 				100*time.Millisecond,

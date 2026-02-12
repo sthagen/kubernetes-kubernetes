@@ -24,9 +24,6 @@ set -o pipefail
 # Unset CDPATH, having it set messes up with script import paths
 unset CDPATH
 
-USER_ID=$(id -u)
-GROUP_ID=$(id -g)
-
 DOCKER_OPTS=${DOCKER_OPTS:-""}
 IFS=" " read -r -a DOCKER <<< "docker ${DOCKER_OPTS}"
 DOCKER_HOST=${DOCKER_HOST:-""}
@@ -347,6 +344,9 @@ function kube::build::clean() {
     # We don't need to do this at all for dockerized builds
     if [[ -d "${LOCAL_OUTPUT_ROOT}/local/go/cache" ]]; then
       chmod -R +w "${LOCAL_OUTPUT_ROOT}/local/go/cache"
+    fi
+    if [[ -d "${LOCAL_OUTPUT_ROOT}/dockerized/go/cache" ]]; then
+      chmod -R +w "${LOCAL_OUTPUT_ROOT}/dockerized/go/cache"
     fi
     rm -rf "${LOCAL_OUTPUT_ROOT}"
   fi
