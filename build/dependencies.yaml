@@ -64,7 +64,7 @@ dependencies:
 
   # etcd
   - name: "etcd"
-    version: 3.6.7
+    version: 3.6.8
     refPaths:
     - path: cluster/gce/manifests/etcd.manifest
       match: etcd_docker_tag|etcd_version
@@ -94,24 +94,6 @@ dependencies:
     - path: test/e2e/testing-manifests/kubectl/agnhost-primary-pod.yaml
       match: registry.k8s.io/e2e-test-images/agnhost:\d+\.\d+\.\d+
     - path: test/e2e/testing-manifests/serviceloadbalancer/netexecrc.yaml
-      match: registry.k8s.io/e2e-test-images/agnhost:\d+\.\d+\.\d+
-    - path: test/e2e/testing-manifests/ingress/multiple-certs/rc.yaml
-      match: registry.k8s.io/e2e-test-images/agnhost:\d+\.\d+\.\d+
-    - path: test/e2e/testing-manifests/ingress/http/rc.yaml
-      match: registry.k8s.io/e2e-test-images/agnhost:\d+\.\d+\.\d+
-    - path: test/e2e/testing-manifests/ingress/http2/rc.yaml
-      match: registry.k8s.io/e2e-test-images/agnhost:\d+\.\d+\.\d+
-    - path: test/e2e/testing-manifests/ingress/pre-shared-cert/rc.yaml
-      match: registry.k8s.io/e2e-test-images/agnhost:\d+\.\d+\.\d+
-    - path: test/e2e/testing-manifests/ingress/gce/static-ip-2/rc.yaml
-      match: registry.k8s.io/e2e-test-images/agnhost:\d+\.\d+\.\d+
-    - path: test/e2e/testing-manifests/ingress/neg/rc.yaml
-      match: registry.k8s.io/e2e-test-images/agnhost:\d+\.\d+\.\d+
-    - path: test/e2e/testing-manifests/ingress/static-ip/rc.yaml
-      match: registry.k8s.io/e2e-test-images/agnhost:\d+\.\d+\.\d+
-    - path: test/e2e/testing-manifests/ingress/neg-exposed/rc.yaml
-      match: registry.k8s.io/e2e-test-images/agnhost:\d+\.\d+\.\d+
-    - path: test/e2e/testing-manifests/ingress/neg-clusterip/rc.yaml
       match: registry.k8s.io/e2e-test-images/agnhost:\d+\.\d+\.\d+
     - path: test/e2e/dra/test-driver/deploy/example/pod-inline.yaml
       match: registry.k8s.io/e2e-test-images/agnhost:\d+\.\d+\.\d+
