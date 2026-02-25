@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,9 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package samplecontroller
+package parse
 
-// GroupName is the group name used in this package
-const (
-	GroupName = "samplecontroller.k8s.io"
-)
+import "strings"
+
+// ParseSELinuxLabel parses a SELinux label string into its components.
+// Format: "user:role:type:level" -> [user, role, type, level]
+// Missing components are represented as empty strings.
+func ParseSELinuxLabel(label string) [4]string {
+	var parts [4]string
+	if label == "" {
+		return parts
+	}
+	split := strings.SplitN(label, ":", 4)
+	copy(parts[:], split)
+	return parts
+}

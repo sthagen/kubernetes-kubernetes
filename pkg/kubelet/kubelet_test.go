@@ -32,12 +32,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/mock"
-
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	noopoteltrace "go.opentelemetry.io/otel/trace/noop"
+
 	"k8s.io/component-base/metrics/legacyregistry"
 
 	cadvisorapi "github.com/google/cadvisor/info/v1"
@@ -4768,13 +4767,12 @@ func TestSyncPodNodeDeclaredFeaturesUpdate(t *testing.T) {
 	newPod.Spec.Containers[0].Resources.Requests[v1.ResourceCPU] = cpu2000m
 	createMockFeature := func(t *testing.T, name string, inferForUpdate bool, maxVersionStr string) *ndftesting.MockFeature {
 		m := ndftesting.NewMockFeature(t)
-		m.EXPECT().Name().Return(name).Maybe()
-		m.EXPECT().InferForUpdate(mock.Anything, mock.Anything).Return(inferForUpdate).Maybe()
+		m.SetName(name)
+		m.SetInferForUpdate(func(_, _ *ndf.PodInfo) bool { return inferForUpdate })
 		if maxVersionStr != "" {
-			maxVersionStr := utilversion.MustParseSemantic(maxVersionStr)
-			m.EXPECT().MaxVersion().Return(maxVersionStr).Maybe()
+			m.SetMaxVersion(utilversion.MustParseSemantic(maxVersionStr))
 		} else {
-			m.EXPECT().MaxVersion().Return(nil).Maybe()
+			m.SetMaxVersion(nil)
 		}
 		return m
 	}
