@@ -213,7 +213,7 @@ func TestRunOp(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, tCtx := ktesting.NewTestContext(t)
+			tCtx := ktesting.Init(t)
 			client := fake.NewSimpleClientset()
 			tCtx = tCtx.WithClients(nil, nil, client, nil, nil)
 
@@ -618,7 +618,7 @@ func TestMetricThreshold(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, tCtx := ktesting.NewTestContext(t)
+			tCtx := ktesting.Init(t)
 			var capturedErr error
 			capturingCtx, finalize := tCtx.WithError(&capturedErr)
 			defer finalize()

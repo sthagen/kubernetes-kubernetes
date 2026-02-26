@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/code-generator/cmd/validation-gen/validators"
 	"k8s.io/gengo/v2"
+	"k8s.io/gengo/v2/codetags"
 	"k8s.io/gengo/v2/generator"
 	"k8s.io/gengo/v2/namer"
 	"k8s.io/gengo/v2/types"
@@ -294,7 +295,7 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 	}
 
 	// Create a linter to collect errors as we go.
-	linter := newLinter()
+	linter := newLinter(lintRules(validator)...)
 
 	// Build a cache of type->callNode for every type we need.
 	for _, input := range context.Inputs {
@@ -374,15 +375,14 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 			}
 		}
 
-		for _, t := range rootTypes {
-			klog.V(3).InfoS("linting root-type", "type", t)
-			if err := linter.lintType(t); err != nil {
-				klog.Fatalf("failed to lint type %q: %v", t.Name, err)
+		extracted := codetags.Extract("+", pkg.Comments)
+		if _, ok := extracted["k8s:validation-gen-nolint"]; !ok {
+			for _, t := range rootTypes {
+				klog.V(3).InfoS("linting root-type", "type", t)
+				if err := linter.lintType(t); err != nil {
+					klog.Fatalf("failed to lint type %q: %v", t.Name, err)
+				}
 			}
-		}
-		if args.LintOnly {
-			klog.V(4).Info("Lint is set, skip appending targets")
-			continue
 		}
 
 		targets = append(targets,
@@ -422,11 +422,7 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 				buf.WriteString(fmt.Sprintf("    %s\n", err.Error()))
 			}
 		}
-		if args.LintOnly {
-			klog.Fatalf("lint failed:\n%s", buf.String())
-		} else {
-			klog.Warningf("lint failed:\n%s", buf.String())
-		}
+		klog.Fatalf("lint failed:\n%s", buf.String())
 	}
 	return targets
 }

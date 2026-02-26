@@ -1428,7 +1428,7 @@ func validateDeviceToleration(toleration resource.DeviceToleration, fldPath *fie
 	case resource.DeviceTolerationOpEqual:
 		allErrs = append(allErrs, validateLabelValue(toleration.Value, fldPath.Child("value"))...)
 	case "":
-		allErrs = append(allErrs, field.Required(fldPath.Child("operator"), ""))
+		allErrs = append(allErrs, field.Required(fldPath.Child("operator"), "").MarkCoveredByDeclarative())
 	default:
 		allErrs = append(allErrs, field.NotSupported(fldPath.Child("operator"), toleration.Operator, validDeviceTolerationOperators).MarkCoveredByDeclarative())
 	}
