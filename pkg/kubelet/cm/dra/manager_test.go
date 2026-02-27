@@ -48,6 +48,7 @@ import (
 	metricstestutil "k8s.io/component-base/metrics/testutil"
 	"k8s.io/dynamic-resource-allocation/resourceclaim"
 	"k8s.io/klog/v2"
+	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	kubeletmetrics "k8s.io/kubernetes/pkg/kubelet/metrics"
 
 	drahealthv1alpha1 "k8s.io/kubelet/pkg/apis/dra-health/v1alpha1"
@@ -638,11 +639,12 @@ func TestGetResources(t *testing.T) {
 	kubeClient := fake.NewSimpleClientset()
 
 	for _, test := range []struct {
-		description string
-		container   *v1.Container
-		pod         *v1.Pod
-		claimInfo   *ClaimInfo
-		wantErr     bool
+		description    string
+		container      *v1.Container
+		pod            *v1.Pod
+		claimInfo      *ClaimInfo
+		wantErr        bool
+		wantCDIDevices []kubecontainer.CDIDevice
 	}{
 		{
 			description: "claim info with devices",
@@ -656,8 +658,9 @@ func TestGetResources(t *testing.T) {
 					},
 				},
 			},
-			pod:       genTestPod(),
-			claimInfo: genTestClaimInfo(claimUID, nil, false, nil),
+			pod:            genTestPod(),
+			claimInfo:      genTestClaimInfo(claimUID, nil, false, nil),
+			wantCDIDevices: []kubecontainer.CDIDevice{{Name: cdiID}},
 		},
 		{
 			description: "nil claiminfo",
@@ -684,8 +687,47 @@ func TestGetResources(t *testing.T) {
 					},
 				},
 			},
-			pod:       genTestPodWithExtendedResource(),
-			claimInfo: genTestClaimInfoWithExtendedResource(nil, false),
+			pod:            genTestPodWithExtendedResource(),
+			claimInfo:      genTestClaimInfoWithExtendedResource(nil, false),
+			wantCDIDevices: []kubecontainer.CDIDevice{{Name: cdiID}},
+		},
+		{
+			description: "same claim referenced by multiple requests",
+			container: &v1.Container{
+				Name: containerName,
+				Resources: v1.ResourceRequirements{
+					Claims: []v1.ResourceClaim{
+						{
+							Name:    claimName,
+							Request: requestName,
+						},
+						{
+							Name:    claimName,
+							Request: requestName2,
+						},
+					},
+				},
+			},
+			pod: genTestPod(),
+			claimInfo: &ClaimInfo{
+				ClaimInfoState: state.ClaimInfoState{
+					ClaimUID:  claimUID,
+					ClaimName: claimName,
+					Namespace: namespace,
+					PodUIDs:   sets.New[string](),
+					DriverState: map[string]state.DriverState{
+						driverName: {
+							Devices: []state.Device{{
+								PoolName:     poolName,
+								DeviceName:   deviceName,
+								RequestNames: []string{requestName, requestName2},
+								CDIDeviceIDs: []string{cdiID},
+							}},
+						},
+					},
+				},
+			},
+			wantCDIDevices: []kubecontainer.CDIDevice{{Name: cdiID}, {Name: cdiID}},
 		},
 	} {
 		t.Run(test.description, func(t *testing.T) {
@@ -703,7 +745,7 @@ func TestGetResources(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, test.claimInfo.DriverState[driverName].Devices[0].CDIDeviceIDs[0], containerInfo.CDIDevices[0].Name)
+				assert.Equal(t, test.wantCDIDevices, containerInfo.CDIDevices)
 			}
 		})
 	}
