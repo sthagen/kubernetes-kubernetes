@@ -182,6 +182,7 @@ const (
 	// depending on the DRA driver, may enable additional permissions
 	// when a container uses the allocated device.
 	DRAAdminAccess featuregate.Feature = "DRAAdminAccess"
+
 	// owner: @sunya-ch
 	// kep: https://kep.k8s.io/5075
 	//
@@ -800,6 +801,11 @@ const (
 	// Relaxed DNS search string validation.
 	RelaxedServiceNameValidation featuregate.Feature = "RelaxedServiceNameValidation"
 
+	// owner: @harshaln
+	//
+	// Enables running kubelet in a configuration that monitors and loads ClientCA from file paths
+	ReloadKubeletClientCAFile = "ReloadKubeletClientCAFile"
+
 	// owner: @zhangweikop
 	//
 	// Enable kubelet tls server to update certificate if the specified certificate files are changed.
@@ -1234,6 +1240,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	DRAAdminAccess: {
 		{Version: version.MustParse("1.32"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.34"), Default: true, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // GA in 1.36; remove in 1.39
 	},
 
 	DRAConsumableCapacity: {
@@ -1706,6 +1713,10 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	RelaxedServiceNameValidation: {
 		{Version: version.MustParse("1.34"), Default: false, PreRelease: featuregate.Alpha},
+		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Beta},
+	},
+
+	ReloadKubeletClientCAFile: {
 		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Beta},
 	},
 
@@ -2410,6 +2421,8 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 	RelaxedEnvironmentVariableValidation: {},
 
 	RelaxedServiceNameValidation: {},
+
+	ReloadKubeletClientCAFile: {},
 
 	ReloadKubeletServerCertificateFile: {},
 
