@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -43,14 +42,13 @@ import (
 	"k8s.io/client-go/dynamic"
 	clientset "k8s.io/client-go/kubernetes"
 	scaleclient "k8s.io/client-go/scale"
-	"k8s.io/client-go/tools/portforward"
-	"k8s.io/client-go/transport/spdy"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2edebug "k8s.io/kubernetes/test/e2e/framework/debug"
 	e2eendpointslice "k8s.io/kubernetes/test/e2e/framework/endpointslice"
 	e2ekubectl "k8s.io/kubernetes/test/e2e/framework/kubectl"
+	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	e2eresource "k8s.io/kubernetes/test/e2e/framework/resource"
 	e2eservice "k8s.io/kubernetes/test/e2e/framework/service"
 	testutils "k8s.io/kubernetes/test/utils"
@@ -144,23 +142,14 @@ type ExternalMetricsController struct {
 	clientSet   clientset.Interface
 	serviceName string
 	namespace   string
-	httpClient  *http.Client
 }
 
 // NewExternalMetricsController creates a new controller for the external metrics server
 func NewExternalMetricsController(clientSet clientset.Interface, serviceName, namespace string) *ExternalMetricsController {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{
-		Transport: tr,
-		Timeout:   30 * time.Second,
-	}
 	return &ExternalMetricsController{
 		clientSet:   clientSet,
 		serviceName: serviceName,
 		namespace:   namespace,
-		httpClient:  client,
 	}
 }
 
@@ -220,52 +209,18 @@ func (emc *ExternalMetricsController) doRequestWithPortForward(ctx context.Conte
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	transport, upgrader, err := spdy.RoundTripperFor(config)
-	if err != nil {
-		return fmt.Errorf("failed to create round tripper: %w", err)
+	// re-use NewTransport which supports both SPDY and WebSocket according to KEP-4006
+	transport := e2epod.NewTransport(emc.clientSet, config)
+	// the external metrics server uses a self-signed certificate.
+	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   30 * time.Second,
 	}
 
-	reqURL := emc.clientSet.CoreV1().RESTClient().Post().
-		Resource("pods").
-		Namespace(emc.namespace).
-		Name(podName).
-		SubResource("portforward").
-		URL()
-
-	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, reqURL)
-
-	stopChan := make(chan struct{})
-	readyChan := make(chan struct{})
-
-	fw, err := portforward.New(dialer, []string{"0:6443"}, stopChan, readyChan, io.Discard, io.Discard)
-	if err != nil {
-		return fmt.Errorf("failed to create port forwarder: %w", err)
-	}
-
-	errChan := make(chan error, 1)
-	go func() {
-		errChan <- fw.ForwardPorts()
-	}()
-
-	select {
-	case <-readyChan:
-		// Ready
-	case err := <-errChan:
-		return fmt.Errorf("port-forward failed: %w", err)
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	defer close(stopChan)
-
-	// Get assigned local port
-	forwardedPorts, err := fw.GetPorts()
-	if err != nil {
-		return fmt.Errorf("failed to get forwarded ports: %w", err)
-	}
-	localPort := forwardedPorts[0].Local
-
-	// Build URL and make request
-	requestURL := fmt.Sprintf("https://localhost:%d/%s/%s", localPort, action, metricName)
+	// test/e2e/framework/pod/dial.go#ParseAddr expects
+	// <namespace>.<pod>:<port number> format as the URL
+	requestURL := fmt.Sprintf("https://%s.%s:%d/%s/%s", emc.namespace, podName, externalMetricsServerPort, action, metricName)
 	if len(params) > 0 {
 		requestURL += "?" + params.Encode()
 	}
@@ -277,12 +232,12 @@ func (emc *ExternalMetricsController) doRequestWithPortForward(ctx context.Conte
 		return err
 	}
 
-	resp, err := emc.httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		framework.Logf("ExternalMetrics %s failure: %v", action, err)
 		return err
 	}
-	defer resp.Body.Close() //nolint: errcheck
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)

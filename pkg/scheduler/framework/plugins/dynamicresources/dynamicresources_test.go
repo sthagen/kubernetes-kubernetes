@@ -771,6 +771,7 @@ var (
 	}()
 
 	allocationResultWithBindingConditions = &resourceapi.AllocationResult{
+		AllocationTimestamp: new(metav1.Time), // Non-nil, actual value not checked.
 		Devices: resourceapi.DeviceAllocationResult{
 			Results: []resourceapi.DeviceRequestAllocationResult{{
 				Driver:                   driver,
@@ -785,6 +786,7 @@ var (
 	}
 
 	allocationResultWithBindingConditions2 = &resourceapi.AllocationResult{
+		AllocationTimestamp: new(metav1.Time), // Non-nil, actual value not checked.
 		Devices: resourceapi.DeviceAllocationResult{
 			Results: []resourceapi.DeviceRequestAllocationResult{{
 				Driver:                   driver2,
@@ -797,6 +799,10 @@ var (
 		},
 		NodeSelector: st.MakeNodeSelector().In("metadata.name", []string{nodeName}, st.NodeSelectorTypeMatchFields).Obj(),
 	}
+
+	bindClaim = st.FromResourceClaim(allocatedClaim).
+			Allocation(allocationResultWithBindingConditions).
+			Obj()
 
 	boundClaim = st.FromResourceClaim(allocatedClaim).
 			Allocation(allocationResultWithBindingConditions).
@@ -871,6 +877,17 @@ func reserve(claim *resourceapi.ResourceClaim, pod *v1.Pod) *resourceapi.Resourc
 	return st.FromResourceClaim(claim).
 		ReservedForPod(pod.Name, types.UID(pod.UID)).
 		Obj()
+}
+
+// addAllocationTimestamp adds an AllocationTimestamp to a claim.
+// Non-nil is all that matters for the go-cmp comparison.
+// Test cases involving binding conditions must ensure that they
+// have such a non-nil time stamp in their expected claims starting
+// with PreBind because PreBind adds it when the feature is on.
+func addAllocationTimestamp(claim *resourceapi.ResourceClaim) *resourceapi.ResourceClaim {
+	claim = claim.DeepCopy()
+	claim.Status.Allocation.AllocationTimestamp = new(metav1.Time)
+	return claim
 }
 
 func adminAccess(claim *resourceapi.ResourceClaim) *resourceapi.ResourceClaim {
@@ -1798,11 +1815,11 @@ func testPlugin(tCtx ktesting.TContext) {
 					inFlightClaims: []metav1.Object{extendedResourceClaimNoName2},
 				},
 				prebind: result{
-					assumedClaim: reserve(extendedResourceClaim2, podWithExtendedResourceName2),
-					added:        []metav1.Object{reserve(extendedResourceClaim2, podWithExtendedResourceName2)},
+					assumedClaim: addAllocationTimestamp(reserve(extendedResourceClaim2, podWithExtendedResourceName2)),
+					added:        []metav1.Object{addAllocationTimestamp(reserve(extendedResourceClaim2, podWithExtendedResourceName2))},
 				},
 				postbind: result{
-					assumedClaim: reserve(extendedResourceClaim2, podWithExtendedResourceName2),
+					assumedClaim: addAllocationTimestamp(reserve(extendedResourceClaim2, podWithExtendedResourceName2)),
 				},
 			},
 		},
@@ -2172,6 +2189,133 @@ func testPlugin(tCtx ktesting.TContext) {
 				},
 			},
 		},
+		"dont-add-allocation-timestamp": {
+			pod:     podWithClaimName,
+			claims:  []*resourceapi.ResourceClaim{pendingClaim},
+			classes: []*resourceapi.DeviceClass{deviceClass},
+			objs:    []apiruntime.Object{workerNodeSlice},
+			want: want{
+				reserve: result{
+					inFlightClaims: []metav1.Object{allocatedClaim},
+				},
+				prebind: result{
+					assumedClaim: reserve(allocatedClaim, podWithClaimName),
+					changes: change{
+						claim: func(in *resourceapi.ResourceClaim) *resourceapi.ResourceClaim {
+							return reserve(allocatedClaim, podWithClaimName)
+						},
+					},
+				},
+			},
+		},
+		"add-allocation-timestamp": {
+			enableDRADeviceBindingConditions:   true,
+			enableDRAResourceClaimDeviceStatus: true,
+			pod:                                podWithClaimName,
+			claims:                             []*resourceapi.ResourceClaim{pendingClaim},
+			classes:                            []*resourceapi.DeviceClass{deviceClass},
+			objs:                               []apiruntime.Object{workerNodeSlice},
+			want: want{
+				reserve: result{
+					inFlightClaims: []metav1.Object{allocatedClaim},
+				},
+				prebind: result{
+					assumedClaim: addAllocationTimestamp(reserve(allocatedClaim, podWithClaimName)),
+					changes: change{
+						claim: func(in *resourceapi.ResourceClaim) *resourceapi.ResourceClaim {
+							return addAllocationTimestamp(reserve(allocatedClaim, podWithClaimName))
+						},
+					},
+				},
+			},
+		},
+		"add-allocation-timestamp-failure": {
+			enableDRADeviceBindingConditions:   true,
+			enableDRAResourceClaimDeviceStatus: true,
+			pod:                                podWithClaimName,
+			claims:                             []*resourceapi.ResourceClaim{allocatedClaim},
+			prepare: prepare{
+				prebind: change{
+					claim: func(in *resourceapi.ResourceClaim) *resourceapi.ResourceClaim {
+						// Simulate deallocation before PreBind runs.
+						return st.FromResourceClaim(in).
+							Allocation(nil).
+							Obj()
+					},
+				},
+			},
+			want: want{
+				prebind: result{
+					status: fwk.AsStatus(fmt.Errorf("claim %s got deallocated elsewhere in the meantime", klog.KObj(allocatedClaim))),
+				},
+			},
+		},
+		"bind-claim-with-binding-conditions": {
+			enableDRADeviceBindingConditions:   true,
+			enableDRAResourceClaimDeviceStatus: true,
+			pod:                                podWithClaimName,
+			claims:                             []*resourceapi.ResourceClaim{pendingClaim},
+			classes:                            []*resourceapi.DeviceClass{deviceClass},
+			objs:                               []apiruntime.Object{fabricSlice},
+			args: &config.DynamicResourcesArgs{
+				// Time out quickly in PreBind. There's no controller which sets the
+				// binding conditions.
+				BindingTimeout: &metav1.Duration{Duration: time.Second},
+			},
+			want: want{
+				reserve: result{
+					inFlightClaims: []metav1.Object{func() *resourceapi.ResourceClaim {
+						claim := bindClaim.DeepCopy()
+						// Will get set in PreBind.
+						claim.Status.Allocation.AllocationTimestamp = nil
+						return claim
+					}()},
+				},
+				prebind: result{
+					assumedClaim: reserve(bindClaim, podWithClaimName),
+					changes: change{
+						claim: func(in *resourceapi.ResourceClaim) *resourceapi.ResourceClaim {
+							return reserve(bindClaim, podWithClaimName)
+						},
+					},
+					// From PreBind itself, when checking isPodReadyForBinding times out.
+					status: fwk.AsStatus(errors.New("device binding timeout")),
+				},
+			},
+		},
+		"bind-failure-concurrent-deallocation": {
+			enableDRADeviceBindingConditions:   true,
+			enableDRAResourceClaimDeviceStatus: true,
+			pod:                                podWithClaimName,
+			claims:                             []*resourceapi.ResourceClaim{pendingClaim},
+			classes:                            []*resourceapi.DeviceClass{deviceClass},
+			objs:                               []apiruntime.Object{fabricSlice},
+			args: &config.DynamicResourcesArgs{
+				// Time out quickly in PreBind. There's no controller which sets the
+				// binding conditions.
+				BindingTimeout: &metav1.Duration{Duration: time.Second},
+			},
+			want: want{
+				reserve: result{
+					inFlightClaims: []metav1.Object{func() *resourceapi.ResourceClaim {
+						claim := bindClaim.DeepCopy()
+						// Will get set in PreBind.
+						claim.Status.Allocation.AllocationTimestamp = nil
+						return claim
+					}()},
+				},
+				prebind: result{
+					assumedClaim: reserve(bindClaim, podWithClaimName),
+					changes: change{
+						claim: func(in *resourceapi.ResourceClaim) *resourceapi.ResourceClaim {
+							return reserve(bindClaim, podWithClaimName)
+						},
+					},
+					// From PreBind itself, when checking isPodReadyForBinding times out.
+					status: fwk.AsStatus(errors.New("device binding timeout")),
+				},
+			},
+		},
 		"bound-claim-with-succeeded-binding-conditions": {
 			enableDRADeviceBindingConditions:   true,
 			enableDRAResourceClaimDeviceStatus: true,
@@ -2189,6 +2333,35 @@ func testPlugin(tCtx ktesting.TContext) {
 					},
 					status: nil,
 				},
+			},
+			metrics: func(tCtx ktesting.TContext, g compbasemetrics.Gatherer) {
+				// Counter: allocations_total should have exactly one event
+				allocs, err := testutil.GetCounterValuesFromGatherer(
+					g,
+					"scheduler_dra_bindingconditions_allocations_total",
+					map[string]string{
+						"status": "success",
+					},
+					"driver", // group by driver label
+				)
+				require.NoError(tCtx, err)
+
+				var totalAllocs float64
+				for _, v := range allocs {
+					totalAllocs += v
+				}
+				require.InEpsilon(tCtx, float64(1), totalAllocs, 0.1, "expected exactly one successful allocation with BindingConditions")
+
+				// Histogram: one success sample with requires_bindingconditions=true
+				hist, err := testutil.GetHistogramVecFromGatherer(
+					g,
+					"scheduler_dra_bindingconditions_wait_duration_seconds",
+					map[string]string{
+						"status": "success",
+					},
+				)
+				require.NoError(tCtx, err)
+				require.Equal(tCtx, uint64(1), hist.GetAggregatedSampleCount(), "expected one success sample in wait duration histogram")
 			},
 		},
 		"bound-claim-with-failed-binding": {
@@ -2307,8 +2480,38 @@ func testPlugin(tCtx ktesting.TContext) {
 								Obj()
 						},
 					},
-					status: fwk.AsStatus(errors.New("claim " + claim.Name + " binding timeout")),
+					// From isPodReadyForBinding.
+					status: fwk.AsStatus(fmt.Errorf("%w: claim=%s", ErrDeviceBindingTimeout, claim.Name)),
 				},
+			},
+			metrics: func(tCtx ktesting.TContext, g compbasemetrics.Gatherer) {
+				// Counter: timeouts_total should have exactly one event
+				timeouts, err := testutil.GetCounterValuesFromGatherer(
+					g,
+					"scheduler_dra_bindingconditions_allocations_total",
+					map[string]string{
+						"status": "timeout",
+					},
+					"driver",
+				)
+				require.NoError(tCtx, err)
+
+				var totalTimeouts float64
+				for _, v := range timeouts {
+					totalTimeouts += v
+				}
+				require.InEpsilon(tCtx, float64(1), totalTimeouts, 0.1, "expected exactly one timeout with BindingConditions")
+
+				// Histogram: one timeout sample with requires_bindingconditions=true
+				hist, err := testutil.GetHistogramVecFromGatherer(
+					g,
+					"scheduler_dra_bindingconditions_wait_duration_seconds",
+					map[string]string{
+						"status": "timeout",
+					},
+				)
+				require.NoError(tCtx, err)
+				require.Equal(tCtx, uint64(1), hist.GetAggregatedSampleCount(), "expected one timeout sample in wait duration histogram")
 			},
 		},
 		"bound-claim-with-mixed-binding-conditions": {
@@ -2362,12 +2565,13 @@ func testPlugin(tCtx ktesting.TContext) {
 			claims: []*resourceapi.ResourceClaim{allocatedClaim, otherClaim},
 			want: want{
 				prebind: result{
-					assumedClaim: reserve(allocatedClaim, podWithClaimTemplateInStatus),
+					assumedClaim: addAllocationTimestamp(reserve(allocatedClaim, podWithClaimTemplateInStatus)),
 					changes: change{
 						claim: func(claim *resourceapi.ResourceClaim) *resourceapi.ResourceClaim {
 							if claim.Name == claimName {
 								claim = claim.DeepCopy()
 								claim.Status.ReservedFor = inUseClaim.Status.ReservedFor
+								claim = addAllocationTimestamp(claim)
 							}
 							return claim
 						},
@@ -2796,6 +3000,14 @@ func setupMetrics(features feature.Features) compbasemetrics.KubeRegistry {
 		testRegistry.MustRegister(metrics.ResourceClaimCreatesTotal)
 		metrics.ResourceClaimCreatesTotal.Reset()
 	}
+	// DRA DeviceBindingConditions metrics.
+	if features.EnableDRADeviceBindingConditions {
+		testRegistry.MustRegister(metrics.DRABindingConditionsAllocationsTotal)
+		testRegistry.MustRegister(metrics.DRABindingConditionsPreBindDuration)
+
+		metrics.DRABindingConditionsAllocationsTotal.Reset()
+		metrics.DRABindingConditionsPreBindDuration.Reset()
+	}
 	return testRegistry
 }
 
@@ -2842,10 +3054,18 @@ func (tc *testContext) verify(tCtx ktesting.TContext, expected result, initialOb
 	// Sometimes assert strips the diff too much, let's do it ourselves...
 	ignoreFieldsInResourceClaims := []cmp.Option{
 		cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion"),
-		cmpopts.IgnoreFields(resourceapi.AllocationResult{}, "AllocationTimestamp"),
+		cmp.Transformer("AllocationTimestamp", func(result resourceapi.AllocationResult) resourceapi.AllocationResult {
+			// Replace all allocation timestamps with the empty timestamp before comparison
+			// because the actual value is unpredictable (not running in a synctest bubble).
+			if result.AllocationTimestamp != nil {
+				result.AllocationTimestamp = new(metav1.Time)
+			}
+			return result
+		}),
 		// It does not matter which specific device is allocated for the testing purpose.
 		cmpopts.IgnoreFields(resourceapi.DeviceRequestAllocationResult{}, "Device"),
 	}
+
 	if diff := cmp.Diff(wantObjects, objects, ignoreFieldsInResourceClaims...); diff != "" {
 		tCtx.Errorf("Stored objects are different (- expected, + actual):\n%s", diff)
 	}
@@ -2997,6 +3217,7 @@ func setup(tCtx ktesting.TContext, args *config.DynamicResourcesArgs, nodes []*v
 	tc.client.ReactionChain = append(apiReactors, tc.client.ReactionChain...)
 
 	tc.informerFactory = informers.NewSharedInformerFactory(tc.client, 0)
+	var doneCheckers []cache.DoneChecker
 	resourceSliceTrackerOpts := resourceslicetracker.Options{
 		EnableDeviceTaintRules: true,
 		SliceInformer:          tc.informerFactory.Resource().V1().ResourceSlices(),
@@ -3006,6 +3227,7 @@ func setup(tCtx ktesting.TContext, args *config.DynamicResourcesArgs, nodes []*v
 	}
 	resourceSliceTracker, err := resourceslicetracker.StartTracker(tCtx, resourceSliceTrackerOpts)
 	require.NoError(tCtx, err, "couldn't start resource slice tracker")
+	doneCheckers = append(doneCheckers, resourceSliceTracker.HasSyncedChecker())
 
 	claimsCache := assumecache.NewAssumeCache(tCtx.Logger(), tc.informerFactory.Resource().V1().ResourceClaims().Informer(), "resource claim", "", nil)
 	// NewAssumeCache calls the informer's AddEventHandler method to register
@@ -3018,14 +3240,14 @@ func setup(tCtx ktesting.TContext, args *config.DynamicResourcesArgs, nodes []*v
 	// This is not the registered handler that is used by the DRA
 	// manager, but it is close enough because the assume cache
 	// uses a single boolean for "is synced" for all handlers.
-	registeredHandler := claimsCache.AddEventHandler(cache.ResourceEventHandlerFuncs{})
+	doneCheckers = append(doneCheckers, claimsCache.AddEventHandler(cache.ResourceEventHandlerFuncs{}).HasSyncedChecker())
 
 	tc.draManager = NewDRAManager(tCtx, claimsCache, resourceSliceTracker, tc.informerFactory)
 	if features.EnableDRAExtendedResource {
 		cache := tc.draManager.DeviceClassResolver().(*extendedresourcecache.ExtendedResourceCache)
-		if _, err := tc.informerFactory.Resource().V1().DeviceClasses().Informer().AddEventHandler(cache); err != nil {
-			tCtx.Logger().Error(err, "failed to add device class informer event handler")
-		}
+		deviceClassHandlerRegistration, err := tc.informerFactory.Resource().V1().DeviceClasses().Informer().AddEventHandler(cache)
+		require.NoError(tCtx, err, "failed to add device class informer event handler")
+		doneCheckers = append(doneCheckers, deviceClassHandlerRegistration.HasSyncedChecker())
 	}
 
 	opts := []runtime.Option{
@@ -3068,11 +3290,11 @@ func setup(tCtx ktesting.TContext, args *config.DynamicResourcesArgs, nodes []*v
 	})
 
 	tc.informerFactory.WaitForCacheSync(tCtx.Done())
-	// The above does not tell us if the registered handler (from NewAssumeCache)
-	// is synced, we need to wait until HasSynced of the handler returns
-	// true, this ensures that the assume cache is in sync with the informer's
+	// The above does not tell us if the registered handlers (e.g. from NewAssumeCache)
+	// are synced, we need to wait until the event handlers confirm that they are synced.
+	// This ensures that the assume cache is in sync with the informer's
 	// store which has been informed by at least one full LIST of the underlying storage.
-	cache.WaitForNamedCacheSyncWithContext(tCtx, registeredHandler.HasSynced, resourceSliceTracker.HasSynced)
+	cache.WaitFor(tCtx, "event handlers", doneCheckers...)
 
 	for _, node := range nodes {
 		nodeInfo := framework.NewNodeInfo()
@@ -3147,7 +3369,7 @@ func createReactor(tracker cgotesting.ObjectTracker, failPatch bool) func(action
 				return true, nil, errors.New("internal error: unexpected old object type")
 			}
 			if oldObjMeta.GetResourceVersion() != resourceVersion {
-				return true, nil, errors.New("ResourceVersion must match the object that gets updated")
+				return true, nil, apierrors.NewConflict(action.GetResource().GroupResource(), obj.GetName(), errors.New("ResourceVersion must match the object that gets updated"))
 			}
 
 			obj.SetResourceVersion(fmt.Sprintf("%d", resourceVersionCounter))

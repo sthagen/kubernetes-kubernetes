@@ -29,7 +29,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	policy "k8s.io/api/policy/v1"
 	resourceapi "k8s.io/api/resource/v1"
-	schedulingapiv1alpha1 "k8s.io/api/scheduling/v1alpha1"
+	schedulingapiv1alpha2 "k8s.io/api/scheduling/v1alpha2"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -126,6 +126,8 @@ func StartScheduler(tCtx ktesting.TContext, cfg *kubeschedulerconfig.KubeSchedul
 	return sched, informerFactory
 }
 
+// CreateResourceClaimController creates a ResourceClaim controller and returns a blocking run function.
+// The caller is responsible for the management of the goroutine where that method is invoked.
 func CreateResourceClaimController(ctx context.Context, tb ktesting.TB, clientSet clientset.Interface, informerFactory informers.SharedInformerFactory) func() {
 	podInformer := informerFactory.Core().V1().Pods()
 	claimInformer := informerFactory.Resource().V1().ResourceClaims()
@@ -139,7 +141,7 @@ func CreateResourceClaimController(ctx context.Context, tb ktesting.TB, clientSe
 		tb.Fatalf("Error creating claim controller: %v", err)
 	}
 	return func() {
-		go claimController.Run(ctx, 5 /* workers */)
+		claimController.Run(ctx, 5 /* workers */)
 	}
 }
 
@@ -523,7 +525,7 @@ func InitTestAPIServer(t *testing.T, nsPrefix string, admission admission.Interf
 			}
 			if utilfeature.DefaultFeatureGate.Enabled(features.GenericWorkload) {
 				options.APIEnablement.RuntimeConfig = cliflag.ConfigurationMap{
-					schedulingapiv1alpha1.SchemeGroupVersion.String(): "true",
+					schedulingapiv1alpha2.SchemeGroupVersion.String(): "true",
 				}
 			}
 		},

@@ -257,6 +257,12 @@ type Framework interface {
 	// code=5("skip") status.
 	RunBindPlugins(ctx context.Context, state fwk.CycleState, pod *v1.Pod, nodeName string) *fwk.Status
 
+	// RunPlacementScorePlugins runs the set of configured placement scoring plugins.
+	// It returns a list that stores scores from each plugin and total score for each Placement.
+	// It also returns *Status, which is set to non-success if any of the plugins returns
+	// a non-success status.
+	RunPlacementScorePlugins(ctx context.Context, state fwk.PodGroupCycleState, podGroupInfo fwk.PodGroupInfo, placements []*fwk.PodGroupAssignments) (ns []fwk.PlacementPluginScores, status *fwk.Status)
+
 	// HasFilterPlugins returns true if at least one Filter plugin is defined.
 	HasFilterPlugins() bool
 
@@ -283,20 +289,11 @@ type Framework interface {
 	Close() error
 }
 
-// NewPostFilterResult creates PostFilterResult with a provided nominated node
-// and a list of victims (if any) that need to be preempted to make the pod schedulable.
-func NewPostFilterResult(nodeName string, victims []*v1.Pod) *fwk.PostFilterResult {
+func NewPostFilterResultWithNominatedNode(name string) *fwk.PostFilterResult {
 	return &fwk.PostFilterResult{
 		NominatingInfo: &fwk.NominatingInfo{
-			NominatedNodeName: nodeName,
+			NominatedNodeName: name,
 			NominatingMode:    fwk.ModeOverride,
 		},
-		Victims: victims,
 	}
-}
-
-// Deprecated: use NewPostFilterResult instead, even if no victims were identified.
-// Deprecated in Kubernetes 1.36 and will be removed in 1.38.
-func NewPostFilterResultWithNominatedNode(nodeName string) *fwk.PostFilterResult {
-	return NewPostFilterResult(nodeName, nil)
 }

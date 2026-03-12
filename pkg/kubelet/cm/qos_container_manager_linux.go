@@ -288,6 +288,14 @@ func (m *qosContainerManagerImpl) retrySetMemoryReserve(logger klog.Logger, conf
 // setMemoryQoS sums the memory requests of all pods in the Burstable class,
 // and set the sum memory as the memory.min in the Unified field of CgroupConfig.
 func (m *qosContainerManagerImpl) setMemoryQoS(logger klog.Logger, configs map[v1.PodQOSClass]*CgroupConfig) {
+	setMemoryMin := func(qos v1.PodQOSClass, memoryMin int64) {
+		if configs[qos].ResourceParameters.Unified == nil {
+			configs[qos].ResourceParameters.Unified = make(map[string]string)
+		}
+		configs[qos].ResourceParameters.Unified[Cgroup2MemoryMin] = strconv.FormatInt(memoryMin, 10)
+		logger.V(4).Info("MemoryQoS config for qos", "qos", qos, "memoryMin", memoryMin)
+	}
+
 	qosMemoryRequests := m.getQoSMemoryRequests()
 
 	// Calculate the memory.min:
@@ -296,21 +304,9 @@ func (m *qosContainerManagerImpl) setMemoryQoS(logger klog.Logger, configs map[v
 	burstableMin := qosMemoryRequests[v1.PodQOSBurstable]
 	guaranteedMin := qosMemoryRequests[v1.PodQOSGuaranteed] + burstableMin
 
-	if burstableMin > 0 {
-		if configs[v1.PodQOSBurstable].ResourceParameters.Unified == nil {
-			configs[v1.PodQOSBurstable].ResourceParameters.Unified = make(map[string]string)
-		}
-		configs[v1.PodQOSBurstable].ResourceParameters.Unified[Cgroup2MemoryMin] = strconv.FormatInt(burstableMin, 10)
-		logger.V(4).Info("MemoryQoS config for qos", "qos", v1.PodQOSBurstable, "memoryMin", burstableMin)
-	}
-
-	if guaranteedMin > 0 {
-		if configs[v1.PodQOSGuaranteed].ResourceParameters.Unified == nil {
-			configs[v1.PodQOSGuaranteed].ResourceParameters.Unified = make(map[string]string)
-		}
-		configs[v1.PodQOSGuaranteed].ResourceParameters.Unified[Cgroup2MemoryMin] = strconv.FormatInt(guaranteedMin, 10)
-		logger.V(4).Info("MemoryQoS config for qos", "qos", v1.PodQOSGuaranteed, "memoryMin", guaranteedMin)
-	}
+	// Always set memory.min, even when it is 0, because omitted Unified keys are not cleared by the cgroup manager.
+	setMemoryMin(v1.PodQOSBurstable, burstableMin)
+	setMemoryMin(v1.PodQOSGuaranteed, guaranteedMin)
 }
 
 func (m *qosContainerManagerImpl) UpdateCgroups(logger logr.Logger) error {

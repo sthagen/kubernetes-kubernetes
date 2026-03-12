@@ -146,17 +146,19 @@ type CSIManager interface {
 	CSINodes() CSINodeLister
 }
 
-// WorkloadManager provides an interface for scheduling plugins to provide workload-aware scheduling.
-// It acts as the central source of truth for runtime information about workloads.
-type WorkloadManager interface {
-	// PodGroupState retrieves the runtime state for a specific pod group, identified by workload's namespace and reference.
-	PodGroupState(namespace string, workloadRef *v1.WorkloadReference) (PodGroupState, error)
+// PodGroupManager provides an interface for scheduling plugins to provide workload-aware scheduling.
+// It acts as the central source of truth for runtime information about pod groups.
+type PodGroupManager interface {
+	// PodGroupState retrieves the runtime state for a specific pod group, identified by pod group's name and namespace.
+	PodGroupState(namespace string, schedulingGroup *v1.PodSchedulingGroup) (PodGroupState, error)
 }
 
 // PodGroupState provides an interface to view and modify the state of a single pod group.
 type PodGroupState interface {
 	// AllPods returns the UIDs of all pods known to the scheduler for this group.
 	AllPods() sets.Set[types.UID]
+	// AllPodsCount returns the number of all pods known to the scheduler for this group.
+	AllPodsCount() int
 	// UnscheduledPods returns all pods that are unscheduled for this group,
 	// i.e., are neither assumed nor assigned.
 	// The returned map type corresponds to the argument of the PodActivator.Activate method.
@@ -166,6 +168,8 @@ type PodGroupState interface {
 	AssumedPods() sets.Set[types.UID]
 	// AssignedPods returns the UIDs of all pods already assigned (bound) for this group.
 	AssignedPods() sets.Set[types.UID]
+	// ScheduledPodsCount returns the number of pods for this group that are either assumed or assigned.
+	ScheduledPodsCount() int
 	// AssumePod marks a pod as having reached the Reserve stage.
 	AssumePod(podUID types.UID)
 	// ForgetPod removes a pod from the assumed state.

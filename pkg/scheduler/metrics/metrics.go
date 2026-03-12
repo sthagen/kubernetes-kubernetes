@@ -66,22 +66,24 @@ var ExtensionPoints = []string{
 }
 
 const (
-	PreFilter                   = "PreFilter"
-	Filter                      = "Filter"
-	PreFilterExtensionAddPod    = "PreFilterExtensionAddPod"
-	PreFilterExtensionRemovePod = "PreFilterExtensionRemovePod"
-	PostFilter                  = "PostFilter"
-	PreScore                    = "PreScore"
-	Score                       = "Score"
-	ScoreExtensionNormalize     = "ScoreExtensionNormalize"
-	PreBind                     = "PreBind"
-	PreBindPreFlight            = "PreBindPreFlight"
-	Bind                        = "Bind"
-	PostBind                    = "PostBind"
-	Reserve                     = "Reserve"
-	Unreserve                   = "Unreserve"
-	Permit                      = "Permit"
-	Sign                        = "Sign"
+	PreFilter                        = "PreFilter"
+	Filter                           = "Filter"
+	PreFilterExtensionAddPod         = "PreFilterExtensionAddPod"
+	PreFilterExtensionRemovePod      = "PreFilterExtensionRemovePod"
+	PostFilter                       = "PostFilter"
+	PreScore                         = "PreScore"
+	Score                            = "Score"
+	ScoreExtensionNormalize          = "ScoreExtensionNormalize"
+	PreBind                          = "PreBind"
+	PreBindPreFlight                 = "PreBindPreFlight"
+	Bind                             = "Bind"
+	PostBind                         = "PostBind"
+	Reserve                          = "Reserve"
+	Unreserve                        = "Unreserve"
+	Permit                           = "Permit"
+	Sign                             = "Sign"
+	PlacementScore                   = "PlacementScore"
+	PlacementScoreExtensionNormalize = "PlacementScoreExtensionNormalize"
 )
 
 const (
@@ -111,6 +113,14 @@ const (
 	BatchFlushExpired         = "expired"
 	BatchFlushPodIncompatible = "pod_incompatible"
 	BatchFlushPodNotBatchable = "pod_not_batchable"
+)
+
+// DRADeviceBindingConditions status labels
+const (
+	BindingConditionsStatusSuccess = "success"
+	BindingConditionsStatusFailed  = "failure"
+	BindingConditionsStatusTimeout = "timeout"
+	BindingConditionsStatusError   = "error"
 )
 
 // All the histogram based metrics have 1ms as size for the smallest bucket.
@@ -159,6 +169,9 @@ var (
 	podGroupScheduleAttempts           *metrics.CounterVec
 	podGroupSchedulingLatency          *metrics.HistogramVec
 	PodGroupSchedulingAlgorithmLatency *metrics.Histogram
+	// The below are only available when the DRADeviceBindingConditions feature gate is enabled.
+	DRABindingConditionsAllocationsTotal *metrics.CounterVec
+	DRABindingConditionsPreBindDuration  *metrics.HistogramVec
 
 	// metricsList is a list of all metrics that should be registered always, regardless of any feature gate's value.
 	metricsList []metrics.Registerable
@@ -195,6 +208,12 @@ func Register() {
 				podGroupScheduleAttempts,
 				podGroupSchedulingLatency,
 				PodGroupSchedulingAlgorithmLatency,
+			)
+		}
+		if utilfeature.DefaultFeatureGate.Enabled(features.DRADeviceBindingConditions) {
+			RegisterMetrics(
+				DRABindingConditionsAllocationsTotal,
+				DRABindingConditionsPreBindDuration,
 			)
 		}
 	})
@@ -450,6 +469,27 @@ func InitMetrics() {
 			StabilityLevel: metrics.ALPHA,
 		},
 		[]string{"status"})
+
+	DRABindingConditionsAllocationsTotal = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Subsystem:      SchedulerSubsystem,
+			Name:           "dra_bindingconditions_allocations_total",
+			Help:           "Number of allocations using devices with BindingConditions, counted per driver per scheduling attempt",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"profile", "driver", "status"},
+	)
+
+	DRABindingConditionsPreBindDuration = metrics.NewHistogramVec(
+		&metrics.HistogramOpts{
+			Subsystem:      SchedulerSubsystem,
+			Name:           "dra_bindingconditions_wait_duration_seconds",
+			Help:           "Time in seconds spent waiting for BindingConditions to be satisfied during PreBind.",
+			Buckets:        metrics.ExponentialBuckets(0.1, 2, 14),
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"profile", "driver", "status"},
+	)
 
 	GetNodeHintDuration = metrics.NewHistogramVec(
 		&metrics.HistogramOpts{

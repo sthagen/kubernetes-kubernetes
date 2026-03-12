@@ -292,6 +292,9 @@ func expandGinkgoArgs(offset ginkgo.Offset, text string, args []any) (string, []
 					ginkgoArgs = append(ginkgoArgs, ginkgo.Label("BetaOffByDefault"))
 				}
 			}
+			if arg.parts[0] == "KubeletMinVersion" {
+				ginkgoArgs = append(ginkgoArgs, ginkgo.ComponentSemVerConstraint("kubelet", ">="+arg.parts[1]))
+			}
 			switch fullLabel {
 			case "Serial":
 				ginkgoArgs = append(ginkgoArgs, ginkgo.Serial)
@@ -663,6 +666,32 @@ func (f *Framework) WithFlaky() interface{} {
 
 func withFlaky() interface{} {
 	return newLabel("Flaky")
+}
+
+// WithKubeletMinVersion specifies that a certain test or group tests needs
+// a kubelet version >= the given version string. Specifying the minimum
+// version as `<major>.<minor>` is sufficient. The patch version may be
+// added, but is not required.
+//
+// This adds
+// - a `[KubeletMinVersion:<version>]` tag in the text,
+// - a `KubeletMinVersion:<version>` label,
+// - and a Ginkgo semver constraint for the "kubelet" component.
+//
+// The easiest way to filter tests is via `ginkgo
+// --sem-ver-filter="kubelet=1.35"` which filters out tests that need a newer
+// kubelet.
+func WithKubeletMinVersion(version string) interface{} {
+	return withKubeletMinVersion(version)
+}
+
+// WithKubeletMinVersion is a shorthand for the corresponding package function.
+func (f *Framework) WithKubeletMinVersion(version string) interface{} {
+	return withKubeletMinVersion(version)
+}
+
+func withKubeletMinVersion(version string) interface{} {
+	return newLabel("KubeletMinVersion", version)
 }
 
 type label struct {

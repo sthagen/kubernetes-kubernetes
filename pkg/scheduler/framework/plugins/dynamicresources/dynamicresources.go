@@ -50,6 +50,7 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/feature"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/helper"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/names"
+	schedmetrics "k8s.io/kubernetes/pkg/scheduler/metrics"
 	schedutil "k8s.io/kubernetes/pkg/scheduler/util"
 	"k8s.io/utils/ptr"
 )
@@ -145,6 +146,11 @@ type DynamicResources struct {
 	celCache       *cel.Cache
 	draManager     fwk.SharedDRAManager
 }
+
+var (
+	ErrDeviceBindingTimeout = errors.New("device binding timeout")
+	ErrDeviceBindingFailed  = errors.New("device binding failed")
+)
 
 // New initializes a new plugin and returns it.
 func New(ctx context.Context, plArgs runtime.Object, fh fwk.Handle, fts feature.Features) (fwk.Plugin, error) {
@@ -1095,18 +1101,61 @@ func (pl *DynamicResources) PreBind(ctx context.Context, cs fwk.CycleState, pod 
 
 	// We need to wait for the device to be attached to the node.
 	pl.fh.EventRecorder().Eventf(pod, nil, v1.EventTypeNormal, "BindingConditionsPending", "Scheduling", "waiting for binding conditions for device on node %s", nodeName)
+	// START: Record start time for metrics duration calculation
+	start := time.Now()
 	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, pl.bindingTimeout, true,
 		func(ctx context.Context) (bool, error) {
 			return pl.isPodReadyForBinding(state)
 		})
-	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			err = errors.New("device binding timeout")
+	// GOAL: Calculate duration since start for metrics recording
+	duration := time.Since(start)
+	if errors.Is(err, context.DeadlineExceeded) {
+		err = fmt.Errorf("%w: %w", ErrDeviceBindingTimeout, err)
+	}
+
+	// Determine status label based on error
+	statusLabel := schedmetrics.BindingConditionsStatusSuccess
+	switch {
+	case err == nil:
+		logger.V(5).Info("BindingConditions is met",
+			"pod", klog.KObj(pod),
+			"node", nodeName,
+			"devices", bindingConditionsStatusFormatter{state, statusLabel},
+		)
+		// keep success
+	case errors.Is(err, ErrDeviceBindingTimeout):
+		statusLabel = schedmetrics.BindingConditionsStatusTimeout
+	case errors.Is(err, ErrDeviceBindingFailed):
+		statusLabel = schedmetrics.BindingConditionsStatusFailed
+	default:
+		statusLabel = schedmetrics.BindingConditionsStatusError
+	}
+
+	// Record metrics for binding conditions outcome (success/failure/timeout/error)
+	profileLabel := pl.fh.ProfileName()
+	for _, claim := range state.claims.all() {
+		if claim.Status.Allocation == nil {
+			continue
 		}
+		for _, res := range claim.Status.Allocation.Devices.Results {
+			schedmetrics.DRABindingConditionsPreBindDuration.
+				WithLabelValues(profileLabel, res.Driver, statusLabel).
+				Observe(duration.Seconds())
+		}
+
+		// Count scheduling attempts that used devices with BindingConditions.
+		for _, bcStatus := range listBindingConditionsStatus(claim) {
+			schedmetrics.DRABindingConditionsAllocationsTotal.
+				WithLabelValues(profileLabel, bcStatus.Driver, statusLabel).
+				Inc()
+		}
+	}
+
+	if err != nil {
 		// Returning an error here causes another scheduling attempt.
 		// In that next attempt, PreFilter will detect the timeout or
 		// error and try to recover.
-		return statusError(logger, err)
+		return statusError(logger, err, "devices", formatBCStatusOneLine(getBindingConditionsStatusForStatus(state, statusLabel)))
 	}
 
 	// If we get here, we know that reserving the claim for
@@ -1244,8 +1293,17 @@ func (pl *DynamicResources) bindClaim(ctx context.Context, state *stateData, ind
 		// preconditions. The apiserver will tell us with a
 		// non-conflict error if this isn't possible.
 		claim.Status.ReservedFor = append(claim.Status.ReservedFor, resourceapi.ResourceClaimConsumerReference{Resource: "pods", Name: pod.Name, UID: pod.UID})
-		if pl.fts.EnableDRADeviceBindingConditions && pl.fts.EnableDRAResourceClaimDeviceStatus && claim.Status.Allocation.AllocationTimestamp == nil {
-			claim.Status.Allocation.AllocationTimestamp = &metav1.Time{Time: time.Now()}
+		if pl.fts.EnableDRADeviceBindingConditions &&
+			pl.fts.EnableDRAResourceClaimDeviceStatus {
+			// Once the feature gate checks get removed, this code can be moved into an else branch
+			// for `if allocation != nil` above. For now it is kept here to avoid changing normal
+			// behavior.
+			if claim.Status.Allocation == nil {
+				return fmt.Errorf("claim %s got deallocated elsewhere in the meantime", klog.KObj(claim))
+			}
+			if claim.Status.Allocation.AllocationTimestamp == nil {
+				claim.Status.Allocation.AllocationTimestamp = &metav1.Time{Time: time.Now()}
+			}
 		}
 		updatedClaim, err := pl.clientset.ResourceV1().ResourceClaims(claim.Namespace).UpdateStatus(ctx, claim, metav1.UpdateOptions{})
 		if err != nil {
@@ -1298,7 +1356,8 @@ func (pl *DynamicResources) isClaimReadyForBinding(claim *resourceapi.ResourceCl
 		for _, cond := range deviceRequest.BindingFailureConditions {
 			failedCond := apimeta.FindStatusCondition(deviceStatus.Conditions, cond)
 			if failedCond != nil && failedCond.Status == metav1.ConditionTrue {
-				return false, fmt.Errorf("claim %s binding failed: reason=%s, message=%q",
+				return false, fmt.Errorf("%w: claim=%s, reason=%s, message=%q",
+					ErrDeviceBindingFailed,
 					claim.Name,
 					failedCond.Reason,
 					failedCond.Message)
@@ -1354,7 +1413,7 @@ func (pl *DynamicResources) isPodReadyForBinding(state *stateData) (bool, error)
 		}
 		if !ready {
 			if pl.isClaimTimeout(claim) {
-				return false, fmt.Errorf("claim %s binding timeout", claim.Name)
+				return false, fmt.Errorf("%w: claim=%s", ErrDeviceBindingTimeout, claim.Name)
 			}
 			return false, nil
 		}
@@ -1412,4 +1471,131 @@ func getAllocatedDeviceStatus(claim *resourceapi.ResourceClaim, deviceRequest *r
 		}
 	}
 	return nil
+}
+
+// bindingConditionsStatusFormatter implements fmt.Stringer for lazy evaluation of device status formatting.
+// This avoids expensive processing when logging is disabled.
+type bindingConditionsStatusFormatter struct {
+	state       *stateData
+	statusLabel string
+}
+
+func (d bindingConditionsStatusFormatter) String() string {
+	return formatBCStatusOneLine(getBindingConditionsStatusForStatus(d.state, d.statusLabel))
+}
+
+// BindingConditionsStatus is a compact per-device summary for BindingConditions logging.
+type BindingConditionsStatus struct {
+	Driver  string   `json:"driver"`
+	Pool    string   `json:"pool"`
+	Device  string   `json:"device"`
+	Pending []string `json:"pending,omitempty"`
+	Failed  []string `json:"failed,omitempty"` // only failure conditions that are true
+}
+
+// listBindingConditionsStatus inspects ONE claim and returns a summary per allocated device
+// that has BindingConditions.
+// - Pending: BindingConditions that are not yet true (or all conditions if device status is missing)
+// - Failed: BindingFailureConditions that are true
+func listBindingConditionsStatus(claim *resourceapi.ResourceClaim) []BindingConditionsStatus {
+	if claim == nil || claim.Status.Allocation == nil {
+		return nil
+	}
+
+	var out []BindingConditionsStatus
+	for _, res := range claim.Status.Allocation.Devices.Results {
+		if len(res.BindingConditions) == 0 {
+			continue
+		}
+
+		sum := BindingConditionsStatus{
+			Driver: res.Driver,
+			Pool:   res.Pool,
+			Device: res.Device,
+		}
+
+		ds := getAllocatedDeviceStatus(claim, &res)
+		if ds == nil {
+			// No status yet => all BindingConditions are pending.
+			sum.Pending = append(sum.Pending, res.BindingConditions...)
+			out = append(out, sum)
+			continue
+		}
+
+		// Failed conditions that are true.
+		for _, c := range res.BindingFailureConditions {
+			if apimeta.IsStatusConditionTrue(ds.Conditions, c) {
+				sum.Failed = append(sum.Failed, c)
+			}
+		}
+
+		// Pending conditions: those not yet true.
+		for _, c := range res.BindingConditions {
+			if !apimeta.IsStatusConditionTrue(ds.Conditions, c) {
+				sum.Pending = append(sum.Pending, c)
+			}
+		}
+
+		out = append(out, sum)
+	}
+
+	return out
+}
+
+// getBindingConditionsStatusForStatus selects which devices to log across ALL claims in the state.
+func getBindingConditionsStatusForStatus(state *stateData, statusLabel string) []BindingConditionsStatus {
+	var out []BindingConditionsStatus
+	for _, claim := range state.claims.all() {
+		for _, s := range listBindingConditionsStatus(claim) {
+			switch statusLabel {
+			case schedmetrics.BindingConditionsStatusSuccess:
+				// success: show all BC devices
+				if len(s.Failed) == 0 && len(s.Pending) == 0 {
+					out = append(out, s)
+				}
+			case schedmetrics.BindingConditionsStatusFailed:
+				// failure: only devices that have at least one failure condition true
+				if len(s.Failed) > 0 {
+					out = append(out, BindingConditionsStatus{
+						Driver: s.Driver,
+						Pool:   s.Pool,
+						Device: s.Device,
+						Failed: append([]string(nil), s.Failed...),
+					})
+				}
+
+			case schedmetrics.BindingConditionsStatusTimeout:
+				// timeout/error: only devices still pending, and not failed
+				if len(s.Pending) > 0 && len(s.Failed) == 0 {
+					out = append(out, s)
+				}
+
+			default:
+				// Treat unknown like timeout/error
+				if len(s.Pending) > 0 && len(s.Failed) == 0 {
+					out = append(out, s)
+				}
+			}
+		}
+	}
+	return out
+}
+
+// formatBCStatusOneLine formats the selected devices into a single log-friendly line.
+func formatBCStatusOneLine(devs []BindingConditionsStatus) string {
+	if len(devs) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(devs))
+	for _, d := range devs {
+		base := fmt.Sprintf("<driver=%s, pool=%s> %s", d.Driver, d.Pool, d.Device)
+		if len(d.Failed) > 0 {
+			base += fmt.Sprintf(" failed=[%s]", strings.Join(d.Failed, ","))
+		}
+		if len(d.Pending) > 0 {
+			base += fmt.Sprintf(" pending=[%s]", strings.Join(d.Pending, ","))
+		}
+		parts = append(parts, base)
+	}
+	return strings.Join(parts, "; ")
 }

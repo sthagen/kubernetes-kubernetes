@@ -2354,6 +2354,15 @@
     running.
   release: "1.25"
   file: test/e2e/common/node/ephemeral_containers.go
+- testname: Image Volume
+  codename: '[sig-node] ImageVolume should succeed with pod and pull policy of Always
+    [LinuxOnly] [MinimumKubeletVersion:1.35] [Conformance]'
+  description: 'Create a Pod using an image volume and a pull policy of Always. This
+    test verifies that the image volume functionality is available by default and
+    works as intended. [LinuxOnly]: This test is marked as LinuxOnly since Windows
+    does not support image volumes.'
+  release: v1.36
+  file: test/e2e/common/node/image_volume.go
 - testname: init-container-starts-app-restartalways-pod
   codename: '[sig-node] InitContainer [NodeConformance] should invoke init containers
     on a RestartAlways pod [Conformance]'

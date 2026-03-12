@@ -643,6 +643,7 @@ func NewMainKubelet(ctx context.Context,
 		nodeStatusMaxImages:          nodeStatusMaxImages,
 		tracer:                       tracer,
 		nodeStartupLatencyTracker:    kubeDeps.NodeStartupLatencyTracker,
+		podStartupLatencyTracker:     kubeDeps.PodStartupLatencyTracker,
 		healthChecker:                kubeDeps.HealthChecker,
 		flagz:                        kubeDeps.Flagz,
 	}
@@ -795,10 +796,11 @@ func NewMainKubelet(ctx context.Context,
 		kubeCfg.MemorySwap.SwapBehavior,
 		kubeDeps.ContainerManager.GetNodeAllocatableAbsolute,
 		*kubeCfg.MemoryThrottlingFactor,
-		kubeDeps.PodStartupLatencyTracker,
+		klet.podStartupLatencyTracker,
 		kubeDeps.TracerProvider,
 		tokenManager,
 		getServiceAccount,
+		klet.podStartupLatencyTracker,
 	)
 	if err != nil {
 		return nil, err
@@ -1561,6 +1563,9 @@ type Kubelet struct {
 	// Track node startup latencies
 	nodeStartupLatencyTracker util.NodeStartupLatencyTracker
 
+	// Track pod startup latencies
+	podStartupLatencyTracker util.PodStartupLatencyTracker
+
 	// Health check kubelet
 	healthChecker watchdog.HealthChecker
 
@@ -1904,7 +1909,9 @@ func (kl *Kubelet) Run(ctx context.Context, updates <-chan kubetypes.PodUpdate) 
 
 		go kl.fastStatusUpdateOnce()
 
-		// start syncing lease
+		// Keep renewing the node lease until the kubelet exits.
+		// This intentionally does not use the kubelet context so lease renewal can
+		// continue during graceful shutdown.
 		go kl.nodeLeaseController.Run(context.Background())
 
 		// Mirror pods for static pods may not be created immediately during node startup

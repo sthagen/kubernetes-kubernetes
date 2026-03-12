@@ -531,7 +531,9 @@ func TestGetPods(t *testing.T) {
 
 	actualPod, err := m.GetPod(tCtx, pod.UID)
 	require.NoError(t, err)
-	assert.Equal(t, expectedPod, actualPod)
+	if !verifyPods([]*kubecontainer.Pod{expectedPod}, []*kubecontainer.Pod{actualPod}) {
+		t.Errorf("expected %#v, got %#v", expectedPod, actualPod)
+	}
 
 	_, err = m.GetPod(tCtx, "non-existent-uid")
 	assert.ErrorIs(t, err, kubecontainer.ErrPodNotFound)

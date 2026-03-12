@@ -97,13 +97,16 @@ func createTestClassWithSpec(tCtx ktesting.TContext, namespace string, spec *res
 	driverName := namespace + driverNameSuffix
 	class := class.DeepCopy()
 	class.Name = namespace + classNameSuffix
-	class.Spec.Selectors = []resourceapi.DeviceSelector{{
-		CEL: &resourceapi.CELDeviceSelector{
-			Expression: fmt.Sprintf("device.driver == %q", driverName),
-		},
-	}}
 	if spec != nil {
 		class.Spec = *spec
+	}
+	// If the caller didn't supply a selector, we add the one which selects by driver name.
+	if len(class.Spec.Selectors) == 0 {
+		class.Spec.Selectors = []resourceapi.DeviceSelector{{
+			CEL: &resourceapi.CELDeviceSelector{
+				Expression: fmt.Sprintf("device.driver == %q", driverName),
+			},
+		}}
 	}
 	class, err := tCtx.Client().ResourceV1().DeviceClasses().Create(tCtx, class, metav1.CreateOptions{})
 	tCtx.ExpectNoError(err, "create class")

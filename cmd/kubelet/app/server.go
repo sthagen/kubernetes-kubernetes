@@ -528,7 +528,7 @@ func UnsecuredDependencies(ctx context.Context, s *options.KubeletServer, featur
 		OOMAdjuster:         oom.NewOOMAdjuster(),
 		OSInterface:         kubecontainer.RealOS{},
 		VolumePlugins:       plugins,
-		DynamicPluginProber: GetDynamicPluginProber(s.VolumePluginDir, pluginRunner),
+		DynamicPluginProber: GetDynamicPluginProber(ctx, s.VolumePluginDir, pluginRunner),
 		TLSOptions:          tlsOptions}, nil
 }
 
@@ -557,12 +557,12 @@ func setConfigz(cz *configz.Config, kc *kubeletconfiginternal.KubeletConfigurati
 	if err != nil {
 		return err
 	}
-	versioned := kubeletconfigv1beta1.KubeletConfiguration{}
-	if err := scheme.Convert(kc, &versioned, nil); err != nil {
+	versioned := &kubeletconfigv1beta1.KubeletConfiguration{}
+	if err := scheme.Convert(kc, versioned, nil); err != nil {
 		return err
 	}
-	cz.Set(versioned)
-	return nil
+	versioned.GetObjectKind().SetGroupVersionKind(kubeletconfigv1beta1.SchemeGroupVersion.WithKind("KubeletConfiguration"))
+	return cz.Set(versioned)
 }
 
 func initConfigz(ctx context.Context, kc *kubeletconfiginternal.KubeletConfiguration) error {
