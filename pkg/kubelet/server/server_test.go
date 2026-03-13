@@ -50,8 +50,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/httpstream"
-	"k8s.io/apimachinery/pkg/util/httpstream/spdy"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -60,11 +58,13 @@ import (
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/tools/remotecommand"
+	remotecommand "k8s.io/client-go/tools/remotecommand"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 	statsapi "k8s.io/kubelet/pkg/apis/stats/v1alpha1"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/test/utils/ktesting"
+	"k8s.io/streaming/pkg/httpstream"
+	"k8s.io/streaming/pkg/httpstream/spdy"
 
 	// Do some initialization to decode the query parameters correctly.
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
@@ -75,9 +75,9 @@ import (
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/component-base/metrics/testutil"
 	zpagesfeatures "k8s.io/component-base/zpages/features"
-	"k8s.io/kubelet/pkg/cri/streaming"
-	"k8s.io/kubelet/pkg/cri/streaming/portforward"
-	remotecommandserver "k8s.io/kubelet/pkg/cri/streaming/remotecommand"
+	"k8s.io/cri-streaming/pkg/streaming"
+	"k8s.io/cri-streaming/pkg/streaming/portforward"
+	remotecommandserver "k8s.io/cri-streaming/pkg/streaming/remotecommand"
 	_ "k8s.io/kubernetes/pkg/apis/core/install"
 	"k8s.io/kubernetes/pkg/features"
 	kubeletconfiginternal "k8s.io/kubernetes/pkg/kubelet/apis/config"
@@ -180,16 +180,16 @@ func (fk *fakeKubelet) SyncLoopHealthCheck(req *http.Request) error {
 }
 
 type fakeRuntime struct {
-	execFunc        func(string, []string, io.Reader, io.WriteCloser, io.WriteCloser, bool, <-chan remotecommand.TerminalSize) error
-	attachFunc      func(string, io.Reader, io.WriteCloser, io.WriteCloser, bool, <-chan remotecommand.TerminalSize) error
+	execFunc        func(string, []string, io.Reader, io.WriteCloser, io.WriteCloser, bool, <-chan remotecommandserver.TerminalSize) error
+	attachFunc      func(string, io.Reader, io.WriteCloser, io.WriteCloser, bool, <-chan remotecommandserver.TerminalSize) error
 	portForwardFunc func(string, int32, io.ReadWriteCloser) error
 }
 
-func (f *fakeRuntime) Exec(_ context.Context, containerID string, cmd []string, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan remotecommand.TerminalSize) error {
+func (f *fakeRuntime) Exec(_ context.Context, containerID string, cmd []string, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan remotecommandserver.TerminalSize) error {
 	return f.execFunc(containerID, cmd, stdin, stdout, stderr, tty, resize)
 }
 
-func (f *fakeRuntime) Attach(_ context.Context, containerID string, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan remotecommand.TerminalSize) error {
+func (f *fakeRuntime) Attach(_ context.Context, containerID string, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan remotecommandserver.TerminalSize) error {
 	return f.attachFunc(containerID, stdin, stdout, stderr, tty, resize)
 }
 
@@ -1544,12 +1544,12 @@ func testExecAttach(t *testing.T, verb string) {
 				return nil
 			}
 
-			ss.fakeRuntime.execFunc = func(containerID string, cmd []string, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan remotecommand.TerminalSize) error {
+			ss.fakeRuntime.execFunc = func(containerID string, cmd []string, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan remotecommandserver.TerminalSize) error {
 				assert.Equal(t, expectedCommand, strings.Join(cmd, " "), "cmd")
 				return testStream(containerID, stdin, stdout, stderr, tty, done)
 			}
 
-			ss.fakeRuntime.attachFunc = func(containerID string, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan remotecommand.TerminalSize) error {
+			ss.fakeRuntime.attachFunc = func(containerID string, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan remotecommandserver.TerminalSize) error {
 				return testStream(containerID, stdin, stdout, stderr, tty, done)
 			}
 
@@ -1686,7 +1686,7 @@ func TestWebsocketExecAttach(t *testing.T) {
 		attachInvoked = true
 	}
 
-	ss.fakeRuntime.attachFunc = func(containerID string, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan remotecommand.TerminalSize) error {
+	ss.fakeRuntime.attachFunc = func(containerID string, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan remotecommandserver.TerminalSize) error {
 		defer close(done)
 		defer stdout.Close() //nolint:errcheck
 		_, err := io.Copy(stdout, stdin)
@@ -2271,7 +2271,7 @@ func TestGetExecWebSocketHandlerSelection(t *testing.T) {
 
 			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.ExtendWebSocketsToKubelet, tt.enableExtendWebSockets)
 
-			ss.fakeRuntime.execFunc = func(_ string, _ []string, _ io.Reader, stdout, _ io.WriteCloser, _ bool, _ <-chan remotecommand.TerminalSize) error {
+			ss.fakeRuntime.execFunc = func(_ string, _ []string, _ io.Reader, stdout, _ io.WriteCloser, _ bool, _ <-chan remotecommandserver.TerminalSize) error {
 				stdout.Close() //nolint:errcheck
 				return nil
 			}
@@ -2361,7 +2361,7 @@ func TestGetAttachWebSocketHandlerSelection(t *testing.T) {
 
 			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.ExtendWebSocketsToKubelet, tt.enableExtendWebSockets)
 
-			ss.fakeRuntime.attachFunc = func(_ string, _ io.Reader, stdout, _ io.WriteCloser, _ bool, _ <-chan remotecommand.TerminalSize) error {
+			ss.fakeRuntime.attachFunc = func(_ string, _ io.Reader, stdout, _ io.WriteCloser, _ bool, _ <-chan remotecommandserver.TerminalSize) error {
 				stdout.Close() //nolint:errcheck
 				return nil
 			}

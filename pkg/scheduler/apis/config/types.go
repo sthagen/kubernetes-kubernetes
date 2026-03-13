@@ -177,6 +177,9 @@ type Plugins struct {
 	// MultiPoint is a simplified config field for enabling plugins for all valid extension points
 	MultiPoint PluginSet
 
+	// PlacementGenerate is a list of plugins that should be invoked during pod group scheduling cycle when determining placements for a pod group.
+	PlacementGenerate PluginSet
+
 	// PlacementScore is a list of plugins that should be invoked during workload scheduling cycle when ranking pod group assignments.
 	PlacementScore PluginSet
 }
@@ -247,6 +250,7 @@ func (p *Plugins) Names() []string {
 		p.PostBind,
 		p.Permit,
 		p.QueueSort,
+		p.PlacementGenerate,
 		p.PlacementScore,
 	}
 	n := sets.New[string]()

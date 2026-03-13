@@ -668,6 +668,11 @@ const (
 	// Enables ordered namespace deletion.
 	OrderedNamespaceDeletion featuregate.Feature = "OrderedNamespaceDeletion"
 
+	// owner: @tallclair
+	//
+	// Enables relisting individual pods on-demand.
+	PLEGOnDemandRelist featuregate.Feature = "PLEGOnDemandRelist"
+
 	// owner: @haircommander
 	// kep: https://kep.k8s.io/2364
 	//
@@ -1261,10 +1266,12 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	DRADeviceTaintRules: {
 		{Version: version.MustParse("1.35"), Default: false, PreRelease: featuregate.Alpha},
+		{Version: version.MustParse("1.36"), Default: false, PreRelease: featuregate.Beta}, // Depends on an off-by-default beta API.
 	},
 
 	DRADeviceTaints: {
 		{Version: version.MustParse("1.33"), Default: false, PreRelease: featuregate.Alpha},
+		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Beta},
 	},
 
 	DRAExtendedResource: {
@@ -1618,6 +1625,10 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.34"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.37
 	},
 
+	PLEGOnDemandRelist: {
+		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Beta},
+	},
+
 	PodAndContainerStatsFromCRI: {
 		{Version: version.MustParse("1.23"), Default: false, PreRelease: featuregate.Alpha},
 	},
@@ -1939,6 +1950,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.25"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.30"), Default: false, PreRelease: featuregate.Beta},
 		{Version: version.MustParse("1.33"), Default: true, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.39.
 	},
 
 	VolumeAttributesClass: {
@@ -2404,6 +2416,8 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 	OpportunisticBatching: {},
 
 	OrderedNamespaceDeletion: {},
+
+	PLEGOnDemandRelist: {},
 
 	PodAndContainerStatsFromCRI: {},
 

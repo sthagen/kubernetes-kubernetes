@@ -1141,7 +1141,7 @@ func TestSchedulerScheduleOne(t *testing.T) {
 			PodGroupManager:                        pgm,
 			nominatedNodeNameForExpectationEnabled: features.nominatedNodeNameForExpectationEnabled,
 		}
-		queue.Add(logger, item.sendPod)
+		queue.Add(ctx, item.sendPod)
 
 		sched.SchedulePod = func(ctx context.Context, fwk framework.Framework, state fwk.CycleState, podInfo *framework.QueuedPodInfo) (ScheduleResult, error) {
 			return item.mockScheduleResult, item.injectSchedulingError
@@ -1520,7 +1520,7 @@ func TestSignatures(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			signature := schedFramework.SignPod(ctx, podWithID("foo", ""), true)
+			signature := schedFramework.SignPod(ctx, podWithID("foo", ""))
 			if !bytes.Equal(signature, item.expectedSignature) {
 				t.Fatal(fmt.Errorf("Test %s got signature %s, expected %s", item.name, signature, item.expectedSignature))
 			}
@@ -1775,7 +1775,7 @@ func TestScheduleOneMarksPodAsProcessedBeforePreBind(t *testing.T) {
 						Profiles:        profile.Map{testSchedulerName: schedFramework},
 						APIDispatcher:   apiDispatcher,
 					}
-					queue.Add(logger, item.sendPod)
+					queue.Add(ctx, item.sendPod)
 
 					sched.SchedulePod = func(ctx context.Context, fwk framework.Framework, state fwk.CycleState, podInfo *framework.QueuedPodInfo) (ScheduleResult, error) {
 						return item.mockScheduleResult, item.injectSchedulingError
@@ -3726,7 +3726,8 @@ func TestFindFitAllError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, diagnosis, _, _, err := scheduler.findNodesThatFitPod(ctx, schedFramework, framework.NewCycleState(), &v1.Pod{})
+	podInfo := queuedPodInfoForPod(&v1.Pod{})
+	_, diagnosis, _, err := scheduler.findNodesThatFitPod(ctx, schedFramework, framework.NewCycleState(), podInfo)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -3772,7 +3773,8 @@ func TestFindFitSomeError(t *testing.T) {
 	}
 
 	pod := st.MakePod().Name("1").UID("1").Obj()
-	_, diagnosis, _, _, err := scheduler.findNodesThatFitPod(ctx, fwk, framework.NewCycleState(), pod)
+	podInfo := queuedPodInfoForPod(pod)
+	_, diagnosis, _, err := scheduler.findNodesThatFitPod(ctx, fwk, framework.NewCycleState(), podInfo)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -3867,7 +3869,8 @@ func TestFindFitPredicateCallCounts(t *testing.T) {
 			}
 			schedFramework.AddNominatedPod(logger, podinfo, &fwk.NominatingInfo{NominatingMode: fwk.ModeOverride, NominatedNodeName: "1"})
 
-			_, _, _, _, err = scheduler.findNodesThatFitPod(ctx, schedFramework, framework.NewCycleState(), test.pod)
+			podInfo := queuedPodInfoForPod(test.pod)
+			_, _, _, err = scheduler.findNodesThatFitPod(ctx, schedFramework, framework.NewCycleState(), podInfo)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -4390,7 +4393,8 @@ func TestFairEvaluationForNodes(t *testing.T) {
 
 	// Iterating over all nodes more than twice
 	for i := 0; i < 2*(numAllNodes/nodesToFind+1); i++ {
-		nodesThatFit, _, _, _, err := sched.findNodesThatFitPod(ctx, fwk, framework.NewCycleState(), &v1.Pod{})
+		podInfo := queuedPodInfoForPod(&v1.Pod{})
+		nodesThatFit, _, _, err := sched.findNodesThatFitPod(ctx, fwk, framework.NewCycleState(), podInfo)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -4474,7 +4478,8 @@ func TestPreferNominatedNodeFilterCallCounts(t *testing.T) {
 			}
 			sched.applyDefaultHandlers()
 
-			_, _, _, _, err = sched.findNodesThatFitPod(ctx, fwk, framework.NewCycleState(), test.pod)
+			podInfo := queuedPodInfoForPod(test.pod)
+			_, _, _, err = sched.findNodesThatFitPod(ctx, fwk, framework.NewCycleState(), podInfo)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}

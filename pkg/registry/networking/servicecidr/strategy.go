@@ -19,6 +19,8 @@ package servicecidr
 import (
 	"context"
 
+	"sigs.k8s.io/structured-merge-diff/v6/fieldpath"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -27,7 +29,6 @@ import (
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/apis/networking"
 	"k8s.io/kubernetes/pkg/apis/networking/validation"
-	"sigs.k8s.io/structured-merge-diff/v6/fieldpath"
 )
 
 // serviceCIDRStrategy implements verification logic for ServiceCIDR allocators.
@@ -54,10 +55,10 @@ func (serviceCIDRStrategy) NamespaceScoped() bool {
 // and should not be modified by the user.
 func (serviceCIDRStrategy) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {
 	fields := map[fieldpath.APIVersion]*fieldpath.Set{
-		"networking/v1": fieldpath.NewSet(
+		"networking.k8s.io/v1": fieldpath.NewSet(
 			fieldpath.MakePathOrDie("status"),
 		),
-		"networking/v1beta1": fieldpath.NewSet(
+		"networking.k8s.io/v1beta1": fieldpath.NewSet(
 			fieldpath.MakePathOrDie("status"),
 		),
 	}
@@ -128,10 +129,10 @@ var StatusStrategy = serviceCIDRStatusStrategy{Strategy}
 // and should not be modified by the user.
 func (serviceCIDRStatusStrategy) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {
 	fields := map[fieldpath.APIVersion]*fieldpath.Set{
-		"networking/v1": fieldpath.NewSet(
+		"networking.k8s.io/v1": fieldpath.NewSet(
 			fieldpath.MakePathOrDie("spec"),
 		),
-		"networking/v1beta1": fieldpath.NewSet(
+		"networking.k8s.io/v1beta1": fieldpath.NewSet(
 			fieldpath.MakePathOrDie("spec"),
 		),
 	}

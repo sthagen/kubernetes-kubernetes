@@ -34,7 +34,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	resourceapi "k8s.io/api/resource/v1"
-	resourcealphaapi "k8s.io/api/resource/v1alpha3"
 	resourcev1beta1 "k8s.io/api/resource/v1beta1"
 	resourcev1beta2 "k8s.io/api/resource/v1beta2"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -2092,17 +2091,17 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 
 			// Now evict it.
 			ginkgo.By("Evicting pod...")
-			taint := &resourcealphaapi.DeviceTaintRule{
+			taint := &resourcev1beta2.DeviceTaintRule{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "device-taint-rule-" + f.UniqueName + "-",
 				},
-				Spec: resourcealphaapi.DeviceTaintRuleSpec{
+				Spec: resourcev1beta2.DeviceTaintRuleSpec{
 					// All devices of the current driver instance.
-					DeviceSelector: &resourcealphaapi.DeviceTaintSelector{
+					DeviceSelector: &resourcev1beta2.DeviceTaintSelector{
 						Driver: &driver.Name,
 					},
-					Taint: resourcealphaapi.DeviceTaint{
-						Effect: resourcealphaapi.DeviceTaintEffectNoExecute,
+					Taint: resourcev1beta2.DeviceTaint{
+						Effect: resourcev1beta2.DeviceTaintEffectNoExecute,
 						Key:    "test.example.com/evict",
 						Value:  "now",
 						// No TimeAdded, gets defaulted.
@@ -2110,7 +2109,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 				},
 			}
 			createdTaint := b.Create(tCtx, taint)
-			taint = createdTaint[0].(*resourcealphaapi.DeviceTaintRule)
+			taint = createdTaint[0].(*resourcev1beta2.DeviceTaintRule)
 			gomega.Expect(*taint).Should(gomega.HaveField("Spec.Taint.TimeAdded.Time", gomega.BeTemporally("~", time.Now(), time.Minute /* allow for some clock drift and delays */)))
 			framework.ExpectNoError(e2epod.WaitForPodTerminatingInNamespaceTimeout(ctx, f.ClientSet, pod.Name, f.Namespace.Name, f.Timeouts.PodStart))
 			pod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(ctx, pod.Name, metav1.GetOptions{})
@@ -2237,12 +2236,15 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 		}).WithTimeout(time.Minute).Should(gomega.BeTrueBecause("extended resource claim should be automatically deleted when pod %s", cleanupMessage))
 	}
 
-	framework.Context(f.WithFeatureGate(features.DRAExtendedResource), feature.DynamicResourceAllocation, f.WithKubeletMinVersion("1.36"), func() {
+	// Any test using implicit resource names (aka <class>.deviceclass.resource.k8s.io/devices) is limited
+	// to kubelet >= 1.35 because there was a bug in 1.34. Other tests can run with kubelet >= 1.34 when
+	// the feature was introduced.
+	framework.Context(f.WithFeatureGate(features.DRAExtendedResource), feature.DynamicResourceAllocation, func() {
 		nodes := drautils.NewNodes(f, 1, 1)
 		driver := drautils.NewDriver(f, nodes, drautils.NetworkResources(10, false))
 		b := drautils.NewBuilder(f, driver)
 
-		ginkgo.It("must run a pod with extended resource with resource quota", func(ctx context.Context) {
+		ginkgo.It("must run a pod with extended resource with resource quota", f.WithKubeletMinVersion("1.35"), func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
 			resourceName := b.ExtendedResourceName("quota")
 			class := b.ClassWithExtendedResource(resourceName)
@@ -2347,7 +2349,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			framework.ExpectNoError(err)
 		})
 
-		ginkgo.It("must run a pod with both implicit and explicit extended resource with one container two resources", func(ctx context.Context) {
+		ginkgo.It("must run a pod with both implicit and explicit extended resource with one container two resources", f.WithKubeletMinVersion("1.35"), func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
 			resourceName := b.ExtendedResourceName("one-container-two-resources")
 			class := b.ClassWithExtendedResource(resourceName)
@@ -2364,15 +2366,13 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			})
 		})
 
-		ginkgo.It("must run a pod with extended resource with one container one resource", func(ctx context.Context) {
+		ginkgo.It("must run a pod with explicit extended resource with one container one resource", f.WithKubeletMinVersion("1.34"), func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
 			resourceName := b.ExtendedResourceName("one-container-one-resource")
 			class := b.ClassWithExtendedResource(resourceName)
 			b.Create(tCtx, class)
 
 			extendedResourceTest(ctx, b, f, []string{
-				// implicit extended resource name
-				resourceapi.ResourceDeviceClassPrefix + class.Name,
 				// explicit extended resource name
 				resourceName,
 			}, []string{
@@ -2380,7 +2380,16 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			})
 		})
 
-		ginkgo.It("must run a pod with extended resource with one container three resources", func(ctx context.Context) {
+		ginkgo.It("must run a pod with implicit extended resource with one container one resource", f.WithKubeletMinVersion("1.35"), func(ctx context.Context) {
+			extendedResourceTest(ctx, b, f, []string{
+				// implicit extended resource name
+				resourceapi.ResourceDeviceClassPrefix + b.ClassName(),
+			}, []string{
+				"container_3_request_0", "true",
+			})
+		})
+
+		ginkgo.It("must run a pod with explicit extended resource with one container three resources", f.WithKubeletMinVersion("1.34"), func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
 			resourceName := b.ExtendedResourceName("one-container-three-resources")
 			var objects []klog.KMetadata
@@ -2398,7 +2407,8 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 				"container_3_request_2", "true",
 			})
 		})
-		ginkgo.It("must run a pod with extended resource with three containers one resource each", func(ctx context.Context) {
+
+		ginkgo.It("must run a pod with explicit extended resource with three containers one resource each", f.WithKubeletMinVersion("1.34"), func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
 			var objects []klog.KMetadata
 			pod := b.Pod()
@@ -2429,7 +2439,8 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 				drautils.TestContainerEnv(tCtx, pod, pod.Spec.Containers[i].Name, false, containerEnv...)
 			}
 		})
-		ginkgo.It("must run a pod with extended resource with three containers multiple resources each", func(ctx context.Context) {
+
+		ginkgo.It("must run a pod with explicit extended resource with three containers multiple resources each", f.WithKubeletMinVersion("1.34"), func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
 			var objects []klog.KMetadata
 			pod := b.Pod()
@@ -2481,7 +2492,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			drautils.TestContainerEnv(tCtx, pod, pod.Spec.Containers[2].Name, false, containerEnv...)
 		})
 
-		ginkgo.It("must cleanup extended resource claims when pods complete", func(ctx context.Context) {
+		ginkgo.It("must cleanup extended resource claims when pods complete", f.WithKubeletMinVersion("1.34"), func(ctx context.Context) {
 			runExtendedClaimCleanup(ctx, b,
 				"echo 'Pod started with extended resource'; sleep 2; echo 'Pod completed successfully'",
 				func(ctx context.Context, p *v1.Pod) error {
@@ -2491,7 +2502,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			)
 		})
 
-		ginkgo.It("must cleanup extended resource claims when pods fail", func(ctx context.Context) {
+		ginkgo.It("must cleanup extended resource claims when pods fail", f.WithKubeletMinVersion("1.34"), func(ctx context.Context) {
 			runExtendedClaimCleanup(ctx, b,
 				"echo 'Pod started with extended resource'; sleep 2; echo 'Pod failing now'; exit 1",
 				func(ctx context.Context, p *v1.Pod) error {
@@ -2502,7 +2513,9 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 				"fails",
 			)
 		})
-		f.It("process extended resources after device plugin uninstall", f.WithSerial(), func(ctx context.Context) {
+
+		// 1.35 because of https://github.com/kubernetes/kubernetes/issues/133488.
+		f.It("process extended resources after device plugin uninstall", f.WithSerial(), f.WithKubeletMinVersion("1.35"), func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
 			resourceName := e2enode.SampleDeviceResourceName
 			extendedResourceName := deployDevicePlugin(tCtx, f, nodes.NodeNames[0:1], false)
@@ -2532,7 +2545,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			drautils.TestContainerEnv(tCtx, pod, pod.Spec.Containers[0].Name, false, containerEnv...)
 		})
 
-		ginkgo.It("must prevent overcommitment of extended resources", func(ctx context.Context) {
+		ginkgo.It("must prevent overcommitment of extended resources", f.WithKubeletMinVersion("1.34"), func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
 			resourceName := b.ExtendedResourceName("overcommitment")
 			// Create a device class with extended resource
@@ -2569,7 +2582,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			drautils.TestContainerEnv(tCtx, pod2, pod2.Spec.Containers[0].Name, false, containerEnv...)
 		})
 
-		ginkgo.It("must reject pod with invalid extended resource name", func(ctx context.Context) {
+		ginkgo.It("must reject pod with invalid extended resource name", f.WithKubeletMinVersion("1.34"), func(ctx context.Context) {
 			pod := b.Pod()
 			res := v1.ResourceList{
 				v1.ResourceName("invalid_resource_name"): resource.MustParse("1"),
@@ -2582,7 +2595,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			gomega.Expect(apierrors.IsInvalid(err)).Should(gomega.BeTrueBecause("pod with invalid extended resource name should be rejected"))
 		})
 
-		ginkgo.It("must accurately populate ExtendedResourceClaimStatus", func(ctx context.Context) {
+		ginkgo.It("must accurately populate ExtendedResourceClaimStatus", f.WithKubeletMinVersion("1.34"), func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
 			pod := b.Pod()
 			resource0 := b.ExtendedResourceName("claimstatus0")
@@ -2625,7 +2638,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			}
 		})
 
-		f.It("must run a pod with extended resource requesting zero", func(ctx context.Context) {
+		f.It("must run a pod with extended resource requesting zero", f.WithKubeletMinVersion("1.34"), func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
 
 			resourceName := b.ExtendedResourceName("zero")
@@ -2649,7 +2662,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			gomega.Expect(updatedPod.Status.ExtendedResourceClaimStatus).Should(gomega.BeNil())
 		})
 
-		f.It("must process extended resource after Device Class creation", func(ctx context.Context) {
+		f.It("must process extended resource after Device Class creation", f.WithKubeletMinVersion("1.34"), func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
 			resourceName := b.ExtendedResourceName("after-device-class-creation")
 			res := v1.ResourceList{v1.ResourceName(resourceName): resource.MustParse("1")}
@@ -2674,7 +2687,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 		})
 	})
 
-	framework.Context(f.WithFeatureGate(features.DRAExtendedResource), feature.DynamicResourceAllocation, f.WithKubeletMinVersion("1.36"), func() {
+	framework.Context(f.WithFeatureGate(features.DRAExtendedResource), feature.DynamicResourceAllocation, func() {
 		nodes := drautils.NewNodes(f, 2, 2)
 		nodes.NumReservedNodes = 1
 		driver := drautils.NewDriver(f, nodes, drautils.NetworkResources(2, false))
@@ -2685,7 +2698,9 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 		// is deployed device plugin for the test, therefore it is marked as serial.
 		// The test runs two pods, one pod request extended resource backed by DRA,
 		// the other pod requests extended resource by device plugin.
-		f.It("must run pods with extended resource on dra nodes and device plugin nodes", f.WithSerial(), func(ctx context.Context) {
+		//
+		// 1.35 because of https://github.com/kubernetes/kubernetes/issues/133488.
+		f.It("must run pods with extended resource on dra nodes and device plugin nodes", f.WithSerial(), f.WithKubeletMinVersion("1.35"), func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
 			var objects []klog.KMetadata
 			extendedResourceName := deployDevicePlugin(tCtx, f, nodes.ExtraNodeNames, false)

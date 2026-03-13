@@ -122,6 +122,10 @@ func (f *FakeRuntimeHelper) RequestPodReinspect(_ kubetypes.UID) {
 	// Not implemented.
 }
 
+func (f *FakeRuntimeHelper) RequestPodRelist(_ kubetypes.UID) {
+	// Not implemented.
+}
+
 func (f *FakeRuntimeHelper) PodCPUAndMemoryStats(_ context.Context, pod *v1.Pod, _ *kubecontainer.PodStatus) (*statsapi.PodStats, error) {
 	if stats, ok := f.PodStats[pod.UID]; ok {
 		return stats, nil

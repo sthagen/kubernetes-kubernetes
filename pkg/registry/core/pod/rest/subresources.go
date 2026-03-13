@@ -24,7 +24,6 @@ import (
 	"slices"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/httpstream/wsstream"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/proxy"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
@@ -38,6 +37,7 @@ import (
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/client"
 	"k8s.io/kubernetes/pkg/registry/core/pod"
+	"k8s.io/streaming/pkg/httpstream/wsstream"
 )
 
 // ProxyREST implements the proxy subresource for a Pod

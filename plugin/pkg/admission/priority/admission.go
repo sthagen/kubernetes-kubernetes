@@ -162,28 +162,11 @@ func (p *Plugin) admitPod(a admission.Attributes) error {
 	if operation == admission.Create {
 		var priority int32
 		var preemptionPolicy *apiv1.PreemptionPolicy
-		if len(pod.Spec.PriorityClassName) == 0 {
-			var err error
-			var pcName string
-			pcName, priority, preemptionPolicy, err = p.getDefaultPriority()
-			if err != nil {
-				return fmt.Errorf("failed to get default priority class: %v", err)
-			}
-			pod.Spec.PriorityClassName = pcName
-		} else {
-			// Try resolving the priority class name.
-			pc, err := p.lister.Get(pod.Spec.PriorityClassName)
-			if err != nil {
-				if errors.IsNotFound(err) {
-					return admission.NewForbidden(a, fmt.Errorf("no PriorityClass with name %v was found", pod.Spec.PriorityClassName))
-				}
-
-				return fmt.Errorf("failed to get PriorityClass with name %s: %v", pod.Spec.PriorityClassName, err)
-			}
-
-			priority = pc.Value
-			preemptionPolicy = pc.PreemptionPolicy
+		pcName, priority, preemptionPolicy, err := p.establishPriority(a, &pod.Spec.PriorityClassName)
+		if err != nil {
+			return err
 		}
+		pod.Spec.PriorityClassName = pcName
 		// if the pod contained a priority that differs from the one computed from the priority class, error
 		if pod.Spec.Priority != nil && *pod.Spec.Priority != priority {
 			return admission.NewForbidden(a, fmt.Errorf("the integer value of priority (%d) must not be provided in pod spec; priority admission controller computed %d from the given PriorityClass name", *pod.Spec.Priority, priority))
@@ -225,6 +208,28 @@ func (p *Plugin) validatePriorityClass(a admission.Attributes) error {
 	return nil
 }
 
+// establishPriority is an auxiliary method for calculating the priority-specific fields
+// based on the provided priority class name.
+// If the provided name is empty, we fall back to getting the default priority class and
+// returning information contained there.
+// If the provided name is not empty, we get the priority class with such name and return
+// the information contained in that class.
+func (p *Plugin) establishPriority(attributes admission.Attributes, priorityClassName *string) (string, int32, *apiv1.PreemptionPolicy, error) {
+	if priorityClassName == nil || *priorityClassName == "" {
+		pcName, priority, preemptionPolicy, err := p.getDefaultPriority()
+		if err != nil {
+			return "", 0, nil, fmt.Errorf("error occurred while retrieving default priority class: %w", err)
+		}
+		return pcName, priority, preemptionPolicy, nil
+	}
+	// Try resolving the priority class name.
+	pc, err := p.resolvePriorityClass(attributes, *priorityClassName)
+	if err != nil {
+		return "", 0, nil, err
+	}
+	return *priorityClassName, pc.Value, pc.PreemptionPolicy, nil
+}
+
 func (p *Plugin) getDefaultPriorityClass() (*schedulingv1.PriorityClass, error) {
 	list, err := p.lister.List(labels.Everything())
 	if err != nil {
@@ -253,4 +258,15 @@ func (p *Plugin) getDefaultPriority() (string, int32, *apiv1.PreemptionPolicy, e
 	}
 	preemptLowerPriority := apiv1.PreemptLowerPriority
 	return "", int32(scheduling.DefaultPriorityWhenNoDefaultClassExists), &preemptLowerPriority, nil
+}
+
+func (p *Plugin) resolvePriorityClass(attributes admission.Attributes, priorityClassName string) (*schedulingv1.PriorityClass, error) {
+	priorityClass, err := p.lister.Get(priorityClassName)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil, admission.NewForbidden(attributes, fmt.Errorf("no PriorityClass with name %v was found", priorityClassName))
+		}
+		return nil, fmt.Errorf("failed to resolve PriorityClass with name %s: %w", priorityClassName, err)
+	}
+	return priorityClass, nil
 }

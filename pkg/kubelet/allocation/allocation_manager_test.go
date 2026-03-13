@@ -158,7 +158,15 @@ func TestUpdatePodFromAllocation(t *testing.T) {
 			v1.ResourceMemory: *resource.NewQuantity(2500, resource.DecimalSI),
 		},
 	}
+
+	podWithPodLevelResourcesAndOverhead := podWithPodLevelResources.DeepCopy()
+	podWithPodLevelResourcesAndOverhead.Spec.Overhead = v1.ResourceList{
+		v1.ResourceCPU:    *resource.NewMilliQuantity(100, resource.DecimalSI),
+		v1.ResourceMemory: *resource.NewQuantity(200, resource.DecimalSI),
+	}
+
 	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.NodeDeclaredFeatures, true)
+
 	tests := []struct {
 		name                         string
 		pod                          *v1.Pod
@@ -249,6 +257,14 @@ func TestUpdatePodFromAllocation(t *testing.T) {
 		},
 		expectUpdate:                 true,
 		expectPod:                    resizedPodWithPodLevelResources,
+		inPlacePodLevelResizeEnabled: true,
+	}, {
+		name: "pod-level resources with overhead, checkpoint matches spec (no overhead stored)",
+		pod:  podWithPodLevelResourcesAndOverhead,
+		allocated: state.PodResourceInfo{
+			PodLevelResources: podWithPodLevelResourcesAndOverhead.Spec.Resources.DeepCopy(),
+		},
+		expectUpdate:                 false,
 		inPlacePodLevelResizeEnabled: true,
 	}, {
 		name: "resized pod-level resources with feature gate disabled",
@@ -1522,6 +1538,11 @@ func TestAllocationManagerAddPodWithPLR(t *testing.T) {
 
 	pod1SmallWithPLR := pod1Small.DeepCopy()
 	pod1SmallWithPLR.Spec.Resources = &v1.ResourceRequirements{Requests: cpu1Mem1G}
+	pod1SmallWithPLRAndOverhead := pod1SmallWithPLR.DeepCopy()
+	pod1SmallWithPLRAndOverhead.Spec.Overhead = v1.ResourceList{
+		v1.ResourceCPU:    resource.MustParse("100m"),
+		v1.ResourceMemory: resource.MustParse("200Mi"),
+	}
 	pod1LargeWithPLR := pod1Large.DeepCopy()
 	pod1LargeWithPLR.Spec.Resources = &v1.ResourceRequirements{Requests: cpu2Mem2G}
 	pod2SmallWithPLR := pod2Small.DeepCopy()
@@ -1554,6 +1575,17 @@ func TestAllocationManagerAddPodWithPLR(t *testing.T) {
 			admitFunc:                      nil,
 			expectAdmit:                    true,
 			// allocated resources updated with pod1's resources
+			expectedAllocatedResourcesState: map[types.UID]resourceState{pod1UID: {podResources: cpu1Mem1G, containerResources: cpu1Mem1G}},
+			ipprPLRFeatureGate:              true,
+		},
+		{
+			name:                           "PLR IPPR Enabled - New pod with overhead admitted and allocated resources updated without overhead",
+			initialAllocatedResourcesState: map[types.UID]resourceState{},
+			currentActivePods:              []*v1.Pod{},
+			podToAdd:                       pod1SmallWithPLRAndOverhead,
+			admitFunc:                      nil,
+			expectAdmit:                    true,
+			// allocated resources updated with pod1's resources, excluding overhead
 			expectedAllocatedResourcesState: map[types.UID]resourceState{pod1UID: {podResources: cpu1Mem1G, containerResources: cpu1Mem1G}},
 			ipprPLRFeatureGate:              true,
 		},

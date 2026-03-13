@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
-	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 )
 
 // PodLifeCycleEventType define the event type of pod life cycle events.
@@ -68,6 +67,8 @@ type PodLifecycleEventGenerator interface {
 	Healthy() (bool, error)
 	// RequestReinspect flags the pod for reinspection on the next Relist iteration.
 	RequestReinspect(podUID types.UID)
+	// RequestRelist queues up the pod for an on-demand relist.
+	RequestRelist(podUID types.UID)
 }
 
 // podLifecycleEventGeneratorHandler contains functions that are useful for different PLEGs
@@ -77,20 +78,4 @@ type podLifecycleEventGeneratorHandler interface {
 	Stop()
 	Update(relistDuration *RelistDuration)
 	Relist()
-}
-
-// WatchCondition takes the latest PodStatus, and returns whether the condition is met.
-type WatchCondition = func(*kubecontainer.PodStatus) bool
-
-// RunningContainerWatchCondition wraps a condition on the container status to make a pod
-// WatchCondition. If the container is no longer running, the condition is implicitly cleared.
-func RunningContainerWatchCondition(containerName string, condition func(*kubecontainer.Status) bool) WatchCondition {
-	return func(podStatus *kubecontainer.PodStatus) bool {
-		status := podStatus.FindContainerStatusByName(containerName)
-		if status == nil || status.State != kubecontainer.ContainerStateRunning {
-			// Container isn't running. Consider the condition "completed" so it is cleared.
-			return true
-		}
-		return condition(status)
-	}
 }

@@ -57,6 +57,7 @@ func pluginsNames(p *configv1.Plugins) []string {
 		p.Permit,
 		p.PreEnqueue,
 		p.QueueSort,
+		p.PlacementGenerate,
 		p.PlacementScore,
 	}
 	n := sets.New[string]()

@@ -75,6 +75,7 @@ type frameworkImpl struct {
 	permitPlugins        []fwk.PermitPlugin
 	batchablePlugins     []fwk.SignPlugin
 
+	placementGeneratePlugins   []fwk.PlacementGeneratePlugin
 	placementScorePlugins      []fwk.PlacementScorePlugin
 	placementScorePluginWeight map[string]int
 
@@ -133,6 +134,7 @@ func (f *frameworkImpl) getExtensionPoints(plugins *config.Plugins) []extensionP
 		{&plugins.Permit, &f.permitPlugins},
 		{&plugins.PreEnqueue, &f.preEnqueuePlugins},
 		{&plugins.QueueSort, &f.queueSortPlugins},
+		{&plugins.PlacementGenerate, &f.placementGeneratePlugins},
 		{&plugins.PlacementScore, &f.placementScorePlugins},
 	}
 }
@@ -352,7 +354,7 @@ func NewFramework(ctx context.Context, r Registry, profile *config.KubeScheduler
 	}
 
 	if utilfeature.DefaultFeatureGate.Enabled(features.OpportunisticBatching) {
-		f.batch = newOpportunisticBatch(f, signUsingFramework)
+		f.batch = newOpportunisticBatch(f)
 	}
 
 	if len(f.extenders) > 0 {
@@ -433,6 +435,9 @@ func NewFramework(ctx context.Context, r Registry, profile *config.KubeScheduler
 	}
 	if len(f.bindPlugins) == 0 {
 		return nil, fmt.Errorf("at least one bind plugin is needed for profile with scheduler name %q", profile.SchedulerName)
+	}
+	if len(f.placementGeneratePlugins) > 1 {
+		return nil, fmt.Errorf("at most one placement generate plugin is allowed for profile with scheduler name %q", profile.SchedulerName)
 	}
 
 	podScoreWeights, err := getValidScoreWeights(f, reflect.TypeFor[fwk.ScorePlugin](), append(profile.Plugins.Score.Enabled, profile.Plugins.MultiPoint.Enabled...))
@@ -849,16 +854,14 @@ func (f *frameworkImpl) computeBatchablePlugins() {
 // is unable to construct a signature for the pod, the result will be nil, which means
 // there is no way to compare this pod against others, and will turn off a number of optimizations
 // for this pod.
-func (f *frameworkImpl) SignPod(ctx context.Context, pod *v1.Pod, recordPluginStats bool) fwk.PodSignature {
+func (f *frameworkImpl) SignPod(ctx context.Context, pod *v1.Pod) fwk.PodSignature {
 	logger := klog.FromContext(ctx)
 	var status *fwk.Status
 
-	if recordPluginStats {
-		startTime := time.Now()
-		defer func() {
-			metrics.FrameworkExtensionPointDuration.WithLabelValues(metrics.Sign, status.Code().String(), f.profileName).Observe(metrics.SinceInSeconds(startTime))
-		}()
-	}
+	startTime := time.Now()
+	defer func() {
+		f.metricsRecorder.ObserveFrameworkExtensionPointDurationAsync(metrics.Sign, status.Code().String(), f.profileName, metrics.SinceInSeconds(startTime))
+	}()
 
 	if !f.enableSignatures {
 		return nil
@@ -1575,8 +1578,8 @@ func (f *frameworkImpl) runPlacementScoreExtension(ctx context.Context, pl fwk.P
 	return status
 }
 
-func (f *frameworkImpl) GetNodeHint(ctx context.Context, pod *v1.Pod, state fwk.CycleState, cycleCount int64) (hint string, signature fwk.PodSignature) {
-	return f.batch.GetNodeHint(ctx, pod, state, cycleCount)
+func (f *frameworkImpl) GetNodeHint(ctx context.Context, pod *v1.Pod, signature fwk.PodSignature, state fwk.CycleState, cycleCount int64) string {
+	return f.batch.GetNodeHint(ctx, pod, signature, state, cycleCount)
 }
 
 func (f *frameworkImpl) StoreScheduleResults(ctx context.Context, signature fwk.PodSignature, hintedNode, chosenNode string, otherNodes framework.SortedScoredNodes, cycleCount int64) {
@@ -1983,6 +1986,46 @@ func (f *frameworkImpl) AddWaitingPod(pod *v1.Pod, pluginsWaitTime map[string]ti
 	f.waitingPods.add(waitingPod)
 }
 
+// RunPlacementGeneratePlugins runs the set of configured PlacementGeneratePlugins and returns the generated placements.
+// If no plugins are defined, the input placement is returned instead.
+func (f *frameworkImpl) RunPlacementGeneratePlugins(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, nodes []fwk.NodeInfo) (placements []*fwk.Placement, status *fwk.Status) {
+	startTime := time.Now()
+	defer func() {
+		metrics.FrameworkExtensionPointDuration.WithLabelValues(metrics.PlacementGenerate, status.Code().String(), f.profileName).Observe(metrics.SinceInSeconds(startTime))
+	}()
+
+	placement := &fwk.Placement{
+		Nodes: nodes,
+	}
+
+	if len(f.placementGeneratePlugins) == 0 {
+		return []*fwk.Placement{placement}, nil
+	}
+
+	plugin := f.placementGeneratePlugins[0]
+
+	result, status := f.runPlacementGeneratePlugin(ctx, plugin, state, podGroup, placement)
+	if !status.IsSuccess() {
+		return nil, status.WithPlugin(plugin.Name())
+	}
+
+	if len(result.Placements) == 0 {
+		return nil, fwk.NewStatus(fwk.Unschedulable, "no feasible placements found").WithPlugin(plugin.Name())
+	}
+
+	return result.Placements, nil
+}
+
+func (f *frameworkImpl) runPlacementGeneratePlugin(ctx context.Context, pl fwk.PlacementGeneratePlugin, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacement *fwk.Placement) (*fwk.GeneratePlacementsResult, *fwk.Status) {
+	if !state.ShouldRecordPluginMetrics() {
+		return pl.GeneratePlacements(ctx, state, podGroup, parentPlacement)
+	}
+	startTime := time.Now()
+	placements, status := pl.GeneratePlacements(ctx, state, podGroup, parentPlacement)
+	f.metricsRecorder.ObservePluginDurationAsync(metrics.PlacementGenerate, pl.Name(), status.Code().String(), metrics.SinceInSeconds(startTime))
+	return placements, status
+}
+
 func (f *frameworkImpl) WillWaitOnPermit(ctx context.Context, pod *v1.Pod) bool {
 	return f.waitingPods.get(pod.UID) != nil
 }
@@ -2196,7 +2239,7 @@ func (f *frameworkImpl) APICacher() fwk.APICacher {
 	return f.apiCacher
 }
 
-// Used only for tests
+// TotalBatchedPods returns the total number of batched pods. Used only for tests
 func (f *frameworkImpl) TotalBatchedPods() int64 {
 	return f.batch.batchedPods
 }

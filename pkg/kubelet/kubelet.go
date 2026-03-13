@@ -685,7 +685,8 @@ func NewMainKubelet(ctx context.Context,
 	klet.livenessManager = proberesults.NewManager()
 	klet.readinessManager = proberesults.NewManager()
 	klet.startupManager = proberesults.NewManager()
-	klet.podCache = kubecontainer.NewCache()
+	podCache := kubecontainer.NewCache()
+	klet.podCache = podCache
 
 	klet.mirrorPodClient = kubepod.NewBasicMirrorClient(klet.kubeClient, string(nodeName), nodeLister)
 	klet.podManager = kubepod.NewBasicPodManager()
@@ -694,7 +695,7 @@ func NewMainKubelet(ctx context.Context,
 	klet.allocationManager = allocation.NewManager(
 		klet.getRootDir(),
 		klet.statusManager,
-		func(pod *v1.Pod) { klet.HandlePodSyncs(ctx, []*v1.Pod{pod}) },
+		klet.syncPodNow,
 		klet.GetActivePods,
 		klet.podManager.GetPodByUID,
 		klet.sourcesReady,
@@ -854,7 +855,7 @@ func NewMainKubelet(ctx context.Context,
 			RelistPeriod:    eventedPlegRelistPeriod,
 			RelistThreshold: eventedPlegRelistThreshold,
 		}
-		klet.pleg = pleg.NewGenericPLEG(logger, klet.containerRuntime, eventChannel, genericRelistDuration, klet.podCache, clock.RealClock{})
+		klet.pleg = pleg.NewGenericPLEG(logger, klet.containerRuntime, eventChannel, genericRelistDuration, podCache, clock.RealClock{})
 		// In case Evented PLEG has to fall back on Generic PLEG due to an error,
 		// Evented PLEG should be able to reset the Generic PLEG relisting duration
 		// to the default value.
@@ -863,7 +864,7 @@ func NewMainKubelet(ctx context.Context,
 			RelistThreshold: genericPlegRelistThreshold,
 		}
 		klet.eventedPleg, err = pleg.NewEventedPLEG(logger, klet.containerRuntime, klet.runtimeService, eventChannel,
-			klet.podCache, klet.pleg, eventedPlegMaxStreamRetries, eventedRelistDuration, clock.RealClock{})
+			podCache, klet.pleg, eventedPlegMaxStreamRetries, eventedRelistDuration, clock.RealClock{})
 		if err != nil {
 			return nil, err
 		}
@@ -872,7 +873,7 @@ func NewMainKubelet(ctx context.Context,
 			RelistPeriod:    genericPlegRelistPeriod,
 			RelistThreshold: genericPlegRelistThreshold,
 		}
-		klet.pleg = pleg.NewGenericPLEG(logger, klet.containerRuntime, eventChannel, genericRelistDuration, klet.podCache, clock.RealClock{})
+		klet.pleg = pleg.NewGenericPLEG(logger, klet.containerRuntime, eventChannel, genericRelistDuration, podCache, clock.RealClock{})
 	}
 
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
@@ -1448,7 +1449,7 @@ type Kubelet struct {
 	eventedPleg pleg.PodLifecycleEventGenerator
 
 	// Store kubecontainer.PodStatus for all pods.
-	podCache kubecontainer.Cache
+	podCache kubecontainer.ROCache
 
 	// os is a facade for various syscalls that need to be mocked during testing.
 	os kubecontainer.OSInterface
@@ -2000,7 +2001,7 @@ func (kl *Kubelet) Run(ctx context.Context, updates <-chan kubetypes.PodUpdate) 
 // This operation writes all events that are dispatched in order to provide
 // the most accurate information possible about an error situation to aid debugging.
 // Callers should not write an event if this operation returns an error.
-func (kl *Kubelet) SyncPod(ctx context.Context, updateType kubetypes.SyncPodType, pod, mirrorPod *v1.Pod, podStatus *kubecontainer.PodStatus) (isTerminal bool, err error) {
+func (kl *Kubelet) SyncPod(ctx context.Context, updateType kubetypes.SyncPodType, pod, mirrorPod *v1.Pod, podStatus *kubecontainer.PodStatus) (isTerminal bool, postSync func(), err error) {
 	ctx, otelSpan := kl.tracer.Start(ctx, "syncPod", trace.WithAttributes(
 		semconv.K8SPodUIDKey.String(string(pod.UID)),
 		attribute.String("k8s.pod", klog.KObj(pod).String()),
@@ -2071,7 +2072,7 @@ func (kl *Kubelet) SyncPod(ctx context.Context, updateType kubetypes.SyncPodType
 	if apiPodStatus.Phase == v1.PodSucceeded || apiPodStatus.Phase == v1.PodFailed {
 		kl.statusManager.SetPodStatus(logger, pod, apiPodStatus)
 		isTerminal = true
-		return isTerminal, nil
+		return isTerminal, nil, nil
 	}
 
 	// Record the time it takes for the pod to become running
@@ -2087,7 +2088,7 @@ func (kl *Kubelet) SyncPod(ctx context.Context, updateType kubetypes.SyncPodType
 	// If the network plugin is not ready, only start the pod if it uses the host network
 	if err := kl.runtimeState.networkErrors(); err != nil && !kubecontainer.IsHostNetworkPod(pod) {
 		kl.recorder.WithLogger(logger).Eventf(pod, v1.EventTypeWarning, events.NetworkNotReady, "%s: %v", NetworkNotReadyErrorMsg, err)
-		return false, fmt.Errorf("%s: %v", NetworkNotReadyErrorMsg, err)
+		return false, nil, fmt.Errorf("%s: %v", NetworkNotReadyErrorMsg, err)
 	}
 
 	// ensure the kubelet knows about referenced secrets or configmaps used by the pod
@@ -2128,7 +2129,7 @@ func (kl *Kubelet) SyncPod(ctx context.Context, updateType kubetypes.SyncPodType
 				podKilled = true
 			} else {
 				if wait.Interrupted(err) {
-					return false, nil
+					return false, nil, nil
 				}
 				logger.Error(err, "KillPod failed", "pod", klog.KObj(pod), "podStatus", podStatus)
 			}
@@ -2156,11 +2157,11 @@ func (kl *Kubelet) SyncPod(ctx context.Context, updateType kubetypes.SyncPodType
 				}
 				if err := pcm.EnsureExists(logger, pod); err != nil {
 					kl.recorder.WithLogger(logger).Eventf(pod, v1.EventTypeWarning, events.FailedToCreatePodContainer, "unable to ensure pod container exists: %v", err)
-					return false, fmt.Errorf("failed to ensure that the pod: %v cgroups exist and are correctly applied: %v", pod.UID, err)
+					return false, nil, fmt.Errorf("failed to ensure that the pod: %v cgroups exist and are correctly applied: %v", pod.UID, err)
 				}
 
 				if err = kl.containerRuntime.UpdateActuatedPodLevelResources(pod); err != nil {
-					return false, fmt.Errorf("failed to update the state of pod-level resources for the pod %v : %w", pod.UID, err)
+					return false, nil, fmt.Errorf("failed to update the state of pod-level resources for the pod %v : %w", pod.UID, err)
 				}
 			}
 		}
@@ -2173,7 +2174,7 @@ func (kl *Kubelet) SyncPod(ctx context.Context, updateType kubetypes.SyncPodType
 	if err := kl.makePodDataDirs(pod); err != nil {
 		kl.recorder.WithLogger(logger).Eventf(pod, v1.EventTypeWarning, events.FailedToMakePodDataDirectories, "error making pod data directories: %v", err)
 		logger.Error(err, "Unable to make pod data directories for pod", "pod", klog.KObj(pod))
-		return false, err
+		return false, nil, err
 	}
 
 	// Wait for volumes to attach/mount
@@ -2182,13 +2183,13 @@ func (kl *Kubelet) SyncPod(ctx context.Context, updateType kubetypes.SyncPodType
 		if errors.As(err, &volumeAttachLimitErr) {
 			kl.rejectPod(ctx, pod, volumemanager.VolumeAttachmentLimitExceededReason, volumeAttachLimitErr.Error())
 			recordAdmissionRejection(volumemanager.VolumeAttachmentLimitExceededReason)
-			return true, nil
+			return true, nil, nil
 		}
 		if !wait.Interrupted(err) {
 			kl.recorder.WithLogger(logger).Eventf(pod, v1.EventTypeWarning, events.FailedMountVolume, "Unable to attach or mount volumes: %v", err)
 			logger.Error(err, "Unable to attach or mount volumes for pod; skipping pod", "pod", klog.KObj(pod))
 		}
-		return false, err
+		return false, nil, err
 	}
 
 	// Fetch the pull secrets for the pod
@@ -2251,7 +2252,14 @@ func (kl *Kubelet) SyncPod(ctx context.Context, updateType kubetypes.SyncPodType
 		}
 	}
 
-	return false, result.Error()
+	err = result.Error()
+	if len(result.SyncResults) > 0 && err == nil {
+		postSync = func() {
+			kl.RequestPodRelist(pod.UID)
+		}
+	}
+
+	return false, postSync, err
 }
 
 // SyncTerminatingPod is expected to terminate all running containers in a pod. Once this method
@@ -3485,4 +3493,13 @@ func (kl *Kubelet) fastStaticPodsRegistration(ctx context.Context) {
 
 func (kl *Kubelet) RequestPodReinspect(podUID types.UID) {
 	kl.pleg.RequestReinspect(podUID)
+}
+
+func (kl *Kubelet) RequestPodRelist(podUID types.UID) {
+	kl.pleg.RequestRelist(podUID)
+}
+
+func (kl *Kubelet) syncPodNow(pod *v1.Pod) {
+	kl.HandlePodSyncs(context.Background(), []*v1.Pod{pod})
+	kl.RequestPodRelist(pod.UID)
 }

@@ -24,15 +24,18 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/component-base/metrics/testutil"
 	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/ktesting"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	containertest "k8s.io/kubernetes/pkg/kubelet/container/testing"
 	"k8s.io/kubernetes/pkg/kubelet/metrics"
@@ -559,11 +562,7 @@ func TestReinspect(t *testing.T) {
 			ch := pleg.Watch()
 
 			podID := types.UID("test-pod")
-			if tc.alreadyReinspect {
-				pleg.RequestReinspect(podID)
-			}
-
-			if tc.requestReinspect {
+			if tc.alreadyReinspect || tc.requestReinspect {
 				pleg.RequestReinspect(podID)
 			}
 
@@ -832,5 +831,141 @@ kubelet_running_pods 2
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestWorkerLoop(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		runtimeMock := containertest.NewMockRuntime(t)
+		cache := kubecontainer.NewCache()
+		pleg := NewGenericPLEG(
+			ktesting.NewLogger(t, ktesting.DefaultConfig),
+			runtimeMock,
+			make(chan *PodLifecycleEvent, 100),
+			&RelistDuration{RelistPeriod: 2 * time.Second},
+			cache,
+			clock.RealClock{},
+		).(*GenericPLEG)
+
+		pod1 := &kubecontainer.Pod{ID: "pod1", Name: "pod1", Containers: []*kubecontainer.Container{{ID: kubecontainer.ContainerID{Type: "test", ID: "c1"}, State: kubecontainer.ContainerStateRunning}}}
+		pod2 := &kubecontainer.Pod{ID: "pod2", Name: "pod2", Containers: []*kubecontainer.Container{{ID: kubecontainer.ContainerID{Type: "test", ID: "c2"}, State: kubecontainer.ContainerStateRunning}}}
+
+		var call *mock.Call // Used to assert order of mock calls.
+
+		startTime := time.Now()
+		pleg.globalRelistTimer = pleg.clock.NewTimer(2 * time.Second)
+
+		// pod1 and pod2 requests should initially be blocked.
+		p1res := getNewerThanAsync(t, cache, pod1.ID, startTime)
+		requireBlocked(t, p1res)
+		p2res := getNewerThanAsync(t, cache, pod2.ID, startTime)
+		requireBlocked(t, p2res)
+
+		t.Log("Test single-pod relist (no reinspect)")
+		pleg.RequestRelist(pod1.ID)
+
+		mctx := context.Background()
+		call = runtimeMock.EXPECT().GetPod(mctx, pod1.ID).RunAndReturn(func(ctx context.Context, uid types.UID) (*kubecontainer.Pod, error) {
+			assert.Equal(t, pod1.ID, uid)
+			return pod1, nil
+		}).Once()
+		call = runtimeMock.EXPECT().GetPodStatus(mctx, pod1).RunAndReturn(func(_ context.Context, pod *kubecontainer.Pod) (*kubecontainer.PodStatus, error) {
+			assert.Equal(t, pod1, pod)
+			return &kubecontainer.PodStatus{ID: pod1.ID, TimeStamp: time.Now()}, nil
+		}).NotBefore(call).Once()
+
+		pleg.workerLoopIteration()
+
+		p1Status := requireUnblocked(t, p1res) // pod1 is now unblocked
+		assert.Equal(t, pod1.ID, p1Status.ID)
+		assert.Equal(t, time.Now(), p1Status.TimeStamp)
+		requireBlocked(t, p2res) // pod2 is still blocked
+
+		p1NewRes := getNewerThanAsync(t, cache, pod1.ID, startTime.Add(2*time.Second))
+		requireBlocked(t, p1NewRes)
+
+		t.Log("Test triggering both global relist and pod2 relist to ensure the global relist gets priority.")
+		pleg.RequestRelist(pod2.ID)
+		time.Sleep(2 * time.Second)
+
+		call = runtimeMock.EXPECT().GetPods(mctx, true).RunAndReturn(func(_ context.Context, _ bool) ([]*kubecontainer.Pod, error) {
+			return []*kubecontainer.Pod{pod1, pod2}, nil
+		}).NotBefore(call).Once()
+		call = runtimeMock.EXPECT().GetPodStatus(mctx, pod2).RunAndReturn(func(_ context.Context, pod *kubecontainer.Pod) (*kubecontainer.PodStatus, error) {
+			assert.Equal(t, pod2, pod)
+			return &kubecontainer.PodStatus{ID: pod2.ID, TimeStamp: time.Now()}, nil
+		}).NotBefore(call).Once()
+
+		pleg.workerLoopIteration()
+
+		// The global relist should have unblocked p2res and p1NewRes.
+		p2Status := requireUnblocked(t, p2res)
+		assert.Equal(t, pod2.ID, p2Status.ID)
+		p1NewStatus := requireUnblocked(t, p1NewRes)
+		assert.Equal(t, p1Status, p1NewStatus) // Status timestamp should be unchanged
+
+		// The pod2 relist request should NOT trigger a relist, since it was made before the global
+		// relist occurred. Drain it from the channel to verify (the mock will trigger an error if GetPod is called for it).
+		pleg.workerLoopIteration()
+
+		t.Log("Test reinspection")
+		p1ReinpsectRes := getNewerThanAsync(t, cache, pod1.ID, time.Now())
+		requireBlocked(t, p1ReinpsectRes)
+
+		// Queue up the next test case: reinspection of pod1.
+		pleg.RequestReinspect(pod1.ID)
+		pleg.RequestRelist(pod1.ID)
+		time.Sleep(2 * time.Second)
+
+		call = runtimeMock.EXPECT().GetPods(mctx, true).RunAndReturn(func(_ context.Context, _ bool) ([]*kubecontainer.Pod, error) {
+			return []*kubecontainer.Pod{pod1, pod2}, nil
+		}).NotBefore(call).Once()
+		runtimeMock.EXPECT().GetPodStatus(mctx, pod1).RunAndReturn(func(_ context.Context, pod *kubecontainer.Pod) (*kubecontainer.PodStatus, error) {
+			assert.Equal(t, pod1, pod)
+			return &kubecontainer.PodStatus{ID: pod1.ID, TimeStamp: time.Now()}, nil
+		}).NotBefore(call).Once()
+
+		pleg.workerLoopIteration()
+
+		p1ReinspectStatus := requireUnblocked(t, p1ReinpsectRes)
+		assert.Equal(t, pod1.ID, p1ReinspectStatus.ID)
+		assert.Equal(t, time.Now(), p1ReinspectStatus.TimeStamp) // Status timestamp should be updated.
+
+		// The pod1 relist request should NOT trigger a relist, since it was made before the global
+		// relist occurred. Drain it from the channel to verify (the mock will trigger an error if GetPod is called for it).
+		pleg.workerLoopIteration()
+	})
+}
+
+func getNewerThanAsync(t *testing.T, cache kubecontainer.ROCache, podID types.UID, minTime time.Time) <-chan *kubecontainer.PodStatus {
+	resCh := make(chan *kubecontainer.PodStatus, 1)
+	go func() {
+		s, err := cache.GetNewerThan(podID, minTime)
+		assert.NoError(t, err)
+		resCh <- s
+	}()
+	return resCh
+}
+
+func requireBlocked[T any](t *testing.T, ch <-chan T) {
+	t.Helper()
+	synctest.Wait()
+	select {
+	case r := <-ch:
+		t.Fatalf("Receive should have blocked, but got: %v", r)
+	default:
+		// OK.
+	}
+}
+
+func requireUnblocked[T any](t *testing.T, ch <-chan T) (received T) {
+	t.Helper()
+	synctest.Wait()
+	select {
+	case r := <-ch:
+		return r
+	default:
+		t.Fatal("Receive should not have been blocked")
+		return
 	}
 }

@@ -51,6 +51,7 @@ const (
 	PLEGDiscardEventsKey               = "pleg_discard_events"
 	PLEGRelistIntervalKey              = "pleg_relist_interval_seconds"
 	PLEGLastSeenKey                    = "pleg_last_seen_seconds"
+	PLEGPodRelistDurationKey           = "pleg_pod_relist_duration_seconds"
 	EventedPLEGConnErrKey              = "evented_pleg_connection_error_count"
 	EventedPLEGConnKey                 = "evented_pleg_connection_success_count"
 	EventedPLEGConnLatencyKey          = "evented_pleg_connection_latency_seconds"
@@ -383,6 +384,17 @@ var (
 			Subsystem:      KubeletSubsystem,
 			Name:           PLEGLastSeenKey,
 			Help:           "Timestamp in seconds when PLEG was last seen active.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+	// PLEGPodRelistDuration is a Histogram that tracks the duration (in seconds) it takes for relisting a single pod in the Kubelet's
+	// Pod Lifecycle Event Generator (PLEG).
+	PLEGPodRelistDuration = metrics.NewHistogram(
+		&metrics.HistogramOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           PLEGPodRelistDurationKey,
+			Help:           "Duration in seconds for relisting a single pod in PLEG.",
+			Buckets:        metrics.DefBuckets,
 			StabilityLevel: metrics.ALPHA,
 		},
 	)
@@ -1222,6 +1234,7 @@ func Register() {
 		legacyregistry.MustRegister(PLEGDiscardEvents)
 		legacyregistry.MustRegister(PLEGRelistInterval)
 		legacyregistry.MustRegister(PLEGLastSeen)
+		legacyregistry.MustRegister(PLEGPodRelistDuration)
 		legacyregistry.MustRegister(EventedPLEGConnErr)
 		legacyregistry.MustRegister(EventedPLEGConn)
 		legacyregistry.MustRegister(EventedPLEGConnLatency)

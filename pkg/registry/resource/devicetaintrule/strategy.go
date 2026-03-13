@@ -54,6 +54,9 @@ func (*deviceTaintRuleStrategy) GetResetFields() map[fieldpath.APIVersion]*field
 		"resource.k8s.io/v1alpha3": fieldpath.NewSet(
 			fieldpath.MakePathOrDie("status"),
 		),
+		"resource.k8s.io/v1beta2": fieldpath.NewSet(
+			fieldpath.MakePathOrDie("status"),
+		),
 	}
 
 	return fields
@@ -131,6 +134,10 @@ type deviceTaintRuleStatusStrategy struct {
 func (*deviceTaintRuleStatusStrategy) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {
 	fields := map[fieldpath.APIVersion]*fieldpath.Set{
 		"resource.k8s.io/v1alpha3": fieldpath.NewSet(
+			fieldpath.MakePathOrDie("metadata"),
+			fieldpath.MakePathOrDie("spec"),
+		),
+		"resource.k8s.io/v1beta2": fieldpath.NewSet(
 			fieldpath.MakePathOrDie("metadata"),
 			fieldpath.MakePathOrDie("spec"),
 		),

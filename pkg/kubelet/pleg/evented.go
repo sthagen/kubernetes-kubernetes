@@ -118,6 +118,10 @@ func (e *EventedPLEG) Relist() {
 	e.genericPleg.Relist()
 }
 
+func (e *EventedPLEG) RequestRelist(podUID types.UID) {
+	e.genericPleg.RequestRelist(podUID)
+}
+
 // Start starts the Evented PLEG
 func (e *EventedPLEG) Start() {
 	e.runningMu.Lock()

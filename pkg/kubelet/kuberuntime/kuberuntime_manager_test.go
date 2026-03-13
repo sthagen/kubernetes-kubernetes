@@ -251,14 +251,6 @@ func verifyPods(a, b []*kubecontainer.Pod) bool {
 		return false
 	}
 
-	// Sort the containers within a pod.
-	for i := range a {
-		sort.Sort(containersByID(a[i].Containers))
-	}
-	for i := range b {
-		sort.Sort(containersByID(b[i].Containers))
-	}
-
 	// Sort the pods by UID.
 	sort.Sort(podsByID(a))
 	sort.Sort(podsByID(b))
@@ -3918,15 +3910,16 @@ func TestDoPodResizeAction(t *testing.T) {
 	metrics.PodResizeDurationMilliseconds.Reset()
 
 	for i, tc := range []struct {
-		testName                  string
-		currentResources          resourceRequirements
-		desiredResources          resourceRequirements
-		updatedResources          []v1.ResourceName
-		otherContainersHaveLimits bool
-		runtimeErrors             map[string][]error
-		expectedError             string
-		expectedErrorMessage      string
-		expectPodCgroupUpdates    int
+		testName                    string
+		currentResources            resourceRequirements
+		desiredResources            resourceRequirements
+		updatedResources            []v1.ResourceName
+		otherContainersHaveLimits   bool
+		runtimeErrors               map[string][]error
+		expectedError               string
+		expectedErrorMessage        string
+		expectPodCgroupUpdates      int
+		injectPodUpdateCgroupsError error
 	}{
 		{
 			testName: "Increase cpu and memory requests and limits, with computed pod limits",
@@ -4040,6 +4033,72 @@ func TestDoPodResizeAction(t *testing.T) {
 			updatedResources:          []v1.ResourceName{v1.ResourceCPU, v1.ResourceMemory},
 			expectPodCgroupUpdates:    2, // cpu lim, memory lim
 		},
+		{
+			testName: "Fail updatePodSandboxResources blocks resize",
+			currentResources: resourceRequirements{
+				cpuRequest: 100, cpuLimit: 100,
+			},
+			desiredResources: resourceRequirements{
+				cpuRequest: 200, cpuLimit: 200,
+			},
+			updatedResources:       []v1.ResourceName{v1.ResourceCPU},
+			expectPodCgroupUpdates: 0,
+			runtimeErrors: map[string][]error{
+				"UpdatePodSandboxResources": {fmt.Errorf("runtime sandbox update failed")},
+			},
+			expectedError:        "ResizePodInPlaceError",
+			expectedErrorMessage: "failed to notify runtime for UpdatePodSandboxResources (resource=cpu); resize rejected: updatePodSandboxResources failed for sanboxID \"sandbox-id\": runtime sandbox update failed",
+		},
+		{
+			testName: "Fail SetPodCgroupConfig triggers rollback of Sandbox resources",
+			currentResources: resourceRequirements{
+				cpuRequest: 100, cpuLimit: 100,
+			},
+			desiredResources: resourceRequirements{
+				cpuRequest: 200, cpuLimit: 200,
+			},
+			updatedResources:            []v1.ResourceName{v1.ResourceCPU},
+			expectPodCgroupUpdates:      1,
+			injectPodUpdateCgroupsError: fmt.Errorf("cgroup update failed"),
+			expectedError:               "ResizePodInPlaceError",
+			expectedErrorMessage:        "cgroup update failed",
+		},
+		{
+			testName: "Ignore Unimplemented error from updatePodSandboxResources",
+			currentResources: resourceRequirements{
+				cpuRequest: 100, cpuLimit: 100,
+			},
+			desiredResources: resourceRequirements{
+				cpuRequest: 200, cpuLimit: 200,
+			},
+			updatedResources:       []v1.ResourceName{v1.ResourceCPU},
+			expectPodCgroupUpdates: 1, // Should proceed to cgroups despite the error
+			runtimeErrors: map[string][]error{
+				// Use a GRPC Unimplemented error
+				"UpdatePodSandboxResources": {status.Error(codes.Unimplemented, "not supported")},
+			},
+			// No error expected because we swallow Unimplemented
+			expectedError:        "",
+			expectedErrorMessage: "",
+		},
+		{
+			testName: "Ignore Unimplemented message from updatePodSandboxResources",
+			currentResources: resourceRequirements{
+				cpuRequest: 100, cpuLimit: 100,
+			},
+			desiredResources: resourceRequirements{
+				cpuRequest: 200, cpuLimit: 200,
+			},
+			updatedResources:       []v1.ResourceName{v1.ResourceCPU},
+			expectPodCgroupUpdates: 1, // Should proceed to cgroups despite the error
+			runtimeErrors: map[string][]error{
+				// Use a GRPC Unimplemented error
+				"UpdatePodSandboxResources": {status.Error(codes.Unknown, "not implemented yet")},
+			},
+			// No error expected because we swallow Unimplemented
+			expectedError:        "",
+			expectedErrorMessage: "",
+		},
 	} {
 		t.Run(tc.testName, func(t *testing.T) {
 			_, _, m, err := createTestRuntimeManagerWithErrors(tCtx, tc.runtimeErrors)
@@ -4070,7 +4129,12 @@ func TestDoPodResizeAction(t *testing.T) {
 			}, nil).Maybe()
 			if tc.expectPodCgroupUpdates > 0 {
 				// TODO: Update to use proper logger once contextual logging migration is complete
-				mockPCM.EXPECT().SetPodCgroupConfig(klog.TODO(), mock.Anything, mock.Anything).Return(nil).Times(tc.expectPodCgroupUpdates)
+				call := mockPCM.EXPECT().SetPodCgroupConfig(klog.TODO(), mock.Anything, mock.Anything)
+				if tc.injectPodUpdateCgroupsError != nil {
+					call.Return(tc.injectPodUpdateCgroupsError).Times(1)
+				} else {
+					call.Return(nil).Times(tc.expectPodCgroupUpdates)
+				}
 			}
 
 			pod, kps := makeBasePodAndStatus()
@@ -4132,6 +4196,7 @@ func TestDoPodResizeAction(t *testing.T) {
 
 			actions := podActions{
 				ContainersToUpdate: containersToUpdate,
+				SandboxID:          "sandbox-id",
 			}
 			resizeResult := m.doPodResizeAction(tCtx, pod, kps, actions)
 

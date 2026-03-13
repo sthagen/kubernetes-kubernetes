@@ -2424,3 +2424,24 @@ func TestUpdateUsedPorts_PodRemove(t *testing.T) {
 		}
 	}
 }
+
+func TestQueuedPodInfo_UpdateInvalidatesSignature(t *testing.T) {
+	pod1 := st.MakePod().Name("pod1").Label("version", "1").Obj()
+	pod2 := pod1.DeepCopy()
+	pod2.Labels["version"] = "2"
+
+	podInfo, _ := NewPodInfo(pod1)
+	queuedPodInfo := &QueuedPodInfo{
+		PodInfo:      podInfo,
+		PodSignature: fwk.PodSignature("sig-1"),
+	}
+
+	err := queuedPodInfo.Update(pod2)
+	if err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	if queuedPodInfo.PodSignature != nil {
+		t.Errorf("Expected signature to be nil after Update, got '%s'", string(queuedPodInfo.PodSignature))
+	}
+}
