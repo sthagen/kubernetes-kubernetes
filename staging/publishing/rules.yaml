@@ -338,8 +338,6 @@ rules:
     dependencies:
     - repository: apimachinery
       branch: master
-    - repository: streaming
-      branch: master
     source:
       branch: master
       dirs:

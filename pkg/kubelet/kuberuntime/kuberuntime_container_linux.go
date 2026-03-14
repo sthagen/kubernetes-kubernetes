@@ -386,13 +386,13 @@ func toKubeContainerResources(statusResources *runtimeapi.ContainerResources) *k
 	if runtimeStatusResources != nil {
 		var cpuLimit, memLimit, cpuRequest *resource.Quantity
 		if runtimeStatusResources.CpuPeriod > 0 {
-			milliCPU := quotaToMilliCPU(runtimeStatusResources.CpuQuota, runtimeStatusResources.CpuPeriod)
+			milliCPU := cm.QuotaToMilliCPU(runtimeStatusResources.CpuQuota, runtimeStatusResources.CpuPeriod)
 			if milliCPU > 0 {
 				cpuLimit = resource.NewMilliQuantity(milliCPU, resource.DecimalSI)
 			}
 		}
 		if runtimeStatusResources.CpuShares > 0 {
-			milliCPU := sharesToMilliCPU(runtimeStatusResources.CpuShares)
+			milliCPU := cm.SharesToMilliCPU(runtimeStatusResources.CpuShares)
 			if milliCPU > 0 {
 				cpuRequest = resource.NewMilliQuantity(milliCPU, resource.DecimalSI)
 			}

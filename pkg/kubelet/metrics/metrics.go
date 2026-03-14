@@ -114,6 +114,23 @@ const (
 	// Metrics to track ephemeral container usage by this kubelet
 	ManagedEphemeralContainersKey = "managed_ephemeral_containers"
 
+	// Metrics to track resource managers allocation
+	ResourceManagerAllocationTotalKey = "resource_manager_allocations_total"
+
+	ResourceManagerAllocationErrorsTotalKey = "resource_manager_allocation_errors_total"
+
+	ResourceManagerContainerAssignmentsKey = "resource_manager_container_assignments"
+
+	ResourceManagerPod  = "pod"
+	ResourceManagerNode = "node"
+
+	ResourceManagerCPU    = "cpu"
+	ResourceManagerMemory = "memory"
+
+	ResourceManagerExclusiveNode = "node_exclusive"
+	ResourceManagerSharedPod     = "pod_shared"
+	ResourceManagerExclusivePod  = "pod_exclusive"
+
 	// Metrics to track the CPU manager behavior
 	CPUManagerPinningRequestsTotalKey         = "cpu_manager_pinning_requests_total"
 	CPUManagerPinningErrorsTotalKey           = "cpu_manager_pinning_errors_total"
@@ -1205,6 +1222,39 @@ var (
 		},
 		[]string{"retry_trigger"},
 	)
+
+	// ResourceManagerAllocationsTotal counts the total number of exclusive resource
+	// allocations performed by a manager. The `source` label distinguishes between
+	// allocations drawn from the node-level pool versus a pre-allocated pod-level pool.
+	ResourceManagerAllocationsTotal = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Name: ResourceManagerAllocationTotalKey,
+			Help: "Number of exclusive resource allocations performed by a resource manager.",
+		},
+		[]string{"resource_name", "source"},
+	)
+
+	// ResourceManagerAllocationErrorsTotal counts errors encountered during exclusive
+	// resource allocation, distinguished by the intended allocation source.
+	ResourceManagerAllocationErrorsTotal = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Name: ResourceManagerAllocationErrorsTotalKey,
+			Help: "Number of errors encountered during exclusive resource allocation.",
+		},
+		[]string{"resource_name", "source"},
+	)
+
+	// ResourceManagerContainerAssignments counts the total number of containers with
+	// a specific type of resource assignment. This provides visibility into how many
+	// containers were allocated with exclusive resources (from the node or pod pool)
+	// versus the pod-level shared pool.
+	ResourceManagerContainerAssignments = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Name: ResourceManagerContainerAssignmentsKey,
+			Help: "Number of containers with a specific type of resource assignment.",
+		},
+		[]string{"resource_name", "assignment_type"},
+	)
 )
 
 var registerMetrics sync.Once
@@ -1321,6 +1371,12 @@ func Register() {
 			legacyregistry.MustRegister(PodInfeasibleResizes)
 			legacyregistry.MustRegister(PodInProgressResizes)
 			legacyregistry.MustRegister(PodDeferredAcceptedResizes)
+		}
+
+		if utilfeature.DefaultFeatureGate.Enabled(features.PodLevelResourceManagers) {
+			legacyregistry.MustRegister(ResourceManagerAllocationsTotal)
+			legacyregistry.MustRegister(ResourceManagerAllocationErrorsTotal)
+			legacyregistry.MustRegister(ResourceManagerContainerAssignments)
 		}
 	})
 }

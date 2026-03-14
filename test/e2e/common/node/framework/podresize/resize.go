@@ -300,7 +300,7 @@ func VerifyPodContainersCgroupValues(ctx context.Context, f *framework.Framework
 	var errs []error
 	for _, ci := range tcInfo {
 		tc := makeResizableContainer(ci)
-		errs = append(errs, cgroups.VerifyContainerCgroupValues(f, pod, &tc, onCgroupv2))
+		errs = append(errs, cgroups.VerifyContainerCgroupValues(ctx, f, pod, &tc, onCgroupv2))
 	}
 	return utilerrors.NewAggregate(errs)
 }

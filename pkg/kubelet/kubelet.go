@@ -43,7 +43,6 @@ import (
 
 	"k8s.io/client-go/informers"
 	ndf "k8s.io/component-helpers/nodedeclaredfeatures"
-	ndffeatures "k8s.io/component-helpers/nodedeclaredfeatures/features"
 	"k8s.io/mount-utils"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -399,17 +398,16 @@ func makePodSourceConfig(ctx context.Context, kubeCfg *kubeletconfiginternal.Kub
 }
 
 // PreInitRuntimeService will init runtime service before RunKubelet.
-func PreInitRuntimeService(kubeCfg *kubeletconfiginternal.KubeletConfiguration, kubeDeps *Dependencies) error {
+func PreInitRuntimeService(ctx context.Context, kubeCfg *kubeletconfiginternal.KubeletConfiguration, kubeDeps *Dependencies) error {
 	remoteImageEndpoint := kubeCfg.ImageServiceEndpoint
 	if remoteImageEndpoint == "" && kubeCfg.ContainerRuntimeEndpoint != "" {
 		remoteImageEndpoint = kubeCfg.ContainerRuntimeEndpoint
 	}
 	var err error
-	logger := klog.Background()
-	if kubeDeps.RemoteRuntimeService, err = remote.NewRemoteRuntimeService(kubeCfg.ContainerRuntimeEndpoint, kubeCfg.RuntimeRequestTimeout.Duration, kubeDeps.TracerProvider, &logger); err != nil {
+	if kubeDeps.RemoteRuntimeService, err = remote.NewRemoteRuntimeService(ctx, kubeCfg.ContainerRuntimeEndpoint, kubeCfg.RuntimeRequestTimeout.Duration, kubeDeps.TracerProvider); err != nil {
 		return err
 	}
-	if kubeDeps.RemoteImageService, err = remote.NewRemoteImageService(remoteImageEndpoint, kubeCfg.RuntimeRequestTimeout.Duration, kubeDeps.TracerProvider, &logger); err != nil {
+	if kubeDeps.RemoteImageService, err = remote.NewRemoteImageService(ctx, remoteImageEndpoint, kubeCfg.RuntimeRequestTimeout.Duration, kubeDeps.TracerProvider); err != nil {
 		return err
 	}
 
@@ -905,6 +903,7 @@ func NewMainKubelet(ctx context.Context,
 
 		kubeDeps.TLSConfig.MinVersion = kubeDeps.TLSOptions.MinVersion
 		kubeDeps.TLSConfig.CipherSuites = kubeDeps.TLSOptions.CipherSuites
+		kubeDeps.TLSConfig.CurvePreferences = kubeDeps.TLSOptions.CurvePreferences
 
 		getServingCertificate := func() *tls.Certificate { return nil }
 
@@ -1073,14 +1072,11 @@ func NewMainKubelet(ctx context.Context,
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse version: %w", err)
 		}
-		framework, err := ndf.New(ndffeatures.AllFeatures)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create node feature helper: %w", err)
-		}
+		framework := ndf.DefaultFramework
 		klet.version = v
 		klet.nodeDeclaredFeaturesFramework = framework
 		klet.nodeDeclaredFeatures = klet.discoverNodeDeclaredFeatures()
-		klet.nodeDeclaredFeaturesSet = ndf.NewFeatureSet(klet.nodeDeclaredFeatures...)
+		klet.nodeDeclaredFeaturesSet = framework.MustMapSorted(klet.nodeDeclaredFeatures)
 	}
 
 	// Safe, allowed sysctls can always be used as unsafe sysctls in the spec.
@@ -2931,8 +2927,8 @@ func (kl *Kubelet) HandlePodUpdates(ctx context.Context, pods []*v1.Pod) {
 			if err != nil {
 				logger.Error(err, "Failed to infer required features for pod update", "pod", klog.KObj(pod))
 			}
-			if reqs.Len() != 0 {
-				matchResult, err := ndf.MatchNodeFeatureSet(reqs, kl.nodeDeclaredFeaturesSet)
+			if !reqs.IsEmpty() {
+				matchResult, err := kl.nodeDeclaredFeaturesFramework.MatchNodeFeatureSet(reqs, kl.nodeDeclaredFeaturesSet)
 				if err != nil {
 					logger.Error(err, "Failed to match pod features with the node", "pod", klog.KObj(pod))
 

@@ -131,6 +131,14 @@ type KubeletConfiguration struct {
 	// Note that TLS 1.3 ciphersuites are not configurable.
 	// Values are from tls package constants (https://golang.org/pkg/crypto/tls/#pkg-constants).
 	TLSCipherSuites []string
+	// TLSCurvePreferences is the set of allowed key exchange mechanisms for the server,
+	// specified as numeric Go crypto/tls CurveID values.
+	// The supported values depend on the Go version used.
+	// See https://pkg.go.dev/crypto/tls#CurveID for values supported for each Go version.
+	// The order of the list is ignored, and key exchange mechanisms are
+	// chosen by Go from this list using an internal preference order.
+	// If empty, the default Go curves will be used.
+	TLSCurvePreferences []int32
 	// TLSMinVersion is the minimum TLS version supported.
 	// Values are from tls package constants (https://golang.org/pkg/crypto/tls/#pkg-constants).
 	TLSMinVersion string

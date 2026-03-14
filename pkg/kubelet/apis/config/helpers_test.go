@@ -236,6 +236,7 @@ var (
 		"SingleProcessOOMKill",
 		"Logging.Verbosity",
 		"TLSCipherSuites[*]",
+		"TLSCurvePreferences[*]",
 		"TLSMinVersion",
 		"IPTablesDropBit",
 		"IPTablesMasqueradeBit",

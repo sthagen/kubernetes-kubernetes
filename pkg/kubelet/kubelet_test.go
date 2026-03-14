@@ -3274,9 +3274,8 @@ func createAndStartFakeRemoteRuntime(t *testing.T) (*fakeremote.RemoteRuntime, s
 	return fakeRuntime, endpoint
 }
 
-func createRemoteRuntimeService(endpoint string, t *testing.T, tp oteltrace.TracerProvider) internalapi.RuntimeService {
-	logger, _ := ktesting.NewTestContext(t)
-	runtimeService, err := remote.NewRemoteRuntimeService(endpoint, 15*time.Second, tp, &logger)
+func createRemoteRuntimeService(ctx context.Context, endpoint string, t *testing.T, tp oteltrace.TracerProvider) internalapi.RuntimeService {
+	runtimeService, err := remote.NewRemoteRuntimeService(ctx, endpoint, 15*time.Second, tp)
 	require.NoError(t, err)
 	return runtimeService
 }
@@ -3342,7 +3341,7 @@ func TestNewMainKubeletStandAlone(t *testing.T) {
 		fakeRuntime.Stop()
 	}()
 	fakeRecorder := &record.FakeRecorder{}
-	rtSvc := createRemoteRuntimeService(endpoint, t, noopoteltrace.NewTracerProvider())
+	rtSvc := createRemoteRuntimeService(tCtx, endpoint, t, noopoteltrace.NewTracerProvider())
 	kubeDep := &Dependencies{
 		Auth:                 nil,
 		CAdvisorInterface:    cadvisor,
@@ -3494,7 +3493,7 @@ func TestNewMainKubeletWithCertAndCAReloadingEnabled(t *testing.T) {
 		fakeRuntime.Stop()
 	}()
 	fakeRecorder := &record.FakeRecorder{}
-	rtSvc := createRemoteRuntimeService(endpoint, t, noopoteltrace.NewTracerProvider())
+	rtSvc := createRemoteRuntimeService(tCtx, endpoint, t, noopoteltrace.NewTracerProvider())
 	kubeDep := &Dependencies{
 		Auth:                 nil,
 		CAdvisorInterface:    cadvisor,
@@ -3596,13 +3595,12 @@ func TestSyncPodSpans(t *testing.T) {
 	defer func() {
 		fakeRuntime.Stop()
 	}()
-	runtimeSvc := createRemoteRuntimeService(endpoint, t, tp)
+	runtimeSvc := createRemoteRuntimeService(tCtx, endpoint, t, tp)
 	kubelet.runtimeService = runtimeSvc
 
 	fakeRuntime.ImageService.SetFakeImageSize(100)
 	fakeRuntime.ImageService.SetFakeImages([]string{"test:latest"})
-	logger := klog.FromContext(tCtx)
-	imageSvc, err := remote.NewRemoteImageService(endpoint, 15*time.Second, tp, &logger)
+	imageSvc, err := remote.NewRemoteImageService(tCtx, endpoint, 15*time.Second, tp)
 	assert.NoError(t, err)
 
 	kubelet.containerRuntime, _, err = kuberuntime.NewKubeGenericRuntimeManager(
@@ -5002,7 +5000,7 @@ func TestSyncPodNodeDeclaredFeaturesUpdate(t *testing.T) {
 			oldPod:             oldPod,
 			newPod:             newPod,
 			nodeFeatures:       []string{"FeatureB"},
-			registeredFeatures: []ndf.Feature{createMockFeature(t, "FeatureA", true, "")},
+			registeredFeatures: []ndf.Feature{createMockFeature(t, "FeatureA", true, ""), createMockFeature(t, "FeatureB", false, "")},
 			expectEvent:        true,
 			expectedEventMsg:   "Pod requires node features that are not available: FeatureA",
 		},
@@ -5012,7 +5010,7 @@ func TestSyncPodNodeDeclaredFeaturesUpdate(t *testing.T) {
 			componentVersion:   "1.35.0",
 			oldPod:             oldPod,
 			newPod:             newPod,
-			nodeFeatures:       []string{""},
+			nodeFeatures:       []string{},
 			registeredFeatures: []ndf.Feature{createMockFeature(t, "FeatureA", true, "1.34.0")},
 			expectEvent:        false,
 		},
@@ -5023,7 +5021,7 @@ func TestSyncPodNodeDeclaredFeaturesUpdate(t *testing.T) {
 			oldPod:             nil,
 			newPod:             newPod,
 			nodeFeatures:       []string{"FeatureB"},
-			registeredFeatures: []ndf.Feature{createMockFeature(t, "FeatureA", true, "")},
+			registeredFeatures: []ndf.Feature{createMockFeature(t, "FeatureA", true, ""), createMockFeature(t, "FeatureB", false, "")},
 			expectEvent:        false,
 		},
 	}
@@ -5041,11 +5039,10 @@ func TestSyncPodNodeDeclaredFeaturesUpdate(t *testing.T) {
 			recorder := record.NewFakeRecorder(10)
 			kubelet.recorder = recorder
 
-			framework, err := ndf.New(tc.registeredFeatures)
-			require.NoError(t, err)
+			framework := ndf.New(tc.registeredFeatures)
 			kubelet.nodeDeclaredFeaturesFramework = framework
 			kubelet.nodeDeclaredFeatures = tc.nodeFeatures
-			kubelet.nodeDeclaredFeaturesSet = ndf.NewFeatureSet(kubelet.nodeDeclaredFeatures...)
+			kubelet.nodeDeclaredFeaturesSet = framework.MustMapSorted(kubelet.nodeDeclaredFeatures)
 			kubelet.version = utilversion.MustParse("1.35.0")
 
 			if tc.oldPod != nil {

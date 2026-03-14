@@ -741,7 +741,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 		runAuthenticatorCAReload(ctx.Done())
 	}
 
-	if err := kubelet.PreInitRuntimeService(&s.KubeletConfiguration, kubeDeps); err != nil {
+	if err := kubelet.PreInitRuntimeService(ctx, &s.KubeletConfiguration, kubeDeps); err != nil {
 		return err
 	}
 
@@ -1175,12 +1175,18 @@ func InitializeTLS(ctx context.Context, kf *options.KubeletFlags, kc *kubeletcon
 		}
 	}
 
+	curvePreferences, err := cliflag.TLSCurvePreferences(kc.TLSCurvePreferences)
+	if err != nil {
+		return nil, err
+	}
+
 	tlsOptions := &server.TLSOptions{
-		MinVersion:   minTLSVersion,
-		CipherSuites: tlsCipherSuites,
-		CertFile:     kc.TLSCertFile,
-		KeyFile:      kc.TLSPrivateKeyFile,
-		ClientCAFile: kc.Authentication.X509.ClientCAFile,
+		MinVersion:       minTLSVersion,
+		CipherSuites:     tlsCipherSuites,
+		CurvePreferences: curvePreferences,
+		CertFile:         kc.TLSCertFile,
+		KeyFile:          kc.TLSPrivateKeyFile,
+		ClientCAFile:     kc.Authentication.X509.ClientCAFile,
 	}
 
 	return tlsOptions, nil

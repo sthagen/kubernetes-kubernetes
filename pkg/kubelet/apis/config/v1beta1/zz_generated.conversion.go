@@ -582,6 +582,7 @@ func autoConvert_v1beta1_KubeletConfiguration_To_config_KubeletConfiguration(in 
 	out.TLSCertFile = in.TLSCertFile
 	out.TLSPrivateKeyFile = in.TLSPrivateKeyFile
 	out.TLSCipherSuites = *(*[]string)(unsafe.Pointer(&in.TLSCipherSuites))
+	out.TLSCurvePreferences = *(*[]int32)(unsafe.Pointer(&in.TLSCurvePreferences))
 	out.TLSMinVersion = in.TLSMinVersion
 	out.RotateCertificates = in.RotateCertificates
 	out.ServerTLSBootstrap = in.ServerTLSBootstrap
@@ -790,6 +791,7 @@ func autoConvert_config_KubeletConfiguration_To_v1beta1_KubeletConfiguration(in 
 	out.TLSCertFile = in.TLSCertFile
 	out.TLSPrivateKeyFile = in.TLSPrivateKeyFile
 	out.TLSCipherSuites = *(*[]string)(unsafe.Pointer(&in.TLSCipherSuites))
+	out.TLSCurvePreferences = *(*[]int32)(unsafe.Pointer(&in.TLSCurvePreferences))
 	out.TLSMinVersion = in.TLSMinVersion
 	out.RotateCertificates = in.RotateCertificates
 	out.ServerTLSBootstrap = in.ServerTLSBootstrap

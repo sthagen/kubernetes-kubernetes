@@ -134,11 +134,12 @@ type Server struct {
 
 // TLSOptions holds the TLS options.
 type TLSOptions struct {
-	MinVersion   uint16
-	CipherSuites []uint16
-	CertFile     string
-	KeyFile      string
-	ClientCAFile string
+	MinVersion       uint16
+	CipherSuites     []uint16
+	CurvePreferences []tls.CurveID
+	CertFile         string
+	KeyFile          string
+	ClientCAFile     string
 }
 
 // containerInterface defines the restful.Container functions used on the root container

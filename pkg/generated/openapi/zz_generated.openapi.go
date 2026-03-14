@@ -71041,6 +71041,21 @@ func schema_k8sio_kubelet_config_v1beta1_KubeletConfiguration(ref common.Referen
 							},
 						},
 					},
+					"tlsCurvePreferences": {
+						SchemaProps: spec.SchemaProps{
+							Description: "tlsCurvePreferences is the set of allowed key exchange mechanisms for the server, specified as numeric Go crypto/tls CurveID values. The supported values depend on the Go version used. See https://pkg.go.dev/crypto/tls#CurveID for values supported for each Go version. The order of the list is ignored, and key exchange mechanisms are chosen by Go from this list using an internal preference order. If empty, the default Go curves will be used. Default: nil",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: 0,
+										Type:    []string{"integer"},
+										Format:  "int32",
+									},
+								},
+							},
+						},
+					},
 					"tlsMinVersion": {
 						SchemaProps: spec.SchemaProps{
 							Description: "tlsMinVersion is the minimum TLS version supported. Values are from tls package constants (https://golang.org/pkg/crypto/tls/#pkg-constants). Default: \"\"",
