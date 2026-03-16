@@ -14,14 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package podgroupmanager
+package cache
 
 import (
 	"testing"
-	"time"
 
+	"github.com/google/go-cmp/cmp"
+	v1 "k8s.io/api/core/v1"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
-	"k8s.io/utils/ptr"
 )
 
 func TestPodGroupState_AssumeForget(t *testing.T) {
@@ -36,7 +36,7 @@ func TestPodGroupState_AssumeForget(t *testing.T) {
 		t.Fatal("Pod should be initially in UnscheduledPods")
 	}
 
-	pgs.AssumePod(pod.UID)
+	pgs.assumePod(pod.UID)
 	if !pgs.AssumedPods().Has(pod.UID) {
 		t.Fatal("Pod should be in AssumedPods after AssumePod")
 	}
@@ -44,7 +44,7 @@ func TestPodGroupState_AssumeForget(t *testing.T) {
 		t.Fatal("UnscheduledPods should be empty after AssumePod")
 	}
 
-	pgs.ForgetPod(pod.UID)
+	pgs.forgetPod(pod.UID)
 	if pgs.AssumedPods().Has(pod.UID) {
 		t.Fatal("Pod should not be in AssumedPods after ForgetPod")
 	}
@@ -53,41 +53,52 @@ func TestPodGroupState_AssumeForget(t *testing.T) {
 	}
 }
 
-func TestPodGroupState_SchedulingTimeout(t *testing.T) {
+func TestPodGroupState_Clone(t *testing.T) {
 	pgs := newPodGroupState()
 
-	timeout := pgs.SchedulingTimeout()
-	if pgs.schedulingDeadline == nil {
-		t.Fatal("Scheduling deadline should be set after SchedulingTimeout call, but is nil")
-	}
-	if timeout <= 0 {
-		t.Errorf("Expected positive timeout duration, got %v", timeout)
+	pod1 := st.MakePod().Namespace("ns1").Name("p1").UID("p1").
+		PodGroupName("pg").Obj()
+	pod2 := st.MakePod().Namespace("ns1").Name("p2").UID("p2").
+		PodGroupName("pg").Obj()
+
+	pgs.addPod(pod1)
+	pgs.addPod(pod2)
+	pgs.assumePod(pod2.UID)
+
+	snap := pgs.snapshot()
+
+	// Clone has the same generation.
+	if snap.generation != pgs.generation {
+		t.Errorf("expected clone generation %d, got %d", pgs.generation, snap.generation)
 	}
 
-	// Sleep for a while to ensure that the time has increased,
-	// especially when testing on Windows machines with lower resolution.
-	time.Sleep(10 * time.Millisecond)
-
-	deadline := *pgs.schedulingDeadline
-	newTimeout := pgs.SchedulingTimeout()
-	if !deadline.Equal(*pgs.schedulingDeadline) {
-		t.Errorf("Previous deadline should not be changed: previous: %v, current: %v", deadline, *pgs.schedulingDeadline)
-	}
-	if newTimeout >= timeout {
-		t.Errorf("Expected lower timeout duration: previous: %v, current: %v", timeout, newTimeout)
+	// Clone contains both pods.
+	if !snap.AllPods().Has(pod1.UID) || !snap.AllPods().Has(pod2.UID) {
+		t.Error("expected both pods in clone's AllPods")
 	}
 
-	// Sleep for a while to ensure that the time has increased,
-	// especially when testing on Windows machines with lower resolution.
-	time.Sleep(10 * time.Millisecond)
-
-	pgs.schedulingDeadline = ptr.To(time.Now().Add(-1 * time.Second))
-	newTimeout = pgs.SchedulingTimeout()
-	if deadline.Equal(*pgs.schedulingDeadline) {
-		t.Error("Deadline should be reset after it has expired, but it wasn't")
+	// Clone preserves pod1 as unscheduled.
+	if _, ok := snap.UnscheduledPods()[pod1.Name]; !ok {
+		t.Error("expected pod1 in clone's UnscheduledPods")
 	}
-	if newTimeout <= 0 {
-		t.Errorf("Expected positive timeout duration after reset, got %v", timeout)
+
+	// Clone preserves pod2 as assumed.
+	if !snap.AssumedPods().Has(pod2.UID) {
+		t.Error("expected pod2 in clone's AssumedPods")
+	}
+
+	// Mutating the clone does not affect the original.
+	snap.assumePod(pod1.UID)
+	if pgs.assumedPods.Has(pod1.UID) {
+		t.Error("mutation to clone should not affect original's assumedPods")
+	}
+
+	// Mutating the original does not affect the clone.
+	pod3 := st.MakePod().Namespace("ns1").Name("p3").UID("p3").
+		PodGroupName("pg").Obj()
+	pgs.addPod(pod3)
+	if snap.AllPods().Has(pod3.UID) {
+		t.Error("mutation to original should not affect clone's AllPods")
 	}
 }
 
@@ -121,7 +132,7 @@ func TestPodGroupState_PodCounts(t *testing.T) {
 	}
 
 	// Assuming a pod should move it from unscheduled to assumed, increasing the count of scheduled pods.
-	pgs.AssumePod(pod1.UID)
+	pgs.assumePod(pod1.UID)
 	if count := pgs.AllPodsCount(); count != 3 {
 		t.Errorf("Expected AllPodsCount to be 3, got %d", count)
 	}
@@ -130,7 +141,7 @@ func TestPodGroupState_PodCounts(t *testing.T) {
 	}
 
 	// Assuming a pod that is already scheduled should not change the counts.
-	pgs.AssumePod(pod3.UID)
+	pgs.assumePod(pod3.UID)
 	if count := pgs.AllPodsCount(); count != 3 {
 		t.Errorf("Expected AllPodsCount to be 3, got %d", count)
 	}
@@ -139,7 +150,7 @@ func TestPodGroupState_PodCounts(t *testing.T) {
 	}
 
 	// Assuming a pod that is not in the state should not change the counts.
-	pgs.AssumePod(pod4.UID)
+	pgs.assumePod(pod4.UID)
 	if count := pgs.AllPodsCount(); count != 3 {
 		t.Errorf("Expected AllPodsCount to be 3, got %d", count)
 	}
@@ -148,7 +159,7 @@ func TestPodGroupState_PodCounts(t *testing.T) {
 	}
 
 	// Forgetting a pod that is already scheduled should not change the counts.
-	pgs.ForgetPod(pod3.UID)
+	pgs.forgetPod(pod3.UID)
 	if count := pgs.AllPodsCount(); count != 3 {
 		t.Errorf("Expected AllPodsCount to be 3, got %d", count)
 	}
@@ -158,7 +169,7 @@ func TestPodGroupState_PodCounts(t *testing.T) {
 
 	// Forgetting a pod that is in the assumed state should move it back to unscheduled,
 	// decreasing the count of scheduled pods.
-	pgs.ForgetPod(pod1.UID)
+	pgs.forgetPod(pod1.UID)
 	if count := pgs.AllPodsCount(); count != 3 {
 		t.Errorf("Expected AllPodsCount to be 3, got %d", count)
 	}
@@ -167,7 +178,7 @@ func TestPodGroupState_PodCounts(t *testing.T) {
 	}
 
 	// Forgetting a pod that is not assumed should not change the counts.
-	pgs.ForgetPod(pod1.UID)
+	pgs.forgetPod(pod1.UID)
 	if count := pgs.AllPodsCount(); count != 3 {
 		t.Errorf("Expected AllPodsCount to be 3, got %d", count)
 	}
@@ -176,7 +187,7 @@ func TestPodGroupState_PodCounts(t *testing.T) {
 	}
 
 	// Assuming a pod again should move it back to assumed, increasing the count of scheduled pods.
-	pgs.AssumePod(pod2.UID)
+	pgs.assumePod(pod2.UID)
 	if count := pgs.AllPodsCount(); count != 3 {
 		t.Errorf("Expected AllPodsCount to be 3, got %d", count)
 	}
@@ -185,11 +196,45 @@ func TestPodGroupState_PodCounts(t *testing.T) {
 	}
 
 	// Forgetting a pod that is not in the state should not change the counts.
-	pgs.ForgetPod(pod4.UID)
+	pgs.forgetPod(pod4.UID)
 	if count := pgs.AllPodsCount(); count != 3 {
 		t.Errorf("Expected AllPodsCount to be 3, got %d", count)
 	}
 	if count := pgs.ScheduledPodsCount(); count != 2 {
 		t.Errorf("Expected ScheduledPodsCount to be 2, got %d", count)
+	}
+}
+
+// TestPodGroupState_ScheduledPods tests that ScheduledPods returns pods that
+// are currently either assumed or assigned altogether.
+func TestPodGroupState_ScheduledPods(t *testing.T) {
+
+	pgs := newPodGroupState()
+	unscheduledPod := st.MakePod().Namespace("ns").Name("p1").UID("p1").
+		PodGroupName("pg").Obj()
+	assumedPod := st.MakePod().Namespace("ns").Name("p2").UID("p2").
+		PodGroupName("pg").Obj()
+	assignedPod := st.MakePod().Namespace("ns").Name("p3").UID("p3").Node("node1").
+		PodGroupName("pg").Obj()
+
+	pgs.addPod(assignedPod)
+	pgs.addPod(unscheduledPod)
+	pgs.addPod(assumedPod)
+
+	pgs.assumePod(assumedPod.UID)
+	scheduledPods := pgs.ScheduledPods()
+
+	snapshot := pgs.snapshot()
+	pgs.assumePod(unscheduledPod.UID)
+	snapshotScheduledPods := snapshot.ScheduledPods()
+
+	expectedScheduledPods := []*v1.Pod{assignedPod, assumedPod}
+
+	if diff := cmp.Diff(expectedScheduledPods, scheduledPods); diff != "" {
+		t.Errorf("unexpected ScheduledPods result (-want,+got):\n%s", diff)
+	}
+
+	if diff := cmp.Diff(expectedScheduledPods, snapshotScheduledPods); diff != "" {
+		t.Errorf("unexpected snapshot ScheduledPods result (-want,+got):\n%s", diff)
 	}
 }

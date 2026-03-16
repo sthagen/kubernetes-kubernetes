@@ -262,7 +262,7 @@ func WithAPIDispatcher(apiDispatcher *apidispatcher.APIDispatcher) Option {
 	}
 }
 
-// WithPodGroupManager sets Pod group manager for the scheduling frameworkImpl.
+// WithPodGroupManager sets the PodGroupManager for the scheduling frameworkImpl.
 func WithPodGroupManager(podGroupManager fwk.PodGroupManager) Option {
 	return func(o *frameworkOptions) {
 		o.podGroupManager = podGroupManager

@@ -39,6 +39,8 @@ type CycleState struct {
 	// GetParallelPreBindPlugins returns plugins that can be run in parallel with other plugins
 	// in the PreBind extension point.
 	parallelPreBindPlugins sets.Set[string]
+	// isPodGroupSchedulingCycle indicates whether this cycle is a pod group scheduling cycle or not.
+	isPodGroupSchedulingCycle bool
 }
 
 // NewCycleState initializes a new CycleState and returns its pointer.
@@ -94,6 +96,14 @@ func (c *CycleState) GetParallelPreBindPlugins() sets.Set[string] {
 	return c.parallelPreBindPlugins
 }
 
+func (c *CycleState) IsPodGroupSchedulingCycle() bool {
+	return c.isPodGroupSchedulingCycle
+}
+
+func (c *CycleState) SetPodGroupSchedulingCycle(isPodGroupSchedulingCycle bool) {
+	c.isPodGroupSchedulingCycle = isPodGroupSchedulingCycle
+}
+
 // Clone creates a copy of CycleState and returns its pointer. Clone returns
 // nil if the context being cloned is nil.
 func (c *CycleState) Clone() fwk.CycleState {
@@ -112,6 +122,7 @@ func (c *CycleState) Clone() fwk.CycleState {
 	copy.skipScorePlugins = c.skipScorePlugins
 	copy.skipPreBindPlugins = c.skipPreBindPlugins
 	copy.parallelPreBindPlugins = c.parallelPreBindPlugins
+	copy.isPodGroupSchedulingCycle = c.isPodGroupSchedulingCycle
 
 	return copy
 }

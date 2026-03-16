@@ -167,7 +167,9 @@ func (g *GenericPLEG) Start() {
 
 	g.isRunning = true
 	g.stopCh = make(chan struct{})
-	g.globalRelistTimer = g.clock.NewTimer(g.relistDuration.RelistPeriod)
+	// Set 0 to trigger the first relist immediately
+	// The RelistPeriod is set after the first relist.
+	g.globalRelistTimer = g.clock.NewTimer(0)
 
 	go func() {
 		for g.workerLoopIteration() {

@@ -159,6 +159,11 @@ var ExpandedPluginsV1 = &config.Plugins{
 			{Name: names.DefaultBinder},
 		},
 	},
+	PlacementScore: config.PluginSet{
+		Enabled: []config.Plugin{
+			{Name: names.NodeResourcesFit, Weight: 1},
+		},
+	},
 }
 
 // PluginConfigsV1 default plugin configurations.

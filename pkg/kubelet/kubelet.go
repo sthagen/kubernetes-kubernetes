@@ -49,6 +49,7 @@ import (
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/tainttoleration"
 	utilfs "k8s.io/kubernetes/pkg/util/filesystem"
+	utilpod "k8s.io/kubernetes/pkg/util/pod"
 	netutils "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 
@@ -3498,4 +3499,44 @@ func (kl *Kubelet) RequestPodRelist(podUID types.UID) {
 func (kl *Kubelet) syncPodNow(pod *v1.Pod) {
 	kl.HandlePodSyncs(context.Background(), []*v1.Pod{pod})
 	kl.RequestPodRelist(pod.UID)
+}
+
+// OnPodSandboxReady is the callback implementation invoked by the container runtime after
+// all three requirements (sandbox, networking, volumes) are ready to immediately update
+// the `PodReadyToStartContainers` pod status condition to `True`.
+// This method implements the RuntimeHelper interface.
+// Ref: https://github.com/kubernetes/kubernetes/issues/134460
+func (kl *Kubelet) OnPodSandboxReady(ctx context.Context, pod *v1.Pod) error {
+	if !utilfeature.DefaultFeatureGate.Enabled(features.PodReadyToStartContainersCondition) {
+		return nil
+	}
+
+	logger := klog.FromContext(ctx)
+	logger.V(3).Info("OnPodSandboxReady callback invoked", "pod", klog.KObj(pod), "podUID", pod.UID)
+
+	// update the status asynchronously to avoid blocking the SyncPod flow
+	go func() {
+		existingStatus, ok := kl.statusManager.GetPodStatus(pod.UID)
+		if !ok {
+			existingStatus = pod.Status
+		}
+
+		cachedStatus := existingStatus.DeepCopy()
+
+		readySandboxCondition := v1.PodCondition{
+			Type:               v1.PodReadyToStartContainers,
+			Status:             v1.ConditionTrue,
+			ObservedGeneration: podutil.CalculatePodConditionObservedGeneration(cachedStatus, pod.Generation, v1.PodReadyToStartContainers),
+		}
+
+		cachedStatus.Conditions = utilpod.ReplaceOrAppendPodCondition(cachedStatus.Conditions, &readySandboxCondition)
+
+		kl.statusManager.SetPodStatus(logger, pod, *cachedStatus)
+
+		logger.V(3).Info("Successfully updated PodReadyToStartContainers condition after sandbox creation",
+			"pod", klog.KObj(pod),
+			"podUID", pod.UID)
+	}()
+
+	return nil
 }

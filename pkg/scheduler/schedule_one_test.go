@@ -65,7 +65,6 @@ import (
 	apidispatcher "k8s.io/kubernetes/pkg/scheduler/backend/api_dispatcher"
 	internalcache "k8s.io/kubernetes/pkg/scheduler/backend/cache"
 	fakecache "k8s.io/kubernetes/pkg/scheduler/backend/cache/fake"
-	"k8s.io/kubernetes/pkg/scheduler/backend/podgroupmanager"
 	internalqueue "k8s.io/kubernetes/pkg/scheduler/backend/queue"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	apicalls "k8s.io/kubernetes/pkg/scheduler/framework/api_calls"
@@ -1030,20 +1029,6 @@ func TestSchedulerScheduleOne(t *testing.T) {
 		var gotBinding *v1.Binding
 		var gotNominatingInfo *fwk.NominatingInfo
 
-		var pgm podgroupmanager.PodGroupManager
-		if scheduleAsPodGroup {
-			group := &v1.PodSchedulingGroup{
-				PodGroupName: new("pg"),
-			}
-			// When scheduling a pod as a pod group, set scheduling group to all relevant pods.
-			item.sendPod = withSchedulingGroup(item.sendPod, group)
-			item.expectErrorPod = withSchedulingGroup(item.expectErrorPod, group)
-			item.expectPodInBackoffQ = withSchedulingGroup(item.expectPodInBackoffQ, group)
-			item.expectPodInUnschedulable = withSchedulingGroup(item.expectPodInUnschedulable, group)
-			pgm = podgroupmanager.New(logger)
-			pgm.AddPod(item.sendPod)
-		}
-
 		client := clientsetfake.NewClientset(item.sendPod)
 		informerFactory := informers.NewSharedInformerFactory(client, 0)
 		client.PrependReactor("create", "pods", func(action clienttesting.Action) (bool, runtime.Object, error) {
@@ -1061,7 +1046,19 @@ func TestSchedulerScheduleOne(t *testing.T) {
 			defer apiDispatcher.Close()
 		}
 
-		internalCache := internalcache.New(ctx, apiDispatcher)
+		internalCache := internalcache.New(ctx, apiDispatcher, scheduleAsPodGroup)
+
+		if scheduleAsPodGroup {
+			group := &v1.PodSchedulingGroup{
+				PodGroupName: new("pg"),
+			}
+			// When scheduling a pod as a pod group, set scheduling group to all relevant pods.
+			item.sendPod = withSchedulingGroup(item.sendPod, group)
+			item.expectErrorPod = withSchedulingGroup(item.expectErrorPod, group)
+			item.expectPodInBackoffQ = withSchedulingGroup(item.expectPodInBackoffQ, group)
+			item.expectPodInUnschedulable = withSchedulingGroup(item.expectPodInUnschedulable, group)
+			internalCache.AddPodGroupMember(item.sendPod)
+		}
 		cache := &fakecache.Cache{
 			Cache: internalCache,
 			ForgetFunc: func(pod *v1.Pod) {
@@ -1119,7 +1116,6 @@ func TestSchedulerScheduleOne(t *testing.T) {
 			frameworkruntime.WithWaitingPods(frameworkruntime.NewWaitingPodsMap()),
 			frameworkruntime.WithPodsInPreBind(frameworkruntime.NewPodsInPreBindMap()),
 			frameworkruntime.WithInformerFactory(informerFactory),
-			frameworkruntime.WithPodGroupManager(pgm),
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -1138,7 +1134,6 @@ func TestSchedulerScheduleOne(t *testing.T) {
 			SchedulingQueue:                        queue,
 			Profiles:                               profile.Map{testSchedulerName: schedFramework},
 			APIDispatcher:                          apiDispatcher,
-			PodGroupManager:                        pgm,
 			nominatedNodeNameForExpectationEnabled: features.nominatedNodeNameForExpectationEnabled,
 		}
 		queue.Add(ctx, item.sendPod)
@@ -1717,7 +1712,7 @@ func TestScheduleOneMarksPodAsProcessedBeforePreBind(t *testing.T) {
 						defer apiDispatcher.Close()
 					}
 
-					internalCache := internalcache.New(ctx, apiDispatcher)
+					internalCache := internalcache.New(ctx, apiDispatcher, false)
 					cache := &fakecache.Cache{
 						Cache: internalCache,
 						ForgetFunc: func(pod *v1.Pod) {
@@ -1906,7 +1901,7 @@ func TestSchedulerNoPhantomPodAfterDelete(t *testing.T) {
 				defer apiDispatcher.Close()
 			}
 
-			scache := internalcache.New(ctx, apiDispatcher)
+			scache := internalcache.New(ctx, apiDispatcher, false)
 			firstPod := podWithPort("pod.Name", "", 8080)
 			node := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", UID: types.UID("node1")}}
 			scache.AddNode(logger, &node)
@@ -1995,7 +1990,7 @@ func TestSchedulerFailedSchedulingReasons(t *testing.T) {
 				defer apiDispatcher.Close()
 			}
 
-			scache := internalcache.New(ctx, apiDispatcher)
+			scache := internalcache.New(ctx, apiDispatcher, false)
 
 			// Design the baseline for the pods, and we will make nodes that don't fit it later.
 			var cpu = int64(4)
@@ -2303,7 +2298,7 @@ func TestSchedulerBinding(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				cache := internalcache.New(ctx, apiDispatcher)
+				cache := internalcache.New(ctx, apiDispatcher, false)
 				if asyncAPICallsEnabled {
 					informerFactory := informers.NewSharedInformerFactory(client, 0)
 					ar := metrics.NewMetricsAsyncRecorder(10, 1*time.Second, ctx.Done())
@@ -3626,7 +3621,7 @@ func TestSchedulerSchedulePod(t *testing.T) {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
-			cache := internalcache.New(ctx, nil)
+			cache := internalcache.New(ctx, nil, false)
 			for _, pod := range test.pods {
 				cache.AddPod(logger, pod)
 			}
@@ -4240,7 +4235,7 @@ func Test_prioritizeNodes(t *testing.T) {
 			_, ctx := ktesting.NewTestContext(t)
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
-			cache := internalcache.New(ctx, nil)
+			cache := internalcache.New(ctx, nil, false)
 			for _, node := range test.nodes {
 				cache.AddNode(klog.FromContext(ctx), node)
 			}
@@ -4442,7 +4437,7 @@ func TestPreferNominatedNodeFilterCallCounts(t *testing.T) {
 			nodes := makeNodeList([]string{"node1", "node2", "node3"})
 			client := clientsetfake.NewClientset(test.pod)
 			informerFactory := informers.NewSharedInformerFactory(client, 0)
-			cache := internalcache.New(ctx, nil)
+			cache := internalcache.New(ctx, nil, false)
 			for _, n := range nodes {
 				cache.AddNode(logger, n)
 			}
@@ -4525,7 +4520,7 @@ func makeNodeList(nodeNames []string) []*v1.Node {
 // makeScheduler makes a simple Scheduler for testing.
 func makeScheduler(ctx context.Context, nodes []*v1.Node) *Scheduler {
 	logger := klog.FromContext(ctx)
-	cache := internalcache.New(ctx, nil)
+	cache := internalcache.New(ctx, nil, false)
 	for _, n := range nodes {
 		cache.AddNode(logger, n)
 	}
@@ -4689,7 +4684,7 @@ func setupTestSchedulerWithVolumeBinding(ctx context.Context, t *testing.T, clie
 		t.Cleanup(apiDispatcher.Close)
 	}
 
-	scache := internalcache.New(ctx, apiDispatcher)
+	scache := internalcache.New(ctx, apiDispatcher, false)
 	scache.AddNode(logger, &testNode)
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
 	pvcInformer := informerFactory.Core().V1().PersistentVolumeClaims()

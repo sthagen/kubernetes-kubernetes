@@ -44,7 +44,6 @@ import (
 	apidispatcher "k8s.io/kubernetes/pkg/scheduler/backend/api_dispatcher"
 	internalcache "k8s.io/kubernetes/pkg/scheduler/backend/cache"
 	cachedebugger "k8s.io/kubernetes/pkg/scheduler/backend/cache/debugger"
-	internalpodgroupmanager "k8s.io/kubernetes/pkg/scheduler/backend/podgroupmanager"
 	internalqueue "k8s.io/kubernetes/pkg/scheduler/backend/queue"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	apicalls "k8s.io/kubernetes/pkg/scheduler/framework/api_calls"
@@ -97,9 +96,6 @@ type Scheduler struct {
 	// Adding a call to APIDispatcher should not be done directly by in-tree usages.
 	// framework.APICache should be used instead.
 	APIDispatcher *apidispatcher.APIDispatcher
-
-	// PodGroupManager can be used to provide workload-aware scheduling.
-	PodGroupManager internalpodgroupmanager.PodGroupManager
 
 	// Profiles are the scheduling profiles.
 	Profiles profile.Map
@@ -351,10 +347,8 @@ func New(ctx context.Context,
 	if feature.DefaultFeatureGate.Enabled(features.SchedulerAsyncAPICalls) {
 		apiDispatcher = apidispatcher.New(client, int(options.parallelism), apicalls.Relevances)
 	}
-	var podGroupManager internalpodgroupmanager.PodGroupManager
-	if feature.DefaultFeatureGate.Enabled(features.GenericWorkload) {
-		podGroupManager = internalpodgroupmanager.New(logger)
-	}
+
+	schedulerCache := internalcache.New(ctx, apiDispatcher, feature.DefaultFeatureGate.Enabled(features.GenericWorkload))
 
 	profiles, err := profile.NewMap(ctx, options.profiles, registry, recorderFactory,
 		frameworkruntime.WithComponentConfigVersion(options.componentConfigVersion),
@@ -371,7 +365,7 @@ func New(ctx context.Context,
 		frameworkruntime.WithPodsInPreBind(podsInPreBind),
 		frameworkruntime.WithAPIDispatcher(apiDispatcher),
 		frameworkruntime.WithSharedCSIManager(sharedCSIManager),
-		frameworkruntime.WithPodGroupManager(podGroupManager),
+		frameworkruntime.WithPodGroupManager(schedulerCache),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("initializing profiles: %v", err)
@@ -423,8 +417,6 @@ func New(ctx context.Context,
 		internalqueue.WithPodSigners(podSigners),
 	)
 
-	schedulerCache := internalcache.New(ctx, apiDispatcher)
-
 	var apiCache fwk.APICacher
 	if apiDispatcher != nil {
 		apiCache = apicache.New(podQueue, schedulerCache)
@@ -452,7 +444,6 @@ func New(ctx context.Context,
 		logger:                                 logger,
 		APIDispatcher:                          apiDispatcher,
 		nominatedNodeNameForExpectationEnabled: feature.DefaultFeatureGate.Enabled(features.NominatedNodeNameForExpectation),
-		PodGroupManager:                        podGroupManager,
 	}
 	sched.NextPod = podQueue.Pop
 	sched.applyDefaultHandlers()

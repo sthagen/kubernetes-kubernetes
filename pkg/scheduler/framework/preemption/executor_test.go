@@ -602,7 +602,7 @@ func TestPrepareCandidate(t *testing.T) {
 					informerFactory.Start(ctx.Done())
 					informerFactory.WaitForCacheSync(ctx.Done())
 					if asyncAPICallsEnabled {
-						cache := internalcache.New(ctx, apiDispatcher)
+						cache := internalcache.New(ctx, apiDispatcher, false)
 						fwk.SetAPICacher(apicache.New(nil, cache))
 					}
 
@@ -829,7 +829,7 @@ func TestPrepareCandidateAsyncSetsPreemptingSets(t *testing.T) {
 				}
 				informerFactory.Start(ctx.Done())
 				if asyncAPICallsEnabled {
-					cache := internalcache.New(ctx, apiDispatcher)
+					cache := internalcache.New(ctx, apiDispatcher, false)
 					fwk.SetAPICacher(apicache.New(nil, cache))
 				}
 

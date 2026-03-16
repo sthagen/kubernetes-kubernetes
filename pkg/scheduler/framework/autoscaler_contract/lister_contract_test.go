@@ -33,6 +33,8 @@ var _ fwk.NodeInfoLister = &nodeInfoListerContract{}
 var _ fwk.StorageInfoLister = &storageInfoListerContract{}
 var _ fwk.SharedLister = &shareListerContract{}
 var _ fwk.ResourceSliceLister = &resourceSliceListerContract{}
+var _ fwk.PodGroupStateLister = &podGroupStateListerContract{}
+var _ fwk.PodGroupState = &podGroupStateContract{}
 var _ fwk.DeviceClassLister = &deviceClassListerContract{}
 var _ fwk.ResourceClaimTracker = &resourceClaimTrackerContract{}
 var _ fwk.DeviceClassResolver = &deviceClassResolverContract{}
@@ -69,6 +71,46 @@ func (c *shareListerContract) NodeInfos() fwk.NodeInfoLister {
 }
 
 func (c *shareListerContract) StorageInfos() fwk.StorageInfoLister {
+	return nil
+}
+
+func (c *shareListerContract) PodGroupStates() fwk.PodGroupStateLister {
+	return nil
+}
+
+type podGroupStateListerContract struct{}
+
+func (c *podGroupStateListerContract) Get(_ string, _ string) (fwk.PodGroupState, error) {
+	return nil, nil
+}
+
+type podGroupStateContract struct{}
+
+func (c *podGroupStateContract) AllPods() sets.Set[types.UID] {
+	return nil
+}
+
+func (c *podGroupStateContract) UnscheduledPods() map[string]*v1.Pod {
+	return nil
+}
+
+func (c *podGroupStateContract) AssumedPods() sets.Set[types.UID] {
+	return nil
+}
+
+func (c *podGroupStateContract) AssignedPods() sets.Set[types.UID] {
+	return nil
+}
+
+func (c *podGroupStateContract) AllPodsCount() int {
+	return 0
+}
+
+func (c *podGroupStateContract) ScheduledPodsCount() int {
+	return 0
+}
+
+func (c *podGroupStateContract) ScheduledPods() []*v1.Pod {
 	return nil
 }
 

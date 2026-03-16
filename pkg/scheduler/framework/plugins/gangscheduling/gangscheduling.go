@@ -25,7 +25,6 @@ import (
 	schedulingapi "k8s.io/api/scheduling/v1alpha2"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	schedulinglisters "k8s.io/client-go/listers/scheduling/v1alpha2"
 	"k8s.io/klog/v2"
 	fwk "k8s.io/kube-scheduler/framework"
@@ -38,25 +37,31 @@ import (
 const (
 	// Name is the name of the plugin used in the plugin registry and configurations.
 	Name = names.GangScheduling
+	// permitTimeoutDuration defines how long the gang pods should
+	// wait at the permit stage for a quorum before being rejected.
+	permitTimeoutDuration = 5 * time.Minute
 )
 
 // GangScheduling is a plugin that enforces "all-or-nothing" scheduling for pods
 // belonging to a PodGroup with a Gang scheduling policy.
 type GangScheduling struct {
-	handle         fwk.Handle
-	podGroupLister schedulinglisters.PodGroupLister
+	handle          fwk.Handle
+	podGroupLister  schedulinglisters.PodGroupLister
+	podGroupManager fwk.PodGroupManager
+	snapshotLister  fwk.SharedLister
 }
 
 var _ fwk.EnqueueExtensions = &GangScheduling{}
 var _ fwk.PreEnqueuePlugin = &GangScheduling{}
-var _ fwk.ReservePlugin = &GangScheduling{}
 var _ fwk.PermitPlugin = &GangScheduling{}
 
 // New initializes a new plugin and returns it.
 func New(_ context.Context, _ runtime.Object, fh fwk.Handle, fts feature.Features) (fwk.Plugin, error) {
 	return &GangScheduling{
-		handle:         fh,
-		podGroupLister: fh.SharedInformerFactory().Scheduling().V1alpha2().PodGroups().Lister(),
+		handle:          fh,
+		podGroupLister:  fh.SharedInformerFactory().Scheduling().V1alpha2().PodGroups().Lister(),
+		podGroupManager: fh.PodGroupManager(),
+		snapshotLister:  fh.SnapshotSharedLister(),
 	}, nil
 }
 
@@ -137,7 +142,7 @@ func (pl *GangScheduling) PreEnqueue(ctx context.Context, pod *v1.Pod) *fwk.Stat
 		return nil
 	}
 
-	podGroupState, err := pl.handle.PodGroupManager().PodGroupState(namespace, schedulingGroup)
+	podGroupState, err := pl.podGroupManager.PodGroupStates().Get(namespace, *schedulingGroup.PodGroupName)
 	if err != nil {
 		return fwk.AsStatus(err)
 	}
@@ -148,35 +153,6 @@ func (pl *GangScheduling) PreEnqueue(ctx context.Context, pod *v1.Pod) *fwk.Stat
 
 	// The quorum is met, allow the pod to enter the scheduling queue.
 	return nil
-}
-
-// Reserve is called after a node has been selected for the pod. For gang pods,
-// this stage marks the pod as "assumed" in the PodGroupManager,
-// contributing to the count of pods ready to be co-scheduled at the Permit stage.
-func (pl *GangScheduling) Reserve(ctx context.Context, cs fwk.CycleState, pod *v1.Pod, nodeName string) *fwk.Status {
-	if pod.Spec.SchedulingGroup == nil {
-		return nil
-	}
-	podGroupState, err := pl.handle.PodGroupManager().PodGroupState(pod.Namespace, pod.Spec.SchedulingGroup)
-	if err != nil {
-		return fwk.AsStatus(err)
-	}
-	podGroupState.AssumePod(pod.UID)
-	return nil
-}
-
-// Unreserve removes the gang pod from the "assumed" state in the PodGroupManager,
-// ensuring it doesn't count towards the Permit quorum.
-func (pl *GangScheduling) Unreserve(ctx context.Context, cs fwk.CycleState, pod *v1.Pod, nodeName string) {
-	if pod.Spec.SchedulingGroup == nil {
-		return
-	}
-	podGroupState, err := pl.handle.PodGroupManager().PodGroupState(pod.Namespace, pod.Spec.SchedulingGroup)
-	if err != nil {
-		utilruntime.HandleErrorWithContext(ctx, err, "Failed to get pod group state", "pod", klog.KObj(pod), "schedulingGroup", pod.Spec.SchedulingGroup)
-		return
-	}
-	podGroupState.ForgetPod(pod.UID)
 }
 
 // Permit forces all pods in a gang to wait at this stage. Once the number of waiting (assumed) pods
@@ -203,7 +179,16 @@ func (pl *GangScheduling) Permit(ctx context.Context, state fwk.CycleState, pod 
 		return nil, 0
 	}
 
-	podGroupState, err := pl.handle.PodGroupManager().PodGroupState(namespace, schedulingGroup)
+	// Select a lister for the pod group state based on the currently executed scheduling phase.
+	// In the pod group scheduling cycle, it reads from the snapshot.
+	// Otherwise, it reads the runtime state of the pod group from the cache.
+	var podGroupStateLister fwk.PodGroupStateLister
+	if state.IsPodGroupSchedulingCycle() {
+		podGroupStateLister = pl.snapshotLister.PodGroupStates()
+	} else {
+		podGroupStateLister = pl.podGroupManager.PodGroupStates()
+	}
+	podGroupState, err := podGroupStateLister.Get(namespace, *schedulingGroup.PodGroupName)
 	if err != nil {
 		return fwk.AsStatus(err), 0
 	}
@@ -213,7 +198,7 @@ func (pl *GangScheduling) Permit(ctx context.Context, state fwk.CycleState, pod 
 		unscheduledPods := podGroupState.UnscheduledPods()
 		pl.handle.Activate(klog.FromContext(ctx), unscheduledPods)
 		logger.V(4).Info("Quorum is not met for a gang. Waiting for another pod to allow", "pod", klog.KObj(pod), "schedulingGroup", schedulingGroup, "activatedPods", len(unscheduledPods))
-		return fwk.NewStatus(fwk.Wait, "waiting for minCount pods from a gang to be scheduled"), podGroupState.SchedulingTimeout()
+		return fwk.NewStatus(fwk.Wait, "waiting for minCount pods from a gang to be scheduled"), permitTimeoutDuration
 	}
 
 	assumedPods := podGroupState.AssumedPods()

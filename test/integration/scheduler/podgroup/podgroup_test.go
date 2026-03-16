@@ -30,7 +30,6 @@ import (
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/scheduler"
-	"k8s.io/kubernetes/pkg/scheduler/backend/podgroupmanager"
 	"k8s.io/kubernetes/pkg/scheduler/backend/queue"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
 	testutils "k8s.io/kubernetes/test/integration/util"
@@ -392,8 +391,6 @@ func TestPodGroupScheduling(t *testing.T) {
 				features.GenericWorkload: true,
 				features.GangScheduling:  true,
 			})
-
-			podgroupmanager.DefaultSchedulingTimeoutDuration = 5 * time.Second
 
 			testCtx := testutils.InitTestSchedulerWithNS(t, "podgroup-scheduling",
 				// disable backoff

@@ -42,7 +42,6 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
 	internalcache "k8s.io/kubernetes/pkg/scheduler/backend/cache"
 	fakecache "k8s.io/kubernetes/pkg/scheduler/backend/cache/fake"
-	"k8s.io/kubernetes/pkg/scheduler/backend/podgroupmanager"
 	internalqueue "k8s.io/kubernetes/pkg/scheduler/backend/queue"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/defaultbinder"
@@ -149,11 +148,11 @@ func TestPodGroupInfoForPod(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			logger, ctx := ktesting.NewTestContext(t)
-			manager := podgroupmanager.New(logger)
+			cache := internalcache.New(ctx, nil, true)
 
-			manager.AddPod(tt.pInfo.Pod)
+			cache.AddPodGroupMember(tt.pInfo.Pod)
 			for _, pod := range tt.unscheduledPods {
-				manager.AddPod(pod)
+				cache.AddPodGroupMember(pod)
 			}
 
 			q := internalqueue.NewTestQueue(ctx, nil)
@@ -164,7 +163,7 @@ func TestPodGroupInfoForPod(t *testing.T) {
 				}
 			}
 			sched := &Scheduler{
-				PodGroupManager: manager,
+				Cache:           cache,
 				SchedulingQueue: q,
 			}
 
@@ -274,7 +273,7 @@ func TestSkipPodGroupPodSchedule(t *testing.T) {
 
 	logger, ctx := ktesting.NewTestContext(t)
 
-	cache := internalcache.New(ctx, nil)
+	cache := internalcache.New(ctx, nil, true)
 	registry := frameworkruntime.Registry{
 		queuesort.Name:     queuesort.New,
 		defaultbinder.Name: defaultbinder.New,
@@ -362,7 +361,7 @@ func TestPodGroupCycle_UpdateSnapshotError(t *testing.T) {
 	// Create fake cache that returns error on UpdateSnapshot
 	updateSnapshotErr := fmt.Errorf("update snapshot error")
 	cache := &fakecache.Cache{
-		Cache: internalcache.New(ctx, nil),
+		Cache: internalcache.New(ctx, nil, true),
 		UpdateSnapshotFunc: func(nodeSnapshot *internalcache.Snapshot) error {
 			return updateSnapshotErr
 		},
@@ -795,6 +794,7 @@ func TestPodGroupSchedulingAlgorithm(t *testing.T) {
 				client := clientsetfake.NewClientset(testNode)
 				informerFactory := informers.NewSharedInformerFactory(client, 0)
 				queue := internalqueue.NewSchedulingQueue(nil, informerFactory)
+				snapshot := internalcache.NewEmptySnapshot()
 
 				registry := []tf.RegisterPluginFunc{
 					tf.RegisterFilterPlugin(tt.plugin.Name(), func(_ context.Context, _ runtime.Object, _ fwk.Handle) (fwk.Plugin, error) {
@@ -816,19 +816,19 @@ func TestPodGroupSchedulingAlgorithm(t *testing.T) {
 					frameworkruntime.WithClientSet(client),
 					frameworkruntime.WithEventRecorder(events.NewFakeRecorder(100)),
 					frameworkruntime.WithInformerFactory(informerFactory),
-					frameworkruntime.WithSnapshotSharedLister(internalcache.NewEmptySnapshot()),
+					frameworkruntime.WithSnapshotSharedLister(snapshot),
 					frameworkruntime.WithPodNominator(queue),
 				)
 				if err != nil {
 					t.Fatalf("Failed to create new framework: %v", err)
 				}
 
-				cache := internalcache.New(ctx, nil)
+				cache := internalcache.New(ctx, nil, true)
 				cache.AddNode(logger, testNode)
 
 				sched := &Scheduler{
 					Cache:            cache,
-					nodeInfoSnapshot: internalcache.NewEmptySnapshot(),
+					nodeInfoSnapshot: snapshot,
 					SchedulingQueue:  queue,
 					Profiles:         profile.Map{"test-scheduler": schedFwk},
 				}
@@ -1236,7 +1236,7 @@ func TestSubmitPodGroupAlgorithmResult(t *testing.T) {
 				t.Fatalf("Failed to create new framework: %v", err)
 			}
 
-			cache := internalcache.New(ctx, nil)
+			cache := internalcache.New(ctx, nil, true)
 			cache.AddNode(klog.FromContext(ctx), testNode)
 
 			sched := &Scheduler{
