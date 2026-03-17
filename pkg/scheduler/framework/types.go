@@ -556,11 +556,6 @@ type QueuedPodInfo struct {
 	// GatingPluginEvents records the events registered by the plugin that gated the Pod at PreEnqueue.
 	// We have it as a cache purpose to avoid re-computing which event(s) might ungate the Pod.
 	GatingPluginEvents []fwk.ClusterEvent
-	// NeedsPodGroupScheduling says whether the pod needs to pass a pod group scheduling cycle or not.
-	// If set to false, it means that the pod either passed the pod group cycle
-	// or doesn't belong to any pod group.
-	// This field can only be set to true when GenericWorkload feature flag is enabled.
-	NeedsPodGroupScheduling bool
 	// PodSignature for opportunistic batching
 	PodSignature fwk.PodSignature
 }
@@ -628,7 +623,6 @@ func (pqi *QueuedPodInfo) DeepCopy() *QueuedPodInfo {
 		GatingPluginEvents:      slices.Clone(pqi.GatingPluginEvents),
 		PendingPlugins:          pqi.PendingPlugins.Clone(),
 		ConsecutiveErrorsCount:  pqi.ConsecutiveErrorsCount,
-		NeedsPodGroupScheduling: pqi.NeedsPodGroupScheduling,
 		PodSignature:            pqi.PodSignature,
 	}
 }

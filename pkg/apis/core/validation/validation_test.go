@@ -8035,7 +8035,7 @@ func TestValidateResizePolicy(t *testing.T) {
 				{ResourceName: "memory", RestartPolicy: "RestartContainer"},
 			},
 			ExpectError:      true,
-			Errors:           field.ErrorList{field.Invalid(field.NewPath("field"), core.ResourceResizeRestartPolicy("RestartContainer"), "must be 'NotRequired' when `restartPolicy` is 'Never'")},
+			Errors:           field.ErrorList{field.Invalid(field.NewPath("field"), core.ResourceResizeRestartPolicy("RestartContainer"), "must be 'NotRequired' when pod `restartPolicy` is 'Never'")},
 			PodRestartPolicy: "Never",
 		},
 		"InvalidMemoryPolicyWithPodRestartPolicy": {
@@ -8044,7 +8044,7 @@ func TestValidateResizePolicy(t *testing.T) {
 				{ResourceName: "memory", RestartPolicy: "NotRequired"},
 			},
 			ExpectError:      true,
-			Errors:           field.ErrorList{field.Invalid(field.NewPath("field"), core.ResourceResizeRestartPolicy("RestartContainer"), "must be 'NotRequired' when `restartPolicy` is 'Never'")},
+			Errors:           field.ErrorList{field.Invalid(field.NewPath("field"), core.ResourceResizeRestartPolicy("RestartContainer"), "must be 'NotRequired' when pod `restartPolicy` is 'Never'")},
 			PodRestartPolicy: "Never",
 		},
 		"InvalidMemoryCPUPolicyWithPodRestartPolicy": {
@@ -8053,7 +8053,7 @@ func TestValidateResizePolicy(t *testing.T) {
 				{ResourceName: "memory", RestartPolicy: "RestartContainer"},
 			},
 			ExpectError:      true,
-			Errors:           field.ErrorList{field.Invalid(field.NewPath("field"), core.ResourceResizeRestartPolicy("RestartContainer"), "must be 'NotRequired' when `restartPolicy` is 'Never'"), field.Invalid(field.NewPath("field"), core.ResourceResizeRestartPolicy("RestartContainer"), "must be 'NotRequired' when `restartPolicy` is 'Never'")},
+			Errors:           field.ErrorList{field.Invalid(field.NewPath("field"), core.ResourceResizeRestartPolicy("RestartContainer"), "must be 'NotRequired' when pod `restartPolicy` is 'Never'"), field.Invalid(field.NewPath("field"), core.ResourceResizeRestartPolicy("RestartContainer"), "must be 'NotRequired' when pod `restartPolicy` is 'Never'")},
 			PodRestartPolicy: "Never",
 		},
 		"ValidMemoryCPUPolicyWithPodRestartPolicy": {
@@ -8067,19 +8067,21 @@ func TestValidateResizePolicy(t *testing.T) {
 		},
 	}
 	for k, v := range testCases {
-		errs := validateResizePolicy(v.PolicyList, field.NewPath("field"), &v.PodRestartPolicy)
-		if !v.ExpectError && len(errs) > 0 {
-			t.Errorf("Testcase %s - expected success, got error: %+v", k, errs)
-		}
-		if v.ExpectError {
-			if len(errs) == 0 {
-				t.Errorf("Testcase %s - expected error, got success", k)
+		t.Run(k, func(t *testing.T) {
+			errs := validateResizePolicy(v.PolicyList, field.NewPath("field"), &v.PodRestartPolicy)
+			if !v.ExpectError && len(errs) > 0 {
+				t.Errorf("Testcase %s - expected success, got error: %+v", k, errs)
 			}
-			delta := cmp.Diff(errs, v.Errors)
-			if delta != "" {
-				t.Errorf("Testcase %s - expected errors '%v', got '%v', diff: '%v'", k, v.Errors, errs, delta)
+			if v.ExpectError {
+				if len(errs) == 0 {
+					t.Errorf("Testcase %s - expected error, got success", k)
+				}
+				delta := cmp.Diff(errs, v.Errors)
+				if delta != "" {
+					t.Errorf("Testcase %s - expected errors '%v', got '%v', diff: '%v'", k, v.Errors, errs, delta)
+				}
 			}
-		}
+		})
 	}
 }
 
@@ -9467,8 +9469,7 @@ func TestValidateInitContainers(t *testing.T) {
 		Image:                    "nginx",
 		ImagePullPolicy:          "IfNotPresent",
 		TerminationMessagePolicy: "File",
-	},
-	}
+	}}
 
 	successCase := []core.Container{{
 		Name:  "container-1-same-host-port-different-protocol",
@@ -9537,10 +9538,27 @@ func TestValidateInitContainers(t *testing.T) {
 		ResizePolicy: []core.ContainerResizePolicy{
 			{ResourceName: "cpu", RestartPolicy: "NotRequired"},
 		},
-	},
-	}
-	var PodRestartPolicy core.RestartPolicy = "Never"
-	if errs := validateInitContainers(successCase, podOS, containers, volumeDevices, nil, defaultGracePeriod, field.NewPath("field"), PodValidationOptions{AllowSidecarResizePolicy: true}, &PodRestartPolicy, noUserNamespace); len(errs) != 0 {
+	}, {
+		Name:                     "restartcontainer-policy-allowed-if-already-exists",
+		Image:                    "nginx",
+		ImagePullPolicy:          "IfNotPresent",
+		TerminationMessagePolicy: "File",
+		ResizePolicy: []core.ContainerResizePolicy{
+			{ResourceName: core.ResourceCPU, RestartPolicy: core.RestartContainer},
+		},
+	}, {
+		Name:                     "restartcontainer-policy-allowed-if-sidecar",
+		Image:                    "nginx",
+		ImagePullPolicy:          "IfNotPresent",
+		TerminationMessagePolicy: "File",
+		ResizePolicy: []core.ContainerResizePolicy{
+			{ResourceName: core.ResourceCPU, RestartPolicy: core.RestartContainer},
+		},
+		RestartPolicy: ptr.To(core.ContainerRestartPolicyAlways),
+	}}
+
+	var PodRestartPolicy core.RestartPolicy = "Always"
+	if errs := validateInitContainers(successCase, podOS, containers, volumeDevices, nil, defaultGracePeriod, field.NewPath("field"), PodValidationOptions{AllowSidecarResizePolicy: true, AllowExistingRestartContainerForNonSidecarInitContainer: true}, &PodRestartPolicy, noUserNamespace); len(errs) != 0 {
 		t.Errorf("expected success: %v", errs)
 	}
 
@@ -9915,22 +9933,41 @@ func TestValidateInitContainers(t *testing.T) {
 			},
 		}},
 		field.ErrorList{{Type: field.ErrorTypeRequired, Field: "initContainers[0].lifecycle.preStop", BadValue: ""}},
-	},
-		{
-			"Not supported ResizePolicy: invalid",
-			line(),
-			[]core.Container{{
-				Name:                     "init",
-				Image:                    "image",
-				ImagePullPolicy:          "IfNotPresent",
-				TerminationMessagePolicy: "File",
-				ResizePolicy: []core.ContainerResizePolicy{
-					{ResourceName: "cpu", RestartPolicy: "NotRequired"},
-				},
-			}},
-			field.ErrorList{{Type: field.ErrorTypeInvalid, Field: "initContainers[0].resizePolicy", BadValue: []core.ContainerResizePolicy{{ResourceName: "cpu", RestartPolicy: "NotRequired"}}}},
-		},
-	}
+	}, {
+		"Not supported ResizePolicy: invalid",
+		line(),
+		[]core.Container{{
+			Name:                     "init",
+			Image:                    "image",
+			ImagePullPolicy:          "IfNotPresent",
+			TerminationMessagePolicy: "File",
+			ResizePolicy: []core.ContainerResizePolicy{
+				{ResourceName: "cpu", RestartPolicy: "NotRequired"},
+			},
+		}},
+		field.ErrorList{{Type: field.ErrorTypeInvalid, Field: "initContainers[0].resizePolicy", BadValue: []core.ContainerResizePolicy{{ResourceName: "cpu", RestartPolicy: "NotRequired"}}}},
+	}, {
+		"RestartContainer policy forbidden for non-sidecar init container",
+		line(),
+		[]core.Container{{
+			Name:                     "standard-init-no-restart",
+			Image:                    "image",
+			ImagePullPolicy:          "IfNotPresent",
+			TerminationMessagePolicy: "File",
+			ResizePolicy: []core.ContainerResizePolicy{
+				{ResourceName: core.ResourceCPU, RestartPolicy: core.RestartContainer},
+			},
+		}},
+		field.ErrorList{{
+			Type:     field.ErrorTypeInvalid,
+			Field:    "initContainers[0].resizePolicy",
+			BadValue: []core.ContainerResizePolicy{{ResourceName: core.ResourceCPU, RestartPolicy: core.RestartContainer}},
+		}, {
+			Type:     field.ErrorTypeInvalid,
+			Field:    "initContainers[0].resizePolicy[0].restartPolicy",
+			BadValue: core.RestartContainer,
+		}},
+	}}
 
 	for _, tc := range errorCases {
 		t.Run(tc.title+"__@L"+tc.line, func(t *testing.T) {
@@ -13718,6 +13755,37 @@ func TestValidatePodUpdate(t *testing.T) {
 			),
 			err:  "Forbidden: pod updates may not change fields other than `spec.containers[*].image",
 			test: "pod OS changing from Linux to Windows, IdentifyPodOS featuregate set",
+		}, {
+			new: *podtest.MakePod("foo",
+				podtest.SetInitContainers(core.Container{
+					Name: "ictr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File",
+					ResizePolicy: []core.ContainerResizePolicy{{ResourceName: core.ResourceCPU, RestartPolicy: core.RestartContainer}},
+				}),
+			),
+			old: *podtest.MakePod("foo",
+				podtest.SetInitContainers(core.Container{
+					Name: "ictr", Image: "image", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File",
+				}),
+			),
+			err:  "spec.initContainers[0].resizePolicy[0].restartPolicy: Invalid value: \"RestartContainer\": must not be set to 'RestartContainer' for non-sidecar initContainers",
+			test: "adding RestartContainer resize policy to non-sidecar init container should fail",
+			opts: PodValidationOptions{AllowSidecarResizePolicy: true, AllowExistingRestartContainerForNonSidecarInitContainer: false},
+		}, {
+			new: *podtest.MakePod("foo",
+				podtest.SetInitContainers(core.Container{
+					Name: "ictr", Image: "image:v2", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File",
+					ResizePolicy: []core.ContainerResizePolicy{{ResourceName: core.ResourceCPU, RestartPolicy: core.RestartContainer}},
+				}),
+			),
+			old: *podtest.MakePod("foo",
+				podtest.SetInitContainers(core.Container{
+					Name: "ictr", Image: "image:v1", ImagePullPolicy: "IfNotPresent", TerminationMessagePolicy: "File",
+					ResizePolicy: []core.ContainerResizePolicy{{ResourceName: core.ResourceCPU, RestartPolicy: core.RestartContainer}},
+				}),
+			),
+			err:  "",
+			test: "existing RestartContainer resize policy on non-sidecar init container should be allowed on update",
+			opts: PodValidationOptions{AllowSidecarResizePolicy: true, AllowExistingRestartContainerForNonSidecarInitContainer: true},
 		}, {
 			new: *podtest.MakePod("foo",
 				podtest.SetOS(core.Windows),

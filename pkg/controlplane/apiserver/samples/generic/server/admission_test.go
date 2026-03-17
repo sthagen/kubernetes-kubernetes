@@ -25,6 +25,7 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/admission/network/defaultingressclass"
 	"k8s.io/kubernetes/plugin/pkg/admission/nodedeclaredfeatures"
 	"k8s.io/kubernetes/plugin/pkg/admission/nodetaint"
+	"k8s.io/kubernetes/plugin/pkg/admission/podresize"
 	"k8s.io/kubernetes/plugin/pkg/admission/podtopologylabels"
 	podpriority "k8s.io/kubernetes/plugin/pkg/admission/priority"
 	"k8s.io/kubernetes/plugin/pkg/admission/runtimeclass"
@@ -46,6 +47,7 @@ var intentionallyOffPlugins = sets.New[string](
 	podsecurity.PluginName,                  // PodSecurity
 	podtopologylabels.PluginName,            // PodTopologyLabels
 	nodedeclaredfeatures.PluginName,         // NodeDeclaredFeatures
+	podresize.PluginName,                    // PodResize
 )
 
 func TestDefaultOffAdmissionPlugins(t *testing.T) {

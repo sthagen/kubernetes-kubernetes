@@ -1025,9 +1025,9 @@ func TestUpdatePodGroupStateSnapshot(t *testing.T) {
 	}
 }
 
-// Test_BindingPodGroupMember simulates binding and tests that when an assumed pod
+// TestBindingPodGroupMember simulates binding and tests that when an assumed pod
 // gets bound, its state within pod group transitions from assumed to assigned.
-func Test_BindingPodGroupMember(t *testing.T) {
+func TestBindingPodGroupMember(t *testing.T) {
 	logger, ctx := ktesting.NewTestContext(t)
 	cache := newCache(ctx, time.Second, nil, true)
 	podGroupName := "pg"
@@ -2153,7 +2153,7 @@ func TestSchedulerCache_UpdateSnapshot(t *testing.T) {
 						allPods:         map[types.UID]*v1.Pod{"puid-podgroup-0": podsWithPodGroupName[0]},
 						assignedPods:    sets.New[types.UID]("puid-podgroup-0"),
 						unscheduledPods: sets.New[types.UID](),
-						assumedPods:     sets.New[types.UID](),
+						assumedPods:     make(map[types.UID]*v1.Pod),
 					},
 				},
 				newPodGroupKey("test-ns", "pg-2"): {
@@ -2161,7 +2161,7 @@ func TestSchedulerCache_UpdateSnapshot(t *testing.T) {
 						allPods:         map[types.UID]*v1.Pod{"puid-podgroup-2": podsWithPodGroupName[2]},
 						assignedPods:    sets.New[types.UID]("puid-podgroup-2"),
 						unscheduledPods: sets.New[types.UID](),
-						assumedPods:     sets.New[types.UID](),
+						assumedPods:     make(map[types.UID]*v1.Pod),
 					},
 				},
 			},

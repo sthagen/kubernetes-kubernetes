@@ -40,6 +40,9 @@ type CycleState struct {
 	// in the PreBind extension point.
 	parallelPreBindPlugins sets.Set[string]
 	// isPodGroupSchedulingCycle indicates whether this cycle is a pod group scheduling cycle or not.
+	// If set to false, it means that the pod referencing this CycleState either passed the pod group cycle
+	// or doesn't belong to any pod group.
+	// This field can only be set to true when GenericWorkload feature flag is enabled.
 	isPodGroupSchedulingCycle bool
 }
 

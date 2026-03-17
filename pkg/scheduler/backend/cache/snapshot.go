@@ -302,7 +302,7 @@ func (s *Snapshot) AssumePod(podInfo *framework.PodInfo) error {
 	}
 	pgKey := newPodGroupKey(pod.Namespace, *pod.Spec.SchedulingGroup.PodGroupName)
 	if pgs, ok := s.podGroupStates[pgKey]; ok {
-		pgs.assumePod(pod.UID)
+		pgs.assumePod(pod)
 	}
 	return nil
 }

@@ -430,8 +430,9 @@ func GetValidationOptionsFromPodSpecAndMeta(podSpec, oldPodSpec *api.PodSpec, po
 		AllowContainerRestartPolicyRules:                    utilfeature.DefaultFeatureGate.Enabled(features.ContainerRestartRules),
 		AllowUserNamespacesWithVolumeDevices:                false,
 		// This also allows restart rules on sidecar containers.
-		AllowRestartAllContainers:  utilfeature.DefaultFeatureGate.Enabled(features.RestartAllContainersOnContainerExits),
-		AllowImageVolumeWithDigest: utilfeature.DefaultFeatureGate.Enabled(features.ImageVolumeWithDigest),
+		AllowRestartAllContainers:                               utilfeature.DefaultFeatureGate.Enabled(features.RestartAllContainersOnContainerExits),
+		AllowImageVolumeWithDigest:                              utilfeature.DefaultFeatureGate.Enabled(features.ImageVolumeWithDigest),
+		AllowExistingRestartContainerForNonSidecarInitContainer: hasRestartContainerForNonSidecarInitContainer(oldPodSpec),
 	}
 
 	// If old spec uses relaxed validation or enabled the RelaxedEnvironmentVariableValidation feature gate,
@@ -2005,4 +2006,22 @@ func dropImageVolumeWithDigest(podStatus *api.PodStatus) {
 			podStatus.EphemeralContainerStatuses[i].VolumeMounts[j].VolumeStatus.Image = nil
 		}
 	}
+}
+
+// hasRestartContainerForNonSidecarInitContainer returns true if any non-sidecar init container
+// has a RestartContainer resize policy.
+func hasRestartContainerForNonSidecarInitContainer(spec *api.PodSpec) bool {
+	if spec == nil {
+		return false
+	}
+	for _, c := range spec.InitContainers {
+		if !IsRestartableInitContainer(&c) {
+			for _, p := range c.ResizePolicy {
+				if p.RestartPolicy == api.RestartContainer {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

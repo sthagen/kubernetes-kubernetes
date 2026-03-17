@@ -72,6 +72,7 @@ import (
 	"k8s.io/apiserver/pkg/server/healthz"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
+	metricsfeatures "k8s.io/component-base/metrics/features"
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/component-base/metrics/testutil"
 	zpagesfeatures "k8s.io/component-base/zpages/features"
@@ -82,6 +83,7 @@ import (
 	"k8s.io/kubernetes/pkg/features"
 	kubeletconfiginternal "k8s.io/kubernetes/pkg/kubelet/apis/config"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
+	kubeletmetrics "k8s.io/kubernetes/pkg/kubelet/metrics"
 	servermetrics "k8s.io/kubernetes/pkg/kubelet/server/metrics"
 	"k8s.io/kubernetes/pkg/kubelet/server/stats"
 	"k8s.io/kubernetes/pkg/volume"
@@ -2482,4 +2484,27 @@ kubelet_websocket_streaming_requests_total{subresource="portforward"} 1
 			}
 		})
 	}
+}
+
+func TestKubeletNativeHistogramMetrics(t *testing.T) {
+	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, metricsfeatures.NativeHistograms, true)
+	metricsfeatures.ApplyFeatureGates(utilfeature.DefaultFeatureGate)
+	kubeletmetrics.Register()
+
+	tCtx := ktesting.Init(t)
+	fw := newServerTest(tCtx)
+	defer fw.testHTTPServer.Close()
+
+	histogramMetric := "kubelet_pod_start_duration_seconds"
+	metrics, err := testutil.ScrapeMetricsProto(fw.testHTTPServer.URL+"/metrics", fw.testHTTPServer.Client())
+	if err != nil {
+		t.Fatalf("failed to scrape metrics: %v", err)
+	}
+
+	mf, ok := metrics[histogramMetric]
+	if !ok {
+		t.Fatalf("metric %q not found in kubelet metrics endpoint", histogramMetric)
+	}
+
+	testutil.AssertHasNativeHistogram(t, mf, nil)
 }

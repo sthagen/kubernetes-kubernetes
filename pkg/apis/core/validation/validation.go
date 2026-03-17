@@ -3645,9 +3645,10 @@ func validateResizePolicy(policyList []core.ContainerResizePolicy, fldPath *fiel
 		}
 
 		if *podRestartPolicy == core.RestartPolicyNever && p.RestartPolicy != core.NotRequired {
-			allErrors = append(allErrors, field.Invalid(fldPath, p.RestartPolicy, "must be 'NotRequired' when `restartPolicy` is 'Never'"))
+			allErrors = append(allErrors, field.Invalid(fldPath, p.RestartPolicy, "must be 'NotRequired' when pod `restartPolicy` is 'Never'"))
 		}
 	}
+
 	return allErrors
 }
 
@@ -3695,7 +3696,7 @@ func validateContainerRestartPolicy(policy *core.ContainerRestartPolicy, rules [
 			allowedActions = supportedContainerRestartRuleActionsWithRestartAllContainers
 		}
 		if !allowedActions.Has(rule.Action) {
-			allErrs = append(allErrs, field.NotSupported(policyRulesFld.Child("action"), rule.Action, sets.List(supportedContainerRestartRuleActions)))
+			allErrs = append(allErrs, field.NotSupported(policyRulesFld.Child("action"), rule.Action, sets.List(allowedActions)))
 		}
 
 		if rule.ExitCodes != nil {
@@ -3857,6 +3858,14 @@ func validateInitContainers(containers []core.Container, os *core.PodOS, regular
 
 		if !opts.AllowSidecarResizePolicy && len(ctr.ResizePolicy) > 0 {
 			allErrs = append(allErrs, field.Invalid(idxPath.Child("resizePolicy"), ctr.ResizePolicy, "must not be set for init containers"))
+		}
+
+		if !restartAlways && !opts.AllowExistingRestartContainerForNonSidecarInitContainer {
+			for j, p := range ctr.ResizePolicy {
+				if p.RestartPolicy == core.RestartContainer {
+					allErrs = append(allErrs, field.Invalid(fldPath.Index(i).Child("resizePolicy").Index(j).Child("restartPolicy"), p.RestartPolicy, "must not be set to 'RestartContainer' for non-sidecar initContainers"))
+				}
+			}
 		}
 	}
 
@@ -4477,6 +4486,8 @@ type PodValidationOptions struct {
 	AllowEnvFilesValidation bool
 	// Allows containers have restart policy and restart policy rules.
 	AllowContainerRestartPolicyRules bool
+	// Allow existing RestartContainer resize policy for non-sidecar init containers for backward compatibility
+	AllowExistingRestartContainerForNonSidecarInitContainer bool
 	// Allow user namespaces with volume devices, even though they will not function properly (should only be tolerated in updates of objects which already have this invalid configuration).
 	AllowUserNamespacesWithVolumeDevices bool
 	// Allow taint toleration comparison operators (Lt, Gt)

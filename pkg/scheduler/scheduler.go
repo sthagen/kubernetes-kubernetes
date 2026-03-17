@@ -117,6 +117,7 @@ type Scheduler struct {
 	registeredHandlers []cache.ResourceEventHandlerRegistration
 
 	nominatedNodeNameForExpectationEnabled bool
+	genericWorkloadEnabled                 bool
 }
 
 func (sched *Scheduler) applyDefaultHandlers() {
@@ -444,6 +445,7 @@ func New(ctx context.Context,
 		logger:                                 logger,
 		APIDispatcher:                          apiDispatcher,
 		nominatedNodeNameForExpectationEnabled: feature.DefaultFeatureGate.Enabled(features.NominatedNodeNameForExpectation),
+		genericWorkloadEnabled:                 feature.DefaultFeatureGate.Enabled(features.GenericWorkload),
 	}
 	sched.NextPod = podQueue.Pop
 	sched.applyDefaultHandlers()

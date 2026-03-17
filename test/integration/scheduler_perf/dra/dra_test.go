@@ -62,7 +62,7 @@ func TestSchedulerPerf(t *testing.T) {
 			// - "default": don't change features
 			var options []perf.SchedulerPerfOption
 			if allocatorName == "stable" {
-				options = append(options, perf.WithPreRunFn(func(tCtx ktesting.TContext) error {
+				options = append(options, perf.WithPreRunFn(func(tCtx ktesting.TContext, _ *perf.Workload) (func(), error) {
 					gate := utilfeature.DefaultFeatureGate.(featuregate.MutableVersionedFeatureGate)
 					overrides := featuregatetesting.FeatureOverrides{
 						features.DRAPrioritizedList: false,
@@ -74,7 +74,7 @@ func TestSchedulerPerf(t *testing.T) {
 						overrides[features.DRAConsumableCapacity] = false
 					}
 					featuregatetesting.SetFeatureGatesDuringTest(tCtx, utilfeature.DefaultFeatureGate, overrides)
-					return nil
+					return nil, nil
 				}))
 			}
 

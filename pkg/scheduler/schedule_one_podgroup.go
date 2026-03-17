@@ -440,8 +440,6 @@ func (sched *Scheduler) submitPodGroupAlgorithmResult(ctx context.Context, sched
 			}
 			switch {
 			case podGroupResult.status.IsSuccess():
-				// Pod no longer needs a pod group scheduling cycle. Setting it to false to disable any checks in further functions.
-				pInfo.NeedsPodGroupScheduling = false
 				// Disable pod group scheduling in cycle state before binding.
 				podCtx.state.SetPodGroupSchedulingCycle(false)
 				// Schedule result is applied for pod and its binding cycle executes.

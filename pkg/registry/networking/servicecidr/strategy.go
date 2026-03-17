@@ -56,10 +56,14 @@ func (serviceCIDRStrategy) NamespaceScoped() bool {
 func (serviceCIDRStrategy) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {
 	fields := map[fieldpath.APIVersion]*fieldpath.Set{
 		"networking.k8s.io/v1": fieldpath.NewSet(
-			fieldpath.MakePathOrDie("status"),
+		// Disabled to match PrepareForCreate/PrepareForUpdate, which do not wipe fields
+		// https://github.com/kubernetes/kubernetes/issues/137680
+		// fieldpath.MakePathOrDie("status"),
 		),
 		"networking.k8s.io/v1beta1": fieldpath.NewSet(
-			fieldpath.MakePathOrDie("status"),
+		// Disabled to match PrepareForCreate/PrepareForUpdate, which do not wipe fields
+		// https://github.com/kubernetes/kubernetes/issues/137680
+		// fieldpath.MakePathOrDie("status"),
 		),
 	}
 	return fields
@@ -130,9 +134,11 @@ var StatusStrategy = serviceCIDRStatusStrategy{Strategy}
 func (serviceCIDRStatusStrategy) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {
 	fields := map[fieldpath.APIVersion]*fieldpath.Set{
 		"networking.k8s.io/v1": fieldpath.NewSet(
+			fieldpath.MakePathOrDie("metadata"),
 			fieldpath.MakePathOrDie("spec"),
 		),
 		"networking.k8s.io/v1beta1": fieldpath.NewSet(
+			fieldpath.MakePathOrDie("metadata"),
 			fieldpath.MakePathOrDie("spec"),
 		),
 	}

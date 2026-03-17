@@ -861,10 +861,10 @@ func (cache *cacheImpl) assumePodGroupMember(pod *v1.Pod) {
 	podGroupState, exists := cache.podGroupStates[key]
 	if !exists {
 		podGroupState = newPodGroupState()
-		cache.podGroupStates[key] = podGroupState
 		podGroupState.allPods[pod.UID] = pod
+		cache.podGroupStates[key] = podGroupState
 	}
-	podGroupState.assumePod(pod.UID)
+	podGroupState.assumePod(pod)
 }
 
 // forgetPodGroupMember moves the pod back from assumed to unscheduled in its pod group state.

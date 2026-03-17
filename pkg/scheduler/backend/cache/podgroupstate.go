@@ -74,7 +74,7 @@ type podGroupStateData struct {
 	unscheduledPods sets.Set[types.UID]
 	// assumedPods tracks pods that have reached the Reserve stage and are waiting
 	// for the rest of the gang to arrive before being allowed to bind.
-	assumedPods sets.Set[types.UID]
+	assumedPods map[types.UID]*v1.Pod
 	// assignedPods tracks all pods belonging to the group that are assigned (bound).
 	assignedPods sets.Set[types.UID]
 }
@@ -83,7 +83,7 @@ func newPodGroupStateData() podGroupStateData {
 	return podGroupStateData{
 		allPods:         make(map[types.UID]*v1.Pod),
 		unscheduledPods: sets.New[types.UID](),
-		assumedPods:     sets.New[types.UID](),
+		assumedPods:     make(map[types.UID]*v1.Pod),
 		assignedPods:    sets.New[types.UID](),
 	}
 }
@@ -109,7 +109,7 @@ func (d *podGroupStateData) updatePod(oldPod, newPod *v1.Pod) {
 		d.assignedPods.Insert(newPod.UID)
 		// Clear pod from unscheduled and assumed when it is assigned.
 		d.unscheduledPods.Delete(newPod.UID)
-		d.assumedPods.Delete(newPod.UID)
+		delete(d.assumedPods, newPod.UID)
 	}
 }
 
@@ -118,27 +118,26 @@ func (d *podGroupStateData) deletePod(podUID types.UID) {
 	d.generation = nextPodGroupGeneration()
 	delete(d.allPods, podUID)
 	d.unscheduledPods.Delete(podUID)
-	d.assumedPods.Delete(podUID)
+	delete(d.assumedPods, podUID)
 	d.assignedPods.Delete(podUID)
 }
 
 // assumePod marks a pod as assumed within the pod group state.
-func (d *podGroupStateData) assumePod(podUID types.UID) {
-
-	pod := d.allPods[podUID]
+func (d *podGroupStateData) assumePod(pod *v1.Pod) {
+	storedPod, ok := d.allPods[pod.UID]
 	// A scheduling pod may be removed from the cluster.
 	// In that case, we just ignore it.
-	if pod == nil {
+	if !ok {
 		return
 	}
 
 	d.generation = nextPodGroupGeneration()
-	// If the pod is already assigned, put it into assignedPods.
+	// If the pod stored in the state is already assigned, put it into assignedPods.
 	// Otherwise put it to assumedPods.
-	if pod.Spec.NodeName != "" {
+	if storedPod.Spec.NodeName != "" {
 		d.assignedPods.Insert(pod.UID)
 	} else {
-		d.assumedPods.Insert(pod.UID)
+		d.assumedPods[pod.UID] = pod
 	}
 	d.unscheduledPods.Delete(pod.UID)
 }
@@ -155,7 +154,7 @@ func (d *podGroupStateData) forgetPod(podUID types.UID) {
 
 	d.generation = nextPodGroupGeneration()
 
-	d.assumedPods.Delete(podUID)
+	delete(d.assumedPods, podUID)
 
 	// If the pod is already assigned, put it into assignedPods.
 	// Otherwise, put it into unscheduledPods.
@@ -172,8 +171,8 @@ func (d *podGroupStateData) scheduledPods() []*v1.Pod {
 	for uid := range d.assignedPods {
 		scheduledPods = append(scheduledPods, d.allPods[uid])
 	}
-	for uid := range d.assumedPods {
-		scheduledPods = append(scheduledPods, d.allPods[uid])
+	for _, pod := range d.assumedPods {
+		scheduledPods = append(scheduledPods, pod)
 	}
 	return scheduledPods
 }
@@ -199,7 +198,7 @@ func (d *podGroupStateData) deepCopy() podGroupStateData {
 		generation:      d.generation,
 		allPods:         maps.Clone(d.allPods),
 		unscheduledPods: d.unscheduledPods.Clone(),
-		assumedPods:     d.assumedPods.Clone(),
+		assumedPods:     maps.Clone(d.assumedPods),
 		assignedPods:    d.assignedPods.Clone(),
 	}
 }
@@ -274,7 +273,7 @@ func (pgs *podGroupState) AssumedPods() sets.Set[types.UID] {
 	pgs.lock.RLock()
 	defer pgs.lock.RUnlock()
 
-	return pgs.podGroupStateData.assumedPods.Clone()
+	return sets.KeySet(pgs.podGroupStateData.assumedPods)
 }
 
 // AssignedPods returns the UIDs of all pods already assigned (bound) for this group.
@@ -309,8 +308,8 @@ type podGroupStateSnapshot struct {
 }
 
 // assumePod marks a pod within the pod group state snapshot as assumed.
-func (s *podGroupStateSnapshot) assumePod(podUID types.UID) {
-	s.podGroupStateData.assumePod(podUID)
+func (s *podGroupStateSnapshot) assumePod(pod *v1.Pod) {
+	s.podGroupStateData.assumePod(pod)
 }
 
 // forgetPod removes a pod from the assumed state within the snapshot.
@@ -330,7 +329,7 @@ func (s *podGroupStateSnapshot) UnscheduledPods() map[string]*v1.Pod {
 
 // AssumedPods returns the UIDs of all assumed pods for this group.
 func (s *podGroupStateSnapshot) AssumedPods() sets.Set[types.UID] {
-	return s.podGroupStateData.assumedPods
+	return sets.KeySet(s.podGroupStateData.assumedPods)
 }
 
 // AssignedPods returns the UIDs of all assigned (bound) pods for this group.

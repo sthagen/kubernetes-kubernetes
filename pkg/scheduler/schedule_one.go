@@ -74,7 +74,7 @@ func (sched *Scheduler) ScheduleOne(ctx context.Context) {
 	if podInfo == nil || podInfo.Pod == nil {
 		return
 	}
-	if podInfo.NeedsPodGroupScheduling {
+	if sched.genericWorkloadEnabled && podInfo.Pod.Spec.SchedulingGroup != nil {
 		podGroupInfo, err := sched.podGroupInfoForPod(ctx, podInfo)
 		if err != nil {
 			podFwk, err := sched.frameworkForPod(podInfo.Pod)
@@ -322,7 +322,7 @@ func (sched *Scheduler) assumeAndReserve(
 	assumedPodInfo := podInfo.DeepCopy()
 	assumedPod := assumedPodInfo.Pod
 	// assume modifies `assumedPod` by setting NodeName=scheduleResult.SuggestedHost
-	err := sched.assume(logger, assumedPodInfo, scheduleResult.SuggestedHost)
+	err := sched.assume(logger, state, assumedPodInfo, scheduleResult.SuggestedHost)
 	if err != nil {
 		// This is most probably result of a BUG in retrying logic.
 		// We report an error here so that pod scheduling can be retried.
@@ -370,7 +370,7 @@ func (sched *Scheduler) unreserveAndForget(
 	logger := klog.FromContext(ctx)
 
 	schedFramework.RunReservePluginsUnreserve(ctx, state, assumedPodInfo.Pod, nodeName)
-	if assumedPodInfo.NeedsPodGroupScheduling {
+	if state.IsPodGroupSchedulingCycle() {
 		err := sched.nodeInfoSnapshot.ForgetPod(logger, assumedPodInfo.Pod)
 		if err != nil {
 			return err
@@ -1103,14 +1103,14 @@ func (h *nodeScoreHeap) Pop() interface{} {
 
 // assume signals to the cache that a pod is already in the cache, so that binding can be asynchronous.
 // When called during pod group scheduling cycle, pod is assumed in the snapshot instead.
-func (sched *Scheduler) assume(logger klog.Logger, assumedPodInfo *framework.QueuedPodInfo, host string) error {
+func (sched *Scheduler) assume(logger klog.Logger, state fwk.CycleState, assumedPodInfo *framework.QueuedPodInfo, host string) error {
 	// Optimistically assume that the binding will succeed and send it to apiserver
 	// in the background.
 	// If the binding fails, scheduler will release resources allocated to assumed pod
 	// immediately.
 	assumedPodInfo.Pod.Spec.NodeName = host
 
-	if assumedPodInfo.NeedsPodGroupScheduling {
+	if state.IsPodGroupSchedulingCycle() {
 		err := sched.nodeInfoSnapshot.AssumePod(assumedPodInfo.PodInfo)
 		if err != nil {
 			logger.Error(err, "Scheduler snapshot AssumePod failed")

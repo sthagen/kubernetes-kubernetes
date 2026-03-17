@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/onsi/gomega"
+	"github.com/onsi/gomega/gstruct"
 	gtypes "github.com/onsi/gomega/types"
 
 	v1 "k8s.io/api/core/v1"
@@ -31,6 +32,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	"k8s.io/kubernetes/test/utils/ktesting"
 	"k8s.io/utils/ptr"
 )
@@ -52,6 +54,7 @@ func must[R, P, O any](tCtx ktesting.TContext, call func(context.Context, P, O) 
 
 // createTestNamespace creates a namespace with a name that is derived from the
 // current test name:
+// - Strip TestDRA prefix.
 // - Non-alpha-numeric characters replaced by hyphen.
 // - Truncated in the middle to make it short enough for GenerateName.
 // - Hyphen plus random suffix added by the apiserver.
@@ -59,6 +62,7 @@ func createTestNamespace(tCtx ktesting.TContext, labels map[string]string) strin
 	tCtx.Helper()
 	name := regexp.MustCompile(`[^[:alnum:]_-]`).ReplaceAllString(tCtx.Name(), "-")
 	name = strings.ToLower(name)
+	name = strings.TrimPrefix(name, "testdra-")
 	// Make sure the generated name leaves enough room so we
 	// can use it as a prefix for the driver name.
 	if len(name) > (56 - len(driverNameSuffix)) {
@@ -266,4 +270,45 @@ func waitForClaimAllocatedToDevice(tCtx ktesting.TContext, namespace, claimName 
 		gomega.HaveField("Status.Allocation", gomega.Not(gomega.BeNil())),
 		"Claim should have been allocated.",
 	)
+}
+
+func expectPodUnschedulable(tCtx ktesting.TContext, pod *v1.Pod, reason string) {
+	tCtx.Helper()
+	tCtx.ExpectNoError(e2epod.WaitForPodNameUnschedulableInNamespace(tCtx, tCtx.Client(), pod.Name, pod.Namespace), fmt.Sprintf("expected pod to be unschedulable because %q", reason))
+	pod, err := tCtx.Client().CoreV1().Pods(pod.Namespace).Get(tCtx, pod.Name, metav1.GetOptions{})
+	tCtx.ExpectNoError(err)
+	gomega.NewWithT(tCtx).Expect(pod).To(gomega.HaveField("Status.Conditions", gomega.ContainElement(gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
+		"Type":    gomega.Equal(v1.PodScheduled),
+		"Status":  gomega.Equal(v1.ConditionFalse),
+		"Reason":  gomega.Equal(v1.PodReasonUnschedulable),
+		"Message": gomega.ContainSubstring(reason),
+	}))))
+}
+
+type nodeInfo struct {
+	name       string
+	driverName string
+	class      *resourceapi.DeviceClass
+	pool       string
+}
+
+func expectedAllocatedClaim(request string, nodeInfo nodeInfo) gtypes.GomegaMatcher {
+	return gomega.HaveField("Status.Allocation", gstruct.PointTo(gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
+		"Devices": gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
+			"Results": gomega.HaveExactElements(gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
+				"Request": gomega.Equal(request),
+				"Driver":  gomega.Equal(nodeInfo.driverName),
+				"Pool":    gomega.Equal(nodeInfo.pool),
+			})),
+		}),
+		"NodeSelector": gstruct.PointTo(gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
+			"NodeSelectorTerms": gomega.HaveExactElements(gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
+				"MatchFields": gomega.HaveExactElements(gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
+					"Key":      gomega.Equal("metadata.name"),
+					"Operator": gomega.Equal(v1.NodeSelectorOpIn),
+					"Values":   gomega.HaveExactElements(gomega.Equal(nodeInfo.name)),
+				})),
+			})),
+		})),
+	})))
 }

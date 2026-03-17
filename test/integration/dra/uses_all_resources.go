@@ -78,7 +78,7 @@ func testUsesAllResources(tCtx ktesting.TContext) {
 			c, err := tCtx.Client().ResourceV1().ResourceClaims(claim.Namespace).Get(tCtx, claim.Name, metav1.GetOptions{})
 			actualClaim = c
 			return c, err
-		}).Should(gomega.HaveField("Status.Allocation", gomega.Not(gomega.BeNil())))
+		}).Should(gomega.HaveField("Status.Allocation", gomega.Not(gomega.BeNil())), "claim %s", klog.KObj(claim))
 		tCtx.Expect(actualClaim.Status.Allocation.Devices.Results).To(gomega.HaveLen(1))
 		result := actualClaim.Status.Allocation.Devices.Results[0]
 		id := structured.MakeDeviceID(result.Driver, result.Pool, result.Device)

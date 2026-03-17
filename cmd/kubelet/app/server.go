@@ -83,6 +83,7 @@ import (
 	"k8s.io/component-base/logs"
 	logsapi "k8s.io/component-base/logs/api/v1"
 	"k8s.io/component-base/metrics"
+	metricsfeatures "k8s.io/component-base/metrics/features"
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/component-base/tracing"
 	"k8s.io/component-base/version"
@@ -633,6 +634,9 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 	if err != nil {
 		return err
 	}
+	// Propagate feature gate state to the metrics subsystem. This must be called
+	// after feature gates are set and before any histogram metrics are registered.
+	metricsfeatures.ApplyFeatureGates(featureGate)
 	// validate the initial KubeletServer (we set feature gates first, because this validation depends on feature gates)
 	if err := options.ValidateKubeletServer(s); err != nil {
 		return err

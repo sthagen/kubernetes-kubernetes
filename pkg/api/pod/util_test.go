@@ -7377,3 +7377,104 @@ func TestDropDisabledPodStatusFields_ResourceHealthStatusMessage(t *testing.T) {
 		})
 	}
 }
+
+func TestHasRestartContainerForNonSidecarInitContainer(t *testing.T) {
+	tests := []struct {
+		name     string
+		podSpec  *api.PodSpec
+		expected bool
+	}{
+		{
+			name:     "nil pod spec",
+			podSpec:  nil,
+			expected: false,
+		},
+		{
+			name:     "no init containers",
+			podSpec:  &api.PodSpec{InitContainers: []api.Container{}},
+			expected: false,
+		},
+		{
+			name: "regular init container without resize policy",
+			podSpec: &api.PodSpec{
+				InitContainers: []api.Container{
+					{Name: "init-1"},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "sidecar (restartable) init container with RestartContainer policy",
+			podSpec: &api.PodSpec{
+				InitContainers: []api.Container{
+					{
+						Name:          "sidecar",
+						RestartPolicy: ptr.To(api.ContainerRestartPolicyAlways),
+						ResizePolicy: []api.ContainerResizePolicy{
+							{ResourceName: api.ResourceCPU, RestartPolicy: api.RestartContainer},
+						},
+					},
+				},
+			},
+			expected: false, // Should be false because it's a sidecar
+		},
+		{
+			name: "non-sidecar init container with NotRequired policy",
+			podSpec: &api.PodSpec{
+				InitContainers: []api.Container{
+					{
+						Name: "init-1",
+						ResizePolicy: []api.ContainerResizePolicy{
+							{ResourceName: api.ResourceCPU, RestartPolicy: api.NotRequired},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "non-sidecar init container with RestartContainer policy",
+			podSpec: &api.PodSpec{
+				InitContainers: []api.Container{
+					{
+						Name: "init-1",
+						ResizePolicy: []api.ContainerResizePolicy{
+							{ResourceName: api.ResourceMemory, RestartPolicy: api.RestartContainer},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "mix of sidecar and non-sidecar with RestartContainer policy",
+			podSpec: &api.PodSpec{
+				InitContainers: []api.Container{
+					{
+						Name:          "sidecar",
+						RestartPolicy: ptr.To(api.ContainerRestartPolicyAlways),
+						ResizePolicy: []api.ContainerResizePolicy{
+							{ResourceName: api.ResourceCPU, RestartPolicy: api.RestartContainer},
+						},
+					},
+					{
+						Name: "init-2",
+						ResizePolicy: []api.ContainerResizePolicy{
+							{ResourceName: api.ResourceCPU, RestartPolicy: api.RestartContainer},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasRestartContainerForNonSidecarInitContainer(tt.podSpec)
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
