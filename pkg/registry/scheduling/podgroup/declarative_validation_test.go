@@ -22,9 +22,13 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/apimachinery/pkg/util/version"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	apitesting "k8s.io/kubernetes/pkg/api/testing"
 	"k8s.io/kubernetes/pkg/apis/scheduling"
+	"k8s.io/kubernetes/pkg/features"
 
 	// Ensure all API groups are registered with the scheme
 	_ "k8s.io/kubernetes/pkg/apis/scheduling/install"
@@ -52,6 +56,7 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 	testCases := map[string]struct {
 		input        scheduling.PodGroup
 		expectedErrs field.ErrorList
+		tasEnabled   bool
 	}{
 		"valid": {
 			input: mkValidPodGroup(),
@@ -108,10 +113,64 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 			input:        mkValidPodGroup(setBothPolicies()),
 			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingPolicy"), nil, "").WithOrigin("union")},
 		},
+		"with schedulingConstraints and TAS disabled": {
+			input:        mkValidPodGroup(addTopologyConstraint("foo")),
+			expectedErrs: field.ErrorList{field.Forbidden(field.NewPath("spec", "schedulingConstraints"), "")},
+		},
+		"valid with schedulingConstraints": {
+			input:      mkValidPodGroup(addTopologyConstraint("foo")),
+			tasEnabled: true,
+		},
+		"schedulingConstraints with multiple topology constraints": {
+			input:        mkValidPodGroup(addTopologyConstraint("foo"), addTopologyConstraint("bar")),
+			expectedErrs: field.ErrorList{field.TooMany(field.NewPath("spec", "schedulingConstraints", "topology"), 2, 1).WithOrigin("maxItems")},
+			tasEnabled:   true,
+		},
+		"valid with empty schedulingConstraints": {
+			input:      mkValidPodGroup(setSchedulingConstraints()),
+			tasEnabled: true,
+		},
+		"topologyConstraint with empty topology key": {
+			input:        mkValidPodGroup(addTopologyConstraint("")),
+			expectedErrs: field.ErrorList{field.Required(field.NewPath("spec", "schedulingConstraints", "topology").Index(0).Child("key"), "")},
+			tasEnabled:   true,
+		},
+		"valid with topology key with DNS prefix": {
+			input:      mkValidPodGroup(addTopologyConstraint("example.com/Foo")),
+			tasEnabled: true,
+		},
+		"valid with topology key with prefix with max length": {
+			input:      mkValidPodGroup(addTopologyConstraint(strings.Repeat("a", 253) + "/" + strings.Repeat("b", 63))),
+			tasEnabled: true,
+		},
+		"with topology key with prefix exceending max prefix length": {
+			input:        mkValidPodGroup(addTopologyConstraint(strings.Repeat("a", 254) + "/foo")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingConstraints", "topology").Index(0).Child("key"), nil, "").WithOrigin("format=k8s-label-key")},
+			tasEnabled:   true,
+		},
+		"with topology key with prefix exceending max name length": {
+			input:        mkValidPodGroup(addTopologyConstraint("foo/" + strings.Repeat("b", 64))),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingConstraints", "topology").Index(0).Child("key"), nil, "").WithOrigin("format=k8s-label-key")},
+			tasEnabled:   true,
+		},
+		"with topology key without prefix exceeding max length": {
+			input:        mkValidPodGroup(addTopologyConstraint(strings.Repeat("b", 64))),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingConstraints", "topology").Index(0).Child("key"), nil, "").WithOrigin("format=k8s-label-key")},
+			tasEnabled:   true,
+		},
+		"with topology key with invalid characters": {
+			input:        mkValidPodGroup(addTopologyConstraint("Example.com/Foo")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingConstraints", "topology").Index(0).Child("key"), nil, "").WithOrigin("format=k8s-label-key")},
+			tasEnabled:   true,
+		},
 	}
 	for k, tc := range testCases {
 		t.Run(k, func(t *testing.T) {
-			apitesting.VerifyValidationEquivalence(t, ctx, &tc.input, strategy.Validate, tc.expectedErrs)
+			featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
+				features.GenericWorkload:                 tc.tasEnabled,
+				features.TopologyAwareWorkloadScheduling: tc.tasEnabled,
+			})
+			apitesting.VerifyValidationEquivalence(t, ctx, &tc.input, strategy.Validate, tc.expectedErrs, apitesting.WithMinEmulationVersion(version.MustParse("1.36")))
 		})
 	}
 }
@@ -139,6 +198,7 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 		oldObj       scheduling.PodGroup
 		updateObj    scheduling.PodGroup
 		expectedErrs field.ErrorList
+		tasEnabled   bool
 	}{
 		"valid update": {
 			oldObj:    mkValidPodGroup(setResourceVersion("1")),
@@ -184,11 +244,57 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 			updateObj:    mkValidPodGroup(setResourceVersion("1"), setBasicPolicy()),
 			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingPolicy"), nil, "field is immutable").WithOrigin("immutable").MarkAlpha()},
 		},
+		"valid update with unchanged scheduling constraints and TAS disabled": {
+			oldObj:    mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("foo")),
+			updateObj: mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("foo")),
+		},
+		"valid update with unchanged scheduling constraints": {
+			oldObj:     mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("foo")),
+			updateObj:  mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("foo")),
+			tasEnabled: true,
+		},
+		"invalid update to scheduling constraints": {
+			oldObj:       mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("foo")),
+			updateObj:    mkValidPodGroup(setResourceVersion("1"), setSchedulingConstraints()),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingConstraints"), nil, "field is immutable").WithOrigin("immutable")},
+			tasEnabled:   true,
+		},
+		"invalid update to topology constraints": {
+			oldObj:       mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("foo")),
+			updateObj:    mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("foo"), addTopologyConstraint("bar")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingConstraints"), nil, "field is immutable").WithOrigin("immutable")},
+			tasEnabled:   true,
+		},
+		"invalid update to topology key": {
+			oldObj:       mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("foo")),
+			updateObj:    mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("bar")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingConstraints"), nil, "field is immutable").WithOrigin("immutable")},
+			tasEnabled:   true,
+		},
+		"invalid update to scheduling constraints with TAS disabled": {
+			oldObj:       mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("foo")),
+			updateObj:    mkValidPodGroup(setResourceVersion("1"), setSchedulingConstraints()),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingConstraints"), nil, "field is immutable").WithOrigin("immutable")},
+		},
+		"invalid update to topology constraints with TAS disabled": {
+			oldObj:       mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("foo")),
+			updateObj:    mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("foo"), addTopologyConstraint("bar")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingConstraints"), nil, "field is immutable").WithOrigin("immutable")},
+		},
+		"invalid update to topology key with TAS disabled": {
+			oldObj:       mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("foo")),
+			updateObj:    mkValidPodGroup(setResourceVersion("1"), addTopologyConstraint("bar")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingConstraints"), nil, "field is immutable").WithOrigin("immutable")},
+		},
 	}
 	for k, tc := range testCases {
 		t.Run(k, func(t *testing.T) {
+			featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
+				features.GenericWorkload:                 tc.tasEnabled,
+				features.TopologyAwareWorkloadScheduling: tc.tasEnabled,
+			})
 			strategy := NewStrategy()
-			apitesting.VerifyUpdateValidationEquivalence(t, ctx, &tc.updateObj, &tc.oldObj, strategy.ValidateUpdate, tc.expectedErrs)
+			apitesting.VerifyUpdateValidationEquivalence(t, ctx, &tc.updateObj, &tc.oldObj, strategy.ValidateUpdate, tc.expectedErrs, apitesting.WithMinEmulationVersion(version.MustParse("1.36")))
 		})
 	}
 }
@@ -331,5 +437,20 @@ func addCondition(conditionType string) func(obj *scheduling.PodGroup) {
 			Message:            "Test status condition message",
 			LastTransitionTime: metav1.Now(),
 		})
+	}
+}
+
+func setSchedulingConstraints() func(obj *scheduling.PodGroup) {
+	return func(obj *scheduling.PodGroup) {
+		obj.Spec.SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{}
+	}
+}
+
+func addTopologyConstraint(value string) func(obj *scheduling.PodGroup) {
+	return func(obj *scheduling.PodGroup) {
+		if obj.Spec.SchedulingConstraints == nil {
+			setSchedulingConstraints()(obj)
+		}
+		obj.Spec.SchedulingConstraints.Topology = append(obj.Spec.SchedulingConstraints.Topology, scheduling.TopologyConstraint{Key: value})
 	}
 }

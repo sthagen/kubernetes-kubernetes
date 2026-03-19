@@ -1142,6 +1142,121 @@ func TestPriorityQueue_Pop(t *testing.T) {
 	}
 }
 
+func TestPriorityQueue_PopSpecificPod(t *testing.T) {
+	activePod := st.MakePod().Name("pod-active").Namespace("ns1").UID("pod-active").Label("foo", "").Obj()
+	backoffPod := st.MakePod().Name("pod-backoff").Namespace("ns1").UID("pod-backoff").Label("foo", "").Obj()
+	unschedulablePod := st.MakePod().Name("pod-unschedulable").Namespace("ns1").UID("pod-unschedulable").Label("foo", "").Obj()
+	gatedPod := st.MakePod().Name("pod-gated").Namespace("ns1").UID("pod-gated").Obj()
+	temporarilyGatedPod := st.MakePod().Name("pod-temporarily-gated").Namespace("ns1").UID("pod-temporarily-gated").Label("bar", "").Obj()
+	otherPod := st.MakePod().Name("pod-other").Namespace("ns1").UID("pod-other").Label("foo", "").Obj()
+
+	objs := []runtime.Object{activePod, backoffPod, unschedulablePod, gatedPod, temporarilyGatedPod, otherPod}
+
+	tests := []struct {
+		name       string
+		podToPop   *v1.Pod
+		gated      bool
+		wantPopped bool
+	}{
+		{
+			name:       "Pod is in activeQ",
+			podToPop:   activePod,
+			wantPopped: true,
+		},
+		{
+			name:       "Pod is in backoffQ",
+			podToPop:   backoffPod,
+			wantPopped: true,
+		},
+		{
+			name:       "Pod is in unschedulablePods",
+			podToPop:   unschedulablePod,
+			wantPopped: true,
+		},
+		{
+			name:       "Pod is gated in unschedulablePods",
+			podToPop:   gatedPod,
+			wantPopped: false,
+		},
+		{
+			name:       "Pod was gated, but should be no longer",
+			podToPop:   temporarilyGatedPod,
+			wantPopped: true,
+		},
+		{
+			name:       "Pod is not in any queue",
+			podToPop:   otherPod,
+			wantPopped: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, ctx := ktesting.NewTestContext(t)
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+
+			plugin := &preEnqueuePlugin{allowlists: []string{"foo"}}
+			m := map[string]map[string]fwk.PreEnqueuePlugin{
+				"": {
+					plugin.Name(): plugin,
+				},
+			}
+			q := NewTestQueueWithObjects(ctx, newDefaultQueueSort(), objs, WithPreEnqueuePluginMap(m))
+
+			q.Add(ctx, activePod)
+
+			backoffPodInfo := q.newQueuedPodInfo(ctx, backoffPod)
+			q.backoffQ.add(logger, backoffPodInfo, framework.EventUnscheduledPodAdd.Label())
+
+			unschedPodInfo := q.newQueuedPodInfo(ctx, unschedulablePod)
+			q.unschedulablePods.addOrUpdate(unschedPodInfo, false, framework.EventUnscheduledPodAdd.Label())
+
+			q.Add(ctx, gatedPod)
+			q.Add(ctx, temporarilyGatedPod)
+
+			// Modify the PreEnqueue allowlists to allow the "bar" label of temporarilyGatedPod.
+			plugin.allowlists = []string{"foo", "bar"}
+
+			gotInfo := q.PopSpecificPod(logger, tt.podToPop)
+			if tt.wantPopped {
+				if gotInfo == nil {
+					t.Errorf("Expected pod info to be popped, got nil")
+				} else if gotInfo.Pod.Name != tt.podToPop.Name {
+					t.Errorf("Expected pod %s, got %s", tt.podToPop.Name, gotInfo.Pod.Name)
+				}
+				_, ok := q.GetPod(tt.podToPop.Name, tt.podToPop.Namespace)
+				if ok {
+					t.Errorf("Expected pod not to exist in the scheduling queue after being popped")
+				}
+			} else {
+				if gotInfo != nil {
+					t.Errorf("Expected nil pod info, got %v", gotInfo.Pod.Name)
+				}
+				if tt.podToPop != otherPod {
+					_, ok := q.GetPod(tt.podToPop.Name, tt.podToPop.Namespace)
+					if !ok {
+						t.Errorf("Expected pod to exist in the scheduling queue after not being popped")
+					}
+				}
+			}
+
+			// Verify if it's in inFlight pods.
+			inFlightPods := q.InFlightPods()
+			found := false
+			for _, p := range inFlightPods {
+				if p.UID == tt.podToPop.UID {
+					found = true
+					break
+				}
+			}
+			if found != tt.wantPopped {
+				t.Errorf("Expected pod inFlight: %v, got: %v", tt.wantPopped, found)
+			}
+		})
+	}
+}
+
 func TestPriorityQueue_Update(t *testing.T) {
 	c := testingclock.NewFakeClock(time.Now())
 

@@ -188,6 +188,9 @@ func TestValidateWorkload(t *testing.T) {
 		"no controllerRef": mkWorkload(func(w *scheduling.Workload) {
 			w.Spec.ControllerRef = nil
 		}),
+		"no scheduling constraints": mkWorkload(func(w *scheduling.Workload) {
+			w.Spec.PodGroupTemplates[1].SchedulingConstraints = nil
+		}),
 	}
 	for name, workload := range successCases {
 		errs := ValidateWorkload(workload)
@@ -381,11 +384,21 @@ func mkWorkload(tweaks ...func(w *scheduling.Workload)) *scheduling.Workload {
 				SchedulingPolicy: scheduling.PodGroupSchedulingPolicy{
 					Basic: &scheduling.BasicSchedulingPolicy{},
 				},
+				SchedulingConstraints: &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{
+						{Key: "foo"},
+					},
+				},
 			}, {
 				Name: "group2",
 				SchedulingPolicy: scheduling.PodGroupSchedulingPolicy{
 					Gang: &scheduling.GangSchedulingPolicy{
 						MinCount: 2,
+					},
+				},
+				SchedulingConstraints: &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{
+						{Key: "foo"},
 					},
 				},
 			}},
@@ -400,6 +413,9 @@ func mkWorkload(tweaks ...func(w *scheduling.Workload)) *scheduling.Workload {
 func TestValidatePodGroup(t *testing.T) {
 	successCases := map[string]*scheduling.PodGroup{
 		"gang policy": mkPodGroup(),
+		"no scheduling constraints": mkPodGroup(func(pg *scheduling.PodGroup) {
+			pg.Spec.SchedulingConstraints = nil
+		}),
 	}
 	for name, podGroup := range successCases {
 		errs := ValidatePodGroup(podGroup)
@@ -735,6 +751,11 @@ func mkPodGroup(tweaks ...func(pg *scheduling.PodGroup)) *scheduling.PodGroup {
 			SchedulingPolicy: scheduling.PodGroupSchedulingPolicy{
 				Gang: &scheduling.GangSchedulingPolicy{
 					MinCount: 5,
+				},
+			},
+			SchedulingConstraints: &scheduling.PodGroupSchedulingConstraints{
+				Topology: []scheduling.TopologyConstraint{
+					{Key: "foo"},
 				},
 			},
 		},

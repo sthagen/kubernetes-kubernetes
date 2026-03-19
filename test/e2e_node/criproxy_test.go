@@ -191,7 +191,7 @@ var _ = SIGDescribe(feature.CriProxy, framework.WithSerial(), func() {
 
 			volMountStatus := getVolumeMountStatus(pod)
 
-			if volMountStatus.VolumeStatus.Image != nil {
+			if volMountStatus.VolumeStatus != nil && volMountStatus.VolumeStatus.Image != nil {
 				ginkgo.Fail(fmt.Sprintf("ImageRef should not be set when ImageStatus fails, but got: %s", volMountStatus.VolumeStatus.Image.ImageRef))
 			}
 
@@ -210,7 +210,7 @@ var _ = SIGDescribe(feature.CriProxy, framework.WithSerial(), func() {
 
 			volMountStatus := getVolumeMountStatus(pod)
 
-			if volMountStatus.VolumeStatus.Image != nil {
+			if volMountStatus.VolumeStatus != nil && volMountStatus.VolumeStatus.Image != nil {
 				ginkgo.Fail(fmt.Sprintf("ImageRef should not be set when ImageStatus fails, but got: %s", volMountStatus.VolumeStatus.Image.ImageRef))
 			}
 

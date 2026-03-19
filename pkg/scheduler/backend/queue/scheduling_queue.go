@@ -822,6 +822,12 @@ func (p *PriorityQueue) determineSchedulingHintForInFlightPod(logger klog.Logger
 		// In this case, we should retry scheduling it because this Pod may not be retried until the next flush.
 		return queueAfterBackoff
 	}
+	if p.isGenericWorkloadEnabled && pInfo.Pod.Spec.SchedulingGroup != nil {
+		// When the pod is a member of the pod group, i.e., needs pod group scheduling,
+		// its retry logic should be based solely on backoff, because event-based requeueing logic
+		// is not yet implemented for pod group level.
+		return queueAfterBackoff
+	}
 
 	events, err := p.activeQ.clusterEventsForPod(logger, pInfo)
 	if err != nil {
@@ -1014,36 +1020,23 @@ func (p *PriorityQueue) PopSpecificPod(logger klog.Logger, pod *v1.Pod) *framewo
 
 	pInfoLookup := newQueuedPodInfoForLookup(pod)
 
+	// Try to activate the pod, then obtain it from the activeQ.
+	// This way, the pod behaves almost the same as it would be activated by some event,
+	// moved to the activeQ and popped from there.
+	_ = p.activate(logger, pod)
+
 	var pInfo *framework.QueuedPodInfo
 	p.activeQ.underRLock(func(unlockedActiveQ unlockedActiveQueueReader) {
 		pInfo, _ = unlockedActiveQ.get(pInfoLookup)
 	})
-	if pInfo != nil {
-		if err := p.activeQ.delete(pInfo); err != nil {
-			return nil
-		}
-	} else {
-		var exists bool
-		pInfo, exists = p.backoffQ.get(pInfoLookup)
-		if exists {
-			if !p.backoffQ.delete(pInfo) {
-				return nil
-			}
-		} else {
-			pInfo = p.unschedulablePods.get(pod)
-			if pInfo != nil {
-				if pInfo.Gated() {
-					// Gated pod shouldn't be popped.
-					return nil
-				}
-				p.unschedulablePods.delete(pod, pInfo.Gated())
-			} else {
-				// Not found in any queue
-				return nil
-			}
-		}
+	if pInfo == nil {
+		return nil
 	}
-
+	if err := p.activeQ.delete(pInfo); err != nil {
+		// Error means that the pod disappeared from the activeQ in the meantime.
+		// Returning nil is fine.
+		return nil
+	}
 	err := p.activeQ.movePodToInFlight(pInfo)
 	if err != nil {
 		utilruntime.HandleErrorWithLogger(logger, err, "Discarding the popped pod")

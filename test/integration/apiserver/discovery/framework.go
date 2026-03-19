@@ -46,7 +46,9 @@ const acceptV1JSON = "application/json"
 const acceptV2JSON = "application/json;g=apidiscovery.k8s.io;v=v2;as=APIGroupDiscoveryList"
 const acceptV2JSONNoPeer = "application/json;g=apidiscovery.k8s.io;v=v2;as=APIGroupDiscoveryList;profile=nopeer"
 
-const maxTimeout = 30 * time.Second
+// Discovery integration tests frequently need to wait through aggregator,
+// API registration, and discovery document convergence on contended CI nodes.
+const maxTimeout = 120 * time.Second
 
 type testClient interface {
 	kubernetes.Interface
@@ -141,7 +143,7 @@ func (a applyAPIService) Cleanup(ctx context.Context, client testClient) error {
 	name := a.Version + "." + a.Group
 	err := client.ApiregistrationV1().APIServices().Delete(ctx, name, metav1.DeleteOptions{})
 
-	if !errors.IsNotFound(err) {
+	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
 
@@ -210,7 +212,7 @@ func (a applyCRD) Cleanup(ctx context.Context, client testClient) error {
 	name := a.Names.Plural + "." + a.Group
 	err := client.ApiextensionsV1().CustomResourceDefinitions().Delete(ctx, name, metav1.DeleteOptions{})
 
-	if !errors.IsNotFound(err) {
+	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
 

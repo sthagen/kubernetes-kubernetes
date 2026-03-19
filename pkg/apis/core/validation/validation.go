@@ -65,6 +65,7 @@ import (
 	"k8s.io/kubernetes/pkg/apis/core/helper/qos"
 	podshelper "k8s.io/kubernetes/pkg/apis/core/pods"
 	corev1 "k8s.io/kubernetes/pkg/apis/core/v1"
+	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"k8s.io/kubernetes/pkg/capabilities"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/fieldpath"
@@ -6050,6 +6051,7 @@ func ValidatePodStatusUpdate(newPod, oldPod *core.Pod, opts PodValidationOptions
 	allErrs = append(allErrs, ValidateEphemeralContainerStateTransition(newPod.Status.EphemeralContainerStatuses, oldPod.Status.EphemeralContainerStatuses, fldPath.Child("ephemeralContainerStatuses"))...)
 	allErrs = append(allErrs, validatePodResourceClaimStatuses(newPod.Status.ResourceClaimStatuses, newPod.Spec.ResourceClaims, fldPath.Child("resourceClaimStatuses"))...)
 	allErrs = append(allErrs, validatePodExtendedResourceClaimStatus(newPod.Status.ExtendedResourceClaimStatus, &newPod.Spec, fldPath.Child("extendedResourceClaimStatus"))...)
+	allErrs = append(allErrs, validateNodeAllocatableResourceClaimStatus(newPod.Status, &newPod.Spec, fldPath.Child("nodeAllocatableResourceClaimStatuses"))...)
 
 	if newIPErrs := validatePodIPs(newPod, oldPod); len(newIPErrs) > 0 {
 		allErrs = append(allErrs, newIPErrs...)
@@ -6132,6 +6134,67 @@ func validatePodResourceClaimStatuses(statuses []core.PodResourceClaimStatus, po
 		if status.ResourceClaimName != nil {
 			for _, detail := range ValidateResourceClaimName(*status.ResourceClaimName, false) {
 				allErrs = append(allErrs, field.Invalid(idxPath.Child("resourceClaimName"), status.ResourceClaimName, detail))
+			}
+		}
+	}
+
+	return allErrs
+}
+
+// validateNodeAllocatableResourceClaimStatus validates NodeAllocatableResourceClaimStatuses in a pod status
+func validateNodeAllocatableResourceClaimStatus(podStatus core.PodStatus, podSpec *core.PodSpec, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if len(podStatus.NodeAllocatableResourceClaimStatuses) == 0 {
+		return allErrs
+	}
+
+	for i, nodeAllocatableStatus := range podStatus.NodeAllocatableResourceClaimStatuses {
+		statusFldPath := fldPath.Index(i)
+		if nodeAllocatableStatus.ResourceClaimName == "" {
+			allErrs = append(allErrs, field.Required(statusFldPath.Child("resourceClaimName"), "must not be empty"))
+		}
+
+		// First check the podSpec to see if the ResourceClaim is directly referenced.
+		// If not, check the podStatus to see if the ResourceClaim was generated from a template.
+		found := false
+		for _, claimRef := range podSpec.ResourceClaims {
+			if (claimRef.ResourceClaimName != nil) && (*claimRef.ResourceClaimName == nodeAllocatableStatus.ResourceClaimName) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			for _, claimRef := range podStatus.ResourceClaimStatuses {
+				if (claimRef.ResourceClaimName != nil) && (*claimRef.ResourceClaimName == nodeAllocatableStatus.ResourceClaimName) {
+					found = true
+					break
+				}
+			}
+		}
+
+		if !found {
+			allErrs = append(allErrs, field.Invalid(statusFldPath.Child("resourceClaimName"), nodeAllocatableStatus.ResourceClaimName, "no mapping found in pod reference"))
+		}
+
+		// TODO(KEP-5517): Evaluate if its ok to have no containers referencing a node allocatable resource claim.
+		// This is pending on defining kubelet cgroup enforcement.
+		if len(nodeAllocatableStatus.Containers) == 0 {
+			allErrs = append(allErrs, field.Required(statusFldPath.Child("containers"), "must not be empty"))
+		}
+
+		resourcesFldPath := statusFldPath.Child("resources")
+		if len(nodeAllocatableStatus.Resources) == 0 {
+			allErrs = append(allErrs, field.Required(resourcesFldPath, "must not be empty"))
+		}
+
+		for resourceName, quantity := range nodeAllocatableStatus.Resources {
+			keyPath := resourcesFldPath.Key(string(resourceName))
+			if !v1helper.IsNativeResource(v1.ResourceName(resourceName)) {
+				allErrs = append(allErrs, field.Invalid(keyPath, resourceName, "must be a node allocatable resource name"))
+			}
+			if quantity.Cmp(resource.Quantity{}) < 0 {
+				allErrs = append(allErrs, field.Invalid(keyPath, quantity.String(), "must be non-negative"))
 			}
 		}
 	}
@@ -6289,7 +6352,15 @@ func ValidatePodResize(newPod, oldPod *core.Pod, opts PodValidationOptions) fiel
 		allErrs = append(allErrs, validatePodLevelResourcesResize(newPod, oldPod, &newPodSpecCopy, specPath, opts)...)
 	}
 
-	// Part 3: Validate that the changes between oldPod.Spec.Containers[].Resources and
+	// Part 3: Disable InPlaceResize if a pod is using DRA resource claims for node-allocatable resources.
+	// TODO(KEP-5517) - Handle in place resize with node-allocatable resource claims.
+	// Currently, the presence of any node-allocatable resource claim blocks resizing for all resources, irrespective of whether
+	// ResourceClaim is used for the same resource.
+	if len(oldPod.Status.NodeAllocatableResourceClaimStatuses) > 0 {
+		allErrs = append(allErrs, field.Forbidden(specPath, "pods with node allocatable resource claims cannot be resized"))
+	}
+
+	// Part 4: Validate that the changes between oldPod.Spec.Containers[].Resources and
 	// newPod.Spec.Containers[].Resources are allowed. Also validate that the changes between oldPod.Spec.InitContainers[].Resources and
 	// newPod.Spec.InitContainers[].Resources are allowed.
 
@@ -9651,8 +9722,12 @@ func validateImageVolumeStatus(imageVolumeStatus *core.ImageVolumeStatus, fldPat
 }
 
 // validateVolumeStatus returns an error if the given struct has more than 1 populated field.
-func validateVolumeStatus(volumeStatus core.VolumeStatus, fldPath *field.Path) field.ErrorList {
+func validateVolumeStatus(volumeStatus *core.VolumeStatus, fldPath *field.Path) field.ErrorList {
 	allErrors := field.ErrorList{}
+
+	if volumeStatus == nil {
+		return allErrors
+	}
 
 	numStatuses := 0
 

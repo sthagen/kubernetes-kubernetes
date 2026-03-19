@@ -23,9 +23,13 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/apimachinery/pkg/util/version"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	apitesting "k8s.io/kubernetes/pkg/api/testing"
 	"k8s.io/kubernetes/pkg/apis/scheduling"
+	"k8s.io/kubernetes/pkg/features"
 
 	// Ensure all API groups are registered with the scheme
 	_ "k8s.io/kubernetes/pkg/apis/scheduling/install"
@@ -52,6 +56,7 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 	testCases := map[string]struct {
 		input        scheduling.Workload
 		expectedErrs field.ErrorList
+		tasEnabled   bool
 	}{
 		"valid": {
 			input: mkValidWorkload(),
@@ -135,10 +140,60 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 		"valid with basic policy": {
 			input: mkValidWorkload(setBasicPolicy(0)),
 		},
+		"valid with schedulingConstraints": {
+			input:      mkValidWorkload(addTopologyConstraint(0, "foo")),
+			tasEnabled: true,
+		},
+		"valid with empty schedulingConstraints": {
+			input:      mkValidWorkload(setSchedulingConstraints(0)),
+			tasEnabled: true,
+		},
+		"with multiple topology constraints": {
+			input:        mkValidWorkload(addTopologyConstraint(0, "foo"), addTopologyConstraint(0, "bar")),
+			expectedErrs: field.ErrorList{field.TooMany(field.NewPath("spec", "podGroupTemplates").Index(0).Child("schedulingConstraints", "topology"), 2, 1).WithOrigin("maxItems")},
+			tasEnabled:   true,
+		},
+		"with empty topology key": {
+			input:        mkValidWorkload(addTopologyConstraint(0, "")),
+			expectedErrs: field.ErrorList{field.Required(field.NewPath("spec", "podGroupTemplates").Index(0).Child("schedulingConstraints", "topology").Index(0).Child("key"), "")},
+			tasEnabled:   true,
+		},
+		"valid with topology key with DNS prefix": {
+			input:      mkValidWorkload(addTopologyConstraint(0, "example.com/Foo")),
+			tasEnabled: true,
+		},
+		"valid with topology key with prefix with max length": {
+			input:      mkValidWorkload(addTopologyConstraint(0, strings.Repeat("a", 253)+"/"+strings.Repeat("b", 63))),
+			tasEnabled: true,
+		},
+		"with topology key with prefix exceending max prefix length": {
+			input:        mkValidWorkload(addTopologyConstraint(0, strings.Repeat("a", 254)+"/foo")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplates").Index(0).Child("schedulingConstraints", "topology").Index(0).Child("key"), nil, "").WithOrigin("format=k8s-label-key")},
+			tasEnabled:   true,
+		},
+		"with topology key with prefix exceending max name length": {
+			input:        mkValidWorkload(addTopologyConstraint(0, "foo/"+strings.Repeat("b", 64))),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplates").Index(0).Child("schedulingConstraints", "topology").Index(0).Child("key"), nil, "").WithOrigin("format=k8s-label-key")},
+			tasEnabled:   true,
+		},
+		"with topology key without prefix exceeding max length": {
+			input:        mkValidWorkload(addTopologyConstraint(0, strings.Repeat("b", 64))),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplates").Index(0).Child("schedulingConstraints", "topology").Index(0).Child("key"), nil, "").WithOrigin("format=k8s-label-key")},
+			tasEnabled:   true,
+		},
+		"with topology key with invalid characters": {
+			input:        mkValidWorkload(addTopologyConstraint(0, "Example.com/Foo")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplates").Index(0).Child("schedulingConstraints", "topology").Index(0).Child("key"), nil, "").WithOrigin("format=k8s-label-key")},
+			tasEnabled:   true,
+		},
 	}
 	for k, tc := range testCases {
 		t.Run(k, func(t *testing.T) {
-			apitesting.VerifyValidationEquivalence(t, ctx, &tc.input, Strategy.Validate, tc.expectedErrs)
+			featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
+				features.GenericWorkload:                 tc.tasEnabled,
+				features.TopologyAwareWorkloadScheduling: tc.tasEnabled,
+			})
+			apitesting.VerifyValidationEquivalence(t, ctx, &tc.input, Strategy.Validate, tc.expectedErrs, apitesting.WithMinEmulationVersion(version.MustParse("1.36")))
 		})
 	}
 }
@@ -156,6 +211,7 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 	testCases := map[string]struct {
 		oldObj       scheduling.Workload
 		updateObj    scheduling.Workload
+		tasEnabled   bool
 		expectedErrs field.ErrorList
 	}{
 		"valid update": {
@@ -221,9 +277,55 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 			updateObj:    mkValidWorkload(setResourceVersion("1"), setBasicPolicy(0)),
 			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplates"), nil, "field is immutable").WithOrigin("immutable").MarkAlpha()},
 		},
+		"valid update with unchanged scheduling constraints": {
+			oldObj:     mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "foo")),
+			updateObj:  mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "foo")),
+			tasEnabled: true,
+		},
+		"invalid update to scheduling constraints": {
+			oldObj:       mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "foo")),
+			updateObj:    mkValidWorkload(setResourceVersion("1"), setSchedulingConstraints(0)),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplates"), nil, "field is immutable").WithOrigin("immutable").MarkAlpha()},
+			tasEnabled:   true,
+		},
+		"invalid update to topology constraints": {
+			oldObj:       mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "foo")),
+			updateObj:    mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "foo"), addTopologyConstraint(0, "bar")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplates"), nil, "field is immutable").WithOrigin("immutable").MarkAlpha()},
+			tasEnabled:   true,
+		},
+		"invalid update to topology key": {
+			oldObj:       mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "foo")),
+			updateObj:    mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "bar")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplates"), nil, "field is immutable").WithOrigin("immutable").MarkAlpha()},
+			tasEnabled:   true,
+		},
+		"valid update with unchanged scheduling constraints with TAS disabled": {
+			oldObj:    mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "foo")),
+			updateObj: mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "foo")),
+		},
+		"invalid update to scheduling constraints with TAS disabled": {
+			oldObj:       mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "foo")),
+			updateObj:    mkValidWorkload(setResourceVersion("1"), setSchedulingConstraints(0)),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplates"), nil, "field is immutable").WithOrigin("immutable").MarkAlpha()},
+		},
+		"invalid update to topology constraints with TAS disabled": {
+			oldObj:       mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "foo")),
+			updateObj:    mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "foo"), addTopologyConstraint(0, "bar")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplates"), nil, "field is immutable").WithOrigin("immutable").MarkAlpha()},
+		},
+		"invalid update to topology key with TAS disabled": {
+			oldObj:       mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "foo")),
+			updateObj:    mkValidWorkload(setResourceVersion("1"), addTopologyConstraint(0, "bar")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplates"), nil, "field is immutable").WithOrigin("immutable").MarkAlpha()},
+		},
 	}
 	for k, tc := range testCases {
 		t.Run(k, func(t *testing.T) {
+			featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
+				features.GenericWorkload:                 tc.tasEnabled,
+				features.TopologyAwareWorkloadScheduling: tc.tasEnabled,
+			})
 			ctx := genericapirequest.WithRequestInfo(genericapirequest.NewDefaultContext(), &genericapirequest.RequestInfo{
 				APIPrefix:         "apis",
 				APIGroup:          "scheduling.k8s.io",
@@ -233,7 +335,7 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 				IsResourceRequest: true,
 				Verb:              "update",
 			})
-			apitesting.VerifyUpdateValidationEquivalence(t, ctx, &tc.updateObj, &tc.oldObj, Strategy.ValidateUpdate, tc.expectedErrs)
+			apitesting.VerifyUpdateValidationEquivalence(t, ctx, &tc.updateObj, &tc.oldObj, Strategy.ValidateUpdate, tc.expectedErrs, apitesting.WithMinEmulationVersion(version.MustParse("1.36")))
 		})
 	}
 }
@@ -352,5 +454,21 @@ func setControllerRef(apiGroup, kind, name string) func(obj *scheduling.Workload
 			Kind:     kind,
 			Name:     name,
 		}
+	}
+}
+
+func setSchedulingConstraints(pgIdx int) func(obj *scheduling.Workload) {
+	return func(obj *scheduling.Workload) {
+		obj.Spec.PodGroupTemplates[pgIdx].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{}
+	}
+}
+
+func addTopologyConstraint(pgIdx int, topologyKey string) func(obj *scheduling.Workload) {
+	return func(obj *scheduling.Workload) {
+		if obj.Spec.PodGroupTemplates[pgIdx].SchedulingConstraints == nil {
+			setSchedulingConstraints(pgIdx)(obj)
+		}
+		obj.Spec.PodGroupTemplates[pgIdx].SchedulingConstraints.Topology = append(obj.Spec.PodGroupTemplates[pgIdx].SchedulingConstraints.Topology,
+			scheduling.TopologyConstraint{Key: topologyKey})
 	}
 }

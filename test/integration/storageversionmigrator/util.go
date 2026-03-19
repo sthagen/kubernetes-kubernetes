@@ -800,7 +800,9 @@ func (svm *svmTest) waitForCRDUpdate(
 	err := wait.PollUntilContextTimeout(
 		ctx,
 		500*time.Millisecond,
-		time.Second*60,
+		// CRD discovery and storage-version reporting can lag well beyond 1 minute
+		// on contended CI nodes while the apiextensions controllers converge.
+		2*time.Minute,
 		true,
 		func(ctx context.Context) (bool, error) {
 			apiGroups, _, err := svm.discoveryClient.ServerGroupsAndResources()

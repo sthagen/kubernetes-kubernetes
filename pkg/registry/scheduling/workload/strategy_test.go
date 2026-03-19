@@ -18,11 +18,16 @@ package workload
 
 import (
 	"context"
+	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/kubernetes/pkg/apis/scheduling"
+	"k8s.io/kubernetes/pkg/features"
 )
 
 var workload = &scheduling.Workload{
@@ -87,6 +92,100 @@ func TestPodSchedulingStrategyCreate(t *testing.T) {
 	})
 }
 
+func TestPodSchedulingStrategyCreate_SchedulingConstraints(t *testing.T) {
+	testCases := map[string]struct {
+		obj                   *scheduling.Workload
+		expectObj             *scheduling.Workload
+		expectValidationError string
+		tasEnabled            bool
+	}{
+		"drops field with SchedulingConstraints set and TAS disabled": {
+			obj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			expectObj:  workload,
+			tasEnabled: false,
+		},
+		"valid with SchedulingConstraints set and TAS enabled": {
+			obj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			expectObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			tasEnabled: true,
+		},
+		"invalid with multiple topology constraints": {
+			obj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{
+						{Key: "foo"},
+						{Key: "bar"},
+					},
+				}
+				return workload
+			}(),
+			expectValidationError: "must have at most 1 item",
+			tasEnabled:            true,
+		},
+		"invalid with invalid topology key": {
+			obj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{
+						{Key: ""},
+					},
+				}
+				return workload
+			}(),
+			expectValidationError: "Required value",
+			tasEnabled:            true,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
+				features.GenericWorkload:                 tc.tasEnabled,
+				features.TopologyAwareWorkloadScheduling: tc.tasEnabled,
+			})
+			ctx := ctxWithRequestInfo()
+			workload := tc.obj.DeepCopy()
+
+			Strategy.PrepareForCreate(ctx, workload)
+			if errs := Strategy.Validate(ctx, workload); len(errs) != 0 {
+				if tc.expectValidationError == "" {
+					t.Fatalf("unexpected error(s): %v", errs)
+				}
+				if len(errs) != 1 {
+					t.Fatalf("exactly one error expected")
+				}
+				if errMsg := errs[0].Error(); !strings.Contains(errMsg, tc.expectValidationError) {
+					t.Fatalf("error %#v does not contain the expected message %q", errMsg, tc.expectValidationError)
+				}
+			}
+			if tc.expectObj != nil {
+				if diff := cmp.Diff(tc.expectObj, workload); diff != "" {
+					t.Errorf("got unexpected workload object (-want, +got): %s", diff)
+				}
+			}
+		})
+	}
+}
+
 func TestPodSchedulingStrategyUpdate(t *testing.T) {
 	t.Run("no changes", func(t *testing.T) {
 		ctx := ctxWithRequestInfo()
@@ -145,4 +244,228 @@ func TestPodSchedulingStrategyUpdate(t *testing.T) {
 			t.Errorf("Expected validation error")
 		}
 	})
+}
+
+func TestPodSchedulingStrategyUpdate_SchedulingConstraints(t *testing.T) {
+	testCases := map[string]struct {
+		oldObj                *scheduling.Workload
+		newObj                *scheduling.Workload
+		expectObj             *scheduling.Workload
+		expectValidationError string
+		tasEnabled            bool
+	}{
+		"valid update with scheduling constraints unchanged and TAS disabled": {
+			oldObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates = append(workload.Spec.PodGroupTemplates, *workload.Spec.PodGroupTemplates[0].DeepCopy())
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			newObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates = append(workload.Spec.PodGroupTemplates, *workload.Spec.PodGroupTemplates[0].DeepCopy())
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			expectObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates = append(workload.Spec.PodGroupTemplates, *workload.Spec.PodGroupTemplates[0].DeepCopy())
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			tasEnabled: false,
+		},
+		"valid update with scheduling constraints unchanged and TAS enabled": {
+			oldObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates = append(workload.Spec.PodGroupTemplates, *workload.Spec.PodGroupTemplates[0].DeepCopy())
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			newObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates = append(workload.Spec.PodGroupTemplates, *workload.Spec.PodGroupTemplates[0].DeepCopy())
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			expectObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates = append(workload.Spec.PodGroupTemplates, *workload.Spec.PodGroupTemplates[0].DeepCopy())
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			tasEnabled: true,
+		},
+		"changing topology key not allowed with TAS disabled": {
+			oldObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			newObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "bar"}},
+				}
+				return workload
+			}(),
+			expectValidationError: "field is immutable",
+			tasEnabled:            false,
+		},
+		"changing topology key not allowed with TAS enabled": {
+			oldObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			newObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "bar"}},
+				}
+				return workload
+			}(),
+			expectValidationError: "field is immutable",
+			tasEnabled:            true,
+		},
+		"changing topology constraints not allowed with TAS disabled": {
+			oldObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates = append(workload.Spec.PodGroupTemplates, *workload.Spec.PodGroupTemplates[0].DeepCopy())
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			newObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates = append(workload.Spec.PodGroupTemplates, *workload.Spec.PodGroupTemplates[0].DeepCopy())
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				workload.Spec.PodGroupTemplates[1].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			expectValidationError: "field is immutable",
+			tasEnabled:            false,
+		},
+		"changing topology constraints not allowed with TAS enabled": {
+			oldObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates = append(workload.Spec.PodGroupTemplates, *workload.Spec.PodGroupTemplates[0].DeepCopy())
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			newObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates = append(workload.Spec.PodGroupTemplates, *workload.Spec.PodGroupTemplates[0].DeepCopy())
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				workload.Spec.PodGroupTemplates[1].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			expectValidationError: "field is immutable",
+			tasEnabled:            true,
+		},
+		"adding scheduling constraints not allowed with TAS disabled": {
+			oldObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			newObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates = append(workload.Spec.PodGroupTemplates, *workload.Spec.PodGroupTemplates[0].DeepCopy())
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				workload.Spec.PodGroupTemplates[1].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			expectValidationError: "field is immutable",
+			tasEnabled:            false,
+		},
+		"adding scheduling constraints not allowed with TAS enabled": {
+			oldObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			newObj: func() *scheduling.Workload {
+				workload := workload.DeepCopy()
+				workload.Spec.PodGroupTemplates = append(workload.Spec.PodGroupTemplates, *workload.Spec.PodGroupTemplates[0].DeepCopy())
+				workload.Spec.PodGroupTemplates[0].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				workload.Spec.PodGroupTemplates[1].SchedulingConstraints = &scheduling.PodGroupSchedulingConstraints{
+					Topology: []scheduling.TopologyConstraint{{Key: "foo"}},
+				}
+				return workload
+			}(),
+			expectValidationError: "field is immutable",
+			tasEnabled:            true,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
+				features.GenericWorkload:                 tc.tasEnabled,
+				features.TopologyAwareWorkloadScheduling: tc.tasEnabled,
+			})
+			ctx := ctxWithRequestInfo()
+			oldWorkload := tc.oldObj.DeepCopy()
+			oldWorkload.ResourceVersion = "1"
+			newWorkload := tc.newObj.DeepCopy()
+			newWorkload.ResourceVersion = "2"
+
+			Strategy.PrepareForUpdate(ctx, newWorkload, oldWorkload)
+			if errs := Strategy.ValidateUpdate(ctx, newWorkload, oldWorkload); len(errs) != 0 {
+				if tc.expectValidationError == "" {
+					t.Fatalf("unexpected error(s): %v", errs)
+				}
+				if len(errs) != 1 {
+					t.Fatalf("exactly one error expected")
+				}
+				if errMsg := errs[0].Error(); !strings.Contains(errMsg, tc.expectValidationError) {
+					t.Fatalf("error %#v does not contain the expected message %q", errMsg, tc.expectValidationError)
+				}
+			}
+			if tc.expectObj != nil {
+				tc.expectObj.ResourceVersion = newWorkload.ResourceVersion
+				if diff := cmp.Diff(tc.expectObj, newWorkload); diff != "" {
+					t.Errorf("got unexpected workload object (-want, +got): %s", diff)
+				}
+			}
+		})
+	}
 }

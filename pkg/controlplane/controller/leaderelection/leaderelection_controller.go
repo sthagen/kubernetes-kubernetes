@@ -166,7 +166,9 @@ func (c *Controller) processNextElectionItem(ctx context.Context) bool {
 	}
 
 	intervalForRequeue, err := c.reconcileElectionStep(ctx, key)
-	utilruntime.HandleErrorWithContext(ctx, err, "Failed to reconcile election step")
+	if err != nil { // HandleErrorWithContext logs regardless of error value, filter out nil err.
+		utilruntime.HandleErrorWithContext(ctx, err, "Failed to reconcile election step", "key", key)
+	}
 	if intervalForRequeue != noRequeue {
 		defer c.queue.AddAfter(key, intervalForRequeue)
 	}

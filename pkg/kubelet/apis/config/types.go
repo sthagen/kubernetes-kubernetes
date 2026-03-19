@@ -503,6 +503,16 @@ type KubeletConfiguration struct {
 	// +featureGate=MemoryQoS
 	// +optional
 	MemoryThrottlingFactor *float64
+	// MemoryReservationPolicy controls how the kubelet applies cgroup v2 memory protection.
+	// "None" (default): The kubelet does not set memory.min for containers and pods,
+	// ensuring no hard memory is locked by the kernel.
+	// "TieredReservation": The kubelet sets cgroup v2 memory.min for Guaranteed pods and memory.low for Burstable pods based on memory requests.
+	// Guaranteed memory is never reclaimed by the kernel; Burstable memory is preferentially retained but may be reclaimed under extreme pressure.
+	// See https://kep.k8s.io/2570 for more details.
+	// Default: None
+	// +featureGate=MemoryQoS
+	// +optional
+	MemoryReservationPolicy MemoryReservationPolicy
 	// registerWithTaints are an array of taints to add to a node object when
 	// the kubelet registers itself. This only takes effect when registerNode
 	// is true and upon the initial registration of the node.
@@ -850,6 +860,18 @@ const (
 	// AlwaysVerify requires credential verification for accessing any image on the
 	// node irregardless how it was pulled
 	AlwaysVerify ImagePullCredentialsVerificationPolicy = "AlwaysVerify"
+)
+
+// MemoryReservationPolicy defines how the kubelet applies cgroup v2 memory protection.
+type MemoryReservationPolicy string
+
+const (
+	// NoneMemoryReservationPolicy disables memory.min protection for containers and pods.
+	// This is the default to maintain node stability by preventing "locked" memory.
+	NoneMemoryReservationPolicy MemoryReservationPolicy = "None"
+	// TieredReservationMemoryReservationPolicy enables tiered memory protection:
+	// memory.min for Guaranteed pods, memory.low for Burstable pods.
+	TieredReservationMemoryReservationPolicy MemoryReservationPolicy = "TieredReservation"
 )
 
 // ImagePullIntent is a record of the kubelet attempting to pull an image.

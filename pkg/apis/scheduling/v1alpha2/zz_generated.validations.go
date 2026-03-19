@@ -106,6 +106,38 @@ func Validate_PodGroup(ctx context.Context, op operation.Operation, fldPath *fie
 	return errs
 }
 
+// Validate_PodGroupSchedulingConstraints validates an instance of PodGroupSchedulingConstraints according
+// to declarative validation rules in the API schema.
+func Validate_PodGroupSchedulingConstraints(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *schedulingv1alpha2.PodGroupSchedulingConstraints) (errs field.ErrorList) {
+	// field schedulingv1alpha2.PodGroupSchedulingConstraints.Topology
+	errs = append(errs,
+		func(fldPath *field.Path, obj, oldObj []schedulingv1alpha2.TopologyConstraint, oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
+				return nil
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.MaxItems(ctx, op, fldPath, obj, oldObj, 1); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if e := validate.OptionalSlice(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			// iterate the list and call the type's validation function
+			errs = append(errs, validate.EachSliceVal(ctx, op, fldPath, obj, oldObj, nil, nil, Validate_TopologyConstraint)...)
+			return
+		}(fldPath.Child("topology"), obj.Topology, safe.Field(oldObj, func(oldObj *schedulingv1alpha2.PodGroupSchedulingConstraints) []schedulingv1alpha2.TopologyConstraint {
+			return oldObj.Topology
+		}), oldObj != nil)...)
+
+	return errs
+}
+
 var unionMembershipFor_k8s_io_api_scheduling_v1alpha2_PodGroupSchedulingPolicy_ = validate.NewUnionMembership(validate.NewUnionMember("basic"), validate.NewUnionMember("gang"))
 
 // Validate_PodGroupSchedulingPolicy validates an instance of PodGroupSchedulingPolicy according
@@ -220,6 +252,39 @@ func Validate_PodGroupSpec(ctx context.Context, op operation.Operation, fldPath 
 			return &oldObj.SchedulingPolicy
 		}), oldObj != nil)...)
 
+	// field schedulingv1alpha2.PodGroupSpec.SchedulingConstraints
+	errs = append(errs,
+		func(fldPath *field.Path, obj, oldObj *schedulingv1alpha2.PodGroupSchedulingConstraints, oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
+				return nil
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "TopologyAwareWorkloadScheduling", false, validate.ForbiddenPointer); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "TopologyAwareWorkloadScheduling", false, validate.OptionalPointer); len(e) != 0 {
+				earlyReturn = true
+			}
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "TopologyAwareWorkloadScheduling", true, validate.OptionalPointer); len(e) != 0 {
+				earlyReturn = true
+			}
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "TopologyAwareWorkloadScheduling", true, validate.Immutable); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			// call the type's validation function
+			errs = append(errs, Validate_PodGroupSchedulingConstraints(ctx, op, fldPath, obj, oldObj)...)
+			return
+		}(fldPath.Child("schedulingConstraints"), obj.SchedulingConstraints, safe.Field(oldObj, func(oldObj *schedulingv1alpha2.PodGroupSpec) *schedulingv1alpha2.PodGroupSchedulingConstraints {
+			return oldObj.SchedulingConstraints
+		}), oldObj != nil)...)
+
 	return errs
 }
 
@@ -260,6 +325,35 @@ func Validate_PodGroupTemplate(ctx context.Context, op operation.Operation, fldP
 			return &oldObj.SchedulingPolicy
 		}), oldObj != nil)...)
 
+	// field schedulingv1alpha2.PodGroupTemplate.SchedulingConstraints
+	errs = append(errs,
+		func(fldPath *field.Path, obj, oldObj *schedulingv1alpha2.PodGroupSchedulingConstraints, oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
+				return nil
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "TopologyAwareWorkloadScheduling", false, validate.ForbiddenPointer); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "TopologyAwareWorkloadScheduling", false, validate.OptionalPointer); len(e) != 0 {
+				earlyReturn = true
+			}
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "TopologyAwareWorkloadScheduling", true, validate.OptionalPointer); len(e) != 0 {
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			// call the type's validation function
+			errs = append(errs, Validate_PodGroupSchedulingConstraints(ctx, op, fldPath, obj, oldObj)...)
+			return
+		}(fldPath.Child("schedulingConstraints"), obj.SchedulingConstraints, safe.Field(oldObj, func(oldObj *schedulingv1alpha2.PodGroupTemplate) *schedulingv1alpha2.PodGroupSchedulingConstraints {
+			return oldObj.SchedulingConstraints
+		}), oldObj != nil)...)
+
 	return errs
 }
 
@@ -296,6 +390,32 @@ func Validate_PodGroupTemplateReference(ctx context.Context, op operation.Operat
 		}(fldPath.Child("workload"), obj.Workload, safe.Field(oldObj, func(oldObj *schedulingv1alpha2.PodGroupTemplateReference) *schedulingv1alpha2.WorkloadPodGroupTemplateReference {
 			return oldObj.Workload
 		}), oldObj != nil)...)
+
+	return errs
+}
+
+// Validate_TopologyConstraint validates an instance of TopologyConstraint according
+// to declarative validation rules in the API schema.
+func Validate_TopologyConstraint(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *schedulingv1alpha2.TopologyConstraint) (errs field.ErrorList) {
+	// field schedulingv1alpha2.TopologyConstraint.Key
+	errs = append(errs,
+		func(fldPath *field.Path, obj, oldObj *string, oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
+				return nil
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			errs = append(errs, validate.LabelKey(ctx, op, fldPath, obj, oldObj)...)
+			return
+		}(fldPath.Child("key"), &obj.Key, safe.Field(oldObj, func(oldObj *schedulingv1alpha2.TopologyConstraint) *string { return &oldObj.Key }), oldObj != nil)...)
 
 	return errs
 }

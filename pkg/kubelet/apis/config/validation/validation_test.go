@@ -71,6 +71,7 @@ var (
 		ShutdownGracePeriod:                    metav1.Duration{Duration: 30 * time.Second},
 		ShutdownGracePeriodCriticalPods:        metav1.Duration{Duration: 10 * time.Second},
 		MemoryThrottlingFactor:                 ptr.To(0.9),
+		MemoryReservationPolicy:                kubeletconfig.NoneMemoryReservationPolicy,
 		FeatureGates: map[string]bool{
 			"GracefulNodeShutdown":       true,
 			"MemoryQoS":                  true,
@@ -563,6 +564,21 @@ func TestValidateKubeletConfiguration(t *testing.T) {
 				return conf
 			},
 			errMsg: "invalid configuration: memoryThrottlingFactor 1.1 must be greater than 0 and less than or equal to 1.0",
+		}, {
+			name: "MemoryReservationPolicy requires MemoryQoS",
+			configure: func(conf *kubeletconfig.KubeletConfiguration) *kubeletconfig.KubeletConfiguration {
+				conf.FeatureGates = map[string]bool{"MemoryQoS": false}
+				conf.MemoryReservationPolicy = kubeletconfig.TieredReservationMemoryReservationPolicy
+				return conf
+			},
+			errMsg: "invalid configuration: memoryReservationPolicy \"TieredReservation\" requires MemoryQoS feature gate to be enabled",
+		}, {
+			name: "invalid MemoryReservationPolicy",
+			configure: func(conf *kubeletconfig.KubeletConfiguration) *kubeletconfig.KubeletConfiguration {
+				conf.MemoryReservationPolicy = "invalid"
+				return conf
+			},
+			errMsg: "invalid configuration: option \"invalid\" specified for memoryReservationPolicy. Valid options are \"None\" or \"TieredReservation\"",
 		}, {
 			name: "invalid Taint.TimeAdded",
 			configure: func(conf *kubeletconfig.KubeletConfiguration) *kubeletconfig.KubeletConfiguration {
