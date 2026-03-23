@@ -28599,10 +28599,11 @@ func TestValidatePodResize(t *testing.T) {
 	}
 
 	tests := []struct {
-		test string
-		old  *core.Pod
-		new  *core.Pod
-		err  string
+		test                 string
+		old                  *core.Pod
+		new                  *core.Pod
+		disableInitCtrResize bool
+		err                  string
 	}{
 		{
 			test: "pod-level resources resize with nil resources in old pod",
@@ -28975,16 +28976,96 @@ func TestValidatePodResize(t *testing.T) {
 			new:  mkPodWithInitContainers(getResources("100m", "", "", ""), core.ResourceList{}, core.ContainerRestartPolicyAlways),
 			err:  "spec.initContainers[0].resources.limits: Forbidden: resource limits cannot be removed",
 		}, {
-			test: "Pod QoS unchanged, burstable -> burstable, remove cpu and memory requests",
+			test: "Pod QoS unchanged, burstable -> burstable, remove cpu and memory requests from sidecar container",
 			old:  mkPodWithInitContainers(getResources("100m", "100Mi", "", ""), getResources("100m", "", "", ""), core.ContainerRestartPolicyAlways),
 			new:  mkPodWithInitContainers(core.ResourceList{}, getResources("100m", "", "", ""), core.ContainerRestartPolicyAlways),
 			err:  "spec.initContainers[0].resources.requests: Forbidden: resource requests cannot be removed",
 		}, {
-			test: "Pod QoS unchanged, burstable -> burstable, remove cpu and memory requests",
+			test: "Pod QoS unchanged, burstable -> burstable, remove cpu and memory requests from non-sidecar initContainer",
 			old:  mkPodWithInitContainers(getResources("100m", "100Mi", "", ""), getResources("100m", "", "", ""), ""),
 			new:  mkPodWithInitContainers(core.ResourceList{}, getResources("100m", "", "", ""), ""),
-			err:  "spec: Forbidden: resources for non-sidecar init containers are immutable",
-		}, {
+			err:  "spec.initContainers[0].resources.requests: Forbidden: resource requests cannot be removed",
+		},
+		{
+			test: "Pod QoS unchanged, burstable -> burstable, attempt to resize non-sidecar initContainer without resize policy",
+			old: mkPodWithInitContainers(nil, nil, "", podtest.SetInitContainers(
+				podtest.MakeContainer("ctr-1",
+					podtest.SetContainerResources(core.ResourceRequirements{
+						Requests: getResources("100m", "100Mi", "", ""),
+						Limits:   getResources("100m", "", "", ""),
+					}),
+				))),
+			new: mkPodWithInitContainers(nil, nil, "", podtest.SetInitContainers(
+				podtest.MakeContainer("ctr-1",
+					podtest.SetContainerResources(core.ResourceRequirements{
+						Requests: getResources("200m", "200Mi", "", ""),
+						Limits:   getResources("200m", "", "", ""),
+					}),
+				))),
+		},
+		{
+			test: "Pod QoS unchanged, burstable -> burstable, attempt to resize non-sidecar initContainer with NotRequired resize policy",
+			old: mkPodWithInitContainers(nil, nil, "", podtest.SetInitContainers(
+				podtest.MakeContainer("ctr-1",
+					podtest.SetContainerResources(core.ResourceRequirements{
+						Requests: getResources("100m", "100Mi", "", ""),
+						Limits:   getResources("100m", "", "", ""),
+					}),
+					podtest.SetContainerResizePolicy(
+						core.ContainerResizePolicy{ResourceName: "cpu", RestartPolicy: "NotRequired"}),
+				))),
+			new: mkPodWithInitContainers(nil, nil, "", podtest.SetInitContainers(
+				podtest.MakeContainer("ctr-1",
+					podtest.SetContainerResources(core.ResourceRequirements{
+						Requests: getResources("200m", "200Mi", "", ""),
+						Limits:   getResources("200m", "", "", ""),
+					}),
+					podtest.SetContainerResizePolicy(
+						core.ContainerResizePolicy{ResourceName: "cpu", RestartPolicy: "NotRequired"}),
+				))),
+		},
+		{
+			test: "Pod QoS unchanged, burstable -> burstable, attempt to resize non-sidecar initContainer with RestartContainer resize policy",
+			old: mkPodWithInitContainers(nil, nil, "", podtest.SetInitContainers(
+				podtest.MakeContainer("ctr-1",
+					podtest.SetContainerResources(core.ResourceRequirements{
+						Requests: getResources("100m", "100Mi", "", ""),
+						Limits:   getResources("100m", "", "", ""),
+					}),
+					podtest.SetContainerResizePolicy(
+						core.ContainerResizePolicy{ResourceName: "cpu", RestartPolicy: "RestartContainer"}),
+				))),
+			new: mkPodWithInitContainers(nil, nil, "", podtest.SetInitContainers(
+				podtest.MakeContainer("ctr-1",
+					podtest.SetContainerResources(core.ResourceRequirements{
+						Requests: getResources("200m", "200Mi", "", ""),
+						Limits:   getResources("200m", "", "", ""),
+					}),
+					podtest.SetContainerResizePolicy(
+						core.ContainerResizePolicy{ResourceName: "cpu", RestartPolicy: "RestartContainer"}),
+				))),
+			err: "spec.initContainers[0]: Forbidden: non-sidecar init containers with a resize policy of RestartContainer cannot be resized",
+		},
+		{
+			test: "Pod QoS unchanged, burstable -> burstable, attempt to resize non-sidecar initContainer with FG disabled",
+			old: mkPodWithInitContainers(nil, nil, "", podtest.SetInitContainers(
+				podtest.MakeContainer("ctr-1",
+					podtest.SetContainerResources(core.ResourceRequirements{
+						Requests: getResources("100m", "100Mi", "", ""),
+						Limits:   getResources("100m", "", "", ""),
+					}),
+				))),
+			new: mkPodWithInitContainers(nil, nil, "", podtest.SetInitContainers(
+				podtest.MakeContainer("ctr-1",
+					podtest.SetContainerResources(core.ResourceRequirements{
+						Requests: getResources("200m", "200Mi", "", ""),
+						Limits:   getResources("200m", "", "", ""),
+					}),
+				))),
+			disableInitCtrResize: true,
+			err:                  "Forbidden: resources for non-sidecar init containers are immutable",
+		},
+		{
 			test: "Pod with nil Resource field in Status",
 			old: mkPod(core.ResourceList{}, getResources("100m", "0", "1Gi", ""), podtest.SetStatus(core.PodStatus{
 				ContainerStatuses: []core.ContainerStatus{{
@@ -29075,7 +29156,7 @@ func TestValidatePodResize(t *testing.T) {
 			test: "storage limit change for sidecar containers",
 			old:  mkPodWithInitContainers(core.ResourceList{}, getResources("100m", "100Mi", "2Gi", ""), core.ContainerRestartPolicyAlways),
 			new:  mkPodWithInitContainers(core.ResourceList{}, getResources("100m", "100Mi", "1Gi", ""), core.ContainerRestartPolicyAlways),
-			err:  "spec: Forbidden: only cpu and memory resources for sidecar containers are mutable",
+			err:  "spec.initContainers[0]: Forbidden: only cpu and memory resources for init or sidecar containers are mutable",
 		}, {
 			test: "cpu request change for sidecar containers",
 			old:  mkPodWithInitContainers(getResources("200m", "0", "", ""), core.ResourceList{}, core.ContainerRestartPolicyAlways),
@@ -29090,7 +29171,7 @@ func TestValidatePodResize(t *testing.T) {
 			test: "storage request change for sidecar containers",
 			old:  mkPodWithInitContainers(getResources("100m", "0", "1Gi", ""), core.ResourceList{}, core.ContainerRestartPolicyAlways),
 			new:  mkPodWithInitContainers(getResources("100m", "0", "2Gi", ""), core.ResourceList{}, core.ContainerRestartPolicyAlways),
-			err:  "spec: Forbidden: only cpu and memory resources for sidecar containers are mutable",
+			err:  "spec.initContainers[0]: Forbidden: only cpu and memory resources for init or sidecar containers are mutable",
 		}, {
 			test: "pod container addition",
 			old: podtest.MakePod("pod", podtest.SetContainers(
@@ -29264,6 +29345,8 @@ func TestValidatePodResize(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.test, func(t *testing.T) {
+			featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.InPlacePodVerticalScalingInitContainers, !test.disableInitCtrResize)
+
 			test.new.ObjectMeta.ResourceVersion = "1"
 			test.old.ObjectMeta.ResourceVersion = "1"
 
