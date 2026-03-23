@@ -950,12 +950,6 @@ func (m *kubeGenericRuntimeManager) doPodResizeAction(ctx context.Context, pod *
 
 		// Update our tracking of the current state.
 		currentPodResources = mergedPodResources
-
-		if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodLevelResourcesVerticalScaling) {
-			if err = updateActuatedPodLevelResources(rName); err != nil {
-				logger.Error(err, "Failed to update pod-level actuated resources", "resource", rName, "pod", klog.KObj(pod))
-			}
-		}
 		return nil
 	}
 
@@ -984,6 +978,7 @@ func (m *kubeGenericRuntimeManager) doPodResizeAction(ctx context.Context, pod *
 				return err
 			}
 		}
+
 		// At downsizing, requests should shrink prior to limits in order to keep "requests <= limits".
 		if newPodCgReqValue < currPodCgReqValue {
 			// TODO: Pass logger from context once contextual logging migration is complete
@@ -995,6 +990,12 @@ func (m *kubeGenericRuntimeManager) doPodResizeAction(ctx context.Context, pod *
 			// TODO(#127825): Pass logger from context once contextual logging migration is complete
 			if err = setPodCgroupConfig(klog.TODO(), rName, true); err != nil {
 				return err
+			}
+		}
+
+		if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodLevelResourcesVerticalScaling) && podContainerChanges.UpdatePodLevelResources {
+			if err = updateActuatedPodLevelResources(rName); err != nil {
+				logger.Error(err, "Failed to update pod-level actuated resources", "resource", rName, "pod", klog.KObj(pod))
 			}
 		}
 		return err

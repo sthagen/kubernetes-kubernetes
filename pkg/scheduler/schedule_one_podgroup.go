@@ -182,7 +182,7 @@ type podSchedulingContext struct {
 }
 
 // initPodSchedulingContext initializes the scheduling context of a single pod for pod group scheduling cycle.
-func initPodSchedulingContext(ctx context.Context, pod *v1.Pod) *podSchedulingContext {
+func initPodSchedulingContext(ctx context.Context, pod *v1.Pod, postFilterMode podGroupPostFilterMode) *podSchedulingContext {
 	logger := klog.FromContext(ctx)
 	// TODO(knelasevero): Remove duplicated keys from log entry calls
 	// When contextualized logging hits GA
@@ -202,6 +202,14 @@ func initPodSchedulingContext(ctx context.Context, pod *v1.Pod) *podSchedulingCo
 
 	// Marks this cycle as a pod group scheduling cycle.
 	state.SetPodGroupSchedulingCycle(true)
+
+	// Skip post filters if requested.
+	switch postFilterMode {
+	case runWithoutPostFilters:
+		state.SetSkipAllPostFilterPlugins(true)
+	case runAllPostFilters:
+		// Default podCtx state will run all post filters.
+	}
 
 	return &podSchedulingContext{
 		logger:         logger,
@@ -225,10 +233,57 @@ func (sched *Scheduler) podGroupCycle(ctx context.Context, schedFwk framework.Fr
 		return
 	}
 
-	result := sched.podGroupSchedulingAlgorithm(ctx, schedFwk, podGroupInfo)
+	result := sched.podGroupSchedulingAlgorithm(ctx, schedFwk, podGroupInfo, runAllPostFilters)
 	metrics.PodGroupSchedulingAlgorithmLatency.Observe(metrics.SinceInSeconds(start))
 
+	// Run workload aware preemption if required. If the preemption is successful,
+	// we need to put the pods from pod group back into the scheduling queue.
+	if sched.workloadAwarePreemptionEnabled && result.status.Code() == fwk.Unschedulable {
+		status := sched.runWorkloadAwarePreemption(ctx, schedFwk, podGroupInfo)
+		if status.IsSuccess() {
+			result.waitingOnPreemption = true
+		} else if status.IsError() {
+			result.status = status
+		} else {
+			result.status.AppendReason(status.String())
+		}
+	}
+
 	sched.submitPodGroupAlgorithmResult(ctx, schedFwk, podGroupInfo, result, start)
+}
+
+// runWorkloadAwarePreemption runs workload-aware preemption for the given pod group.
+// It saves the current snapshot of node infos, runs a PodGroupPostFilter
+// which modifies the node infos to check feasibility of the
+// pod group scheduling with some pods removed and reverts the snapshot to the
+// original state.
+// The function used for evaluating feasibility of pod group scheduling is
+// scheduler.podGroupSchedulingAlgorithm run without any post filters.
+func (sched *Scheduler) runWorkloadAwarePreemption(ctx context.Context, schedFwk framework.Framework, podGroupInfo *framework.QueuedPodGroupInfo) *fwk.Status {
+	// Default preemption should be the only pod group post filter registered plugin.
+	plugins := schedFwk.PodGroupPostFilterPlugins()
+	if len(plugins) == 0 {
+		return fwk.NewStatus(fwk.Unschedulable, "default preemption plugin is not registered, workload aware preemption is disabled")
+	}
+
+	pg, err := schedFwk.SharedInformerFactory().Scheduling().V1alpha2().PodGroups().Lister().PodGroups(podGroupInfo.Namespace).Get(podGroupInfo.Name)
+	if err != nil {
+		return fwk.AsStatus(fmt.Errorf("failed to get pod group object: %w", err))
+	}
+	if pg.Spec.SchedulingConstraints != nil && len(pg.Spec.SchedulingConstraints.Topology) > 0 {
+		return fwk.NewStatus(fwk.Unschedulable, "workload aware preemption is not supported for pod groups with scheduling constraints")
+	}
+
+	restoreFn, err := sched.nodeInfoSnapshot.BackupSnapshot()
+	if err != nil {
+		return fwk.AsStatus(fmt.Errorf("failed to backup snapshot: %w", err))
+	}
+	defer restoreFn()
+
+	return plugins[0].PodGroupPostFilter(ctx, pg, podGroupInfo.UnscheduledPods, func(ctx context.Context) *fwk.Status {
+		res := sched.podGroupSchedulingAlgorithm(ctx, schedFwk, podGroupInfo, runWithoutPostFilters)
+		return res.status
+	})
 }
 
 // algorithmResult stores the scheduling result and status for a scheduling attempt of a single pod.
@@ -249,6 +304,18 @@ type algorithmResult struct {
 	// This is only set when the `status` is success or the `requiresPreemption` is true.
 	permitStatus *fwk.Status
 }
+
+// podGroupPostFilterMode defines how the pod group algorithm should run post filters plugins.
+type podGroupPostFilterMode int
+
+const (
+	// The pod group algorithm should try to run all post filters in pod-by-pod cycle.
+	runAllPostFilters podGroupPostFilterMode = iota
+	// The pod group algorithm should not try post filter at all. This can be used
+	// by workload aware preemption that tries to check if after removing some
+	// pods the pod group can be scheduled.
+	runWithoutPostFilters
+)
 
 func (ar *algorithmResult) GetPod() *v1.Pod {
 	return ar.pod
@@ -286,7 +353,7 @@ type podGroupAlgorithmResult struct {
 // It tries to schedule each pod using standard filtering and scoring logic in a fixed order.
 // If a pod requires preemption to be schedulable, subsequent pods in the algorithm
 // treat that pod as already scheduled on that node with victims being already removed in memory.
-func (sched *Scheduler) podGroupSchedulingDefaultAlgorithm(ctx context.Context, schedFwk framework.Framework, podGroupInfo *framework.QueuedPodGroupInfo) podGroupAlgorithmResult {
+func (sched *Scheduler) podGroupSchedulingDefaultAlgorithm(ctx context.Context, schedFwk framework.Framework, podGroupInfo *framework.QueuedPodGroupInfo, postFilterMode podGroupPostFilterMode) podGroupAlgorithmResult {
 	result := podGroupAlgorithmResult{
 		podResults:          make([]algorithmResult, 0, len(podGroupInfo.QueuedPodInfos)),
 		status:              fwk.NewStatus(fwk.Unschedulable).WithError(errPodGroupUnschedulable),
@@ -298,7 +365,7 @@ func (sched *Scheduler) podGroupSchedulingDefaultAlgorithm(ctx context.Context, 
 
 	requiresPreemption := false
 	for _, podInfo := range podGroupInfo.QueuedPodInfos {
-		podResult, revertFn := sched.podGroupPodSchedulingAlgorithm(ctx, schedFwk, podGroupInfo, podInfo)
+		podResult, revertFn := sched.podGroupPodSchedulingAlgorithm(ctx, schedFwk, podGroupInfo, podInfo, postFilterMode)
 		result.podResults = append(result.podResults, podResult)
 		if !podResult.status.IsSuccess() && !podResult.requiresPreemption {
 			// When a pod is not feasible and doesn't require preemption, it means that it failed scheduling.
@@ -336,9 +403,9 @@ func (sched *Scheduler) podGroupSchedulingDefaultAlgorithm(ctx context.Context, 
 
 // podGroupPodSchedulingAlgorithm runs a scheduling algorithm for individual pod from a pod group.
 // It returns the algorithm result and, if successful or the preemption is required, the permit status together with the revert function.
-func (sched *Scheduler) podGroupPodSchedulingAlgorithm(ctx context.Context, schedFwk framework.Framework, podGroupInfo *framework.QueuedPodGroupInfo, podInfo *framework.QueuedPodInfo) (algorithmResult, func()) {
+func (sched *Scheduler) podGroupPodSchedulingAlgorithm(ctx context.Context, schedFwk framework.Framework, podGroupInfo *framework.QueuedPodGroupInfo, podInfo *framework.QueuedPodInfo, postFilterMode podGroupPostFilterMode) (algorithmResult, func()) {
 	pod := podInfo.Pod
-	podCtx := initPodSchedulingContext(ctx, pod)
+	podCtx := initPodSchedulingContext(ctx, pod, postFilterMode)
 	logger := podCtx.logger
 	ctx = klog.NewContext(ctx, logger)
 	start := time.Now()
@@ -437,7 +504,7 @@ func (sched *Scheduler) submitPodGroupAlgorithmResult(ctx context.Context, sched
 			// In pod group-level unschedulable or error cases, podResult may not be defined.
 			// Initialize it now to handle pod failure correctly.
 			podResult = algorithmResult{
-				podCtx: initPodSchedulingContext(ctx, pInfo.Pod),
+				podCtx: initPodSchedulingContext(ctx, pInfo.Pod, runAllPostFilters),
 				status: podGroupResult.status.Clone(),
 			}
 		}
@@ -581,7 +648,7 @@ func (sched *Scheduler) updatePodGroupCondition(ctx context.Context,
 // Placement is a set of nodes that will be considered when scheduling a pod group.
 // Then for each placement it tries to schedule the pod group through podGroupSchedulingDefaultAlgorithm.
 // Finally, it runs placement scorer plugins to select the best placement.
-func (sched *Scheduler) podGroupSchedulingPlacementAlgorithm(ctx context.Context, schedFwk framework.Framework, podGroupInfo *framework.QueuedPodGroupInfo) podGroupAlgorithmResult {
+func (sched *Scheduler) podGroupSchedulingPlacementAlgorithm(ctx context.Context, schedFwk framework.Framework, podGroupInfo *framework.QueuedPodGroupInfo, postFilterMode podGroupPostFilterMode) podGroupAlgorithmResult {
 	logger := klog.FromContext(ctx)
 	allNodes, err := sched.nodeInfoSnapshot.NodeInfos().List()
 	if err != nil {
@@ -611,7 +678,7 @@ func (sched *Scheduler) podGroupSchedulingPlacementAlgorithm(ctx context.Context
 				status: fwk.AsStatus(fmt.Errorf("failed to assume pod group placement: %w", err)),
 			}
 		}
-		result := sched.podGroupSchedulingDefaultAlgorithm(ctx, schedFwk, podGroupInfo)
+		result := sched.podGroupSchedulingDefaultAlgorithm(ctx, schedFwk, podGroupInfo, postFilterMode)
 		sched.nodeInfoSnapshot.ForgetPlacement()
 		if result.status.IsError() {
 			return result
@@ -701,13 +768,13 @@ func makePodGroupAssignments(successfulResults map[*fwk.Placement]*podGroupAlgor
 }
 
 // podGroupSchedulingAlgorithm attempts to schedule pods in the pod group according to the policy and constraints and returns the scheduling result for each pod in the pod group.
-func (sched *Scheduler) podGroupSchedulingAlgorithm(ctx context.Context, schedFwk framework.Framework, podGroupInfo *framework.QueuedPodGroupInfo) podGroupAlgorithmResult {
+func (sched *Scheduler) podGroupSchedulingAlgorithm(ctx context.Context, schedFwk framework.Framework, podGroupInfo *framework.QueuedPodGroupInfo, postFilterMode podGroupPostFilterMode) podGroupAlgorithmResult {
 	podGroupCycleCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	if utilfeature.DefaultFeatureGate.Enabled(features.TopologyAwareWorkloadScheduling) {
-		return sched.podGroupSchedulingPlacementAlgorithm(podGroupCycleCtx, schedFwk, podGroupInfo)
+		return sched.podGroupSchedulingPlacementAlgorithm(podGroupCycleCtx, schedFwk, podGroupInfo, postFilterMode)
 	} else {
-		return sched.podGroupSchedulingDefaultAlgorithm(podGroupCycleCtx, schedFwk, podGroupInfo)
+		return sched.podGroupSchedulingDefaultAlgorithm(podGroupCycleCtx, schedFwk, podGroupInfo, postFilterMode)
 	}
 }

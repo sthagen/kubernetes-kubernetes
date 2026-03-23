@@ -121,6 +121,7 @@ func dropDisabledPodGroupTemplatesFields(templates, oldTemplates []scheduling.Po
 		}
 		template := &templates[i]
 		dropDisabledSchedulingConstraintsFields(template, oldTemplate)
+		dropDisabledDRAWorkloadResourceClaimsFields(template, oldTemplate)
 	}
 }
 
@@ -149,4 +150,17 @@ func anySchedulingConstraintsInUse(workload *scheduling.Workload) bool {
 
 func schedulingConstraintsInUse(pgt *scheduling.PodGroupTemplate) bool {
 	return pgt != nil && pgt.SchedulingConstraints != nil
+}
+
+// dropDisabledDRAWorkloadResourceClaimsFields removes resource claim references from
+// podGroupTemplates unless they are already used by the old Workload spec.
+func dropDisabledDRAWorkloadResourceClaimsFields(template, oldTemplate *scheduling.PodGroupTemplate) {
+	if utilfeature.DefaultFeatureGate.Enabled(features.DRAWorkloadResourceClaims) || draWorkloadResourceClaimsInUse(oldTemplate) {
+		return
+	}
+	template.ResourceClaims = nil
+}
+
+func draWorkloadResourceClaimsInUse(pgt *scheduling.PodGroupTemplate) bool {
+	return pgt != nil && len(pgt.ResourceClaims) > 0
 }

@@ -144,6 +144,7 @@ func (*podGroupStatusStrategy) PrepareForUpdate(ctx context.Context, obj, old ru
 	oldPodGroup := old.(*scheduling.PodGroup)
 	newPodGroup.Spec = oldPodGroup.Spec
 	metav1.ResetObjectMetaForStatus(&newPodGroup.ObjectMeta, &oldPodGroup.ObjectMeta)
+	dropDisabledPodGroupStatusFields(newPodGroup, oldPodGroup)
 }
 
 func (r *podGroupStatusStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
@@ -161,6 +162,17 @@ func (*podGroupStatusStrategy) WarningsOnUpdate(ctx context.Context, obj, old ru
 // dropDisabledPodGroupFields removes fields which are covered by a feature gate.
 func dropDisabledPodGroupFields(newPodGroup, oldPodGroup *scheduling.PodGroup) {
 	dropDisabledSchedulingConstraintsFields(newPodGroup, oldPodGroup)
+	dropDisabledDRAWorkloadResourceClaimsFields(newPodGroup, oldPodGroup)
+}
+
+func dropDisabledPodGroupStatusFields(newPodGroup, oldPodGroup *scheduling.PodGroup) {
+	if newPodGroup == nil {
+		return
+	}
+
+	if !utilfeature.DefaultFeatureGate.Enabled(features.DRAWorkloadResourceClaims) && !draWorkloadResourceClaimsInUse(oldPodGroup) {
+		newPodGroup.Status.ResourceClaimStatuses = nil
+	}
 }
 
 // dropDisabledSchedulingConstraintsFields drops the SchedulingConstraints field
@@ -176,4 +188,18 @@ func dropDisabledSchedulingConstraintsFields(newPodGroup, oldPodGroup *schedulin
 
 func schedulingConstraintsInUse(pg *scheduling.PodGroup) bool {
 	return utilfeature.DefaultFeatureGate.Enabled(features.TopologyAwareWorkloadScheduling) || (pg != nil && pg.Spec.SchedulingConstraints != nil)
+}
+
+// dropDisabledDRAWorkloadResourceClaimsFields removes resource claim references
+// unless they are already used by the old PodGroup spec.
+func dropDisabledDRAWorkloadResourceClaimsFields(podGroup, oldPodGroup *scheduling.PodGroup) {
+	if draWorkloadResourceClaimsInUse(oldPodGroup) {
+		// No need to drop anything.
+		return
+	}
+	podGroup.Spec.ResourceClaims = nil
+}
+
+func draWorkloadResourceClaimsInUse(pg *scheduling.PodGroup) bool {
+	return utilfeature.DefaultFeatureGate.Enabled(features.DRAWorkloadResourceClaims) || (pg != nil && len(pg.Spec.ResourceClaims) > 0)
 }

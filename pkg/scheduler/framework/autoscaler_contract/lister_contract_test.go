@@ -193,6 +193,10 @@ func (s *sharedDRAManagerContract) DeviceClassResolver() fwk.DeviceClassResolver
 	return nil
 }
 
+func (s *sharedDRAManagerContract) PodGroups() fwk.PodGroupLister {
+	return nil
+}
+
 type deviceClassResolverContract struct{}
 
 func (d *deviceClassResolverContract) GetDeviceClass(_ v1.ResourceName) *resourceapi.DeviceClass {

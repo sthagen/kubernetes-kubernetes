@@ -482,3 +482,266 @@ func TestStatusStrategyUpdate(t *testing.T) {
 		})
 	}
 }
+
+func TestDropPodGroupTemplateResourceClaims(t *testing.T) {
+	var noPodGroup *scheduling.PodGroup
+	podGroupWithoutClaims := podGroup
+
+	t.Run("spec", func(t *testing.T) {
+		podGroupWithClaims := func() *scheduling.PodGroup {
+			w := podGroupWithoutClaims.DeepCopy()
+			w.Spec.ResourceClaims = []scheduling.PodGroupResourceClaim{
+				{
+					Name:              "my-claim",
+					ResourceClaimName: new("resource-claim"),
+				},
+			}
+			return w
+		}()
+
+		tests := []struct {
+			description  string
+			enabled      bool
+			oldPodGroup  *scheduling.PodGroup
+			newPodGroup  *scheduling.PodGroup
+			wantPodGroup *scheduling.PodGroup
+		}{
+			{
+				description:  "old with claims / new with claims / disabled",
+				oldPodGroup:  podGroupWithClaims,
+				newPodGroup:  podGroupWithClaims,
+				wantPodGroup: podGroupWithClaims,
+			},
+			{
+				description:  "old without claims / new with claims / disabled",
+				oldPodGroup:  podGroupWithoutClaims,
+				newPodGroup:  podGroupWithClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+			{
+				description:  "no old PodGroup / new with claims / disabled",
+				oldPodGroup:  noPodGroup,
+				newPodGroup:  podGroupWithClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+
+			{
+				description:  "old with claims / new without claims / disabled",
+				oldPodGroup:  podGroupWithClaims,
+				newPodGroup:  podGroupWithoutClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+			{
+				description:  "old without claims / new without claims / disabled",
+				oldPodGroup:  podGroupWithoutClaims,
+				newPodGroup:  podGroupWithoutClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+			{
+				description:  "no old PodGroup / new without claims / disabled",
+				oldPodGroup:  noPodGroup,
+				newPodGroup:  podGroupWithoutClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+
+			{
+				description:  "old with claims / new with claims / enabled",
+				enabled:      true,
+				oldPodGroup:  podGroupWithClaims,
+				newPodGroup:  podGroupWithClaims,
+				wantPodGroup: podGroupWithClaims,
+			},
+			{
+				description:  "old without claims / new with claims / enabled",
+				enabled:      true,
+				oldPodGroup:  podGroupWithoutClaims,
+				newPodGroup:  podGroupWithClaims,
+				wantPodGroup: podGroupWithClaims,
+			},
+			{
+				description:  "no old PodGroup / new with claims / enabled",
+				enabled:      true,
+				oldPodGroup:  noPodGroup,
+				newPodGroup:  podGroupWithClaims,
+				wantPodGroup: podGroupWithClaims,
+			},
+
+			{
+				description:  "old with claims / new without claims / enabled",
+				enabled:      true,
+				oldPodGroup:  podGroupWithClaims,
+				newPodGroup:  podGroupWithoutClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+			{
+				description:  "old without claims / new without claims / enabled",
+				enabled:      true,
+				oldPodGroup:  podGroupWithoutClaims,
+				newPodGroup:  podGroupWithoutClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+			{
+				description:  "no old PodGroup / new without claims / enabled",
+				enabled:      true,
+				oldPodGroup:  noPodGroup,
+				newPodGroup:  podGroupWithoutClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.description, func(t *testing.T) {
+				featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
+					features.DRAWorkloadResourceClaims: tc.enabled,
+					features.GenericWorkload:           tc.enabled,
+				})
+
+				oldPodGroup := tc.oldPodGroup.DeepCopy()
+				newPodGroup := tc.newPodGroup.DeepCopy()
+				wantPodGroup := tc.wantPodGroup
+				dropDisabledPodGroupFields(newPodGroup, oldPodGroup)
+
+				// old PodGroup should never be changed
+				if diff := cmp.Diff(oldPodGroup, tc.oldPodGroup); diff != "" {
+					t.Errorf("old PodGroup changed: %s", diff)
+				}
+
+				if diff := cmp.Diff(wantPodGroup, newPodGroup); diff != "" {
+					t.Errorf("new PodGroup changed (- want, + got): %s", diff)
+				}
+			})
+		}
+	})
+
+	t.Run("status", func(t *testing.T) {
+		podGroupWithClaims := func() *scheduling.PodGroup {
+			w := podGroupWithoutClaims.DeepCopy()
+			w.Spec.ResourceClaims = []scheduling.PodGroupResourceClaim{
+				{
+					Name:              "my-claim",
+					ResourceClaimName: new("resource-claim"),
+				},
+			}
+			w.Status.ResourceClaimStatuses = []scheduling.PodGroupResourceClaimStatus{
+				{
+					Name:              "my-claim",
+					ResourceClaimName: new("generated-claim"),
+				},
+			}
+			return w
+		}()
+
+		tests := []struct {
+			description  string
+			enabled      bool
+			oldPodGroup  *scheduling.PodGroup
+			newPodGroup  *scheduling.PodGroup
+			wantPodGroup *scheduling.PodGroup
+		}{
+			{
+				description:  "old with claims / new with claims / disabled",
+				oldPodGroup:  podGroupWithClaims,
+				newPodGroup:  podGroupWithClaims,
+				wantPodGroup: podGroupWithClaims,
+			},
+			{
+				description:  "old without claims / new with claims / disabled",
+				oldPodGroup:  podGroupWithoutClaims,
+				newPodGroup:  podGroupWithClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+			{
+				description:  "no old PodGroup / new with claims / disabled",
+				oldPodGroup:  noPodGroup,
+				newPodGroup:  podGroupWithClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+
+			{
+				description:  "old with claims / new without claims / disabled",
+				oldPodGroup:  podGroupWithClaims,
+				newPodGroup:  podGroupWithoutClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+			{
+				description:  "old without claims / new without claims / disabled",
+				oldPodGroup:  podGroupWithoutClaims,
+				newPodGroup:  podGroupWithoutClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+			{
+				description:  "no old PodGroup / new without claims / disabled",
+				oldPodGroup:  noPodGroup,
+				newPodGroup:  podGroupWithoutClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+
+			{
+				description:  "old with claims / new with claims / enabled",
+				enabled:      true,
+				oldPodGroup:  podGroupWithClaims,
+				newPodGroup:  podGroupWithClaims,
+				wantPodGroup: podGroupWithClaims,
+			},
+			{
+				description:  "old without claims / new with claims / enabled",
+				enabled:      true,
+				oldPodGroup:  podGroupWithoutClaims,
+				newPodGroup:  podGroupWithClaims,
+				wantPodGroup: podGroupWithClaims,
+			},
+			{
+				description:  "no old PodGroup / new with claims / enabled",
+				enabled:      true,
+				oldPodGroup:  noPodGroup,
+				newPodGroup:  podGroupWithClaims,
+				wantPodGroup: podGroupWithClaims,
+			},
+
+			{
+				description:  "old with claims / new without claims / enabled",
+				enabled:      true,
+				oldPodGroup:  podGroupWithClaims,
+				newPodGroup:  podGroupWithoutClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+			{
+				description:  "old without claims / new without claims / enabled",
+				enabled:      true,
+				oldPodGroup:  podGroupWithoutClaims,
+				newPodGroup:  podGroupWithoutClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+			{
+				description:  "no old PodGroup / new without claims / enabled",
+				enabled:      true,
+				oldPodGroup:  noPodGroup,
+				newPodGroup:  podGroupWithoutClaims,
+				wantPodGroup: podGroupWithoutClaims,
+			},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.description, func(t *testing.T) {
+				featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
+					features.DRAWorkloadResourceClaims: tc.enabled,
+					features.GenericWorkload:           tc.enabled,
+				})
+
+				oldPodGroup := tc.oldPodGroup.DeepCopy()
+				newPodGroup := tc.newPodGroup.DeepCopy()
+				wantPodGroup := tc.wantPodGroup
+				dropDisabledPodGroupStatusFields(newPodGroup, oldPodGroup)
+
+				// old PodGroup should never be changed
+				if diff := cmp.Diff(oldPodGroup, tc.oldPodGroup); diff != "" {
+					t.Errorf("old PodGroup changed: %s", diff)
+				}
+
+				if diff := cmp.Diff(wantPodGroup.Status, newPodGroup.Status); diff != "" {
+					t.Errorf("new PodGroup changed (- want, + got): %s", diff)
+				}
+			})
+		}
+	})
+}

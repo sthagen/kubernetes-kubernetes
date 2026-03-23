@@ -170,6 +170,10 @@ type TypedLocalObjectReference struct {
 	Name string
 }
 
+// MaxPodGroupResourceClaims is the maximum number of resource claims for a
+// PodGroup or a Workload's PodGroupTemplate.
+const MaxPodGroupResourceClaims = 4
+
 // PodGroupTemplate represents a template for a set of pods with a scheduling policy.
 type PodGroupTemplate struct {
 	// Name is a unique identifier for the PodGroupTemplate within the Workload.
@@ -189,6 +193,25 @@ type PodGroupTemplate struct {
 	// +optional
 	// +featureGate=TopologyAwareWorkloadScheduling
 	SchedulingConstraints *PodGroupSchedulingConstraints
+
+	// ResourceClaims defines which ResourceClaims may be shared among Pods in
+	// the group. Pods consume the devices allocated to a PodGroup's claim by
+	// defining a claim in its own Spec.ResourceClaims that matches the
+	// PodGroup's claim exactly. The claim must have the same name and refer to
+	// the same ResourceClaim or ResourceClaimTemplate.
+	//
+	// This is an alpha-level field and requires that the
+	// DRAWorkloadResourceClaims feature gate is enabled.
+	//
+	// This field is immutable.
+	//
+	// +optional
+	// +patchMergeKey=name
+	// +patchStrategy=merge,retainKeys
+	// +listType=map
+	// +listMapKey=name
+	// +featureGate=DRAWorkloadResourceClaims
+	ResourceClaims []PodGroupResourceClaim
 }
 
 // PodGroupSchedulingPolicy defines the scheduling configuration for a PodGroup.
@@ -225,6 +248,51 @@ type GangSchedulingPolicy struct {
 	//
 	// +required
 	MinCount int32
+}
+
+// PodGroupResourceClaim references exactly one ResourceClaim, either directly
+// or by naming a ResourceClaimTemplate which is then turned into a ResourceClaim
+// for the PodGroup.
+//
+// It adds a name to it that uniquely identifies the ResourceClaim inside the PodGroup.
+// Pods that need access to the ResourceClaim define a matching reference in its
+// own Spec.ResourceClaims. The Pod's claim must match all fields of the
+// PodGroup's claim exactly.
+type PodGroupResourceClaim struct {
+	// Name uniquely identifies this resource claim inside the PodGroup.
+	// This must be a DNS_LABEL.
+	//
+	// +required
+	Name string
+
+	// ResourceClaimName is the name of a ResourceClaim object in the same
+	// namespace as this PodGroup. The ResourceClaim will be reserved for the
+	// PodGroup instead of its individual pods.
+	//
+	// Exactly one of ResourceClaimName and ResourceClaimTemplateName must
+	// be set.
+	//
+	// +optional
+	ResourceClaimName *string
+
+	// ResourceClaimTemplateName is the name of a ResourceClaimTemplate
+	// object in the same namespace as this PodGroup.
+	//
+	// The template will be used to create a new ResourceClaim, which will
+	// be bound to this PodGroup. When this PodGroup is deleted, the ResourceClaim
+	// will also be deleted. The PodGroup name and resource name, along with a
+	// generated component, will be used to form a unique name for the
+	// ResourceClaim, which will be recorded in podgroup.status.resourceClaimStatuses.
+	//
+	// This field is immutable and no changes will be made to the
+	// corresponding ResourceClaim by the control plane after creating the
+	// ResourceClaim.
+	//
+	// Exactly one of ResourceClaimName and ResourceClaimTemplateName must
+	// be set.
+	//
+	// +optional
+	ResourceClaimTemplateName *string
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -289,6 +357,23 @@ type PodGroupSpec struct {
 	// +optional
 	// +featureGate=TopologyAwareWorkloadScheduling
 	SchedulingConstraints *PodGroupSchedulingConstraints
+
+	// ResourceClaims defines which ResourceClaims may be shared among Pods in
+	// the group. Pods must reference these claims in order to consume the
+	// allocated devices.
+	//
+	// This is an alpha-level field and requires that the
+	// DRAWorkloadResourceClaims feature gate is enabled.
+	//
+	// This field is immutable.
+	//
+	// +optional
+	// +patchMergeKey=name
+	// +patchStrategy=merge,retainKeys
+	// +listType=map
+	// +listMapKey=name
+	// +featureGate=DRAWorkloadResourceClaims
+	ResourceClaims []PodGroupResourceClaim
 }
 
 // PodGroupStatus represents information about the status of a pod group.
@@ -316,6 +401,15 @@ type PodGroupStatus struct {
 	// +listType=map
 	// +listMapKey=type
 	Conditions []metav1.Condition
+
+	// Status of resource claims.
+	// +optional
+	// +patchMergeKey=name
+	// +patchStrategy=merge,retainKeys
+	// +listType=map
+	// +listMapKey=name
+	// +featureGate=DRAWorkloadResourceClaims
+	ResourceClaimStatuses []PodGroupResourceClaimStatus
 }
 
 // Well-known condition types for PodGroups.
@@ -339,6 +433,26 @@ const (
 	// to make room for higher-priority PodGroups or Pods.
 	PodGroupReasonPreemptionByScheduler string = "PreemptionByScheduler"
 )
+
+// PodGroupResourceClaimStatus is stored in the PodGroupStatus for each
+// PodGroupResourceClaim which references a ResourceClaimTemplate. It stores the
+// generated name for the corresponding ResourceClaim.
+type PodGroupResourceClaimStatus struct {
+	// Name uniquely identifies this resource claim inside the PodGroup. This
+	// must match the name of an entry in podgroup.spec.resourceClaims, which
+	// implies that the string must be a DNS_LABEL.
+	//
+	// +required
+	Name string
+
+	// ResourceClaimName is the name of the ResourceClaim that was generated for
+	// the PodGroup in the namespace of the PodGroup. If this is unset, then
+	// generating a ResourceClaim was not necessary. The
+	// podgroup.spec.resourceClaims entry can be ignored in this case.
+	//
+	// +optional
+	ResourceClaimName *string
+}
 
 // PodGroupTemplateReference references a PodGroup template defined in some object (e.g. Workload).
 // Exactly one reference must be set.
