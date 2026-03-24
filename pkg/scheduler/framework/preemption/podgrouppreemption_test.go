@@ -18,6 +18,7 @@ package preemption
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -27,11 +28,34 @@ import (
 	schedulingapi "k8s.io/api/scheduling/v1alpha2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	schedulinglisters "k8s.io/client-go/listers/scheduling/v1alpha2"
 	"k8s.io/klog/v2/ktesting"
 	fwk "k8s.io/kube-scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
 )
+
+type mockPodGroupLister struct {
+	schedulinglisters.PodGroupLister
+	podGroups map[string]*schedulingapi.PodGroup
+}
+
+func (m *mockPodGroupLister) PodGroups(namespace string) schedulinglisters.PodGroupNamespaceLister {
+	return &mockPodGroupNamespaceLister{podGroups: m.podGroups, namespace: namespace}
+}
+
+type mockPodGroupNamespaceLister struct {
+	schedulinglisters.PodGroupNamespaceLister
+	podGroups map[string]*schedulingapi.PodGroup
+	namespace string
+}
+
+func (m *mockPodGroupNamespaceLister) Get(name string) (*schedulingapi.PodGroup, error) {
+	if pg, ok := m.podGroups[name]; ok {
+		return pg, nil
+	}
+	return nil, fmt.Errorf("pod group %s not found", name)
+}
 
 func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 	// blockingRule mocks complex scheduling constraints for tests.
@@ -47,6 +71,7 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 		name           string
 		nodeNames      []string
 		initPods       []*v1.Pod
+		initPodGroups  []*schedulingapi.PodGroup
 		preemptor      *podGroupPreemptor
 		pdbs           []*policy.PodDisruptionBudget
 		blockingRules  []blockingRule
@@ -61,8 +86,12 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				st.MakePod().Name("p2").UID("v2").Node("node2").Priority(lowPriority).PodGroupName("pg1").Obj(),
 				st.MakePod().Name("p3").UID("v3").Node("node3").Priority(lowPriority).PodGroupName("pg2").Obj(),
 			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
+				st.MakePodGroup().Name("pg2").UID("pg2").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
+			},
 			preemptor: newPodGroupPreemptor(
-				&schedulingapi.PodGroup{ObjectMeta: metav1.ObjectMeta{Name: "preemptor-pg"}},
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
 				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
 			),
 			blockingRules: []blockingRule{
@@ -81,8 +110,11 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				st.MakePod().Name("p2").UID("v2").Node("node2").Priority(lowPriority).PodGroupName("pg1").StartTime(metav1.Unix(0, 0)).Obj(),
 				st.MakePod().Name("p3").UID("v3").Node("node3").Priority(midPriority).Obj(),
 			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
+			},
 			preemptor: newPodGroupPreemptor(
-				&schedulingapi.PodGroup{ObjectMeta: metav1.ObjectMeta{Name: "preemptor-pg"}},
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
 				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
 			),
 			blockingRules: []blockingRule{
@@ -100,8 +132,11 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				st.MakePod().Name("p1").UID("v1").Node("node1").Priority(lowPriority).PodGroupName("pg1").StartTime(metav1.Unix(1, 0)).Obj(),
 				st.MakePod().Name("p2").UID("v2").Node("node2").Priority(lowPriority).PodGroupName("pg1").StartTime(metav1.Unix(0, 0)).Obj(),
 			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
+			},
 			preemptor: newPodGroupPreemptor(
-				&schedulingapi.PodGroup{ObjectMeta: metav1.ObjectMeta{Name: "preemptor-pg"}},
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
 				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
 			),
 			blockingRules: []blockingRule{
@@ -121,8 +156,13 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				st.MakePod().Name("p4").UID("v4").Node("node4").Priority(midPriority).Obj(),
 				st.MakePod().Name("p5").UID("v5").Node("node5").Priority(highPriority).PodGroupName("pg3").StartTime(metav1.Unix(0, 0)).Obj(),
 			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
+				st.MakePodGroup().Name("pg2").UID("pg2").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
+				st.MakePodGroup().Name("pg3").UID("pg3").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
+			},
 			preemptor: newPodGroupPreemptor(
-				&schedulingapi.PodGroup{ObjectMeta: metav1.ObjectMeta{Name: "preemptor-pg"}},
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
 				[]*v1.Pod{
 					st.MakePod().Name("p-1").UID("p-1").Priority(highPriority).Obj(),
 					st.MakePod().Name("p-2").UID("p-2").Priority(highPriority).Obj(),
@@ -153,7 +193,7 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				},
 			},
 			preemptor: newPodGroupPreemptor(
-				&schedulingapi.PodGroup{ObjectMeta: metav1.ObjectMeta{Name: "preemptor-pg"}},
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
 				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
 			),
 			blockingRules: []blockingRule{
@@ -172,7 +212,7 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				st.MakePod().Name("p3").UID("v3").Node("node3").Priority(lowPriority).PodGroupName("pg2").Obj(),
 			},
 			preemptor: newPodGroupPreemptor(
-				&schedulingapi.PodGroup{ObjectMeta: metav1.ObjectMeta{Name: "preemptor-pg"}},
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
 				[]*v1.Pod{
 					st.MakePod().Name("p-1").UID("p-1").Priority(highPriority).PreemptionPolicy(v1.PreemptNever).Obj(),
 					st.MakePod().Name("p-2").UID("p-2").Priority(highPriority).Obj(),
@@ -186,6 +226,358 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 			},
 			expectedPods:   []string{},
 			expectedStatus: fwk.NewStatus(fwk.Unschedulable),
+		},
+		{
+			name:      "Preempt single lower priority pod",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("v1").Node("node1").Priority(lowPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", blockingVictims: sets.New("p1"), capacity: 1},
+			},
+			expectedPods:   []string{"p1"},
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "Priority: Prefer lower priority victim",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("v1").Node("node1").Priority(lowPriority).Obj(),
+				st.MakePod().Name("p2").UID("v2").Node("node1").Priority(midPriority).Obj(),
+				st.MakePod().Name("p3").UID("v3").Node("node1").Priority(highPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", blockingVictims: sets.New("p1"), capacity: 1},
+				{nodeName: "node1", blockingVictims: sets.New("p2"), capacity: 1},
+				{nodeName: "node1", blockingVictims: sets.New("p3"), capacity: 1},
+			},
+			expectedPods:   []string{"p1"},
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "Efficiency: Preempt minimum number of victims",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("v1").Node("node1").Priority(lowPriority).Obj(),
+				st.MakePod().Name("p2").UID("v2").Node("node1").Priority(lowPriority).Obj(),
+				st.MakePod().Name("p3").UID("v3").Node("node1").Priority(lowPriority).Obj(),
+				st.MakePod().Name("p4").UID("v4").Node("node1").Priority(lowPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", blockingVictims: sets.New("p1", "p2"), capacity: 1},
+				{nodeName: "node1", blockingVictims: sets.New("p1"), capacity: 1},
+			},
+			expectedPods:   []string{"p1"},
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "PDB: Prefer non-violating victim",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("victim-pdb").UID("v1").Node("node1").Label("app", "foo").Priority(lowPriority).Obj(),
+				st.MakePod().Name("victim-no-pdb").UID("v2").Node("node1").Priority(lowPriority).Obj(),
+			},
+			pdbs: []*policy.PodDisruptionBudget{
+				{
+					Spec:   policy.PodDisruptionBudgetSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}},
+					Status: policy.PodDisruptionBudgetStatus{DisruptionsAllowed: 0},
+				},
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", blockingVictims: sets.New("victim-pdb"), capacity: 1},
+				{nodeName: "node1", blockingVictims: sets.New("victim-no-pdb"), capacity: 1},
+			},
+			expectedPods:   []string{"victim-no-pdb"},
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "PodGroup with PreemptNever does not perform preemption",
+			nodeNames: []string{"node1", "node2", "node3"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("v1").Node("node1").Priority(lowPriority).Obj(),
+				st.MakePod().Name("p2").UID("v2").Node("node2").Priority(lowPriority).PodGroupName("pg1").Obj(),
+				st.MakePod().Name("p3").UID("v3").Node("node3").Priority(lowPriority).PodGroupName("pg2").Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePod).Priority(lowPriority).Obj(),
+				st.MakePodGroup().Name("pg2").UID("pg2").DisruptionMode(schedulingapi.DisruptionModePod).Priority(lowPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{
+					st.MakePod().Name("p-1").UID("p-1").Priority(highPriority).PreemptionPolicy(v1.PreemptNever).Obj(),
+					st.MakePod().Name("p-2").UID("p-2").Priority(highPriority).Obj(),
+				},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", capacity: 1, blockingVictims: sets.New("p1")},
+				{nodeName: "node2", capacity: 1, blockingVictims: sets.New("p2")},
+				{nodeName: "node3", capacity: 1, blockingVictims: sets.New("p3")},
+			},
+			expectedPods:   []string{},
+			expectedStatus: fwk.NewStatus(fwk.Unschedulable),
+		},
+		{
+			name:      "PDB: Prefer lower priority pod for preemption, when preemption without pdb violation is not possible",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("v1").Node("node1").Label("app", "foo").Priority(lowPriority).Obj(),
+				st.MakePod().Name("p2").UID("v2").Node("node1").Label("app", "foo").Priority(midPriority).Obj(),
+			},
+			pdbs: []*policy.PodDisruptionBudget{
+				{
+					Spec:   policy.PodDisruptionBudgetSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}},
+					Status: policy.PodDisruptionBudgetStatus{DisruptionsAllowed: 0},
+				},
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", blockingVictims: sets.New("p1"), capacity: 1},
+				{nodeName: "node1", blockingVictims: sets.New("p2"), capacity: 1},
+			},
+			expectedPods:   []string{"p1"},
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "PodGroup: Preempt group as a whole",
+			nodeNames: []string{"node1", "node2"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("v1").Node("node1").Priority(lowPriority).PodGroupName("pg1").Obj(),
+				st.MakePod().Name("p2").UID("v2").Node("node2").Priority(lowPriority).PodGroupName("pg1").Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePodGroup).Priority(lowPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", capacity: 1, blockingVictims: sets.New("p1")},
+			},
+			expectedPods:   []string{"p1", "p2"},
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "PodGroup: Prefer single pod over podGroup for preemption candidate",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("p1").Node("node1").Priority(lowPriority).Obj(),
+				st.MakePod().Name("g1-1").UID("g1").Node("node1").PodGroupName("pg1").Priority(lowPriority).Obj(),
+				st.MakePod().Name("g1-2").UID("g2").Node("node1").PodGroupName("pg1").Priority(lowPriority).Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePodGroup).Priority(lowPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", blockingVictims: sets.New("g1-1", "g1-2"), capacity: 1},
+				{nodeName: "node1", blockingVictims: sets.New("p1"), capacity: 1},
+			},
+			expectedPods:   []string{"p1"},
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "PodGroup: Preempt group as a whole on single node",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("g1-1").UID("g1").Node("node1").PodGroupName("pg1").Priority(lowPriority).Obj(),
+				st.MakePod().Name("g1-2").UID("g2").Node("node1").PodGroupName("pg1").Priority(lowPriority).Obj(),
+				st.MakePod().Name("p1").UID("p1").Node("node1").Priority(midPriority).Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePodGroup).Priority(lowPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", capacity: 1, blockingVictims: sets.New("g1-1")}, // Only g1-1 is blocking
+			},
+			expectedPods:   []string{"g1-1", "g1-2"}, // Both must be preempted
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "PDB: Unit violation if any member violates",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("g1-1").UID("g1").Node("node1").Label("app", "foo").PodGroupName("pg1").Priority(lowPriority).Obj(),
+				st.MakePod().Name("g1-2").UID("g2").Node("node1").PodGroupName("pg1").Priority(lowPriority).Obj(),
+				st.MakePod().Name("p1").UID("p1").Node("node1").Priority(lowPriority).Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePodGroup).Priority(lowPriority).Obj(),
+			},
+			pdbs: []*policy.PodDisruptionBudget{
+				{
+					Spec:   policy.PodDisruptionBudgetSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}},
+					Status: policy.PodDisruptionBudgetStatus{DisruptionsAllowed: 0},
+				},
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", capacity: 1, blockingVictims: sets.New("g1-1")}, // Only g1-1 is blocking
+				{nodeName: "node1", capacity: 1, blockingVictims: sets.New("p1")},   // p1 is also blocking
+			},
+			expectedPods:   []string{"p1"}, // p1 is preferred because pg1 unit-violates PDB (via g1-1)
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "PodGroup: Prefer preempting single pod over group of same priority",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("p1").Node("node1").Priority(lowPriority).Obj(),
+				st.MakePod().Name("g1-1").UID("g1").Node("node1").PodGroupName("pg1").Priority(lowPriority).Obj(),
+				st.MakePod().Name("g1-2").UID("g2").Node("node1").PodGroupName("pg1").Priority(lowPriority).Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePodGroup).Priority(lowPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", capacity: 1, blockingVictims: sets.New("g1-1", "g1-2")},
+				{nodeName: "node1", capacity: 1, blockingVictims: sets.New("p1")},
+			},
+			expectedPods:   []string{"p1"}, // p1 is preempted because the PodGroup is "more important" at the same priority level
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "Failure: Cannot preempt the victim with higher priority",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("v1").Node("node1").Priority(highPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(midPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(midPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", blockingVictims: sets.New("p1")},
+			},
+			expectedPods:   []string{},
+			expectedStatus: fwk.NewStatus(fwk.UnschedulableAndUnresolvable),
+		},
+		{
+			name:      "Failure: Cannot preempt if node is empty",
+			nodeNames: []string{"node1"},
+			initPods:  []*v1.Pod{},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(midPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(midPriority).Obj()},
+			),
+			blockingRules:  []blockingRule{},
+			expectedPods:   []string{},
+			expectedStatus: fwk.NewStatus(fwk.UnschedulableAndUnresolvable),
+		},
+		{
+			name:      "Priority divergence: candidate victim PodGroup has lower priority than the Pods from that group",
+			nodeNames: []string{"node1", "node2"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("v1").Node("node1").Priority(highPriority).PodGroupName("pg1").Obj(),
+				st.MakePod().Name("p2").UID("v2").Node("node2").Priority(highPriority).PodGroupName("pg1").Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePodGroup).Priority(midPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", capacity: 1, blockingVictims: sets.New("p1")},
+			},
+			expectedPods:   []string{"p1", "p2"},
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "Priority divergence: candidate victim PodGroup has higher priority than the Pods from that group",
+			nodeNames: []string{"node1", "node2"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("v1").Node("node1").Priority(lowPriority).PodGroupName("pg1").Obj(),
+				st.MakePod().Name("p2").UID("v2").Node("node2").Priority(lowPriority).PodGroupName("pg1").Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePodGroup).Priority(midPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(midPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(midPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", capacity: 1, blockingVictims: sets.New("p1")},
+			},
+			expectedPods:   []string{},
+			expectedStatus: fwk.NewStatus(fwk.UnschedulableAndUnresolvable),
+		},
+		{
+			name:      "Priority divergence: preemptor PodGroup has higher priority than the Pod from preemptor PodGroup",
+			nodeNames: []string{"node1", "node2"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("v1").Node("node1").Priority(midPriority).PodGroupName("pg1").Obj(),
+				st.MakePod().Name("p2").UID("v2").Node("node2").Priority(midPriority).PodGroupName("pg1").Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePodGroup).Priority(midPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(lowPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", capacity: 1, blockingVictims: sets.New("p1")},
+			},
+			expectedPods:   []string{"p1", "p2"},
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "Priority divergence: preemptor PodGroup has lower priority than the Pod from preemptor PodGroup",
+			nodeNames: []string{"node1", "node2"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("v1").Node("node1").Priority(midPriority).PodGroupName("pg1").Obj(),
+				st.MakePod().Name("p2").UID("v2").Node("node2").Priority(midPriority).PodGroupName("pg1").Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePodGroup).Priority(midPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(lowPriority).Obj(),
+				[]*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", capacity: 1, blockingVictims: sets.New("p1")},
+			},
+			expectedPods:   []string{},
+			expectedStatus: fwk.NewStatus(fwk.UnschedulableAndUnresolvable),
 		},
 	}
 
@@ -213,7 +605,12 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				domainNodes = append(domainNodes, nodeInfos[name])
 			}
 
-			domain := newDomainForWorkloadPreemption(domainNodes, "test-domain")
+			podGroups := make(map[string]*schedulingapi.PodGroup)
+			for _, pg := range tt.initPodGroups {
+				podGroups[pg.Name] = pg
+			}
+			pgLister := &mockPodGroupLister{podGroups: podGroups}
+			domain := newDomainForWorkloadPreemption(domainNodes, pgLister, "test-domain")
 
 			// Create a mock podGroupSchedulingFunc.
 			// This simulates whether the preempting PodGroup can schedule given the current
@@ -268,10 +665,12 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 			if wantCode != fwk.Success {
 				return
 			}
+			if victims == nil {
+				t.Fatalf("expected non-nil victims on success")
+			}
 
-			gotPods := victims.Pods
 			gotNames := sets.Set[string]{}
-			for _, p := range gotPods {
+			for _, p := range victims.Pods {
 				gotNames.Insert(p.Name)
 			}
 			wantNames := sets.New(tt.expectedPods...)

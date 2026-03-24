@@ -54984,6 +54984,29 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupSpec(ref common.ReferenceCallb
 							},
 						},
 					},
+					"disruptionMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DisruptionMode defines the mode in which a given PodGroup can be disrupted. Controllers are expected to fill this field by copying it from a PodGroupTemplate. One of Pod, PodGroup. Defaults to Pod if unset. This field is immutable. This field is available only when the WorkloadAwarePreemption feature gate is enabled.\n\n\nPossible enum values:\n - `\"Pod\"` means that individual pods can be disrupted or preempted independently. It doesn't depend on exact set of pods currently running in this PodGroup.\n - `\"PodGroup\"` means that the whole PodGroup needs to be disrupted or preempted together.",
+							Default:     "Pod",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"Pod", "PodGroup"},
+						},
+					},
+					"priorityClassName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PriorityClassName defines the priority that should be considered when scheduling this pod group. Controllers are expected to fill this field by copying it from a PodGroupTemplate. Otherwise, it is validated and resolved similarly to the PriorityClassName on PodGroupTemplate (i.e. if no priority class is specified, admission control can set this to the global default priority class if it exists. Otherwise, the pod group's priority will be zero). This field is immutable. This field is available only when the WorkloadAwarePreemption feature gate is enabled.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Priority is the value of priority of this pod group. Various system components use this field to find the priority of the pod group. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. This field is immutable. This field is available only when the WorkloadAwarePreemption feature gate is enabled.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 				Required: []string{"schedulingPolicy"},
 			},
@@ -55106,6 +55129,28 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupTemplate(ref common.ReferenceC
 									},
 								},
 							},
+						},
+					},
+					"disruptionMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DisruptionMode defines the mode in which a given PodGroup can be disrupted. One of Pod, PodGroup. This field is available only when the WorkloadAwarePreemption feature gate is enabled.\n\n\nPossible enum values:\n - `\"Pod\"` means that individual pods can be disrupted or preempted independently. It doesn't depend on exact set of pods currently running in this PodGroup.\n - `\"PodGroup\"` means that the whole PodGroup needs to be disrupted or preempted together.",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"Pod", "PodGroup"},
+						},
+					},
+					"priorityClassName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PriorityClassName indicates the priority that should be considered when scheduling a pod group created from this template. If no priority class is specified, admission control can set this to the global default priority class if it exists. Otherwise, pod groups created from this template will have the priority set to zero. This field is available only when the WorkloadAwarePreemption feature gate is enabled.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Priority is the value of priority of pod groups created from this template. Various system components use this field to find the priority of the pod group. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. This field is available only when the WorkloadAwarePreemption feature gate is enabled.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 				},

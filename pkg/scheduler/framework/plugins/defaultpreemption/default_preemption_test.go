@@ -2499,7 +2499,7 @@ func TestPreEnqueue(t *testing.T) {
 			podToTriggerPreemption: st.MakePod().Name("p").UID("p").Namespace(v1.NamespaceDefault).PodGroupName("pg1").Priority(highPriority).Obj(),
 			podToCheck:             st.MakePod().Name("p_other").UID("p_other").Namespace(v1.NamespaceDefault).PodGroupName("pg1").Priority(highPriority).Obj(),
 			pgs: []*v1alpha2.PodGroup{
-				st.MakePodGroup().Name("pg1").UID("pg1").Namespace(v1.NamespaceDefault).Obj(),
+				st.MakePodGroup().Name("pg1").UID("pg1").Namespace(v1.NamespaceDefault).Priority(highPriority).Obj(),
 			},
 			features:         feature.Features{EnableAsyncPreemption: true, EnableWorkloadAwarePreemption: true},
 			expectPreemption: true,
@@ -2521,8 +2521,8 @@ func TestPreEnqueue(t *testing.T) {
 			podToTriggerPreemption: st.MakePod().Name("p").UID("p").Namespace(v1.NamespaceDefault).PodGroupName("pg1").Priority(highPriority).Obj(),
 			podToCheck:             st.MakePod().Name("p_other").UID("p_other").Namespace(v1.NamespaceDefault).PodGroupName("pg2").Priority(highPriority).Obj(),
 			pgs: []*v1alpha2.PodGroup{
-				st.MakePodGroup().Name("pg1").UID("pg1").Namespace(v1.NamespaceDefault).Obj(),
-				st.MakePodGroup().Name("pg2").UID("pg2").Namespace(v1.NamespaceDefault).Obj(),
+				st.MakePodGroup().Name("pg1").UID("pg1").Namespace(v1.NamespaceDefault).Priority(highPriority).Obj(),
+				st.MakePodGroup().Name("pg2").UID("pg2").Namespace(v1.NamespaceDefault).Priority(highPriority).Obj(),
 			},
 			features:         feature.Features{EnableAsyncPreemption: true, EnableWorkloadAwarePreemption: true},
 			expectPreemption: true,
@@ -2533,7 +2533,7 @@ func TestPreEnqueue(t *testing.T) {
 			podToTriggerPreemption: st.MakePod().Name("p").UID("p").Namespace(v1.NamespaceDefault).PodGroupName("pg1").Priority(highPriority).Obj(),
 			podToCheck:             st.MakePod().Name("p_other").UID("p_other").Namespace(v1.NamespaceDefault).PodGroupName("pg_missing").Priority(highPriority).Obj(),
 			pgs: []*v1alpha2.PodGroup{
-				st.MakePodGroup().Name("pg1").UID("pg1").Namespace(v1.NamespaceDefault).Obj(),
+				st.MakePodGroup().Name("pg1").UID("pg1").Namespace(v1.NamespaceDefault).Priority(highPriority).Obj(),
 			},
 			features:         feature.Features{EnableAsyncPreemption: true, EnableWorkloadAwarePreemption: true},
 			expectPreemption: false,

@@ -417,7 +417,7 @@ func TestPodGroupCycle_UpdateSnapshotError(t *testing.T) {
 		},
 	}
 
-	sched.podGroupCycle(ctx, schedFwk, podGroupInfo)
+	sched.podGroupCycle(ctx, schedFwk, framework.NewCycleState(), podGroupInfo)
 
 	if !failureHandlerCalled {
 		t.Errorf("Expected FailureHandler to be called after UpdateSnapshot failed")
@@ -559,7 +559,7 @@ func TestPodGroupCycle_PodGroupPostFilter(t *testing.T) {
 			}
 
 			sched.SchedulePod = sched.schedulePod
-			sched.podGroupCycle(ctx, schedFwk, podGroupInfo)
+			sched.podGroupCycle(ctx, schedFwk, framework.NewCycleState(), podGroupInfo)
 
 			if fakePlugin.podGroupPostFilterCalled != tt.expectedPodGroupPostFilterCalled {
 				t.Errorf("Expected workload aware preemption (PodGroupPostFilter) to be %v, but got %v", tt.expectedPodGroupPostFilterCalled, fakePlugin.podGroupPostFilterCalled)
@@ -1020,7 +1020,7 @@ func TestPodGroupSchedulingAlgorithm(t *testing.T) {
 					t.Fatalf("Failed to update snapshot: %v", err)
 				}
 
-				result := sched.podGroupSchedulingAlgorithm(ctx, schedFwk, podGroupInfo, runAllPostFilters)
+				result := sched.podGroupSchedulingAlgorithm(ctx, schedFwk, framework.NewCycleState(), podGroupInfo, runAllPostFilters)
 
 				if result.status.Code() != tt.expectedGroupStatusCode {
 					t.Errorf("Expected group status code: %v, got: %v", tt.expectedGroupStatusCode, result.status.Code())
@@ -1636,13 +1636,15 @@ func TestSubmitPodGroupAlgorithmResult(t *testing.T) {
 				},
 			}
 
+			podGroupCycleState := framework.NewCycleState()
+
 			for i := range tt.algorithmResult.podResults {
 				pod := podGroupInfo.QueuedPodInfos[i].Pod
-				podCtx := initPodSchedulingContext(ctx, pod, runAllPostFilters)
+				podCtx := initPodSchedulingContext(ctx, pod, podGroupCycleState, runAllPostFilters)
 				tt.algorithmResult.podResults[i].podCtx = podCtx
 			}
 
-			sched.submitPodGroupAlgorithmResult(ctx, schedFwk, podGroupInfo, tt.algorithmResult, time.Now())
+			sched.submitPodGroupAlgorithmResult(ctx, schedFwk, podGroupCycleState, podGroupInfo, tt.algorithmResult, time.Now())
 
 			if err := wait.PollUntilContextTimeout(ctx, time.Millisecond*200, wait.ForeverTestTimeout, false, func(ctx context.Context) (bool, error) {
 				lock.Lock()
@@ -2340,7 +2342,7 @@ func TestPodGroupSchedulingPlacementAlgorithm(t *testing.T) {
 				},
 			}
 
-			result := sched.podGroupSchedulingPlacementAlgorithm(ctx, schedFwk, pgInfo, runAllPostFilters)
+			result := sched.podGroupSchedulingPlacementAlgorithm(ctx, schedFwk, framework.NewCycleState(), pgInfo, runAllPostFilters)
 
 			opts := cmp.Options{
 				cmp.AllowUnexported(
@@ -2502,7 +2504,7 @@ func TestPodGroupSchedulingPlacementAlgorithm_Scoring(t *testing.T) {
 				},
 			}
 
-			result := sched.podGroupSchedulingPlacementAlgorithm(ctx, schedFwk, pgInfo, runAllPostFilters)
+			result := sched.podGroupSchedulingPlacementAlgorithm(ctx, schedFwk, framework.NewCycleState(), pgInfo, runAllPostFilters)
 
 			expectedHost := placements[tt.expectedPlacement][0]
 			actualHost := result.podResults[0].scheduleResult.SuggestedHost
@@ -2697,7 +2699,7 @@ func TestRunWorkloadAwarePreemption(t *testing.T) {
 			// Just inject logger explicitly in context to avoid panic
 			ctx = klog.NewContext(ctx, logger)
 
-			status := sched.runWorkloadAwarePreemption(ctx, schedFwk, tt.podGroupInfo)
+			status := sched.runWorkloadAwarePreemption(ctx, schedFwk, framework.NewCycleState(), tt.podGroupInfo)
 
 			if tt.expectedStatus.Code() != status.Code() || tt.expectedStatus.Message() != status.Message() {
 				t.Errorf("Unexpected status, want code %v message %q, got code %v message %q",

@@ -41,11 +41,11 @@ type CycleState struct {
 	// GetParallelPreBindPlugins returns plugins that can be run in parallel with other plugins
 	// in the PreBind extension point.
 	parallelPreBindPlugins sets.Set[string]
-	// isPodGroupSchedulingCycle indicates whether this cycle is a pod group scheduling cycle or not.
-	// If set to false, it means that the pod referencing this CycleState either passed the pod group cycle
+	// podGroupCycleState contains the CycleState for this pod's PodGroup.
+	// If set to nil, it means that the pod referencing this CycleState either passed the pod group cycle
 	// or doesn't belong to any pod group.
-	// This field can only be set to true when GenericWorkload feature flag is enabled.
-	isPodGroupSchedulingCycle bool
+	// This field can only be non-nil when GenericWorkload feature flag is enabled.
+	podGroupCycleState fwk.PodGroupCycleState
 }
 
 // NewCycleState initializes a new CycleState and returns its pointer.
@@ -102,11 +102,15 @@ func (c *CycleState) GetParallelPreBindPlugins() sets.Set[string] {
 }
 
 func (c *CycleState) IsPodGroupSchedulingCycle() bool {
-	return c.isPodGroupSchedulingCycle
+	return c.podGroupCycleState != nil
 }
 
-func (c *CycleState) SetPodGroupSchedulingCycle(isPodGroupSchedulingCycle bool) {
-	c.isPodGroupSchedulingCycle = isPodGroupSchedulingCycle
+func (c *CycleState) SetPodGroupSchedulingCycle(podGroupCycleState fwk.PodGroupCycleState) {
+	c.podGroupCycleState = podGroupCycleState
+}
+
+func (c *CycleState) GetPodGroupSchedulingCycle() fwk.PodGroupCycleState {
+	return c.podGroupCycleState
 }
 
 func (c *CycleState) SetSkipAllPostFilterPlugins(flag bool) {
@@ -135,7 +139,7 @@ func (c *CycleState) Clone() fwk.CycleState {
 	copy.skipScorePlugins = c.skipScorePlugins
 	copy.skipPreBindPlugins = c.skipPreBindPlugins
 	copy.parallelPreBindPlugins = c.parallelPreBindPlugins
-	copy.isPodGroupSchedulingCycle = c.isPodGroupSchedulingCycle
+	copy.podGroupCycleState = c.podGroupCycleState
 	copy.skipAllPostFilterPlugins = c.skipAllPostFilterPlugins
 
 	return copy

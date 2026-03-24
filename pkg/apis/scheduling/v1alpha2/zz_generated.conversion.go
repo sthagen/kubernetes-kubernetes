@@ -408,6 +408,9 @@ func autoConvert_v1alpha2_PodGroupSpec_To_scheduling_PodGroupSpec(in *scheduling
 	}
 	out.SchedulingConstraints = (*scheduling.PodGroupSchedulingConstraints)(unsafe.Pointer(in.SchedulingConstraints))
 	out.ResourceClaims = *(*[]scheduling.PodGroupResourceClaim)(unsafe.Pointer(&in.ResourceClaims))
+	out.DisruptionMode = (*scheduling.DisruptionMode)(unsafe.Pointer(in.DisruptionMode))
+	out.PriorityClassName = in.PriorityClassName
+	out.Priority = (*int32)(unsafe.Pointer(in.Priority))
 	return nil
 }
 
@@ -423,6 +426,9 @@ func autoConvert_scheduling_PodGroupSpec_To_v1alpha2_PodGroupSpec(in *scheduling
 	}
 	out.SchedulingConstraints = (*schedulingv1alpha2.PodGroupSchedulingConstraints)(unsafe.Pointer(in.SchedulingConstraints))
 	out.ResourceClaims = *(*[]schedulingv1alpha2.PodGroupResourceClaim)(unsafe.Pointer(&in.ResourceClaims))
+	out.DisruptionMode = (*schedulingv1alpha2.DisruptionMode)(unsafe.Pointer(in.DisruptionMode))
+	out.PriorityClassName = in.PriorityClassName
+	out.Priority = (*int32)(unsafe.Pointer(in.Priority))
 	return nil
 }
 
@@ -460,6 +466,9 @@ func autoConvert_v1alpha2_PodGroupTemplate_To_scheduling_PodGroupTemplate(in *sc
 	}
 	out.SchedulingConstraints = (*scheduling.PodGroupSchedulingConstraints)(unsafe.Pointer(in.SchedulingConstraints))
 	out.ResourceClaims = *(*[]scheduling.PodGroupResourceClaim)(unsafe.Pointer(&in.ResourceClaims))
+	out.DisruptionMode = (*scheduling.DisruptionMode)(unsafe.Pointer(in.DisruptionMode))
+	out.PriorityClassName = in.PriorityClassName
+	out.Priority = (*int32)(unsafe.Pointer(in.Priority))
 	return nil
 }
 
@@ -475,6 +484,9 @@ func autoConvert_scheduling_PodGroupTemplate_To_v1alpha2_PodGroupTemplate(in *sc
 	}
 	out.SchedulingConstraints = (*schedulingv1alpha2.PodGroupSchedulingConstraints)(unsafe.Pointer(in.SchedulingConstraints))
 	out.ResourceClaims = *(*[]schedulingv1alpha2.PodGroupResourceClaim)(unsafe.Pointer(&in.ResourceClaims))
+	out.DisruptionMode = (*schedulingv1alpha2.DisruptionMode)(unsafe.Pointer(in.DisruptionMode))
+	out.PriorityClassName = in.PriorityClassName
+	out.Priority = (*int32)(unsafe.Pointer(in.Priority))
 	return nil
 }
 

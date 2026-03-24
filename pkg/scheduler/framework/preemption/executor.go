@@ -496,15 +496,7 @@ func (p *podGroupExecutorPreemptor) Obj() runtime.Object {
 }
 
 func (p *podGroupExecutorPreemptor) Priority() int32 {
-	// TODO(Argh4k): Replace it with v1alpha2 pod group priority
-	// once it's available.
-	maxPrio := int32(0)
-	for _, pod := range p.pods {
-		if prio := corev1helpers.PodPriority(pod); prio > maxPrio {
-			maxPrio = prio
-		}
-	}
-	return maxPrio
+	return util.PodGroupPriority(p.pg)
 }
 
 func (p *podGroupExecutorPreemptor) Pods() map[string]*v1.Pod {

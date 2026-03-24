@@ -17,11 +17,15 @@ limitations under the License.
 package preemption
 
 import (
+	"maps"
+	"slices"
 	"sync/atomic"
 
 	v1 "k8s.io/api/core/v1"
 	schedulingapi "k8s.io/api/scheduling/v1alpha2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	schedulinglisters "k8s.io/client-go/listers/scheduling/v1alpha2"
 	corev1helpers "k8s.io/component-helpers/scheduling/corev1"
 	extenderv1 "k8s.io/kube-scheduler/extender/v1"
 	fwk "k8s.io/kube-scheduler/framework"
@@ -37,21 +41,14 @@ type podGroupPreemptor struct {
 }
 
 func newPodGroupPreemptor(pg *schedulingapi.PodGroup, pods []*v1.Pod) *podGroupPreemptor {
-	prio := int32(0)
 	preemptionPolicy := v1.PreemptLowerPriority
-	// TODO(Argh4k): Replace it with pg.Spec.Priority once it's implemented:
-	// https://github.com/kubernetes/kubernetes/pull/136589
 	for _, pod := range pods {
-		if p := corev1helpers.PodPriority(pod); p > prio {
-			prio = p
-		}
 		if p := pod.Spec.PreemptionPolicy; p != nil && *p == v1.PreemptNever {
 			preemptionPolicy = *p
 		}
 	}
-
 	return &podGroupPreemptor{
-		priority:         prio,
+		priority:         util.PodGroupPriority(pg),
 		pods:             pods,
 		podGroup:         pg,
 		preemptionPolicy: preemptionPolicy,
@@ -86,19 +83,53 @@ type domain struct {
 	allPossibleVictims []*victim
 }
 
-func newDomainForWorkloadPreemption(nodes []fwk.NodeInfo, name string) *domain {
-	// TODO(Argh4k): PodGroups with a DisruptionMode == DisruptionModePodGroup
-	// should be treated as a single Victim.
-	// https://github.com/kubernetes/kubernetes/pull/136589
-	// TODO(Argh4k): For pod groups victims use pg.Spec.Priority once it's implemented:
-	// https://github.com/kubernetes/kubernetes/pull/136589
-	allPossibleVictims := make([]*victim, 0, len(nodes))
+// isPodGroupPreemptiblePod checks if a pod is a part of a pod group that should
+// be treated as a single unit for preemption purposes.
+// If the pod is a part of such a pod group, it returns the pod group and true.
+// In all other cases, it returns nil and false.
+func isPodGroupPreemptiblePod(p *v1.Pod, pgLister schedulinglisters.PodGroupLister) (*schedulingapi.PodGroup, bool) {
+	if p.Spec.SchedulingGroup == nil {
+		return nil, false
+	}
+	pgName := p.Spec.SchedulingGroup.PodGroupName
+	pg, err := pgLister.PodGroups(p.Namespace).Get(*pgName)
+	if err != nil {
+		return nil, false
+	}
+	if mode := pg.Spec.DisruptionMode; mode == nil || *mode != schedulingapi.DisruptionModePodGroup {
+		return nil, false
+	}
+	return pg, true
+}
+
+// newDomainForWorkloadPreemption creates a new domain for workload preemption.
+// The domain is the whole cluster and it contains victims that are computed based
+// on the pods and their scheduling groups.
+// Pods that are part of a pod group with the PodGroup disruption mode are grouped
+// together into a single victim. Otherwise, they are treated as individual victims.
+func newDomainForWorkloadPreemption(nodes []fwk.NodeInfo, pgLister schedulinglisters.PodGroupLister, name string) *domain {
+	victimMap := map[types.UID]*victim{}
 	for _, node := range nodes {
 		for _, p := range node.GetPods() {
-			allPossibleVictims = append(allPossibleVictims, newVictim([]fwk.PodInfo{p}, corev1helpers.PodPriority(p.GetPod()), []fwk.NodeInfo{node}))
+			// TODO: Calling the lister here is not ideal given we do this
+			// for every pod in the cluster. Instead, we should be getting
+			// this information from the snapshot.
+			pg, ok := isPodGroupPreemptiblePod(p.GetPod(), pgLister)
+			if !ok {
+				victimMap[p.GetPod().UID] = newVictim([]fwk.PodInfo{p}, corev1helpers.PodPriority(p.GetPod()), []fwk.NodeInfo{node})
+				continue
+			}
+			victim, ok := victimMap[pg.UID]
+			if ok {
+				victim.pods = append(victim.pods, p)
+				victim.affectedNodes[node.Node().Name] = node
+				continue
+			}
+			victimMap[pg.UID] = newVictim([]fwk.PodInfo{p}, util.PodGroupPriority(pg), []fwk.NodeInfo{node})
 		}
 	}
 
+	allPossibleVictims := slices.Collect(maps.Values(victimMap))
 	return &domain{
 		nodes:              nodes,
 		allPossibleVictims: allPossibleVictims,

@@ -3884,10 +3884,9 @@ func (tc *testContext) listAssumedClaims() ([]metav1.Object, []metav1.Object) {
 
 func (tc *testContext) listInFlightClaims() []metav1.Object {
 	var inFlightClaims []metav1.Object
-	tc.draManager.resourceClaimTracker.inFlightAllocations.Range(func(key, value any) bool {
-		inFlightClaims = append(inFlightClaims, value.(*resourceapi.ResourceClaim))
-		return true
-	})
+	for _, inFlight := range tc.draManager.resourceClaimTracker.allInFlightAllocationsRLocked() {
+		inFlightClaims = append(inFlightClaims, inFlight.claim)
+	}
 	sortObjects(inFlightClaims)
 	return inFlightClaims
 }
@@ -4968,7 +4967,7 @@ func testGatherAllocatedState(tCtx ktesting.TContext) {
 			logger := klog.FromContext(tCtx)
 			draManager := &DefaultDRAManager{
 				resourceClaimTracker: &claimTracker{
-					inFlightAllocations: &sync.Map{},
+					inFlightAllocations: make(map[types.UID]inFlightAllocation),
 					allocatedDevices:    newAllocatedDevices(logger),
 				},
 			}

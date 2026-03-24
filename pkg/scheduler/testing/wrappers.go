@@ -1654,6 +1654,18 @@ func (wrapper *PodGroupWrapper) ResourceClaimStatuses(statuses ...schedulingapi.
 	return wrapper
 }
 
+// DisruptionMode sets the disruption mode of the inner PodGroup.
+func (wrapper *PodGroupWrapper) DisruptionMode(mode schedulingapi.DisruptionMode) *PodGroupWrapper {
+	wrapper.PodGroup.Spec.DisruptionMode = &mode
+	return wrapper
+}
+
+// Priority sets the priority of the inner PodGroup.
+func (wrapper *PodGroupWrapper) Priority(priority int32) *PodGroupWrapper {
+	wrapper.PodGroup.Spec.Priority = &priority
+	return wrapper
+}
+
 // WorkloadWrapper wraps a Workload inside.
 type WorkloadWrapper struct{ schedulingapi.Workload }
 
