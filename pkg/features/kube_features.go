@@ -1742,7 +1742,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	},
 
 	PLEGOnDemandRelist: {
-		{Version: version.MustParse("1.36"), Default: false, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Beta},
 	},
 
 	PersistentVolumeClaimUnusedSinceTime: {

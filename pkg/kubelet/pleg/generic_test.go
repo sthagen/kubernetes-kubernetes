@@ -838,8 +838,6 @@ kubelet_running_pods 2
 }
 
 func TestWorkerLoop(t *testing.T) {
-	// TODO: feature temporarily disabled by defaault but this test is for that feature
-	// Remove when we re-enable PLEGOnDemandRelist by default
 	featuregatetesting.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, features.PLEGOnDemandRelist, true)
 	synctest.Test(t, func(t *testing.T) {
 		runtimeMock := containertest.NewMockRuntime(t)
