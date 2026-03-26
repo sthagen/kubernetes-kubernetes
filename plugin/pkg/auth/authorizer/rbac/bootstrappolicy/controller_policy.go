@@ -215,6 +215,11 @@ func buildControllerRoles() ([]rbacv1.ClusterRole, []rbacv1.ClusterRoleBinding) 
 				rbacv1helpers.NewRule("update", "patch").Groups(schedulingGroup).Resources("podgroups/status").RuleOrDie(),
 			)
 		}
+		if utilfeature.DefaultFeatureGate.Enabled(features.DRAResourceClaimGranularStatusAuthorization) {
+			rules = append(rules,
+				rbacv1helpers.NewRule("update", "patch").Groups(resourceGroup).Resources("resourceclaims/binding").RuleOrDie(),
+			)
+		}
 		addControllerRole(&controllerRoles, &controllerRoleBindings, rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{Name: saRolePrefix + "resource-claim-controller"},
 			Rules:      rules,

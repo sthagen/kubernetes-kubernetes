@@ -270,6 +270,16 @@ const (
 	// status from DRA drivers.
 	DRAResourceClaimDeviceStatus featuregate.Feature = "DRAResourceClaimDeviceStatus"
 
+	// owner: @aojea
+	// kep: http://kep.k8s.io/4817
+	//
+	// Enables fine-grained authorization checks for ResourceClaim status updates.
+	// Requires separate permission on resourceclaims/binding to update
+	// status.allocation and status.reservedFor, and per-driver permission on
+	// resourceclaims/driver using associated-node / arbitrary-node verb prefixes
+	// to update status.devices.
+	DRAResourceClaimGranularStatusAuthorization featuregate.Feature = "DRAResourceClaimGranularStatusAuthorization"
+
 	// owner: @nmn3m
 	// kep: http://kep.k8s.io/5677
 	//
@@ -1390,6 +1400,10 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.33"), Default: true, PreRelease: featuregate.Beta},
 	},
 
+	DRAResourceClaimGranularStatusAuthorization: {
+		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Beta},
+	},
+
 	DRAResourcePoolStatus: {
 		{Version: version.MustParse("1.36"), Default: false, PreRelease: featuregate.Alpha},
 	},
@@ -2438,6 +2452,8 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 
 	DRAResourceClaimDeviceStatus: {}, // Soft dependency on DynamicResourceAllocation due to on/off-by-default conflict.
 
+	DRAResourceClaimGranularStatusAuthorization: {DynamicResourceAllocation, DRAResourceClaimDeviceStatus},
+
 	DRAResourcePoolStatus: {DynamicResourceAllocation},
 
 	DRASchedulerFilterTimeout: {DynamicResourceAllocation},
@@ -2708,7 +2724,7 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 
 	TranslateStreamCloseWebsocketRequests: {},
 
-	UserNamespacesHostNetworkSupport: {UserNamespacesSupport},
+	UserNamespacesHostNetworkSupport: {UserNamespacesSupport, NodeDeclaredFeatures},
 
 	UserNamespacesSupport: {},
 

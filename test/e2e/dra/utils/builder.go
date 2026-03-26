@@ -82,6 +82,11 @@ func (b *Builder) ClassName() string {
 	return b.namespace + b.Driver.NameSuffix + "-class"
 }
 
+// DriverName returns the default device driver name.
+func (b *Builder) DriverName() string {
+	return b.Driver.Name
+}
+
 // Class returns the device Class that the builder's other objects
 // reference.
 func (b *Builder) Class() *DeviceClassWrapper {

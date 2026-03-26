@@ -639,6 +639,12 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.33"
+- name: DRAResourceClaimGranularStatusAuthorization
+  versionedSpecs:
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.36"
 - name: DRAResourcePoolStatus
   versionedSpecs:
   - default: false

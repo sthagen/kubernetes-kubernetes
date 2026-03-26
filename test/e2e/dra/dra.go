@@ -33,6 +33,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	resourceapi "k8s.io/api/resource/v1"
 	resourcealphaapi "k8s.io/api/resource/v1alpha3"
 	resourcev1beta1 "k8s.io/api/resource/v1beta1"
@@ -44,6 +45,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	applyv1 "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/events"
@@ -3112,7 +3114,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			}).Should(gomega.MatchError(gomega.ContainSubstring("exceeded quota: object-count, requested: count/resourceclaims.resource.k8s.io=1, used: count/resourceclaims.resource.k8s.io=1, limited: count/resourceclaims.resource.k8s.io=1")), "creating second claim not allowed")
 		})
 
-		f.It("must be possible for the driver to update the ResourceClaim.Status.Devices once allocated", f.WithFeatureGate(features.DRAResourceClaimDeviceStatus), func(ctx context.Context) {
+		f.It("must be impossible for a node ServiceAccount to update the non-node ResourceClaim.Status.Devices once allocated", f.WithFeatureGate(features.DRAResourceClaimDeviceStatus), func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
 			claim := b.ExternalClaim()
 			pod := b.PodExternal(claim.Name)
@@ -3154,17 +3156,163 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			if !ok {
 				framework.Failf("pod got scheduled to node %s without a plugin", scheduledPod.Spec.NodeName)
 			}
-			updatedResourceClaim, err := plugin.UpdateStatus(ctx, allocatedResourceClaim)
+			_, err = plugin.UpdateStatus(ctx, allocatedResourceClaim)
+			gomega.Expect(apierrors.IsInvalid(err)).To(gomega.BeTrueBecause("expected invalid error: %v", err))
+			gomega.Expect(err.Error()).To(gomega.ContainSubstring("cannot arbitrary-node:update"))
+		})
+
+		f.It("must be possible for a control-plane ServiceAccount to update the ResourceClaim.Status.Devices once allocated", f.WithFeatureGate(features.DRAResourceClaimDeviceStatus), func(ctx context.Context) {
+			tCtx := f.TContext(ctx)
+			claim := b.ExternalClaim()
+			pod := b.PodExternal(claim.Name)
+			b.Create(tCtx, claim, pod)
+
+			// Waits for the ResourceClaim to be allocated and the pod to be scheduled.
+			b.TestPod(tCtx, pod)
+
+			ginkgo.By("Creating a ServiceAccount and Role to update ResourceClaim status")
+			saName := "claim-status-updater-sa"
+			roleName := "claim-status-updater-role"
+			bindingName := "claim-status-updater-binding"
+
+			sa := &v1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{Name: saName, Namespace: f.Namespace.Name},
+			}
+			_, err := f.ClientSet.CoreV1().ServiceAccounts(f.Namespace.Name).Create(ctx, sa, metav1.CreateOptions{})
 			framework.ExpectNoError(err)
+
+			// Create ClusterRole with 'update' permission on 'resourceclaims/status'
+			role := &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{Name: roleName, Namespace: f.Namespace.Name},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups: []string{resourceapi.SchemeGroupVersion.Group},
+						Resources: []string{"resourceclaims/status"},
+						Verbs:     []string{"update", "patch"},
+					},
+					{
+						// Also need 'get' to fetch the claim for the update operation
+						APIGroups: []string{resourceapi.SchemeGroupVersion.Group},
+						Resources: []string{"resourceclaims"},
+						Verbs:     []string{"get"},
+					},
+				},
+			}
+			_, err = f.ClientSet.RbacV1().ClusterRoles().Create(ctx, role, metav1.CreateOptions{})
+			framework.ExpectNoError(err)
+			ginkgo.DeferCleanup(func(ctx context.Context) {
+				err := f.ClientSet.RbacV1().ClusterRoles().Delete(ctx, roleName, metav1.DeleteOptions{})
+				if !apierrors.IsNotFound(err) {
+					framework.ExpectNoError(err)
+				}
+			})
+			// Create ClusterRoleBinding
+			binding := &rbacv1.ClusterRoleBinding{
+				ObjectMeta: metav1.ObjectMeta{Name: bindingName, Namespace: f.Namespace.Name},
+				Subjects: []rbacv1.Subject{
+					{
+						Kind:      "ServiceAccount",
+						Name:      saName,
+						Namespace: f.Namespace.Name,
+					},
+				},
+				RoleRef: rbacv1.RoleRef{
+					Kind:     "ClusterRole",
+					Name:     roleName,
+					APIGroup: rbacv1.GroupName,
+				},
+			}
+			_, err = f.ClientSet.RbacV1().ClusterRoleBindings().Create(ctx, binding, metav1.CreateOptions{})
+			framework.ExpectNoError(err)
+			ginkgo.DeferCleanup(func(ctx context.Context) {
+				err := f.ClientSet.RbacV1().ClusterRoleBindings().Delete(ctx, bindingName, metav1.DeleteOptions{})
+				if !apierrors.IsNotFound(err) {
+					framework.ExpectNoError(err)
+				}
+			})
+			// Create a new clientset impersonating the ServiceAccount
+			saClientConfig := rest.CopyConfig(f.ClientConfig())
+			saClientConfig.Impersonate = rest.ImpersonationConfig{
+				UserName: fmt.Sprintf("system:serviceaccount:%s:%s", f.Namespace.Name, saName),
+			}
+			saClient, err := kubernetes.NewForConfig(saClientConfig)
+			framework.ExpectNoError(err)
+
+			// Get the allocated claim using the admin client
+			allocatedResourceClaim, err := f.ClientSet.ResourceV1().ResourceClaims(f.Namespace.Name).Get(ctx, claim.Name, metav1.GetOptions{})
+			framework.ExpectNoError(err)
+			gomega.Expect(allocatedResourceClaim).ToNot(gomega.BeNil())
+			gomega.Expect(allocatedResourceClaim.Status.Allocation).ToNot(gomega.BeNil())
+			gomega.Expect(allocatedResourceClaim.Status.Allocation.Devices.Results).To(gomega.HaveLen(1))
+
+			ginkgo.By("Setting the device status a first time (via ServiceAccount without proper RBAC) for driver " + b.DriverName())
+			allocatedResourceClaim.Status.Devices = append(allocatedResourceClaim.Status.Devices,
+				resourceapi.AllocatedDeviceStatus{
+					Driver:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Driver,
+					Pool:       allocatedResourceClaim.Status.Allocation.Devices.Results[0].Pool,
+					Device:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Device,
+					Conditions: []metav1.Condition{{Type: "a", Status: "True", Message: "c", Reason: "d", LastTransitionTime: metav1.NewTime(time.Now().Truncate(time.Second))}},
+					Data:       &runtime.RawExtension{Raw: []byte(`{"foo":"bar"}`)},
+					NetworkData: &resourceapi.NetworkDeviceData{
+						InterfaceName:   "inf1",
+						IPs:             []string{"10.9.8.0/24", "2001:db8::/64"},
+						HardwareAddress: "bc:1c:b6:3e:b8:25",
+					},
+				})
+
+			// Update the ResourceClaim status using the impersonated client
+			// Wait for the initial ClusterRoleBinding to propagate AND for the DRA validation to explicitly reject it.
+			gomega.Eventually(ctx, func(ctx context.Context) error {
+				_, err := saClient.ResourceV1().ResourceClaims(f.Namespace.Name).UpdateStatus(ctx, allocatedResourceClaim, metav1.UpdateOptions{})
+				if err == nil {
+					return fmt.Errorf("expected request to be rejected by DRA validation, but it succeeded")
+				}
+				// If we get a pure Forbidden (403), the basic RBAC cache hasn't updated yet. Trigger a retry.
+				if apierrors.IsForbidden(err) {
+					return fmt.Errorf("standard RBAC cache not synced yet, got pure 403 Forbidden")
+				}
+				if apierrors.IsInvalid(err) && strings.Contains(err.Error(), "is forbidden") {
+					return nil
+				}
+				return fmt.Errorf("unexpected error: %w", err)
+			}).WithTimeout(15*time.Second).WithPolling(1*time.Second).Should(gomega.Succeed(), "failed waiting for DRA validation to reject the update")
+
+			ginkgo.By("Setting the device status a first time (via ServiceAccount with RBAC with specific driver name) for driver " + b.DriverName())
+			newRole := role.DeepCopy()
+			newRole.Rules = append(newRole.Rules, rbacv1.PolicyRule{
+				APIGroups:     []string{resourceapi.SchemeGroupVersion.Group},
+				Resources:     []string{"resourceclaims/driver"},
+				Verbs:         []string{"arbitrary-node:update", "arbitrary-node:patch"},
+				ResourceNames: []string{b.DriverName()}, // allow for the specific drivers
+			})
+			_, err = f.ClientSet.RbacV1().ClusterRoles().Update(ctx, newRole, metav1.UpdateOptions{})
+			framework.ExpectNoError(err)
+
+			// Use Eventually to wait for RBAC propagation
+			var updatedResourceClaim *resourceapi.ResourceClaim
+			gomega.Eventually(ctx, func(ctx context.Context) error {
+				var updateErr error
+				updatedResourceClaim, updateErr = saClient.ResourceV1().ResourceClaims(f.Namespace.Name).UpdateStatus(ctx, allocatedResourceClaim, metav1.UpdateOptions{})
+				// If it's a forbidden error, the RBAC cache hasn't updated yet, so we return the error to trigger a retry
+				return updateErr
+			}).WithTimeout(15*time.Second).WithPolling(1*time.Second).Should(gomega.Succeed(), "failed to update ResourceClaim status after adding RBAC rule")
 			gomega.Expect(updatedResourceClaim).ToNot(gomega.BeNil())
 			gomega.Expect(updatedResourceClaim.Status.Devices).To(gomega.Equal(allocatedResourceClaim.Status.Devices))
 
-			ginkgo.By("Updating the device status")
+			ginkgo.By("Updating the device status (via ServiceAccount with RBAC allowing all drivers)")
+			newRole = role.DeepCopy()
+			newRole.Rules = append(newRole.Rules, rbacv1.PolicyRule{
+				APIGroups: []string{resourceapi.SchemeGroupVersion.Group},
+				Resources: []string{"resourceclaims/driver"},
+				Verbs:     []string{"arbitrary-node:update", "arbitrary-node:patch"},
+			})
+			_, err = f.ClientSet.RbacV1().ClusterRoles().Update(ctx, newRole, metav1.UpdateOptions{})
+			framework.ExpectNoError(err)
+
 			updatedResourceClaim.Status.Devices[0] = resourceapi.AllocatedDeviceStatus{
 				Driver:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Driver,
 				Pool:       allocatedResourceClaim.Status.Allocation.Devices.Results[0].Pool,
 				Device:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Device,
-				ShareID:    shareID,
 				Conditions: []metav1.Condition{{Type: "e", Status: "True", Message: "g", Reason: "h", LastTransitionTime: metav1.NewTime(time.Now().Truncate(time.Second))}},
 				Data:       &runtime.RawExtension{Raw: []byte(`{"bar":"foo"}`)},
 				NetworkData: &resourceapi.NetworkDeviceData{
@@ -3174,11 +3322,16 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 				},
 			}
 
-			updatedResourceClaim2, err := plugin.UpdateStatus(ctx, updatedResourceClaim)
-			framework.ExpectNoError(err)
+			var updatedResourceClaim2 *resourceapi.ResourceClaim
+			gomega.Eventually(ctx, func(ctx context.Context) error {
+				var updateErr error
+				updatedResourceClaim2, updateErr = saClient.ResourceV1().ResourceClaims(f.Namespace.Name).UpdateStatus(ctx, updatedResourceClaim, metav1.UpdateOptions{})
+				return updateErr
+			}).WithTimeout(15*time.Second).WithPolling(1*time.Second).Should(gomega.Succeed(), "failed to update ResourceClaim status after wildcard RBAC rule")
 			gomega.Expect(updatedResourceClaim2).ToNot(gomega.BeNil())
 			gomega.Expect(updatedResourceClaim2.Status.Devices).To(gomega.Equal(updatedResourceClaim.Status.Devices))
 
+			ginkgo.By("Verifying the final status with admin client")
 			getResourceClaim, err := f.ClientSet.ResourceV1().ResourceClaims(f.Namespace.Name).Get(ctx, claim.Name, metav1.GetOptions{})
 			framework.ExpectNoError(err)
 			gomega.Expect(getResourceClaim).ToNot(gomega.BeNil())
@@ -3190,6 +3343,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 		nodes := drautils.NewNodes(f, 1, 4)
 		driver := drautils.NewDriver(f, nodes, drautils.DriverResources(1))
 		driver.WithKubelet = false
+		b := drautils.NewBuilder(f, driver)
 
 		f.It("must apply per-node permission checks", func(ctx context.Context) {
 			tCtx := f.TContext(ctx)
@@ -3333,6 +3487,79 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 			mustFailToDelete(realNodeClient, "real plugin", createdClusterSlice, matchVAPDeniedError(realNodeName, createdClusterSlice))
 			mustFailToDelete(fictionalNodeClient, "fictional plugin", createdClusterSlice, matchVAPDeniedError(fictionalNodeName, createdClusterSlice))
 			mustDelete(f.ClientSet, "admin", createdClusterSlice)
+		})
+
+		f.It("must be possible for a node ServiceAccount to update the node ResourceClaim.Status.Devices once allocated", f.WithFeatureGate(features.DRAResourceClaimDeviceStatus), func(ctx context.Context) {
+			tCtx := f.TContext(ctx)
+			claim := b.ExternalClaim()
+			pod := b.PodExternal(claim.Name)
+			b.Create(tCtx, claim, pod)
+
+			// Waits for the ResourceClaim to be allocated and the pod to be scheduled.
+			b.TestPod(tCtx, pod)
+
+			allocatedResourceClaim, err := f.ClientSet.ResourceV1().ResourceClaims(f.Namespace.Name).Get(ctx, claim.Name, metav1.GetOptions{})
+			framework.ExpectNoError(err)
+			gomega.Expect(allocatedResourceClaim).ToNot(gomega.BeNil())
+			gomega.Expect(allocatedResourceClaim.Status.Allocation).ToNot(gomega.BeNil())
+			gomega.Expect(allocatedResourceClaim.Status.Allocation.Devices.Results).To(gomega.HaveLen(1))
+
+			scheduledPod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(ctx, pod.Name, metav1.GetOptions{})
+			framework.ExpectNoError(err)
+			gomega.Expect(scheduledPod).ToNot(gomega.BeNil())
+
+			shareID := (*string)(allocatedResourceClaim.Status.Allocation.Devices.Results[0].ShareID)
+
+			ginkgo.By("Setting the device status a first time")
+			allocatedResourceClaim.Status.Devices = append(allocatedResourceClaim.Status.Devices,
+				resourceapi.AllocatedDeviceStatus{
+					Driver:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Driver,
+					Pool:       allocatedResourceClaim.Status.Allocation.Devices.Results[0].Pool,
+					Device:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Device,
+					ShareID:    shareID,
+					Conditions: []metav1.Condition{{Type: "a", Status: "True", Message: "c", Reason: "d", LastTransitionTime: metav1.NewTime(time.Now().Truncate(time.Second))}},
+					Data:       &runtime.RawExtension{Raw: []byte(`{"foo":"bar"}`)},
+					NetworkData: &resourceapi.NetworkDeviceData{
+						InterfaceName:   "inf1",
+						IPs:             []string{"10.9.8.0/24", "2001:db8::/64"},
+						HardwareAddress: "bc:1c:b6:3e:b8:25",
+					},
+				})
+
+			// Updates the ResourceClaim from the driver on the same node as the pod.
+			plugin, ok := driver.Nodes[scheduledPod.Spec.NodeName]
+			if !ok {
+				framework.Failf("pod got scheduled to node %s without a plugin", scheduledPod.Spec.NodeName)
+			}
+			updatedResourceClaim, err := plugin.UpdateStatus(ctx, allocatedResourceClaim)
+			framework.ExpectNoError(err)
+			gomega.Expect(updatedResourceClaim).ToNot(gomega.BeNil())
+			gomega.Expect(updatedResourceClaim.Status.Devices).To(gomega.Equal(allocatedResourceClaim.Status.Devices))
+
+			ginkgo.By("Updating the device status")
+			updatedResourceClaim.Status.Devices[0] = resourceapi.AllocatedDeviceStatus{
+				Driver:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Driver,
+				Pool:       allocatedResourceClaim.Status.Allocation.Devices.Results[0].Pool,
+				Device:     allocatedResourceClaim.Status.Allocation.Devices.Results[0].Device,
+				ShareID:    shareID,
+				Conditions: []metav1.Condition{{Type: "e", Status: "True", Message: "g", Reason: "h", LastTransitionTime: metav1.NewTime(time.Now().Truncate(time.Second))}},
+				Data:       &runtime.RawExtension{Raw: []byte(`{"bar":"foo"}`)},
+				NetworkData: &resourceapi.NetworkDeviceData{
+					InterfaceName:   "inf2",
+					IPs:             []string{"10.9.8.1/24", "2001:db8::1/64"},
+					HardwareAddress: "bc:1c:b6:3e:b8:26",
+				},
+			}
+
+			updatedResourceClaim2, err := plugin.UpdateStatus(ctx, updatedResourceClaim)
+			framework.ExpectNoError(err)
+			gomega.Expect(updatedResourceClaim2).ToNot(gomega.BeNil())
+			gomega.Expect(updatedResourceClaim2.Status.Devices).To(gomega.Equal(updatedResourceClaim.Status.Devices))
+
+			getResourceClaim, err := f.ClientSet.ResourceV1().ResourceClaims(f.Namespace.Name).Get(ctx, claim.Name, metav1.GetOptions{})
+			framework.ExpectNoError(err)
+			gomega.Expect(getResourceClaim).ToNot(gomega.BeNil())
+			gomega.Expect(getResourceClaim.Status.Devices).To(gomega.Equal(updatedResourceClaim.Status.Devices))
 		})
 	})
 
