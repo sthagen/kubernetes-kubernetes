@@ -871,6 +871,7 @@ func TestWorkerLoop(t *testing.T) {
 		mctx := context.Background()
 		call = runtimeMock.EXPECT().GetPod(mctx, pod1.ID).RunAndReturn(func(ctx context.Context, uid types.UID) (*kubecontainer.Pod, error) {
 			assert.Equal(t, pod1.ID, uid)
+			pod1.Timestamp = time.Now()
 			return pod1, nil
 		}).Once()
 		call = runtimeMock.EXPECT().GetPodStatus(mctx, pod1).RunAndReturn(func(_ context.Context, pod *kubecontainer.Pod) (*kubecontainer.PodStatus, error) {
@@ -893,6 +894,8 @@ func TestWorkerLoop(t *testing.T) {
 		time.Sleep(2 * time.Second)
 
 		call = runtimeMock.EXPECT().GetPods(mctx, true).RunAndReturn(func(_ context.Context, _ bool) ([]*kubecontainer.Pod, error) {
+			pod1.Timestamp = time.Now()
+			pod2.Timestamp = time.Now()
 			return []*kubecontainer.Pod{pod1, pod2}, nil
 		}).NotBefore(call).Once()
 		call = runtimeMock.EXPECT().GetPodStatus(mctx, pod2).RunAndReturn(func(_ context.Context, pod *kubecontainer.Pod) (*kubecontainer.PodStatus, error) {
@@ -922,6 +925,8 @@ func TestWorkerLoop(t *testing.T) {
 		time.Sleep(2 * time.Second)
 
 		call = runtimeMock.EXPECT().GetPods(mctx, true).RunAndReturn(func(_ context.Context, _ bool) ([]*kubecontainer.Pod, error) {
+			pod1.Timestamp = time.Now()
+			pod2.Timestamp = time.Now()
 			return []*kubecontainer.Pod{pod1, pod2}, nil
 		}).NotBefore(call).Once()
 		runtimeMock.EXPECT().GetPodStatus(mctx, pod1).RunAndReturn(func(_ context.Context, pod *kubecontainer.Pod) (*kubecontainer.PodStatus, error) {

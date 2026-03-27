@@ -221,6 +221,8 @@ type Pod struct {
 	// Sandboxes are sorted by creation time, newest -> oldest.
 	// TODO: use the runtimeApi.PodSandbox type directly.
 	Sandboxes []*Container
+	// Timestamp is the time that this Pod object was read from the runtime.
+	Timestamp time.Time
 }
 
 // PodPair contains both runtime#Pod and api#Pod

@@ -481,6 +481,7 @@ func (m *kubeGenericRuntimeManager) GetPods(ctx context.Context, all bool) ([]*k
 func (m *kubeGenericRuntimeManager) getPods(ctx context.Context, opts listOptions) (map[kubetypes.UID]*kubecontainer.Pod, error) {
 	logger := klog.FromContext(ctx)
 	pods := make(map[kubetypes.UID]*kubecontainer.Pod)
+	timestamp := time.Now()
 	sandboxes, err := m.getSandboxes(ctx, opts)
 	if err != nil {
 		return nil, err
@@ -499,6 +500,7 @@ func (m *kubeGenericRuntimeManager) getPods(ctx context.Context, opts listOption
 				ID:        podUID,
 				Name:      s.Metadata.Name,
 				Namespace: s.Metadata.Namespace,
+				Timestamp: timestamp,
 			}
 		}
 		p := pods[podUID]
@@ -536,6 +538,7 @@ func (m *kubeGenericRuntimeManager) getPods(ctx context.Context, opts listOption
 				ID:        labelledInfo.PodUID,
 				Name:      labelledInfo.PodName,
 				Namespace: labelledInfo.PodNamespace,
+				Timestamp: timestamp,
 			}
 			pods[labelledInfo.PodUID] = pod
 		}
@@ -2019,7 +2022,12 @@ func (m *kubeGenericRuntimeManager) GetPodStatus(ctx context.Context, pod *kubec
 	sandboxStatuses := []*runtimeapi.PodSandboxStatus{}
 	containerStatuses := []*kubecontainer.Status{}
 	activeContainerStatuses := []*kubecontainer.Status{}
-	timestamp := time.Now()
+
+	// Since we rely on the sandbox & container IDs in the kubecontainer.Pod, we must be
+	// conservative and use it's timestamp as the status timestamp. Otherwise, we risk reporting a
+	// newer PodStatus timestamp that is missing Sandboxes or Containers that should have been
+	// present at that time.
+	timestamp := pod.Timestamp
 
 	podIPs := []string{}
 	var activePodSandboxID string

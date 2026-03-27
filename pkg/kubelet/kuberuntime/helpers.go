@@ -36,12 +36,6 @@ import (
 	"k8s.io/kubernetes/pkg/security/apparmor"
 )
 
-type podsByID []*kubecontainer.Pod
-
-func (b podsByID) Len() int           { return len(b) }
-func (b podsByID) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
-func (b podsByID) Less(i, j int) bool { return b[i].ID < b[j].ID }
-
 type containerByCreatedThenID []*runtimeapi.Container
 
 func (b containerByCreatedThenID) Len() int      { return len(b) }

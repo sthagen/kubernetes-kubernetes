@@ -2348,6 +2348,7 @@ func (kl *Kubelet) SyncTerminatingPod(ctx context.Context, pod *v1.Pod, podStatu
 				ID:        pod.UID,
 				Name:      pod.Name,
 				Namespace: pod.Namespace,
+				Timestamp: kl.clock.Now(),
 			}
 		} else {
 			return fmt.Errorf("unable to get pod prior to final pod termination: %w", err)
