@@ -29,7 +29,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/kubernetes/pkg/features"
+	kubeletevents "k8s.io/kubernetes/pkg/kubelet/events"
 	"k8s.io/kubernetes/test/e2e/common/node/framework/cgroups"
 	"k8s.io/kubernetes/test/e2e/common/node/framework/podresize"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -448,6 +450,7 @@ var _ = SIGDescribe("PLR Pod InPlace Resize", framework.WithFeatureGate(features
 	doGuaranteedPodLevelResizeTests(f)
 	doBurstablePodLevelResizeTests(f)
 	doPodLevelResourcesMemoryLimitDecreaseTest(f)
+	doInitialCreationNoResizeEventTest(f)
 })
 
 func makePodResources(cpuReq, cpuLim, memReq, memLim string) *v1.ResourceRequirements {
@@ -639,6 +642,39 @@ func doPodLevelResourcesMemoryLimitDecreaseTest(f *framework.Framework) {
 
 		ginkgo.By("deleting pod")
 		podClient.DeleteSync(ctx, testPod.Name, metav1.DeleteOptions{}, f.Timeouts.PodDelete)
+	})
+}
+
+func doInitialCreationNoResizeEventTest(f *framework.Framework) {
+	framework.It("should not emit ResizeCompleted event on initial creation", framework.WithKubeletMinVersion("1.36"), func(ctx context.Context) {
+		podClient := e2epod.NewPodClient(f)
+		originalPLR := &v1.ResourceRequirements{
+			Requests: v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse("200m"),
+				v1.ResourceMemory: resource.MustParse("256Mi"),
+			},
+			Limits: v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse("200m"),
+				v1.ResourceMemory: resource.MustParse("256Mi"),
+			},
+		}
+
+		containers := []podresize.ResizableContainerInfo{{
+			Name: "c1",
+		}}
+
+		ginkgo.By("creating and verifying pod")
+		testPod := createAndVerifyPodPLR(ctx, f, podClient, containers, originalPLR, true)
+
+		ginkgo.By("verifying no ResizeCompleted event was emitted")
+		events, err := f.ClientSet.CoreV1().Events(f.Namespace.Name).SearchWithContext(ctx, scheme.Scheme, testPod)
+		framework.ExpectNoError(err, "failed to list events")
+
+		for _, event := range events.Items {
+			if event.Reason == kubeletevents.ResizeCompleted {
+				framework.Failf("Unexpected ResizeCompleted event found for pod %s: %v", testPod.Name, event)
+			}
+		}
 	})
 }
 
