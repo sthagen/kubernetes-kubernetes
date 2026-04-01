@@ -33,6 +33,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -525,6 +526,13 @@ func TestStatusEquality(t *testing.T) {
 	}
 	oldPodStatus.ResourceClaimStatuses = []v1.PodResourceClaimStatus{claimStatusA}
 	oldPodStatus.ExtendedResourceClaimStatus = extendedClaimStatusA
+	oldPodStatus.NodeAllocatableResourceClaimStatuses = []v1.NodeAllocatableResourceClaimStatus{
+		{
+			ResourceClaimName: "my-claim",
+			Containers:        []string{"ctr0"},
+			Resources:         map[v1.ResourceName]resource.Quantity{v1.ResourceMemory: resource.MustParse("100Mi")},
+		},
+	}
 
 	normalizeStatus(&pod, &oldPodStatus)
 	normalizeStatus(&pod, &podStatus)
