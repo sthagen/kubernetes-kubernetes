@@ -498,7 +498,7 @@ func buildQueueingHintMap(ctx context.Context, es []fwk.EnqueueExtensions) (inte
 		registerNodeTaintUpdated := false
 		for _, event := range events {
 			fn := event.QueueingHintFn
-			if fn == nil || !feature.DefaultFeatureGate.Enabled(features.SchedulerQueueingHints) {
+			if fn == nil {
 				fn = defaultQueueingHintFn
 			}
 
@@ -511,10 +511,18 @@ func buildQueueingHintMap(ctx context.Context, es []fwk.EnqueueExtensions) (inte
 				}
 			}
 
-			queueingHintMap[event.Event] = append(queueingHintMap[event.Event], &internalqueue.QueueingHintFunction{
+			queueingHintFn := &internalqueue.QueueingHintFunction{
 				PluginName:     e.Name(),
 				QueueingHintFn: fn,
-			})
+			}
+
+			if event.Event.Resource == fwk.Pod {
+				for _, podEvent := range framework.UnrollPodEvent(event.Event) {
+					queueingHintMap[podEvent] = append(queueingHintMap[podEvent], queueingHintFn)
+				}
+			} else {
+				queueingHintMap[event.Event] = append(queueingHintMap[event.Event], queueingHintFn)
+			}
 		}
 		if registerNodeAdded && !registerNodeTaintUpdated {
 			// Temporally fix for the issue https://github.com/kubernetes/kubernetes/issues/109437

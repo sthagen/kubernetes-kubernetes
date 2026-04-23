@@ -1045,7 +1045,7 @@ func (og *operationGenerator) GenerateMapVolumeFunc(
 			}
 
 			// From now on, the volume is mapped. Mark it as uncertain on error,
-			// so it is is unmapped when corresponding pod is deleted.
+			// so it is unmapped when corresponding pod is deleted.
 			defer func() {
 				if operationContext.EventErr != nil {
 					errText := operationContext.EventErr.Error()
@@ -2123,7 +2123,7 @@ func (og *operationGenerator) legacyCallNodeExpandOnPlugin(resizeOp nodeResizeOp
 		// expansion operation should not block mounting
 		if volumetypes.IsFailedPreconditionError(resizeErr) {
 			actualStateOfWorld.MarkForInUseExpansionError(volumeToMount.VolumeName)
-			klog.Error(volumeToMount.GenerateErrorDetailed("MountVolume.NodeExapndVolume failed", resizeErr).Error())
+			klog.Error(volumeToMount.GenerateErrorDetailed("MountVolume.NodeExpandVolume failed", resizeErr).Error())
 			return true, nil
 		}
 		return false, resizeErr

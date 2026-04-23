@@ -355,6 +355,12 @@ func StartTestServer(t ktesting.TB, instanceOptions *TestServerInstanceOptions, 
 	if err := fs.Parse(customFlags); err != nil {
 		return result, err
 	}
+
+	// disable endpoint reconciliation when using a loopback "external" address
+	// unless the user has explicitly overridden the reconciler or advertise address
+	if !fs.Changed("advertise-address") && !fs.Changed("endpoint-reconciler-type") {
+		s.EndpointReconcilerType = "none"
+	}
 	if utilfeature.DefaultFeatureGate.Enabled(zpagesfeatures.ComponentFlagz) {
 		s.Flagz = flagz.NamedFlagSetsReader{FlagSets: namedFlagSets}
 	}

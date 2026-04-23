@@ -494,7 +494,7 @@ func (util *ISCSIUtil) persistISCSI(b iscsiDiskMounter) error {
 	}
 
 	if err := os.MkdirAll(globalPDPath, 0750); err != nil {
-		klog.Errorf("iscsi: failed to mkdir %s, error", globalPDPath)
+		klog.Errorf("iscsi: failed to mkdir %s: %v", globalPDPath, err)
 		return err
 	}
 

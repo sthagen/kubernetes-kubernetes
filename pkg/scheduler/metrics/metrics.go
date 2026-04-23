@@ -152,7 +152,6 @@ var (
 	unschedulableReasons  *metrics.GaugeVec
 	PluginEvaluationTotal *metrics.CounterVec
 
-	// The below two are only available when the QHint feature gate is enabled.
 	queueingHintExecutionDuration *metrics.HistogramVec
 	SchedulerQueueIncomingPods    *metrics.CounterVec
 
@@ -189,9 +188,6 @@ func Register() {
 		RegisterMetrics(metricsList...)
 		volumebindingmetrics.RegisterVolumeSchedulingMetrics()
 
-		if utilfeature.DefaultFeatureGate.Enabled(features.SchedulerQueueingHints) {
-			RegisterMetrics(queueingHintExecutionDuration, InFlightEvents)
-		}
 		if utilfeature.DefaultFeatureGate.Enabled(features.SchedulerAsyncPreemption) {
 			RegisterMetrics(PreemptionGoroutinesDuration, PreemptionGoroutinesExecutionTotal)
 		}
@@ -360,7 +356,6 @@ func InitMetrics() {
 		},
 		[]string{"plugin", "extension_point", "status"})
 
-	// This is only available when the QHint feature gate is enabled.
 	queueingHintExecutionDuration = metrics.NewHistogramVec(
 		&metrics.HistogramOpts{
 			Subsystem: SchedulerSubsystem,
@@ -563,6 +558,8 @@ func InitMetrics() {
 		BatchCacheFlushed,
 		GetNodeHintDuration,
 		StoreScheduleResultsDuration,
+		queueingHintExecutionDuration,
+		InFlightEvents,
 	}
 }
 

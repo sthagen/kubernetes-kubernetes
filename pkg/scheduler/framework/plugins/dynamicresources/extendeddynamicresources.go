@@ -29,6 +29,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	resourceapi "k8s.io/api/resource/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -312,7 +313,7 @@ func (pl *DynamicResources) deleteClaim(ctx context.Context, claim *resourceapi.
 
 	klog.FromContext(ctx).V(5).Info("Delete", "resourceclaim", klog.KObj(claim))
 	err := pl.clientset.ResourceV1().ResourceClaims(claim.Namespace).Delete(ctx, claim.Name, metav1.DeleteOptions{})
-	if err != nil {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 	return nil

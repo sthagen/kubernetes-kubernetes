@@ -73,22 +73,6 @@ func Validate_LimitResponse(ctx context.Context, op operation.Operation, fldPath
 				}
 				return errs
 			}},
-		{
-			Value: "Reject", Validation: func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *flowcontrolv1beta3.QueuingConfiguration) field.ErrorList {
-				errs := field.ErrorList{}
-				earlyReturn := false
-				if e := validate.ForbiddenPointer(ctx, op, fldPath, obj, oldObj).MarkAlpha(); len(e) != 0 {
-					errs = append(errs, e...)
-					earlyReturn = true
-				}
-				if e := validate.OptionalPointer(ctx, op, fldPath, obj, oldObj).MarkAlpha(); len(e) != 0 {
-					earlyReturn = true
-				}
-				if earlyReturn {
-					return errs
-				}
-				return errs
-			}},
 	})...)
 
 	// field flowcontrolv1beta3.LimitResponse.Type
@@ -207,22 +191,6 @@ func Validate_PriorityLevelConfigurationSpec(ctx context.Context, op operation.O
 				}
 				return errs
 			}},
-		{
-			Value: "Limited", Validation: func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *flowcontrolv1beta3.ExemptPriorityLevelConfiguration) field.ErrorList {
-				errs := field.ErrorList{}
-				earlyReturn := false
-				if e := validate.ForbiddenPointer(ctx, op, fldPath, obj, oldObj).MarkAlpha(); len(e) != 0 {
-					errs = append(errs, e...)
-					earlyReturn = true
-				}
-				if e := validate.OptionalPointer(ctx, op, fldPath, obj, oldObj).MarkAlpha(); len(e) != 0 {
-					earlyReturn = true
-				}
-				if earlyReturn {
-					return errs
-				}
-				return errs
-			}},
 	})...)
 	errs = append(errs, validate.Discriminated(ctx, op, fldPath, obj, oldObj, "limited", func(obj *flowcontrolv1beta3.PriorityLevelConfigurationSpec) *flowcontrolv1beta3.LimitedPriorityLevelConfiguration {
 		return obj.Limited
@@ -233,22 +201,6 @@ func Validate_PriorityLevelConfigurationSpec(ctx context.Context, op operation.O
 		errs = append(errs, validate.ForbiddenPointer(ctx, op, fldPath, obj, oldObj).MarkAlpha()...)
 		return errs
 	}, []validate.DiscriminatedRule[*flowcontrolv1beta3.LimitedPriorityLevelConfiguration, flowcontrolv1beta3.PriorityLevelEnablement]{
-		{
-			Value: "Exempt", Validation: func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *flowcontrolv1beta3.LimitedPriorityLevelConfiguration) field.ErrorList {
-				errs := field.ErrorList{}
-				earlyReturn := false
-				if e := validate.ForbiddenPointer(ctx, op, fldPath, obj, oldObj).MarkAlpha(); len(e) != 0 {
-					errs = append(errs, e...)
-					earlyReturn = true
-				}
-				if e := validate.OptionalPointer(ctx, op, fldPath, obj, oldObj).MarkAlpha(); len(e) != 0 {
-					earlyReturn = true
-				}
-				if earlyReturn {
-					return errs
-				}
-				return errs
-			}},
 		{
 			Value: "Limited", Validation: func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *flowcontrolv1beta3.LimitedPriorityLevelConfiguration) field.ErrorList {
 				errs := field.ErrorList{}

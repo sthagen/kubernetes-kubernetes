@@ -384,9 +384,7 @@ func dropNonResizeUpdates(newPod, oldPod *api.Pod) *api.Pod {
 	metav1.ResetObjectMetaForStatus(&newPod.ObjectMeta, &oldPod.ObjectMeta)
 
 	newPod.Spec.Containers = containers
-	if utilfeature.DefaultFeatureGate.Enabled(features.SidecarContainers) {
-		newPod.Spec.InitContainers = initContainers
-	}
+	newPod.Spec.InitContainers = initContainers
 
 	return newPod
 }

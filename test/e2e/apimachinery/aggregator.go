@@ -486,14 +486,25 @@ func TestSampleAPIServer(ctx context.Context, f *framework.Framework, aggrclient
 	flunderName = generateFlunderName("dynamic-flunder")
 
 	// Rerun the Create/List/Delete tests using the Dynamic client.
-	resources, discoveryErr := client.Discovery().ServerPreferredNamespacedResources()
-	groupVersionResources, err := discovery.GroupVersionResources(resources)
-	framework.ExpectNoError(err, "getting group version resources for dynamic client")
+	// Discovery may still show the aggregated API group as stale if the
+	// kube-apiserver's DiscoveryManager hasn't synced yet, so poll until
+	// the wardle/flunders GVR appears in the discovery results.
 	gvr := schema.GroupVersionResource{Group: apiServiceGroupName, Version: apiServiceVersion, Resource: "flunders"}
-	_, ok := groupVersionResources[gvr]
-	if !ok {
-		framework.Failf("could not find group version resource for dynamic client and wardle/flunders (discovery error: %v, discovery results: %#v)", discoveryErr, groupVersionResources)
-	}
+	err = pollTimed(ctx, 1*time.Second, 60*time.Second, func(ctx context.Context) (bool, error) {
+		resources, discoveryErr := client.Discovery().ServerPreferredNamespacedResources()
+		if discoveryErr != nil {
+			framework.Logf("discovery returned error (may be transient), will retry: %v", discoveryErr)
+			return false, nil
+		}
+		groupVersionResources, err := discovery.GroupVersionResources(resources)
+		if err != nil {
+			framework.Logf("error getting group version resources for dynamic client, will retry: %v", err)
+			return false, nil
+		}
+		_, ok := groupVersionResources[gvr]
+		return ok, nil
+	}, "Waited %s for the dynamic client to discover wardle/flunders.")
+	framework.ExpectNoError(err, "timed out waiting for discovery to include wardle/flunders GVR")
 	dynamicClient := f.DynamicClient.Resource(gvr).Namespace(n.namespace)
 
 	// kubectl create -f flunders-1.yaml
