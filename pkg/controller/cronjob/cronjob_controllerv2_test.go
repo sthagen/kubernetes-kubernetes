@@ -1836,6 +1836,13 @@ func TestControllerV2JobAlreadyExistsButNotInActiveStatus(t *testing.T) {
 	if !reflect.DeepEqual(cronJobControl.Updates[0].Status.Active[0], *expectedActiveRef) {
 		t.Errorf("Unexpected job reference in cronjob active list, got: %v, expected: %v", cronJobControl.Updates[0].Status.Active[0], expectedActiveRef)
 	}
+
+	if len(jobControl.GetJobNamespace) != 1 {
+		t.Fatalf("Unexpected get job count, got: %d, expected 1", len(jobControl.GetJobNamespace))
+	}
+	if jobControl.GetJobNamespace[0] != cj.Namespace {
+		t.Fatalf("Unexpected job's namespace, got: %s, expected %s", jobControl.GetJobNamespace[0], cj.Namespace)
+	}
 }
 
 // TestControllerV2JobAlreadyExistsButDifferentOwnner validates that an already created job
@@ -1881,5 +1888,12 @@ func TestControllerV2JobAlreadyExistsButDifferentOwner(t *testing.T) {
 
 	if len(cronJobControl.Updates) != 0 {
 		t.Fatalf("Unexpected updates to cronjob, got: %d, expected 0", len(cronJobControl.Updates))
+	}
+
+	if len(jobControl.GetJobNamespace) != 1 {
+		t.Fatalf("Unexpected get job count, got: %d, expected 1", len(jobControl.GetJobNamespace))
+	}
+	if jobControl.GetJobNamespace[0] != cj.Namespace {
+		t.Fatalf("Unexpected job's namespace, got: %s, expected %s", jobControl.GetJobNamespace[0], cj.Namespace)
 	}
 }

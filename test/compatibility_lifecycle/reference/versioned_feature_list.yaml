@@ -779,6 +779,12 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.35"
+- name: HPAGeneration
+  versionedSpecs:
+  - default: true
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.37"
 - name: HPAScaleToZero
   versionedSpecs:
   - default: false

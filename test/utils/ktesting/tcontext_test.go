@@ -19,6 +19,8 @@ package ktesting_test
 import (
 	"sync"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
@@ -57,6 +59,76 @@ func TestCancelAutomatic(t *testing.T) {
 		// Blocks until the context gets canceled automatically.
 		<-tCtx.Done()
 	}()
+}
+
+func TestSyncTestInit(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// This must work inside a synctest bubble, despite Deadline panicking there.
+		// We then don't have a deadline.
+		tCtx := ktesting.Init(t)
+		deadline, ok := tCtx.Deadline()
+		if ok {
+			tCtx.Errorf("Expected no deadline, got %s", deadline)
+		}
+		if !tCtx.IsSyncTest() {
+			tCtx.Errorf("Expected to run as synctest")
+		}
+	})
+}
+
+func TestNormalInit(t *testing.T) {
+	// The outcome depends on how the unit test was started.
+	// See below for deterministic deadline/no deadline testing.
+	expectDeadline, expectOK := t.Deadline()
+	expectDeadline = expectDeadline.Add(-ktesting.CleanupGracePeriod)
+	tCtx := ktesting.Init(t)
+	actualDeadline, actualOK := tCtx.Deadline()
+	tCtx.Expect(actualOK).To(gomega.Equal(expectOK), "have deadline")
+	if expectOK {
+		tCtx.Expect(actualDeadline).To(gomega.BeTemporally("~", expectDeadline, 2*time.Second), "deadline")
+	}
+	if tCtx.IsSyncTest() {
+		tCtx.Errorf("Expected to not run as synctest")
+	}
+}
+
+func TestNoDeadline(t *testing.T) {
+	mockT := &deadlineT{T: t, deadline: nil}
+	tCtx := ktesting.Init(mockT)
+	deadline, ok := tCtx.Deadline()
+	if ok {
+		tCtx.Errorf("Expected no deadline, got %s", deadline)
+	}
+}
+
+func TestDeadline(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// Inside a synctest bubble this is always in the future.
+		mockDeadline := time.Date(2000, 01, 01, 0, 0, 0, 0, time.UTC)
+		mockT := &deadlineT{T: t, deadline: &mockDeadline}
+		tCtx := ktesting.Init(mockT)
+		actualDeadline, ok := tCtx.Deadline()
+		if ok {
+			expectDeadline := mockDeadline.Add(-ktesting.CleanupGracePeriod)
+			tCtx.Expect(actualDeadline).To(gomega.BeTemporally("==", expectDeadline), "deadline")
+		} else {
+			tCtx.Error("Expected a deadline, got none")
+		}
+	})
+}
+
+// deadlineT overrides Deadline, returning false if no
+// deadline is configured and the deadline otherwise.
+type deadlineT struct {
+	*testing.T
+	deadline *time.Time
+}
+
+func (t *deadlineT) Deadline() (time.Time, bool) {
+	if t.deadline == nil {
+		return time.Time{}, false
+	}
+	return *t.deadline, true
 }
 
 func TestCancelCtx(t *testing.T) {

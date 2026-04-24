@@ -38,7 +38,6 @@ func TestGenerationManagement(t *testing.T) {
 	generationExempt := sets.New(
 		"apiservices.apiregistration.k8s.io",
 		"certificatesigningrequests.certificates.k8s.io",
-		"horizontalpodautoscalers.autoscaling",
 		"namespaces",
 		"nodes",
 		"persistentvolumeclaims",

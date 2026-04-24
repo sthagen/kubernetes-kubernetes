@@ -120,7 +120,7 @@ func findExtendedResourceClaim(pod *v1.Pod, resourceClaims []*resourceapi.Resour
 	for _, c := range resourceClaims {
 		if c.Annotations[resourceapi.ExtendedResourceClaimAnnotation] == "true" {
 			for _, or := range c.OwnerReferences {
-				if or.Name == pod.Name && *or.Controller && or.UID == pod.UID {
+				if or.Name == pod.Name && ptr.Deref(or.Controller, false) && or.UID == pod.UID {
 					return c
 				}
 			}

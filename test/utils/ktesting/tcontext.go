@@ -117,8 +117,24 @@ type ContextTB interface {
 // Ginkgo create a fresh context for cleanup code.
 //
 // Can be called more than once per test to get different contexts with
-// independent cancellation. The default behavior describe above can be
+// independent cancellation. The default behavior described above can be
 // modified via optional functional options defined in [initoption].
+//
+// Can be called inside a synctest bubble. Signal handling (cleaning up on
+// SIGINT, progress reporting on SIGUSR1) then does not get initialized because
+// code running inside a bubble should not depend on outside input. Progress
+// reporting still works when some parent test already initialized it.
+// Therefore the recommended pattern is to initialize ktesting first, then
+// create the synctest bubble:
+//
+//	func TestSomething(t *testing.T) { ktesting.Init(t).SyncTest("", testSomething) }
+//	func testSomething(tCtx ktesting.TContext) { ... }
+//
+// This pattern also has the advantage that the test code cannot accidentally
+// use the testing.T instance directly. The same works for normal tests:
+//
+//	func TestSomething(t *testing.T) { testSomething(ktesting.Init(t)) }
+//	func testSomething(tCtx ktesting.TContext) { ... }
 func Init(tb TB, opts ...InitOption) TContext {
 	tb.Helper()
 
@@ -130,13 +146,31 @@ func Init(tb TB, opts ...InitOption) TContext {
 	}
 
 	// We don't need a Deadline implementation, testing.B doesn't have it.
-	// But if we have one, we'll use it to set a timeout shortly before
-	// the deadline. This needs to come before we wrap tb.
-	deadlineTB, deadlineOK := tb.(interface {
+	// But if we have one, we use it to determine the deadline and
+	// set a timeout shortly before it.
+	//
+	// This also allows us to detect a synctest bubble.
+	isSyncTest := false
+	var deadline *time.Time
+	if deadlineTB, deadlineOK := tb.(interface {
 		Deadline() (time.Time, bool)
-	})
+	}); deadlineOK {
+		func() {
+			defer func() {
+				// Calling testing.T.Deadline panics inside a synctest bubble.
+				// There's no API to detect that in advance, so here we react
+				// by catching the panic.
+				if r := recover(); r != nil {
+					isSyncTest = true
+				}
+			}()
+			if d, ok := deadlineTB.Deadline(); ok {
+				deadline = &d
+			}
+		}()
+	}
 
-	ctx := defaultProgressReporter.init(tb)
+	ctx := defaultProgressReporter.init(tb, isSyncTest)
 	var header func() string
 	if c.PerTestOutput {
 		logger := newLogger(tb, c.BufferLogs)
@@ -145,16 +179,15 @@ func Init(tb TB, opts ...InitOption) TContext {
 	}
 
 	var cancelTimeout func(cause string)
-	if deadlineOK {
-		if deadline, ok := deadlineTB.Deadline(); ok {
-			timeLeft := time.Until(deadline)
-			timeLeft -= CleanupGracePeriod
-			ctx, cancelTimeout = withTimeout(ctx, tb, timeLeft, fmt.Sprintf("test suite deadline (%s) is close, need to clean up before the %s cleanup grace period", deadline.Truncate(time.Second), CleanupGracePeriod))
-		}
+	if deadline != nil {
+		timeLeft := time.Until(*deadline)
+		timeLeft -= CleanupGracePeriod
+		ctx, cancelTimeout = withTimeout(ctx, tb, timeLeft, fmt.Sprintf("test suite deadline (%s) is close, need to clean up before the %s cleanup grace period", deadline.Truncate(time.Second), CleanupGracePeriod))
 	}
 
 	// Construct new TContext with context and settings as determined above.
 	tCtx := InitCtx(ctx, tb)
+	tCtx.isSyncTest = isSyncTest
 	if cancelTimeout != nil {
 		tCtx.cancel = cancelTimeout
 	} else {
@@ -366,7 +399,7 @@ type TContext struct {
 	// It's empty if there are no steps.
 	steps string
 
-	// for SyncTest
+	// for IsSyncTest
 	isSyncTest bool
 
 	// for WithClient
@@ -483,6 +516,9 @@ func (tCtx TContext) Run(name string, cb func(tCtx TContext)) bool {
 // the bubble directly in the current test context.
 //
 // Only works in Go unit tests.
+//
+// Cleaning up on SIGINT is not available because code running inside a bubble
+// should not depend on outside input.
 func (tCtx TContext) SyncTest(name string, cb func(tCtx TContext)) bool {
 	return run(tCtx, name, true, cb)
 }

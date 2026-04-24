@@ -201,8 +201,10 @@ var _ = common.SIGDescribe("DNS", func() {
 
 		ginkgo.By("Manually creating two EndpointSlices for the service")
 		addressType := discoveryv1.AddressTypeIPv4
+		ips := []string{"1.2.3.4", "5.6.7.8"}
 		if framework.TestContext.ClusterIsIPv6() {
 			addressType = discoveryv1.AddressTypeIPv6
+			ips = []string{"fc00::1234", "fc00::5678"}
 		}
 		slice1 := &discoveryv1.EndpointSlice{
 			ObjectMeta: metav1.ObjectMeta{
@@ -214,7 +216,7 @@ var _ = common.SIGDescribe("DNS", func() {
 			},
 			AddressType: addressType,
 			Endpoints: []discoveryv1.Endpoint{{
-				Addresses:  []string{"1.2.3.4"},
+				Addresses:  ips[:1],
 				Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)},
 			}},
 			Ports: []discoveryv1.EndpointPort{{
@@ -236,7 +238,7 @@ var _ = common.SIGDescribe("DNS", func() {
 			},
 			AddressType: addressType,
 			Endpoints: []discoveryv1.Endpoint{{
-				Addresses:  []string{"5.6.7.8"},
+				Addresses:  ips[1:],
 				Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)},
 			}},
 			Ports: []discoveryv1.EndpointPort{{
