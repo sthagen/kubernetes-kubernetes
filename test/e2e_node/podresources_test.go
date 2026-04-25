@@ -1195,7 +1195,7 @@ var _ = SIGDescribe("POD Resources API", framework.WithSerial(), feature.PodReso
 		})
 	})
 
-	framework.Context("without SRIOV devices in the system", framework.WithFlaky(), func() {
+	framework.Context("without SRIOV devices in the system", func() {
 		ginkgo.BeforeEach(func() {
 			requireLackOfSRIOVDevices()
 		})
@@ -1355,7 +1355,7 @@ var _ = SIGDescribe("POD Resources API", framework.WithSerial(), feature.PodReso
 			deletePodsAsync(ctx, f, podMap)
 		})
 
-		ginkgo.JustBeforeEach(func(ctx context.Context) {
+		ginkgo.BeforeEach(func(ctx context.Context) {
 			// this is a very rough check. We just want to rule out system that does NOT have enough resources
 			_, cpuAlloc, _ = getLocalNodeCPUDetails(ctx, f)
 			if cpuAlloc < minCoreCount {
