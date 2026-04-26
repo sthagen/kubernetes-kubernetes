@@ -1566,7 +1566,7 @@ func (og *operationGenerator) GenerateExpandVolumeFunc(
 			klog.V(4).Infof("Controller resizing done for PVC %s", util.GetPersistentVolumeClaimQualifiedName(pvc))
 			_, err := util.MarkResizeFinished(pvc, newSize, og.kubeClient)
 			if err != nil {
-				detailedErr := fmt.Errorf("error marking pvc %s as resized : %v", util.GetPersistentVolumeClaimQualifiedName(pvc), err)
+				detailedErr := fmt.Errorf("error marking pvc %s as resized: %w", util.GetPersistentVolumeClaimQualifiedName(pvc), err)
 				return volumetypes.NewOperationContext(detailedErr, detailedErr, migrated)
 			}
 			successMsg := fmt.Sprintf("ExpandVolume succeeded for volume %s", util.GetPersistentVolumeClaimQualifiedName(pvc))
@@ -1574,7 +1574,7 @@ func (og *operationGenerator) GenerateExpandVolumeFunc(
 		} else {
 			_, err := util.MarkForFSResize(pvc, og.kubeClient)
 			if err != nil {
-				detailedErr := fmt.Errorf("error updating pvc %s condition for fs resize : %v", util.GetPersistentVolumeClaimQualifiedName(pvc), err)
+				detailedErr := fmt.Errorf("error updating pvc %s condition for fs resize: %w", util.GetPersistentVolumeClaimQualifiedName(pvc), err)
 				klog.Warning(detailedErr)
 				return volumetypes.NewOperationContext(nil, nil, migrated)
 			}
