@@ -28,7 +28,6 @@ import (
 
 	"github.com/onsi/gomega/format"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 )
 
@@ -60,15 +59,29 @@ func handleYAML(object interface{}) (string, bool) {
 	return "\n" + strings.TrimSpace(string(y)), true
 }
 
-var unstructuredObjectType = reflect.TypeOf(unstructured.Unstructured{})
+// unstructured is a copy of [k8s.io/apimachinery/pkg/apis/meta/v1/unstructured.Unstructured].
+// We cannot use that type directly (dependency on apimachinery!) but we can detect it
+// because it's convertible to this copy here.
+//
+// Tests in test/utils/format will break should Unstructured ever get modified.
+type unstructured struct {
+	Object map[string]interface{}
+}
+
+var unstructuredObjectType = reflect.TypeFor[unstructured]()
 
 func useYAML(t reflect.Type) bool {
-	if t == unstructuredObjectType {
-		// It looks nicer as YAML.
+	if t.ConvertibleTo(unstructuredObjectType) {
+		// unstructured.Unstructured looks nicer as YAML.
 		//
 		// unstructured.Unstructured is a map, but because
 		// it's wrapped in a struct it does not get recognized
 		// as one by the code below and thus needs a direct check.
+		//
+		// We also do this for other types which look like
+		// unstructured.Unstructured, partly because we cannot
+		// check for it explicitly, partly because it might be
+		// the right thing to do.
 		return true
 	}
 

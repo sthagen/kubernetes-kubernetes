@@ -26,17 +26,11 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/onsi/gomega"
 
-	apiextensions "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	"k8s.io/client-go/dynamic"
-	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/restmapper"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/ktesting"
-	"k8s.io/kubernetes/test/utils/format"
+	"k8s.io/kubernetes/test/utils/ktesting/format"
 	"k8s.io/kubernetes/test/utils/ktesting/initoption"
 	"k8s.io/kubernetes/test/utils/ktesting/internal"
 )
@@ -333,15 +327,12 @@ func run(tCtx TContext, name string, syncTest bool, cb func(tCtx TContext)) bool
 //	   tCtx := ktesting.WithContext(tCtx, ctx)
 //	   ...
 //
-// This is important because the Context in the callback could have
-// a different deadline than in the parent TContext.
+// Cancellation and deadline are determined by the new context.
+// Values are looked up first in the new context, then the old one.
+// In other words, values set previous via WithValue are still
+// available.
 func (tCtx TContext) WithContext(ctx context.Context) TContext {
-	logger := tCtx.Logger()
-	tCtx.Context = ctx
-	if _, err := logr.FromContext(ctx); err != nil {
-		// Keep using the logger from the parent context.
-		tCtx = tCtx.WithLogger(logger)
-	}
+	tCtx.Context = &chainContext{Context: ctx, previousCtx: tCtx.Context}
 	return tCtx
 }
 
@@ -349,6 +340,18 @@ func (tCtx TContext) WithContext(ctx context.Context) TContext {
 func (tCtx TContext) WithValue(key, val any) TContext {
 	ctx := context.WithValue(tCtx, key, val)
 	return tCtx.WithContext(ctx)
+}
+
+type chainContext struct {
+	context.Context
+	previousCtx context.Context
+}
+
+func (ctx *chainContext) Value(key any) any {
+	if val := ctx.Context.Value(key); val != nil {
+		return val
+	}
+	return ctx.previousCtx.Value(key)
 }
 
 // TContext implements [context.Context], [testing.TB] and some additional
@@ -401,13 +404,6 @@ type TContext struct {
 
 	// for IsSyncTest
 	isSyncTest bool
-
-	// for WithClient
-	restConfig    *rest.Config
-	restMapper    *restmapper.DeferredDiscoveryRESTMapper
-	client        clientset.Interface
-	dynamic       dynamic.Interface
-	apiextensions apiextensions.Interface
 
 	// for WithNamespace
 	namespace string
@@ -576,19 +572,6 @@ func (tCtx TContext) TB() TB { return tCtx.testingTB.TB }
 func (tCtx TContext) Logger() klog.Logger {
 	return klog.FromContext(tCtx.Context)
 }
-
-// RESTConfig returns a copy of the config for a rest client with the UserAgent
-// set to include the current test name or nil if not available. Several typed
-// clients using this config are available through [Client], [Dynamic],
-// [APIExtensions].
-func (tCtx TContext) RESTConfig() *rest.Config {
-	return rest.CopyConfig(tCtx.restConfig)
-}
-
-func (tCtx TContext) RESTMapper() *restmapper.DeferredDiscoveryRESTMapper { return tCtx.restMapper }
-func (tCtx TContext) Client() clientset.Interface                         { return tCtx.client }
-func (tCtx TContext) Dynamic() dynamic.Interface                          { return tCtx.dynamic }
-func (tCtx TContext) APIExtensions() apiextensions.Interface              { return tCtx.apiextensions }
 
 // Expect wraps [gomega.Expect] such that a failure will be reported via
 // [TContext.Fatal]. As with [gomega.Expect], additional values

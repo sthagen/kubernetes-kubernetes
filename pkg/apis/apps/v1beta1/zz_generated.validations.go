@@ -77,6 +77,7 @@ func Validate_ScaleSpec(ctx context.Context, op operation.Operation, fldPath *fi
 	// field appsv1beta1.ScaleSpec.Replicas
 	errs = append(errs,
 		func(fldPath *field.Path, obj, oldObj *int32, oldValueCorrelated bool) (errs field.ErrorList) {
+			// optional value-type fields with zero-value defaults are purely documentation
 			// don't revalidate unchanged data
 			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
 				return nil

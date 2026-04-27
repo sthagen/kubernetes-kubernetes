@@ -109,6 +109,7 @@ const (
 const (
 	BatchFlushPodFailed       = "pod_failed"
 	BatchFlushPodSkipped      = "pod_skipped"
+	BatchFlushPodNominated    = "pod_nominated"
 	BatchFlushNodeMissing     = "node_missing"
 	BatchFlushNodeNotFull     = "node_not_full"
 	BatchFlushEmptyList       = "empty_list"

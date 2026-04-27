@@ -120,6 +120,7 @@ func Validate_ReplicationControllerSpec(ctx context.Context, op operation.Operat
 	// field corev1.ReplicationControllerSpec.MinReadySeconds
 	errs = append(errs,
 		func(fldPath *field.Path, obj, oldObj *int32, oldValueCorrelated bool) (errs field.ErrorList) {
+			// optional value-type fields with zero-value defaults are purely documentation
 			// don't revalidate unchanged data
 			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
 				return nil
