@@ -53,7 +53,7 @@ func RegisterValidations(scheme *runtime.Scheme) error {
 	// type DeviceTaintRule
 	scheme.AddValidationFunc((*resourcev1beta2.DeviceTaintRule)(nil), func(ctx context.Context, op operation.Operation, obj, oldObj interface{}) field.ErrorList {
 		switch op.Request.SubresourcePath() {
-		case "/":
+		case "/", "/status":
 			return Validate_DeviceTaintRule(ctx, op, nil /* fldPath */, obj.(*resourcev1beta2.DeviceTaintRule), safe.Cast[*resourcev1beta2.DeviceTaintRule](oldObj))
 		}
 		return field.ErrorList{field.InternalError(nil, fmt.Errorf("no validation found for %T, subresource: %v", obj, op.Request.SubresourcePath()))}

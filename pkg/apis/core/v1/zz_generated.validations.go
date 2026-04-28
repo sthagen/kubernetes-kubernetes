@@ -43,7 +43,7 @@ func RegisterValidations(scheme *runtime.Scheme) error {
 	// type ReplicationController
 	scheme.AddValidationFunc((*corev1.ReplicationController)(nil), func(ctx context.Context, op operation.Operation, obj, oldObj interface{}) field.ErrorList {
 		switch op.Request.SubresourcePath() {
-		case "/", "/scale":
+		case "/", "/scale", "/status":
 			return Validate_ReplicationController(ctx, op, nil /* fldPath */, obj.(*corev1.ReplicationController), safe.Cast[*corev1.ReplicationController](oldObj))
 		}
 		return field.ErrorList{field.InternalError(nil, fmt.Errorf("no validation found for %T, subresource: %v", obj, op.Request.SubresourcePath()))}

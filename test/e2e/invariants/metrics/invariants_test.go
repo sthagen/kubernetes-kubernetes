@@ -14,24 +14,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package invariants
+package metrics
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestApiServerMetricInvariantsFieldsAreSet(t *testing.T) {
 	// enforce that all fields are set for all registered metrics
-	for i, inv := range apiServerMetricInvariants {
-		if inv.Metric == "" {
-			t.Errorf("apiServerMetricInvariants[%d].Metric is not set", i)
+	for i, inv := range apiServerInvariants {
+		if inv.metricName == "" {
+			t.Errorf("apiServerInvariants[%d].metricName is not set", i)
 		}
-		if inv.SIG == "" {
-			t.Errorf("apiServerMetricInvariants[%d].SIG is not set", i)
+		if inv.sig == "" {
+			t.Errorf("apiServerInvariants[%d].sig is not set", i)
 		}
-		if len(inv.Owners) == 0 {
-			t.Errorf("apiServerMetricInvariants[%d].Owners is not set", i)
+		if len(inv.owners) == 0 {
+			t.Errorf("apiServerInvariants[%d].owners is not set", i)
 		}
-		if inv.IsValid == nil {
-			t.Errorf("apiServerMetricInvariants[%d].IsValid is not set", i)
+		if inv.isValid == nil {
+			t.Errorf("apiServerInvariants[%d].isValid is not set", i)
 		}
 	}
 }

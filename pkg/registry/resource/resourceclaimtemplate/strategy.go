@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/registry/generic"
+	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/storage/names"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
@@ -36,7 +37,7 @@ import (
 
 // resourceClaimTemplateStrategy implements behavior for ResourceClaimTemplate objects
 type resourceClaimTemplateStrategy struct {
-	runtime.ObjectTyper
+	rest.DeclarativeValidation
 	names.NameGenerator
 	nsClient v1.NamespaceInterface
 }
@@ -44,7 +45,7 @@ type resourceClaimTemplateStrategy struct {
 // NewStrategy is the default logic that applies when creating and updating ResourceClaimTemplate objects.
 func NewStrategy(nsClient v1.NamespaceInterface) *resourceClaimTemplateStrategy {
 	return &resourceClaimTemplateStrategy{
-		legacyscheme.Scheme,
+		rest.DeclarativeValidation{Scheme: legacyscheme.Scheme},
 		names.SimpleNameGenerator,
 		nsClient,
 	}

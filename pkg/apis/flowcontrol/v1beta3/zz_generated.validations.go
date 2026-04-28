@@ -42,7 +42,7 @@ func RegisterValidations(scheme *runtime.Scheme) error {
 	// type PriorityLevelConfiguration
 	scheme.AddValidationFunc((*flowcontrolv1beta3.PriorityLevelConfiguration)(nil), func(ctx context.Context, op operation.Operation, obj, oldObj interface{}) field.ErrorList {
 		switch op.Request.SubresourcePath() {
-		case "/":
+		case "/", "/status":
 			return Validate_PriorityLevelConfiguration(ctx, op, nil /* fldPath */, obj.(*flowcontrolv1beta3.PriorityLevelConfiguration), safe.Cast[*flowcontrolv1beta3.PriorityLevelConfiguration](oldObj))
 		}
 		return field.ErrorList{field.InternalError(nil, fmt.Errorf("no validation found for %T, subresource: %v", obj, op.Request.SubresourcePath()))}
