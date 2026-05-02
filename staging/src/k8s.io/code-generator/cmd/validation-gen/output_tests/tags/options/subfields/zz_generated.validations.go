@@ -38,52 +38,92 @@ func init() { localSchemeBuilder.Register(RegisterValidations) }
 // Public to allow building arbitrary schemes.
 func RegisterValidations(scheme *testscheme.Scheme) error {
 	// type Struct
-	scheme.AddValidationFunc((*Struct)(nil), func(ctx context.Context, op operation.Operation, obj, oldObj interface{}) field.ErrorList {
-		switch op.Request.SubresourcePath() {
-		case "/":
-			return Validate_Struct(ctx, op, nil /* fldPath */, obj.(*Struct), safe.Cast[*Struct](oldObj))
-		}
-		return field.ErrorList{field.InternalError(nil, fmt.Errorf("no validation found for %T, subresource: %v", obj, op.Request.SubresourcePath()))}
-	})
+	scheme.AddValidationFunc(
+		(*Struct)(nil),
+		func(ctx context.Context, op operation.Operation, obj, oldObj interface{}) field.ErrorList {
+			switch op.Request.SubresourcePath() {
+			case "/":
+				return Validate_Struct(
+					ctx, op, nil, /* fldPath */
+					obj.(*Struct),
+					safe.Cast[*Struct](oldObj))
+			}
+			return field.ErrorList{
+				field.InternalError(nil, fmt.Errorf("no validation found for %T, subresource: %v", obj, op.Request.SubresourcePath())),
+			}
+		})
 	return nil
 }
 
 // Validate_Struct validates an instance of Struct according
 // to declarative validation rules in the API schema.
-func Validate_Struct(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *Struct) (errs field.ErrorList) {
+func Validate_Struct(
+	ctx context.Context, op operation.Operation, fldPath *field.Path,
+	obj, oldObj *Struct) (errs field.ErrorList) {
+
 	// field Struct.TypeMeta has no validation
 
-	// field Struct.ObjectMeta
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj *ObjectMeta, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.ObjectMeta
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *ObjectMeta,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ObjectMeta) field.ErrorList {
-				return validate.Subfield(ctx, op, fldPath, obj, oldObj, "xEnabledField", func(o *ObjectMeta) *string { return &o.XEnabledField }, validate.DirectEqualPtr, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
-					return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.ObjectMeta.XEnabledField")
-				})
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ObjectMeta) field.ErrorList {
+					return validate.Subfield(ctx, op, fldPath, obj, oldObj, "xEnabledField",
+						func(o *ObjectMeta) *string { return &o.XEnabledField }, validate.DirectEqualPtr,
+						func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
+							return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.ObjectMeta.XEnabledField")
+						})
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("metadata"), &obj.ObjectMeta, safe.Field(oldObj, func(oldObj *Struct) *ObjectMeta { return &oldObj.ObjectMeta }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) *ObjectMeta {
+				return &oldObj.ObjectMeta
+			})
+		errs = append(errs, fn(fldPath.Child("metadata"), &obj.ObjectMeta, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.ObjectMetaDisabled
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj *ObjectMeta, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.ObjectMetaDisabled
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *ObjectMeta,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ObjectMeta) field.ErrorList {
-				return validate.Subfield(ctx, op, fldPath, obj, oldObj, "xDisabledField", func(o *ObjectMeta) *string { return &o.XDisabledField }, validate.DirectEqualPtr, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
-					return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.ObjectMetaDisabled.XDisabledField")
-				})
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ObjectMeta) field.ErrorList {
+					return validate.Subfield(ctx, op, fldPath, obj, oldObj, "xDisabledField",
+						func(o *ObjectMeta) *string { return &o.XDisabledField }, validate.DirectEqualPtr,
+						func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
+							return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.ObjectMetaDisabled.XDisabledField")
+						})
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("metadataDisabled"), &obj.ObjectMetaDisabled, safe.Field(oldObj, func(oldObj *Struct) *ObjectMeta { return &oldObj.ObjectMetaDisabled }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) *ObjectMeta {
+				return &oldObj.ObjectMetaDisabled
+			})
+		errs = append(errs, fn(fldPath.Child("metadataDisabled"), &obj.ObjectMetaDisabled, oldVal, oldObj != nil)...)
+	}
 
 	return errs
 }

@@ -424,12 +424,21 @@ func verifyValidationEquivalence(t *testing.T, expectedErrs field.ErrorList, run
 		testCtx := rest.WithAllDeclarativeEnforcedForTest(ctx)
 		allDeclarativeErrs := runValidations(testCtx)
 
+		// In this mode, strategy.go validation remove all hand written validations errors which are marked covered by declarative validations.
+		// so we have to filter out errors which are filtered out by strategy.go.
+		// This is because declarative validations do not return those errors due to short circuiting of validations at the parent node.
+		filteredExpectedErrors := make(field.ErrorList, 0, len(expectedErrs))
+		for _, err := range expectedErrs {
+			if !err.ShortCircuitedInDeclarative {
+				filteredExpectedErrors = append(filteredExpectedErrors, err)
+			}
+		}
 		// The matcher here is more specific to ensure that errors from Alpha rules
 		// are included and matched correctly.
 		// This also ensure that errors are coming from the declarative validations only.
 		dvErrorMatcher := errOutputMatcher.ByValidationStabilityLevel().BySource()
-		if len(expectedErrs) > 0 {
-			dvErrorMatcher.Test(t, expectedErrs, allDeclarativeErrs)
+		if len(filteredExpectedErrors) > 0 {
+			dvErrorMatcher.Test(t, filteredExpectedErrors, allDeclarativeErrs)
 		} else if len(allDeclarativeErrs) != 0 {
 			t.Errorf("expected no errors, but got: %v", allDeclarativeErrs)
 		}

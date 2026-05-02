@@ -39,112 +39,204 @@ func init() { localSchemeBuilder.Register(RegisterValidations) }
 // Public to allow building arbitrary schemes.
 func RegisterValidations(scheme *testscheme.Scheme) error {
 	// type Struct
-	scheme.AddValidationFunc((*Struct)(nil), func(ctx context.Context, op operation.Operation, obj, oldObj interface{}) field.ErrorList {
-		switch op.Request.SubresourcePath() {
-		case "/":
-			return Validate_Struct(ctx, op, nil /* fldPath */, obj.(*Struct), safe.Cast[*Struct](oldObj))
-		}
-		return field.ErrorList{field.InternalError(nil, fmt.Errorf("no validation found for %T, subresource: %v", obj, op.Request.SubresourcePath()))}
-	})
+	scheme.AddValidationFunc(
+		(*Struct)(nil),
+		func(ctx context.Context, op operation.Operation, obj, oldObj interface{}) field.ErrorList {
+			switch op.Request.SubresourcePath() {
+			case "/":
+				return Validate_Struct(
+					ctx, op, nil, /* fldPath */
+					obj.(*Struct),
+					safe.Cast[*Struct](oldObj))
+			}
+			return field.ErrorList{
+				field.InternalError(nil, fmt.Errorf("no validation found for %T, subresource: %v", obj, op.Request.SubresourcePath())),
+			}
+		})
 	return nil
 }
 
 // Validate_Struct validates an instance of Struct according
 // to declarative validation rules in the API schema.
-func Validate_Struct(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *Struct) (errs field.ErrorList) {
+func Validate_Struct(
+	ctx context.Context, op operation.Operation, fldPath *field.Path,
+	obj, oldObj *Struct) (errs field.ErrorList) {
+
 	// field Struct.TypeMeta has no validation
 
-	// field Struct.MapField
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj map[string]string, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.MapField
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj map[string]string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
-				return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.MapField")
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
+					return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.MapField")
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("mapField"), obj.MapField, safe.Field(oldObj, func(oldObj *Struct) map[string]string { return oldObj.MapField }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) map[string]string {
+				return oldObj.MapField
+			})
+		errs = append(errs, fn(fldPath.Child("mapField"), obj.MapField, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.MapFieldDisabled
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj map[string]string, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.MapFieldDisabled
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj map[string]string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
-				return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.MapFieldDisabled")
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
+					return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.MapFieldDisabled")
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("mapFieldDisabled"), obj.MapFieldDisabled, safe.Field(oldObj, func(oldObj *Struct) map[string]string { return oldObj.MapFieldDisabled }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) map[string]string {
+				return oldObj.MapFieldDisabled
+			})
+		errs = append(errs, fn(fldPath.Child("mapFieldDisabled"), obj.MapFieldDisabled, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.MapFieldEachKey
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj map[string]string, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.MapFieldEachKey
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj map[string]string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
-				return validate.EachMapKey(ctx, op, fldPath, obj, oldObj, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
-					return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.MapFieldEachKey/key")
-				})
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
+					return validate.EachMapKey(ctx, op, fldPath, obj, oldObj,
+						func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
+							return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.MapFieldEachKey/key")
+						})
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("mapFieldEachKey"), obj.MapFieldEachKey, safe.Field(oldObj, func(oldObj *Struct) map[string]string { return oldObj.MapFieldEachKey }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) map[string]string {
+				return oldObj.MapFieldEachKey
+			})
+		errs = append(errs, fn(fldPath.Child("mapFieldEachKey"), obj.MapFieldEachKey, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.MapFieldEachKeyDisabled
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj map[string]string, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.MapFieldEachKeyDisabled
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj map[string]string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
-				return validate.EachMapKey(ctx, op, fldPath, obj, oldObj, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
-					return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.MapFieldEachKeyDisabled/key")
-				})
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
+					return validate.EachMapKey(ctx, op, fldPath, obj, oldObj,
+						func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
+							return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.MapFieldEachKeyDisabled/key")
+						})
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("mapFieldEachKeyDisabled"), obj.MapFieldEachKeyDisabled, safe.Field(oldObj, func(oldObj *Struct) map[string]string { return oldObj.MapFieldEachKeyDisabled }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) map[string]string {
+				return oldObj.MapFieldEachKeyDisabled
+			})
+		errs = append(errs, fn(fldPath.Child("mapFieldEachKeyDisabled"), obj.MapFieldEachKeyDisabled, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.MapFieldEachVal
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj map[string]string, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.MapFieldEachVal
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj map[string]string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
-				return validate.EachMapVal(ctx, op, fldPath, obj, oldObj, validate.DirectEqual, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
-					return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.MapFieldEachVal/val")
-				})
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
+					return validate.EachMapVal(ctx, op, fldPath, obj, oldObj, validate.DirectEqual,
+						func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
+							return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.MapFieldEachVal/val")
+						})
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("mapFieldEachVal"), obj.MapFieldEachVal, safe.Field(oldObj, func(oldObj *Struct) map[string]string { return oldObj.MapFieldEachVal }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) map[string]string {
+				return oldObj.MapFieldEachVal
+			})
+		errs = append(errs, fn(fldPath.Child("mapFieldEachVal"), obj.MapFieldEachVal, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.MapFieldEachValDisabled
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj map[string]string, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.MapFieldEachValDisabled
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj map[string]string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
-				return validate.EachMapVal(ctx, op, fldPath, obj, oldObj, validate.DirectEqual, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
-					return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.MapFieldEachValDisabled/val")
-				})
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
+					return validate.EachMapVal(ctx, op, fldPath, obj, oldObj, validate.DirectEqual,
+						func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
+							return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.MapFieldEachValDisabled/val")
+						})
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("mapFieldEachValDisabled"), obj.MapFieldEachValDisabled, safe.Field(oldObj, func(oldObj *Struct) map[string]string { return oldObj.MapFieldEachValDisabled }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) map[string]string {
+				return oldObj.MapFieldEachValDisabled
+			})
+		errs = append(errs, fn(fldPath.Child("mapFieldEachValDisabled"), obj.MapFieldEachValDisabled, oldVal, oldObj != nil)...)
+	}
 
 	return errs
 }

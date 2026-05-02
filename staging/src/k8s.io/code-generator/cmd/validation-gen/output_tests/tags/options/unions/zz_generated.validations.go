@@ -39,13 +39,20 @@ func init() { localSchemeBuilder.Register(RegisterValidations) }
 // Public to allow building arbitrary schemes.
 func RegisterValidations(scheme *testscheme.Scheme) error {
 	// type Struct
-	scheme.AddValidationFunc((*Struct)(nil), func(ctx context.Context, op operation.Operation, obj, oldObj interface{}) field.ErrorList {
-		switch op.Request.SubresourcePath() {
-		case "/":
-			return Validate_Struct(ctx, op, nil /* fldPath */, obj.(*Struct), safe.Cast[*Struct](oldObj))
-		}
-		return field.ErrorList{field.InternalError(nil, fmt.Errorf("no validation found for %T, subresource: %v", obj, op.Request.SubresourcePath()))}
-	})
+	scheme.AddValidationFunc(
+		(*Struct)(nil),
+		func(ctx context.Context, op operation.Operation, obj, oldObj interface{}) field.ErrorList {
+			switch op.Request.SubresourcePath() {
+			case "/":
+				return Validate_Struct(
+					ctx, op, nil, /* fldPath */
+					obj.(*Struct),
+					safe.Cast[*Struct](oldObj))
+			}
+			return field.ErrorList{
+				field.InternalError(nil, fmt.Errorf("no validation found for %T, subresource: %v", obj, op.Request.SubresourcePath())),
+			}
+		})
 	return nil
 }
 
@@ -54,116 +61,195 @@ var zeroOrOneOfMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tes
 
 // Validate_Struct validates an instance of Struct according
 // to declarative validation rules in the API schema.
-func Validate_Struct(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *Struct) (errs field.ErrorList) {
+func Validate_Struct(
+	ctx context.Context, op operation.Operation, fldPath *field.Path,
+	obj, oldObj *Struct) (errs field.ErrorList) {
+
 	// field Struct.TypeMeta has no validation
 
-	// field Struct.UnionField
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj *Union, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.UnionField
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *Union,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
 			}
 			// call the type's validation function
 			errs = append(errs, Validate_Union(ctx, op, fldPath, obj, oldObj)...)
 			return
-		}(fldPath.Child("unionField"), &obj.UnionField, safe.Field(oldObj, func(oldObj *Struct) *Union { return &oldObj.UnionField }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) *Union {
+				return &oldObj.UnionField
+			})
+		errs = append(errs, fn(fldPath.Child("unionField"), &obj.UnionField, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.UnionFieldDisabled
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj *UnionDisabled, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.UnionFieldDisabled
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *UnionDisabled,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
 			}
 			// call the type's validation function
 			errs = append(errs, Validate_UnionDisabled(ctx, op, fldPath, obj, oldObj)...)
 			return
-		}(fldPath.Child("unionFieldDisabled"), &obj.UnionFieldDisabled, safe.Field(oldObj, func(oldObj *Struct) *UnionDisabled { return &oldObj.UnionFieldDisabled }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) *UnionDisabled {
+				return &oldObj.UnionFieldDisabled
+			})
+		errs = append(errs, fn(fldPath.Child("unionFieldDisabled"), &obj.UnionFieldDisabled, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.ZeroOrOneOfField
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj *ZeroOrOneOf, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.ZeroOrOneOfField
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *ZeroOrOneOf,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
 			}
 			// call the type's validation function
 			errs = append(errs, Validate_ZeroOrOneOf(ctx, op, fldPath, obj, oldObj)...)
 			return
-		}(fldPath.Child("zeroOrOneOfField"), &obj.ZeroOrOneOfField, safe.Field(oldObj, func(oldObj *Struct) *ZeroOrOneOf { return &oldObj.ZeroOrOneOfField }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) *ZeroOrOneOf {
+				return &oldObj.ZeroOrOneOfField
+			})
+		errs = append(errs, fn(fldPath.Child("zeroOrOneOfField"), &obj.ZeroOrOneOfField, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.ZeroOrOneOfFieldDisabled
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj *ZeroOrOneOfDisabled, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.ZeroOrOneOfFieldDisabled
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *ZeroOrOneOfDisabled,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && (obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj)) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
 			}
 			// call the type's validation function
 			errs = append(errs, Validate_ZeroOrOneOfDisabled(ctx, op, fldPath, obj, oldObj)...)
 			return
-		}(fldPath.Child("zeroOrOneOfFieldDisabled"), &obj.ZeroOrOneOfFieldDisabled, safe.Field(oldObj, func(oldObj *Struct) *ZeroOrOneOfDisabled { return &oldObj.ZeroOrOneOfFieldDisabled }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) *ZeroOrOneOfDisabled {
+				return &oldObj.ZeroOrOneOfFieldDisabled
+			})
+		errs = append(errs, fn(fldPath.Child("zeroOrOneOfFieldDisabled"), &obj.ZeroOrOneOfFieldDisabled, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.ZeroOrOneOfItem
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj []Task, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.ZeroOrOneOfItem
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj []Task,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []Task) field.ErrorList {
-				return validate.ZeroOrOneOfUnion(ctx, op, fldPath, obj, oldObj, zeroOrOneOfMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tags_options_unions_Struct_zeroOrOneOfItem_, func(list []Task) bool {
-					for i := range list {
-						if list[i].Name == "failed" {
-							return true
-						}
-					}
-					return false
-				}, func(list []Task) bool {
-					for i := range list {
-						if list[i].Name == "succeeded" {
-							return true
-						}
-					}
-					return false
-				})
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []Task) field.ErrorList {
+					return validate.ZeroOrOneOfUnion(ctx, op, fldPath, obj, oldObj, zeroOrOneOfMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tags_options_unions_Struct_zeroOrOneOfItem_,
+						func(list []Task) bool {
+							for i := range list {
+								if list[i].Name == "failed" {
+									return true
+								}
+							}
+							return false
+						},
+						func(list []Task) bool {
+							for i := range list {
+								if list[i].Name == "succeeded" {
+									return true
+								}
+							}
+							return false
+						})
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			// lists with map semantics require unique keys
-			errs = append(errs, validate.Unique(ctx, op, fldPath, obj, oldObj, func(a Task, b Task) bool { return a.Name == b.Name })...)
+			if e := validate.Unique(ctx, op, fldPath, obj, oldObj,
+				func(a Task, b Task) bool { return a.Name == b.Name }); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("zeroOrOneOfItem"), obj.ZeroOrOneOfItem, safe.Field(oldObj, func(oldObj *Struct) []Task { return oldObj.ZeroOrOneOfItem }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) []Task {
+				return oldObj.ZeroOrOneOfItem
+			})
+		errs = append(errs, fn(fldPath.Child("zeroOrOneOfItem"), obj.ZeroOrOneOfItem, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.ZeroOrOneOfItemDisabled
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj []Task, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.ZeroOrOneOfItemDisabled
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj []Task,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []Task) field.ErrorList {
-				return validate.ZeroOrOneOfUnion(ctx, op, fldPath, obj, oldObj, zeroOrOneOfMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tags_options_unions_Struct_zeroOrOneOfItemDisabled_, func(list []Task) bool {
-					for i := range list {
-						if list[i].Name == "failed" {
-							return true
-						}
-					}
-					return false
-				}, func(list []Task) bool {
-					for i := range list {
-						if list[i].Name == "succeeded" {
-							return true
-						}
-					}
-					return false
-				})
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []Task) field.ErrorList {
+					return validate.ZeroOrOneOfUnion(ctx, op, fldPath, obj, oldObj, zeroOrOneOfMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tags_options_unions_Struct_zeroOrOneOfItemDisabled_,
+						func(list []Task) bool {
+							for i := range list {
+								if list[i].Name == "failed" {
+									return true
+								}
+							}
+							return false
+						},
+						func(list []Task) bool {
+							for i := range list {
+								if list[i].Name == "succeeded" {
+									return true
+								}
+							}
+							return false
+						})
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			// lists with map semantics require unique keys
-			errs = append(errs, validate.Unique(ctx, op, fldPath, obj, oldObj, func(a Task, b Task) bool { return a.Name == b.Name })...)
+			if e := validate.Unique(ctx, op, fldPath, obj, oldObj,
+				func(a Task, b Task) bool { return a.Name == b.Name }); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("zeroOrOneOfItemDisabled"), obj.ZeroOrOneOfItemDisabled, safe.Field(oldObj, func(oldObj *Struct) []Task { return oldObj.ZeroOrOneOfItemDisabled }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) []Task {
+				return oldObj.ZeroOrOneOfItemDisabled
+			})
+		errs = append(errs, fn(fldPath.Child("zeroOrOneOfItemDisabled"), obj.ZeroOrOneOfItemDisabled, oldVal, oldObj != nil)...)
+	}
 
 	return errs
 }
@@ -172,27 +258,36 @@ var unionMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tag
 
 // Validate_Union validates an instance of Union according
 // to declarative validation rules in the API schema.
-func Validate_Union(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *Union) (errs field.ErrorList) {
-	errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *Union) field.ErrorList {
-		return validate.DiscriminatedUnion(ctx, op, fldPath, obj, oldObj, unionMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tags_options_unions_Union_, func(obj *Union) string {
-			if obj == nil {
-				return ""
-			}
-			return string(obj.Discriminator)
-		}, func(obj *Union) bool {
-			if obj == nil {
-				return false
-			}
-			var z string
-			return obj.XEnabledField != z
-		}, func(obj *Union) bool {
-			if obj == nil {
-				return false
-			}
-			var z string
-			return obj.XDisabledField != z
-		})
-	})...)
+func Validate_Union(
+	ctx context.Context, op operation.Operation, fldPath *field.Path,
+	obj, oldObj *Union) (errs field.ErrorList) {
+
+	if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true,
+		func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *Union) field.ErrorList {
+			return validate.DiscriminatedUnion(ctx, op, fldPath, obj, oldObj, unionMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tags_options_unions_Union_,
+				func(obj *Union) string {
+					if obj == nil {
+						return ""
+					}
+					return string(obj.Discriminator)
+				},
+				func(obj *Union) bool {
+					if obj == nil {
+						return false
+					}
+					var z string
+					return obj.XEnabledField != z
+				},
+				func(obj *Union) bool {
+					if obj == nil {
+						return false
+					}
+					var z string
+					return obj.XDisabledField != z
+				})
+		}); len(e) != 0 {
+		errs = append(errs, e...)
+	}
 
 	// field Union.Discriminator has no validation
 	// field Union.XEnabledField has no validation
@@ -204,27 +299,36 @@ var unionMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tag
 
 // Validate_UnionDisabled validates an instance of UnionDisabled according
 // to declarative validation rules in the API schema.
-func Validate_UnionDisabled(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *UnionDisabled) (errs field.ErrorList) {
-	errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *UnionDisabled) field.ErrorList {
-		return validate.DiscriminatedUnion(ctx, op, fldPath, obj, oldObj, unionMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tags_options_unions_UnionDisabled_, func(obj *UnionDisabled) string {
-			if obj == nil {
-				return ""
-			}
-			return string(obj.Discriminator)
-		}, func(obj *UnionDisabled) bool {
-			if obj == nil {
-				return false
-			}
-			var z string
-			return obj.XEnabledField != z
-		}, func(obj *UnionDisabled) bool {
-			if obj == nil {
-				return false
-			}
-			var z string
-			return obj.XDisabledField != z
-		})
-	})...)
+func Validate_UnionDisabled(
+	ctx context.Context, op operation.Operation, fldPath *field.Path,
+	obj, oldObj *UnionDisabled) (errs field.ErrorList) {
+
+	if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false,
+		func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *UnionDisabled) field.ErrorList {
+			return validate.DiscriminatedUnion(ctx, op, fldPath, obj, oldObj, unionMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tags_options_unions_UnionDisabled_,
+				func(obj *UnionDisabled) string {
+					if obj == nil {
+						return ""
+					}
+					return string(obj.Discriminator)
+				},
+				func(obj *UnionDisabled) bool {
+					if obj == nil {
+						return false
+					}
+					var z string
+					return obj.XEnabledField != z
+				},
+				func(obj *UnionDisabled) bool {
+					if obj == nil {
+						return false
+					}
+					var z string
+					return obj.XDisabledField != z
+				})
+		}); len(e) != 0 {
+		errs = append(errs, e...)
+	}
 
 	// field UnionDisabled.Discriminator has no validation
 	// field UnionDisabled.XEnabledField has no validation
@@ -236,22 +340,30 @@ var zeroOrOneOfMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tes
 
 // Validate_ZeroOrOneOf validates an instance of ZeroOrOneOf according
 // to declarative validation rules in the API schema.
-func Validate_ZeroOrOneOf(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ZeroOrOneOf) (errs field.ErrorList) {
-	errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ZeroOrOneOf) field.ErrorList {
-		return validate.ZeroOrOneOfUnion(ctx, op, fldPath, obj, oldObj, zeroOrOneOfMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tags_options_unions_ZeroOrOneOf_, func(obj *ZeroOrOneOf) bool {
-			if obj == nil {
-				return false
-			}
-			var z string
-			return obj.XEnabledField != z
-		}, func(obj *ZeroOrOneOf) bool {
-			if obj == nil {
-				return false
-			}
-			var z string
-			return obj.XDisabledField != z
-		})
-	})...)
+func Validate_ZeroOrOneOf(
+	ctx context.Context, op operation.Operation, fldPath *field.Path,
+	obj, oldObj *ZeroOrOneOf) (errs field.ErrorList) {
+
+	if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true,
+		func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ZeroOrOneOf) field.ErrorList {
+			return validate.ZeroOrOneOfUnion(ctx, op, fldPath, obj, oldObj, zeroOrOneOfMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tags_options_unions_ZeroOrOneOf_,
+				func(obj *ZeroOrOneOf) bool {
+					if obj == nil {
+						return false
+					}
+					var z string
+					return obj.XEnabledField != z
+				},
+				func(obj *ZeroOrOneOf) bool {
+					if obj == nil {
+						return false
+					}
+					var z string
+					return obj.XDisabledField != z
+				})
+		}); len(e) != 0 {
+		errs = append(errs, e...)
+	}
 
 	// field ZeroOrOneOf.XEnabledField has no validation
 	// field ZeroOrOneOf.XDisabledField has no validation
@@ -262,22 +374,30 @@ var zeroOrOneOfMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tes
 
 // Validate_ZeroOrOneOfDisabled validates an instance of ZeroOrOneOfDisabled according
 // to declarative validation rules in the API schema.
-func Validate_ZeroOrOneOfDisabled(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ZeroOrOneOfDisabled) (errs field.ErrorList) {
-	errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ZeroOrOneOfDisabled) field.ErrorList {
-		return validate.ZeroOrOneOfUnion(ctx, op, fldPath, obj, oldObj, zeroOrOneOfMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tags_options_unions_ZeroOrOneOfDisabled_, func(obj *ZeroOrOneOfDisabled) bool {
-			if obj == nil {
-				return false
-			}
-			var z string
-			return obj.XEnabledField != z
-		}, func(obj *ZeroOrOneOfDisabled) bool {
-			if obj == nil {
-				return false
-			}
-			var z string
-			return obj.XDisabledField != z
-		})
-	})...)
+func Validate_ZeroOrOneOfDisabled(
+	ctx context.Context, op operation.Operation, fldPath *field.Path,
+	obj, oldObj *ZeroOrOneOfDisabled) (errs field.ErrorList) {
+
+	if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false,
+		func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ZeroOrOneOfDisabled) field.ErrorList {
+			return validate.ZeroOrOneOfUnion(ctx, op, fldPath, obj, oldObj, zeroOrOneOfMembershipFor_k8s_io_code_generator_cmd_validation_gen_output_tests_tags_options_unions_ZeroOrOneOfDisabled_,
+				func(obj *ZeroOrOneOfDisabled) bool {
+					if obj == nil {
+						return false
+					}
+					var z string
+					return obj.XEnabledField != z
+				},
+				func(obj *ZeroOrOneOfDisabled) bool {
+					if obj == nil {
+						return false
+					}
+					var z string
+					return obj.XDisabledField != z
+				})
+		}); len(e) != 0 {
+		errs = append(errs, e...)
+	}
 
 	// field ZeroOrOneOfDisabled.XEnabledField has no validation
 	// field ZeroOrOneOfDisabled.XDisabledField has no validation

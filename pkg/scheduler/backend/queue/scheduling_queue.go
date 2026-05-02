@@ -126,7 +126,6 @@ type SchedulingQueue interface {
 	Delete(pod *v1.Pod)
 	// Important Note: preCheck shouldn't include anything that depends on the in-tree plugins' logic.
 	// (e.g., filter Pods based on added/updated Node's capacity, etc.)
-	// We know currently some do, but we'll eventually remove them in favor of the scheduling queue hint.
 	MoveAllToActiveOrBackoffQueue(logger klog.Logger, event fwk.ClusterEvent, oldObj, newObj interface{}, preCheck PreEnqueueCheck)
 	AssignedPodAdded(logger klog.Logger, pod *v1.Pod)
 	AssignedPodUpdated(logger klog.Logger, oldPod, newPod *v1.Pod, event fwk.ClusterEvent)

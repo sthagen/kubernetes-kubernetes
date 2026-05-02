@@ -40,55 +40,97 @@ func init() { localSchemeBuilder.Register(RegisterValidations) }
 // Public to allow building arbitrary schemes.
 func RegisterValidations(scheme *testscheme.Scheme) error {
 	// type Struct
-	scheme.AddValidationFunc((*Struct)(nil), func(ctx context.Context, op operation.Operation, obj, oldObj interface{}) field.ErrorList {
-		switch op.Request.SubresourcePath() {
-		case "/":
-			return Validate_Struct(ctx, op, nil /* fldPath */, obj.(*Struct), safe.Cast[*Struct](oldObj))
-		}
-		return field.ErrorList{field.InternalError(nil, fmt.Errorf("no validation found for %T, subresource: %v", obj, op.Request.SubresourcePath()))}
-	})
+	scheme.AddValidationFunc(
+		(*Struct)(nil),
+		func(ctx context.Context, op operation.Operation, obj, oldObj interface{}) field.ErrorList {
+			switch op.Request.SubresourcePath() {
+			case "/":
+				return Validate_Struct(
+					ctx, op, nil, /* fldPath */
+					obj.(*Struct),
+					safe.Cast[*Struct](oldObj))
+			}
+			return field.ErrorList{
+				field.InternalError(nil, fmt.Errorf("no validation found for %T, subresource: %v", obj, op.Request.SubresourcePath())),
+			}
+		})
 	return nil
 }
 
 // Validate_Struct validates an instance of Struct according
 // to declarative validation rules in the API schema.
-func Validate_Struct(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *Struct) (errs field.ErrorList) {
+func Validate_Struct(
+	ctx context.Context, op operation.Operation, fldPath *field.Path,
+	obj, oldObj *Struct) (errs field.ErrorList) {
+
 	// field Struct.TypeMeta has no validation
 
-	// field Struct.ObjectMeta
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj *v1.ObjectMeta, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.ObjectMeta
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *v1.ObjectMeta,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			func() { // cohort labels
-				errs = append(errs, validate.Subfield(ctx, op, fldPath, obj, oldObj, "labels", func(o *v1.ObjectMeta) map[string]string { return o.Labels }, validate.SemanticDeepEqual, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
-					return validate.EachMapKey(ctx, op, fldPath, obj, oldObj, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
-						return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "labels key error")
-					})
-				})...)
+			func() { // cohort = "labels"
+				if e := validate.Subfield(ctx, op, fldPath, obj, oldObj, "labels",
+					func(o *v1.ObjectMeta) map[string]string { return o.Labels }, validate.SemanticDeepEqual,
+					func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj map[string]string) field.ErrorList {
+						return validate.EachMapKey(ctx, op, fldPath, obj, oldObj,
+							func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
+								return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "labels key error")
+							})
+					}); len(e) != 0 {
+					errs = append(errs, e...)
+				}
 			}()
-			func() { // cohort ownerReferences
-				errs = append(errs, validate.Subfield(ctx, op, fldPath, obj, oldObj, "ownerReferences", func(o *v1.ObjectMeta) []v1.OwnerReference { return o.OwnerReferences }, validate.SemanticDeepEqual, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []v1.OwnerReference) field.ErrorList {
-					return validate.Unique(ctx, op, fldPath, obj, oldObj, func(a v1.OwnerReference, b v1.OwnerReference) bool { return a.UID == b.UID })
-				})...)
-				errs = append(errs, validate.Subfield(ctx, op, fldPath, obj, oldObj, "ownerReferences", func(o *v1.ObjectMeta) []v1.OwnerReference { return o.OwnerReferences }, validate.SemanticDeepEqual, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []v1.OwnerReference) field.ErrorList {
-					return validate.EachSliceVal(ctx, op, fldPath, obj, oldObj, func(a v1.OwnerReference, b v1.OwnerReference) bool { return a.UID == b.UID }, validate.SemanticDeepEqual, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *v1.OwnerReference) field.ErrorList {
-						return validate.Subfield(ctx, op, fldPath, obj, oldObj, "name", func(o *v1.OwnerReference) *string { return &o.Name }, validate.DirectEqualPtr, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
-							return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "ownerReference name error")
-						})
-					})
-				})...)
+			func() { // cohort = "ownerReferences"
+				if e := validate.Subfield(ctx, op, fldPath, obj, oldObj, "ownerReferences",
+					func(o *v1.ObjectMeta) []v1.OwnerReference { return o.OwnerReferences }, validate.SemanticDeepEqual,
+					func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []v1.OwnerReference) field.ErrorList {
+						return validate.Unique(ctx, op, fldPath, obj, oldObj,
+							func(a v1.OwnerReference, b v1.OwnerReference) bool { return a.UID == b.UID })
+					}); len(e) != 0 {
+					errs = append(errs, e...)
+				}
+				if e := validate.Subfield(ctx, op, fldPath, obj, oldObj, "ownerReferences",
+					func(o *v1.ObjectMeta) []v1.OwnerReference { return o.OwnerReferences }, validate.SemanticDeepEqual,
+					func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []v1.OwnerReference) field.ErrorList {
+						return validate.EachSliceVal(ctx, op, fldPath, obj, oldObj,
+							func(a v1.OwnerReference, b v1.OwnerReference) bool { return a.UID == b.UID }, validate.SemanticDeepEqual,
+							func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *v1.OwnerReference) field.ErrorList {
+								return validate.Subfield(ctx, op, fldPath, obj, oldObj, "name",
+									func(o *v1.OwnerReference) *string { return &o.Name }, validate.DirectEqualPtr,
+									func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
+										return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "ownerReference name error")
+									})
+							})
+					}); len(e) != 0 {
+					errs = append(errs, e...)
+				}
 			}()
-			func() { // cohort finalizers
-				errs = append(errs, validate.Subfield(ctx, op, fldPath, obj, oldObj, "finalizers", func(o *v1.ObjectMeta) []string { return o.Finalizers }, validate.SemanticDeepEqual, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []string) field.ErrorList {
-					return validate.Unique(ctx, op, fldPath, obj, oldObj, validate.DirectEqual)
-				})...)
+			func() { // cohort = "finalizers"
+				if e := validate.Subfield(ctx, op, fldPath, obj, oldObj, "finalizers",
+					func(o *v1.ObjectMeta) []string { return o.Finalizers }, validate.SemanticDeepEqual,
+					func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []string) field.ErrorList {
+						return validate.Unique(ctx, op, fldPath, obj, oldObj, validate.DirectEqual)
+					}); len(e) != 0 {
+					errs = append(errs, e...)
+				}
 			}()
 			return
-		}(fldPath.Child("objectMeta"), &obj.ObjectMeta, safe.Field(oldObj, func(oldObj *Struct) *v1.ObjectMeta { return &oldObj.ObjectMeta }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) *v1.ObjectMeta {
+				return &oldObj.ObjectMeta
+			})
+		errs = append(errs, fn(fldPath.Child("objectMeta"), &obj.ObjectMeta, oldVal, oldObj != nil)...)
+	}
 
 	return errs
 }

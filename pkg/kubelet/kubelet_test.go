@@ -348,7 +348,6 @@ func newTestKubeletWithImageList(
 		config.NewSourcesReady(func(_ sets.Set[string]) bool { return enableResizing }),
 		kubelet.recorder,
 	)
-	kubelet.allocationManager.SetContainerRuntime(fakeRuntime)
 	volumeStatsAggPeriod := time.Second * 10
 	kubelet.resourceAnalyzer = serverstats.NewResourceAnalyzer(tCtx, kubelet, volumeStatsAggPeriod, kubelet.recorder)
 
@@ -3665,7 +3664,6 @@ func TestSyncPodSpans(t *testing.T) {
 		kubelet.podStartupLatencyTracker,
 	)
 	assert.NoError(t, err)
-	kubelet.allocationManager.SetContainerRuntime(kubelet.containerRuntime)
 
 	pod := podWithUIDNameNsSpec("12345678", "foo", "new", v1.PodSpec{
 		Containers: []v1.Container{

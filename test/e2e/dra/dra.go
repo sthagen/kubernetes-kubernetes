@@ -111,6 +111,48 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 		})
 
 		/*
+		   Release: v1.37
+		   Testname: CRUD operations for devicetaintrules
+		   Description: kube-apiserver must support create/update/list/patch/delete operations for resource.k8s.io/v1beta2 DeviceTaintRule.
+		*/
+		f.It("resource.k8s.io/v1beta2 DeviceTaintRule", f.WithFeatureGate(features.DRADeviceTaintRules), func(ctx context.Context) {
+			lastTransitionTime := metav1.Now()
+			lastTransitionTimeEncoded, err := lastTransitionTime.MarshalJSON()
+			framework.ExpectNoError(err)
+			e2econformance.TestResource(ctx, f,
+				&e2econformance.ResourceTestcase[*resourcev1beta2.DeviceTaintRule]{
+					GVR:        resourcev1beta2.SchemeGroupVersion.WithResource("devicetaintrules"),
+					Namespaced: ptr.To(false),
+					InitialSpec: &resourcev1beta2.DeviceTaintRule{
+						Spec: resourcev1beta2.DeviceTaintRuleSpec{
+							// Empty DeviceSelector => no devices selected, so this test is safe.
+							Taint: resourcev1beta2.DeviceTaint{
+								Key:    "testing",
+								Effect: resourcev1beta2.DeviceTaintEffectNone,
+							},
+						},
+					},
+					UpdateSpec: func(obj *resourcev1beta2.DeviceTaintRule) *resourcev1beta2.DeviceTaintRule {
+						obj.Spec.Taint.Effect = resourcev1beta2.DeviceTaintEffectNoExecute
+						return obj
+					},
+					StrategicMergePatchSpec: `{"spec": {"taint": {"effect": "NoExecute"}}}`,
+					UpdateStatus: func(obj *resourcev1beta2.DeviceTaintRule) *resourcev1beta2.DeviceTaintRule {
+						obj.Status.Conditions = append(obj.Status.Conditions, metav1.Condition{
+							Type:               "Testing",
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: lastTransitionTime,
+							Reason:             "E2E_test_running",
+							Message:            "This condition can be ignored.",
+						})
+						return obj
+					},
+					StrategicMergePatchStatus: fmt.Sprintf(`{"status": {"conditions": [{"type": "Testing", "status": "True", "lastTransitionTime": %s, "reason": "E2E_test_running", "message": "This condition can be ignored."}]}}`, string(lastTransitionTimeEncoded)),
+				},
+			)
+		})
+
+		/*
 		   Release: v1.35
 		   Testname: CRUD operations for resourceclaims
 		   Description: kube-apiserver must support create/update/list/patch/delete operations for resource.k8s.io/v1 ResourceClaim.
@@ -248,6 +290,8 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 						return obj
 					},
 					StrategicMergePatchSpec: `{"metadata": {"labels": {"test.dra.example.com": "test"}}}`,
+
+					// UpdateStatus is missing here. Needs to be added before graduation.
 				},
 			)
 		})

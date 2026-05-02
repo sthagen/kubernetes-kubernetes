@@ -819,7 +819,6 @@ func NewMainKubelet(ctx context.Context,
 	klet.containerRuntime = runtime
 	klet.streamingRuntime = runtime
 	klet.runner = runtime
-	klet.allocationManager.SetContainerRuntime(runtime)
 	resizeAdmitHandler := allocation.NewPodResizesAdmitHandler(klet.containerManager, runtime, klet.allocationManager, logger)
 
 	runtimeCache, err := kubecontainer.NewRuntimeCache(klet.containerRuntime, runtimeCacheRefreshPeriod)

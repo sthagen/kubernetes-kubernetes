@@ -91,6 +91,14 @@ func (strategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) fie
 	return validation.ValidateRoleBindingUpdate(newRoleBinding, oldRoleBinding)
 }
 
+func (strategy) DeclarativeValidationConfig(ctx context.Context, obj, oldObj runtime.Object) rest.DeclarativeValidationConfig {
+	// Match declarative validation short-circuit errors with handwritten child field errors.
+	// This is required because RoleBinding.RoleRef is immutable.
+	return rest.DeclarativeValidationConfig{
+		ShortCircuitMismatch: true,
+	}
+}
+
 // WarningsOnUpdate returns warnings for the given update.
 func (strategy) WarningsOnUpdate(ctx context.Context, obj, old runtime.Object) []string {
 	return nil

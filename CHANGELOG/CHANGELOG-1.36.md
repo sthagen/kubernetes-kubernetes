@@ -237,7 +237,7 @@ name | architectures
 - Added the `--tls-curve-preferences` flag for configuring TLS key exchange mechanism. ([#137115](https://github.com/kubernetes/kubernetes/pull/137115), [@damdo](https://github.com/damdo)) [SIG API Machinery, Architecture, CLI, Cloud Provider, Node and Testing]
 - Added the `PodGroupPodsCount` scheduler plugin to support workload-aware scheduling by prioritizing placements with higher Pod counts within a group. ([#137488](https://github.com/kubernetes/kubernetes/pull/137488), [@vshkrabkov](https://github.com/vshkrabkov)) [SIG Scheduling and Testing]
 - Added the `tlsServerName` field to `EgressSelectorConfiguration` `TLSConfig` to allow overriding the server name used for TLS certificate verification. ([#136640](https://github.com/kubernetes/kubernetes/pull/136640), [@kennangaibel](https://github.com/kennangaibel)) [SIG API Machinery, Apps, Auth, Storage and Testing]
-- Added the alpha `DRANativeResources` feature, which includes a new `ResourceSlice.Spec.Devices[*].NativeResourceMappings` field for DRA drivers to declare how device resources map to native Kubernetes resources (e.g., cpu, memory), changes in the DynamicResources plugin and the scheduler framework to correctly account for native resources requested through resource claims, and `kubelet` admission handler validation for native resource DRA requests along with standard requests in the Pod spec. ([#136725](https://github.com/kubernetes/kubernetes/pull/136725), [@pravk03](https://github.com/pravk03)) [SIG API Machinery, Apps, Node, Scheduling and Testing]
+- Added the alpha `DRANodeAllocatableResources` feature, which introduces a new `ResourceSlice.Spec.Devices[*].NodeAllocatableResourceMappings` field for DRA drivers to declare how device resources map to node allocatable Kubernetes resources (e.g., cpu, memory).([#136725](https://github.com/kubernetes/kubernetes/pull/136725), [@pravk03](https://github.com/pravk03)) [SIG API Machinery, Apps, Node, Scheduling and Testing]
 - Added topology-aware scheduling (TAS) logic to the PodGroup scheduling cycle behind the `TopologyAwareWorkloadScheduling` feature gate, supporting scheduling of PodGroups on nodes with matching topology domains. ([#137489](https://github.com/kubernetes/kubernetes/pull/137489), [@brejman](https://github.com/brejman)) [SIG API Machinery, Apps, Auth, CLI, Cloud Provider, Etcd, Node, Scheduling and Testing]
 - Added validation to prevent negative duration values for `imageMinimumGCAge`. ([#135997](https://github.com/kubernetes/kubernetes/pull/135997), [@ngopalak-redhat](https://github.com/ngopalak-redhat)) [SIG API Machinery and Node]
 - Changed deprecated `sets.String` with `sets.Set[string]` in apiserver admission subsystem. This is a **breaking change** for consumers of the `NewLifecycle` function. ([#134044](https://github.com/kubernetes/kubernetes/pull/134044), [@mcallzbl](https://github.com/mcallzbl)) [SIG API Machinery and Auth]
@@ -1024,10 +1024,10 @@ name | architectures
   values with extraneous leading "0"s (e.g., `010.000.000.005` rather than
   `10.0.0.5`) or CIDR subnet/mask values with ambiguous semantics (e.g.,
   `192.168.0.5/24` rather than `192.168.0.0/24` or `192.168.0.5/32`). ([#137053](https://github.com/kubernetes/kubernetes/pull/137053), [@danwinship](https://github.com/danwinship)) [SIG Network and Testing]
-- This change adds a new alpha feature DRANativeResources, which includes:
-   - A new ResourceSlice.Spec.Devices[*].NativeResourceMappings field for DRA drivers to declare how device resources map to native Kubernetes resources (e.g., cpu, memory).
-   - Changes in the DynamicResources plugin and the scheduler framework to correctly account for native resources requested through resource claims.
-   - Kubelet's admission handler validates if the node can fulfill native resource DRA requests along with standard requests in the pod spec
+- This change adds a new alpha feature DRANodeAllocatableResources, which includes:
+   - A new ResourceSlice.Spec.Devices[*].NodeAllocatableResourceMappings field for DRA drivers to declare how device resources map to node allocatable Kubernetes resources (e.g., cpu, memory).
+   - Changes in the DynamicResources plugin and the scheduler framework to correctly account for node allocatable resources requested through resource claims.
+   - Kubelet's admission handler validates if the node can fulfill node allocatable DRA requests along with standard requests in the pod spec.
    ```
   
   #### Additional documentation e.g., KEPs (Kubernetes Enhancement Proposals), usage docs, etc.:

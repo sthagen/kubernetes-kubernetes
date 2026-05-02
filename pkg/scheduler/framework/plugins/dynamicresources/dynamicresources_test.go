@@ -1827,7 +1827,7 @@ func testPlugin(tCtx ktesting.TContext) {
 			want: want{
 				filter: perNodeResult{
 					workerNode.Name: {
-						status: fwk.AsStatus(errors.New(`claim default/my-pod-my-resource: selector #0: CEL runtime error: no such key: ` + string(attrName))),
+						status: fwk.AsStatus(errors.New(`claim default/my-pod-my-resource: selector #0 on device some-driver/worker/instance-1: CEL runtime error: no such key: ` + string(attrName) + `. consider using CEL optional chaining (.? followed by orValue()) or guarding the check with has() for optional fields`)),
 					},
 				},
 			},
@@ -1841,7 +1841,7 @@ func testPlugin(tCtx ktesting.TContext) {
 			want: want{
 				filter: perNodeResult{
 					workerNode.Name: {
-						status: fwk.AsStatus(errors.New(`class my-resource-class: selector #0: CEL runtime error: no such key: ` + string(attrName))),
+						status: fwk.AsStatus(errors.New(`class my-resource-class: selector #0 on device some-driver/worker/instance-1: CEL runtime error: no such key: ` + string(attrName) + `. consider using CEL optional chaining (.? followed by orValue()) or guarding the check with has() for optional fields`)),
 					},
 				},
 			},
@@ -1861,7 +1861,7 @@ func testPlugin(tCtx ktesting.TContext) {
 			want: want{
 				filter: perNodeResult{
 					workerNode.Name: {
-						status: fwk.AsStatus(errors.New(`claim default/my-pod-my-resource: selector #0: CEL runtime error: no such key: ` + string(attrName))),
+						status: fwk.AsStatus(errors.New(`claim default/my-pod-my-resource: selector #0 on device some-driver/worker/instance-1: CEL runtime error: no such key: ` + string(attrName) + `. consider using CEL optional chaining (.? followed by orValue()) or guarding the check with has() for optional fields`)),
 					},
 				},
 			},
@@ -1877,12 +1877,12 @@ func testPlugin(tCtx ktesting.TContext) {
 			want: want{
 				filter: perNodeResult{
 					workerNode.Name: {
-						status: fwk.NewStatus(fwk.UnschedulableAndUnresolvable, `claim default/my-pod-my-resource: selector #0: CEL runtime error: no such key: `+string(attrName)),
+						status: fwk.NewStatus(fwk.UnschedulableAndUnresolvable, `claim default/my-pod-my-resource: selector #0 on device some-driver/worker/instance-1: CEL runtime error: no such key: `+string(attrName)+`. consider using CEL optional chaining (.? followed by orValue()) or guarding the check with has() for optional fields`),
 					},
 				},
 				prescore: result{
 					// This is the error found during Filter.
-					status: fwk.NewStatus(fwk.UnschedulableAndUnresolvable, `filter node worker: claim default/my-pod-my-resource: selector #0: CEL runtime error: no such key: healthy`),
+					status: fwk.NewStatus(fwk.UnschedulableAndUnresolvable, `filter node worker: claim default/my-pod-my-resource: selector #0 on device some-driver/worker/instance-1: CEL runtime error: no such key: healthy. consider using CEL optional chaining (.? followed by orValue()) or guarding the check with has() for optional fields`),
 				},
 			},
 		},

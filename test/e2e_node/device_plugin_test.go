@@ -170,7 +170,7 @@ func testDevicePlugin(f *framework.Framework, pluginSockDir string) {
 			}, f.Timeouts.PodDelete, f.Timeouts.Poll).Should(gomega.Succeed())
 
 			ginkgo.By("Scheduling a sample device plugin pod")
-			dp := getSampleDevicePluginPod(pluginSockDir)
+			dp := getSampleDevicePluginPod(pluginSockDir, "")
 			dptemplate = dp.DeepCopy()
 			devicePluginPod = e2epod.NewPodClient(f).CreateSync(ctx, dp)
 
@@ -1104,16 +1104,20 @@ func matchContainerDevices(ident string, contDevs []*kubeletpodresourcesv1.Conta
 }
 
 // getSampleDevicePluginPod returns the Sample Device Plugin pod to be used e2e tests.
-func getSampleDevicePluginPod(pluginSockDir string) *v1.Pod {
+func getSampleDevicePluginPod(pluginSockDir string, version string) *v1.Pod {
 	data, err := e2etestfiles.Read(e2enode.SampleDevicePluginDSYAML)
 	if err != nil {
 		framework.Fail(err.Error())
 	}
 
 	ds := readDaemonSetV1OrDie(data)
+	podName := e2enode.SampleDevicePluginName
+	if version != "" {
+		podName = podName + "-" + version
+	}
 	dp := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: e2enode.SampleDevicePluginName,
+			Name: podName,
 		},
 		Spec: ds.Spec.Template.Spec,
 	}
@@ -1124,6 +1128,9 @@ func getSampleDevicePluginPod(pluginSockDir string) *v1.Pod {
 	}
 
 	dp.Spec.Containers[0].Env = append(dp.Spec.Containers[0].Env, v1.EnvVar{Name: "CDI_ENABLED", Value: "1"})
+	if version != "" {
+		dp.Spec.Containers[0].Env = append(dp.Spec.Containers[0].Env, v1.EnvVar{Name: "UNIQUE_NAME", Value: version})
+	}
 
 	return dp
 }

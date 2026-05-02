@@ -144,7 +144,7 @@ var CoreResourceEnqueueTestCases = []*CoreResourceEnqueueTestCase{
 		WantRequeuedPods: sets.New("pod2"),
 	},
 	{
-		Name:          "Pod rejected by the PodAffinity plugin is requeued when a new Node is created and turned to ready",
+		Name:          "Pod rejected by the PodAffinity plugin is requeued when a new Node is created",
 		EnablePlugins: []string{names.InterPodAffinity},
 		InitialNodes:  []*v1.Node{st.MakeNode().Name("fake-node").Label("node", "fake-node").Capacity(map[v1.ResourceName]string{v1.ResourceCPU: "2"}).Obj()},
 		InitialPods: []*v1.Pod{
@@ -155,25 +155,11 @@ var CoreResourceEnqueueTestCases = []*CoreResourceEnqueueTestCase{
 			st.MakePod().Label("anti", "anti").Name("pod2").PodAntiAffinityExists("anti", "node", st.PodAntiAffinityWithRequiredReq).Container("image").Obj(),
 		},
 		TriggerFn: func(testCtx *testutils.TestContext) (map[fwk.ClusterEvent]uint64, error) {
-			// Trigger a NodeCreated event.
-			// Note that this Node has a un-ready taint and pod2 should be requeued ideally because unschedulable plugins registered for pod2 is PodAffinity.
-			// However, due to preCheck, it's not requeueing pod2 to activeQ.
-			// It'll be fixed by the removal of preCheck in the future.
-			// https://github.com/kubernetes/kubernetes/issues/110175
-			node := st.MakeNode().Name("fake-node2").Label("node", "fake-node2").Capacity(map[v1.ResourceName]string{v1.ResourceCPU: "2"}).Taints([]v1.Taint{{Key: v1.TaintNodeNotReady, Effect: v1.TaintEffectNoSchedule}}).Obj()
+			node := st.MakeNode().Name("fake-node2").Label("node", "fake-node2").Capacity(map[v1.ResourceName]string{v1.ResourceCPU: "2"}).Obj()
 			if _, err := testCtx.ClientSet.CoreV1().Nodes().Create(testCtx.Ctx, node, metav1.CreateOptions{}); err != nil {
 				return nil, fmt.Errorf("failed to create a new node: %w", err)
 			}
-
-			// As a mitigation of an issue described above, all plugins subscribing Node/Add event register UpdateNodeTaint too.
-			// So, this removal of taint moves pod2 to activeQ.
-			node.Spec.Taints = nil
-			if _, err := testCtx.ClientSet.CoreV1().Nodes().Update(testCtx.Ctx, node, metav1.UpdateOptions{}); err != nil {
-				return nil, fmt.Errorf("failed to remove taints off the node: %w", err)
-			}
-			return map[fwk.ClusterEvent]uint64{
-				{Resource: fwk.Node, ActionType: fwk.Add}:             1,
-				{Resource: fwk.Node, ActionType: fwk.UpdateNodeTaint}: 1}, nil
+			return map[fwk.ClusterEvent]uint64{{Resource: fwk.Node, ActionType: fwk.Add}: 1}, nil
 		},
 		WantRequeuedPods: sets.New("pod2"),
 	},

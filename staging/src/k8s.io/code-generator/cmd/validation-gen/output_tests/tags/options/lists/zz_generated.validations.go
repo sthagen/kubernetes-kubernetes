@@ -39,80 +39,146 @@ func init() { localSchemeBuilder.Register(RegisterValidations) }
 // Public to allow building arbitrary schemes.
 func RegisterValidations(scheme *testscheme.Scheme) error {
 	// type Struct
-	scheme.AddValidationFunc((*Struct)(nil), func(ctx context.Context, op operation.Operation, obj, oldObj interface{}) field.ErrorList {
-		switch op.Request.SubresourcePath() {
-		case "/":
-			return Validate_Struct(ctx, op, nil /* fldPath */, obj.(*Struct), safe.Cast[*Struct](oldObj))
-		}
-		return field.ErrorList{field.InternalError(nil, fmt.Errorf("no validation found for %T, subresource: %v", obj, op.Request.SubresourcePath()))}
-	})
+	scheme.AddValidationFunc(
+		(*Struct)(nil),
+		func(ctx context.Context, op operation.Operation, obj, oldObj interface{}) field.ErrorList {
+			switch op.Request.SubresourcePath() {
+			case "/":
+				return Validate_Struct(
+					ctx, op, nil, /* fldPath */
+					obj.(*Struct),
+					safe.Cast[*Struct](oldObj))
+			}
+			return field.ErrorList{
+				field.InternalError(nil, fmt.Errorf("no validation found for %T, subresource: %v", obj, op.Request.SubresourcePath())),
+			}
+		})
 	return nil
 }
 
 // Validate_Struct validates an instance of Struct according
 // to declarative validation rules in the API schema.
-func Validate_Struct(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *Struct) (errs field.ErrorList) {
+func Validate_Struct(
+	ctx context.Context, op operation.Operation, fldPath *field.Path,
+	obj, oldObj *Struct) (errs field.ErrorList) {
+
 	// field Struct.TypeMeta has no validation
 
-	// field Struct.ListMap
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj []ListItem, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.ListMap
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj []ListItem,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []ListItem) field.ErrorList {
-				return validate.Unique(ctx, op, fldPath, obj, oldObj, func(a ListItem, b ListItem) bool { return a.Name == b.Name })
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []ListItem) field.ErrorList {
+					return validate.Unique(ctx, op, fldPath, obj, oldObj,
+						func(a ListItem, b ListItem) bool { return a.Name == b.Name })
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("listMap"), obj.ListMap, safe.Field(oldObj, func(oldObj *Struct) []ListItem { return oldObj.ListMap }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) []ListItem {
+				return oldObj.ListMap
+			})
+		errs = append(errs, fn(fldPath.Child("listMap"), obj.ListMap, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.ListMapDisabled
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj []ListItem, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.ListMapDisabled
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj []ListItem,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []ListItem) field.ErrorList {
-				return validate.Unique(ctx, op, fldPath, obj, oldObj, func(a ListItem, b ListItem) bool { return a.Name == b.Name })
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []ListItem) field.ErrorList {
+					return validate.Unique(ctx, op, fldPath, obj, oldObj,
+						func(a ListItem, b ListItem) bool { return a.Name == b.Name })
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("listMapDisabled"), obj.ListMapDisabled, safe.Field(oldObj, func(oldObj *Struct) []ListItem { return oldObj.ListMapDisabled }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) []ListItem {
+				return oldObj.ListMapDisabled
+			})
+		errs = append(errs, fn(fldPath.Child("listMapDisabled"), obj.ListMapDisabled, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.ListEachVal
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj []ListItem, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.ListEachVal
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj []ListItem,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []ListItem) field.ErrorList {
-				return validate.EachSliceVal(ctx, op, fldPath, obj, oldObj, nil, nil, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ListItem) field.ErrorList {
-					return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.ListEachVal/val")
-				})
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", true,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []ListItem) field.ErrorList {
+					return validate.EachSliceVal(ctx, op, fldPath, obj, oldObj, nil, nil,
+						func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ListItem) field.ErrorList {
+							return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.ListEachVal/val")
+						})
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("listEachVal"), obj.ListEachVal, safe.Field(oldObj, func(oldObj *Struct) []ListItem { return oldObj.ListEachVal }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) []ListItem {
+				return oldObj.ListEachVal
+			})
+		errs = append(errs, fn(fldPath.Child("listEachVal"), obj.ListEachVal, oldVal, oldObj != nil)...)
+	}
 
-	// field Struct.ListEachValDisabled
-	errs = append(errs,
-		func(fldPath *field.Path, obj, oldObj []ListItem, oldValueCorrelated bool) (errs field.ErrorList) {
+	{ // field Struct.ListEachValDisabled
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj []ListItem,
+			oldValueCorrelated bool) (errs field.ErrorList) {
 			// don't revalidate unchanged data
-			if oldValueCorrelated && op.Type == operation.Update && equality.Semantic.DeepEqual(obj, oldObj) {
-				return nil
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
 			}
 			// call field-attached validations
-			errs = append(errs, validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []ListItem) field.ErrorList {
-				return validate.EachSliceVal(ctx, op, fldPath, obj, oldObj, nil, nil, func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ListItem) field.ErrorList {
-					return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.ListEachValDisabled/val")
-				})
-			})...)
+			if e := validate.IfOption(ctx, op, fldPath, obj, oldObj, "FeatureX", false,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []ListItem) field.ErrorList {
+					return validate.EachSliceVal(ctx, op, fldPath, obj, oldObj, nil, nil,
+						func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *ListItem) field.ErrorList {
+							return validate.FixedResult(ctx, op, fldPath, obj, oldObj, false, "field Struct.ListEachValDisabled/val")
+						})
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
 			return
-		}(fldPath.Child("listEachValDisabled"), obj.ListEachValDisabled, safe.Field(oldObj, func(oldObj *Struct) []ListItem { return oldObj.ListEachValDisabled }), oldObj != nil)...)
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *Struct) []ListItem {
+				return oldObj.ListEachValDisabled
+			})
+		errs = append(errs, fn(fldPath.Child("listEachValDisabled"), obj.ListEachValDisabled, oldVal, oldObj != nil)...)
+	}
 
 	return errs
 }

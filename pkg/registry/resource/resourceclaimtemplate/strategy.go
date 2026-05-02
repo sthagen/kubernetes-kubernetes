@@ -66,6 +66,14 @@ func (s *resourceClaimTemplateStrategy) Validate(ctx context.Context, obj runtim
 	return append(allErrs, validation.ValidateResourceClaimTemplate(resourceClaimTemplate)...)
 }
 
+// DeclarativeValidationConfig supplies the same path-normalization rules used
+// by ResourceClaim, so the runtime mismatch comparator can pair v1beta1's
+// flattened request paths (e.g. spec.spec.devices.requests[i].tolerations) with
+// the handwritten paths under .exactly.* without false positives.
+func (*resourceClaimTemplateStrategy) DeclarativeValidationConfig(ctx context.Context, obj, oldObj runtime.Object) rest.DeclarativeValidationConfig {
+	return rest.DeclarativeValidationConfig{NormalizationRules: validation.ResourceNormalizationRules}
+}
+
 func (*resourceClaimTemplateStrategy) WarningsOnCreate(ctx context.Context, obj runtime.Object) []string {
 	return nil
 }
