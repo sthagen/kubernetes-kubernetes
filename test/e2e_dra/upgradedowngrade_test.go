@@ -198,7 +198,7 @@ func testUpgradeDowngrade(tCtx ktesting.TContext) {
 					break
 				}
 				base := path.Base(header.Name)
-				if slices.Contains(localupcluster.KubeClusterComponents, localupcluster.KubeComponentName(base)) {
+				if slices.Contains(localupcluster.KubeClusterComponents, localupcluster.ClusterComponentName(base)) {
 					data, err := io.ReadAll(unpack)
 					tCtx.ExpectNoError(err, fmt.Sprintf("read content of %s", header.Name))
 					tCtx.ExpectNoError(os.MkdirAll(binDir, 0755), "create directory for binaries")
@@ -208,9 +208,11 @@ func testUpgradeDowngrade(tCtx ktesting.TContext) {
 		})
 	}
 
-	var cluster *localupcluster.Cluster
+	cluster := localupcluster.New()
+	tCtx.CleanupCtx(func(tCtx ktesting.TContext) {
+		tCtx.Step("cleanup", cluster.Stop)
+	})
 	tCtx.Step(fmt.Sprintf("bring up v%d.%d", major, previousMinor), func(tCtx ktesting.TContext) {
-		cluster = localupcluster.New(tCtx)
 		localUpClusterEnv := map[string]string{
 			"RUNTIME_CONFIG": "resource.k8s.io/v1beta1,resource.k8s.io/v1beta2,resource.k8s.io/v1alpha3",
 			"FEATURE_GATES":  "DynamicResourceAllocation=true,DRADeviceTaintRules=true,DRADeviceTaints=true,DRAExtendedResource=true,DRAPartitionableDevices=true",
