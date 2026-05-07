@@ -60,7 +60,7 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/otel v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
-	go.yaml.in/yaml/v2 v2.4.3 // indirect
+	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/net v0.53.0 // indirect
@@ -70,8 +70,8 @@ require (
 	golang.org/x/term v0.42.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260406210006-6f92a3bedf2d // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260414002931-afd174a4e478 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

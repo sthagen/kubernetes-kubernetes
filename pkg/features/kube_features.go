@@ -465,30 +465,10 @@ const (
 	InPlacePodVerticalScalingInitContainers featuregate.Feature = "InPlacePodVerticalScalingInitContainers"
 
 	// owner: @mimowo
-	// kep: https://kep.k8s.io/3850
-	//
-	// Allows users to specify counting of failed pods per index.
-	JobBackoffLimitPerIndex featuregate.Feature = "JobBackoffLimitPerIndex"
-
-	// owner: @mimowo
 	// kep: https://kep.k8s.io/4368
 	//
 	// Allows to delegate reconciliation of a Job object to an external controller.
 	JobManagedBy featuregate.Feature = "JobManagedBy"
-
-	// owner: @kannon92
-	// kep : https://kep.k8s.io/3939
-	//
-	// Allow users to specify recreating pods of a job only when
-	// pods have fully terminated.
-	JobPodReplacementPolicy featuregate.Feature = "JobPodReplacementPolicy"
-
-	// owner: @tenzen-y
-	// kep: https://kep.k8s.io/3998
-	//
-	// Allow users to specify when a Job can be declared as succeeded
-	// based on the set of succeeded pods.
-	JobSuccessPolicy featuregate.Feature = "JobSuccessPolicy"
 
 	// owner: @marquiz
 	// kep: http://kep.k8s.io/4033
@@ -1519,28 +1499,10 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Beta},
 	},
 
-	JobBackoffLimitPerIndex: {
-		{Version: version.MustParse("1.28"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.29"), Default: true, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.33"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.36
-	},
-
 	JobManagedBy: {
 		{Version: version.MustParse("1.30"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.32"), Default: true, PreRelease: featuregate.Beta},
 		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.38
-	},
-
-	JobPodReplacementPolicy: {
-		{Version: version.MustParse("1.28"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.29"), Default: true, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.34"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.37
-	},
-
-	JobSuccessPolicy: {
-		{Version: version.MustParse("1.30"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.31"), Default: true, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.33"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.36
 	},
 
 	KubeletCgroupDriverFromCRI: {
@@ -2452,13 +2414,7 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 
 	InPlacePodVerticalScalingInitContainers: {InPlacePodVerticalScaling, NodeDeclaredFeatures},
 
-	JobBackoffLimitPerIndex: {},
-
 	JobManagedBy: {},
-
-	JobPodReplacementPolicy: {},
-
-	JobSuccessPolicy: {},
 
 	KubeletCgroupDriverFromCRI: {},
 
