@@ -172,6 +172,37 @@ func TestPriorityQueue_Add(t *testing.T) {
 	}
 }
 
+func TestPriorityQueue_AddNominatedGatedPod(t *testing.T) {
+	gatedPod := st.MakePod().Name("pod-gated").Namespace("ns1").UID("pod-gated").NominatedNodeName("node1").Obj()
+	objs := []runtime.Object{gatedPod}
+	_, ctx := ktesting.NewTestContext(t)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	plugin := &preEnqueuePlugin{allowlists: []string{"allow"}}
+	m := map[string]map[string]fwk.PreEnqueuePlugin{
+		"": {
+			"preEnqueuePlugin": plugin,
+		},
+	}
+	q := NewTestQueueWithObjects(ctx, newDefaultQueueSort(), objs, WithPreEnqueuePluginMap(m))
+	q.Add(ctx, gatedPod)
+
+	// Verify the pod is gated
+	pInfo := q.unschedulablePods.get(gatedPod)
+	if pInfo == nil || !pInfo.Gated() {
+		t.Fatalf("Expected pod to be gated in unschedulablePods")
+	}
+
+	// Verify the pod is added to nominator
+	if len(q.nominator.nominatedPods["node1"]) != 1 {
+		t.Errorf("Expected pod-gated in nominatedPods")
+	}
+	if q.nominator.nominatedPodToNode[gatedPod.UID] != "node1" {
+		t.Errorf("Expected pod-gated in nominatedPodToNode")
+	}
+}
+
 func newDefaultQueueSort() fwk.LessFunc {
 	sort := &queuesort.PrioritySort{}
 	return sort.Less
@@ -660,9 +691,7 @@ func Test_InFlightPods(t *testing.T) {
 				{podPopped: pod2},
 				// Simulate a bug, putting pod into activeQ, while pod is being scheduled.
 				{callback: func(t *testing.T, q *PriorityQueue) {
-					q.activeQ.underLock(func(unlocked unlockedActiveQueuer) {
-						unlocked.add(logger, newQueuedPodInfoForLookup(pod1), framework.EventUnscheduledPodAdd.Label())
-					})
+					q.activeQ.add(logger, newQueuedPodInfoForLookup(pod1), framework.EventUnscheduledPodAdd.Label())
 				}},
 				// At this point, in the activeQ, we have pod1 and pod3 in this order.
 				{podCreated: pod3},
@@ -1201,6 +1230,12 @@ func TestPriorityQueue_Update(t *testing.T) {
 		},
 	}
 
+	withGate := func(p *v1.Pod) *v1.Pod {
+		newPod := p.DeepCopy()
+		newPod.Labels = map[string]string{"deny": "true"}
+		return newPod
+	}
+
 	notInAnyQueue := "NotInAnyQueue"
 	tests := []struct {
 		name  string
@@ -1222,11 +1257,28 @@ func TestPriorityQueue_Update(t *testing.T) {
 			},
 		},
 		{
-			name:                 "Update highPriorityPodInfo and add a nominatedNodeName to it",
+			name:  "Update gated pod that didn't exist in the queue",
+			wantQ: unschedulableQ,
+			prepareFunc: func(tCtx ktesting.TContext, q *PriorityQueue) (oldPod, newPod *v1.Pod) {
+				updatedPod := withGate(medPriorityPodInfo.Pod)
+				updatedPod.Annotations["foo"] = "test"
+				return withGate(medPriorityPodInfo.Pod), updatedPod
+			},
+		},
+		{
+			name:                 "Update non-existent highPriorityPodInfo and add a nominatedNodeName to it",
 			wantQ:                activeQ,
 			wantAddedToNominated: true,
 			prepareFunc: func(tCtx ktesting.TContext, q *PriorityQueue) (oldPod, newPod *v1.Pod) {
 				return highPriorityPodInfo.Pod, highPriNominatedPodInfo.Pod
+			},
+		},
+		{
+			name:                 "Update non-existent gated highPriorityPodInfo and add a nominatedNodeName to it",
+			wantQ:                unschedulableQ,
+			wantAddedToNominated: true,
+			prepareFunc: func(tCtx ktesting.TContext, q *PriorityQueue) (oldPod, newPod *v1.Pod) {
+				return withGate(highPriorityPodInfo.Pod), withGate(highPriNominatedPodInfo.Pod)
 			},
 		},
 		{
@@ -1307,7 +1359,13 @@ func TestPriorityQueue_Update(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tCtx := ktesting.Init(t)
 			objs := []runtime.Object{highPriorityPodInfo.Pod, unschedulablePodInfo.Pod, medPriorityPodInfo.Pod}
-			q := NewTestQueueWithObjects(tCtx, newDefaultQueueSort(), objs, WithClock(c), WithQueueingHintMapPerProfile(queueingHintMap))
+			plugin := &denyingPreEnqueuePlugin{denylists: []string{"deny"}}
+			m := map[string]map[string]fwk.PreEnqueuePlugin{
+				"": {
+					"denyingPreEnqueuePlugin": plugin,
+				},
+			}
+			q := NewTestQueueWithObjects(tCtx, newDefaultQueueSort(), objs, WithClock(c), WithQueueingHintMapPerProfile(queueingHintMap), WithPreEnqueuePluginMap(m))
 
 			oldPod, newPod := tt.prepareFunc(tCtx, q)
 
@@ -1349,7 +1407,7 @@ func TestPriorityQueue_Update(t *testing.T) {
 			}
 
 			if tt.wantAddedToNominated && len(q.nominator.nominatedPods) != 1 {
-				t.Errorf("Expected one item in nominatedPods map: %v", q.nominator)
+				t.Errorf("Expected one item in nominatedPods map: %v", q.nominator.nominatedPods)
 			}
 
 		})
@@ -1625,9 +1683,7 @@ func TestPriorityQueue_Activate(t *testing.T) {
 
 			if tt.qPodInInFlightPod != nil {
 				// Put -> Pop the Pod to make it registered in inFlightPods.
-				q.activeQ.underLock(func(unlockedActiveQ unlockedActiveQueuer) {
-					unlockedActiveQ.add(logger, newQueuedPodInfoForLookup(tt.qPodInInFlightPod), framework.EventUnscheduledPodAdd.Label())
-				})
+				q.activeQ.add(logger, newQueuedPodInfoForLookup(tt.qPodInInFlightPod), framework.EventUnscheduledPodAdd.Label())
 				p, err := q.activeQ.pop(logger)
 				if err != nil {
 					t.Fatalf("Pop failed: %v", err)
@@ -1713,7 +1769,26 @@ func (pl *preEnqueuePlugin) PreEnqueue(ctx context.Context, p *v1.Pod) *fwk.Stat
 			}
 		}
 	}
-	return fwk.NewStatus(fwk.UnschedulableAndUnresolvable, "pod name not in allowlists")
+	return fwk.NewStatus(fwk.UnschedulableAndUnresolvable, "pod label not in allowlists")
+}
+
+type denyingPreEnqueuePlugin struct {
+	denylists []string
+}
+
+func (pl *denyingPreEnqueuePlugin) Name() string {
+	return "denyingPreEnqueuePlugin"
+}
+
+func (pl *denyingPreEnqueuePlugin) PreEnqueue(ctx context.Context, p *v1.Pod) *fwk.Status {
+	for _, denied := range pl.denylists {
+		for label := range p.Labels {
+			if label == denied {
+				return fwk.NewStatus(fwk.UnschedulableAndUnresolvable, "pod label in denylists")
+			}
+		}
+	}
+	return nil
 }
 
 func TestPriorityQueue_moveToActiveQ(t *testing.T) {
@@ -3318,9 +3393,7 @@ var (
 		queue.Add(tCtx, pInfo.Pod)
 	}
 	addPodActiveQDirectly = func(tCtx ktesting.TContext, queue *PriorityQueue, pInfo *framework.QueuedPodInfo) {
-		queue.activeQ.underLock(func(unlockedActiveQ unlockedActiveQueuer) {
-			unlockedActiveQ.add(klog.FromContext(tCtx), pInfo, framework.EventUnscheduledPodAdd.Label())
-		})
+		queue.activeQ.add(klog.FromContext(tCtx), pInfo, framework.EventUnscheduledPodAdd.Label())
 	}
 	addPodUnschedulablePods = func(tCtx ktesting.TContext, queue *PriorityQueue, pInfo *framework.QueuedPodInfo) {
 		if !pInfo.Gated() {
@@ -4678,9 +4751,7 @@ func TestPriorityQueue_GetPod(t *testing.T) {
 
 	logger, ctx := ktesting.NewTestContext(t)
 	q := NewTestQueue(ctx, newDefaultQueueSort())
-	q.activeQ.underLock(func(unlockedActiveQ unlockedActiveQueuer) {
-		unlockedActiveQ.add(logger, newQueuedPodInfoForLookup(activeQPod), framework.EventUnscheduledPodAdd.Label())
-	})
+	q.activeQ.add(logger, newQueuedPodInfoForLookup(activeQPod), framework.EventUnscheduledPodAdd.Label())
 	q.backoffQ.add(logger, newQueuedPodInfoForLookup(backoffQPod), framework.EventUnscheduledPodAdd.Label())
 	q.unschedulablePods.addOrUpdate(newQueuedPodInfoForLookup(unschedPod), false, framework.EventUnscheduledPodAdd.Label())
 
@@ -5100,8 +5171,6 @@ func TestPriorityQueue_MultipleProfiles(t *testing.T) {
 	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.OpportunisticBatching, true)
 
 	_, ctx := ktesting.NewTestContext(t)
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	signers := map[string]PodSigner{
 		"scheduler-1": func(ctx context.Context, pod *v1.Pod) fwk.PodSignature {
@@ -5135,4 +5204,62 @@ func TestPriorityQueue_MultipleProfiles(t *testing.T) {
 	if pInfo3.PodSignature != nil {
 		t.Errorf("Pod3: expected nil signature (no signer), got '%s'", string(pInfo3.PodSignature))
 	}
+
+}
+
+func TestConcurrentUpdateAndPop(t *testing.T) {
+	logger, ctx := ktesting.NewTestContext(t)
+
+	q := NewTestQueue(ctx, newDefaultQueueSort())
+
+	podName := "test-pod"
+	// Create a pod with high priority to ensure it's at the front
+	pod := st.MakePod().Name(podName).Namespace("default").UID("uid-1").Priority(100).Obj()
+	q.Add(ctx, pod)
+
+	var wg sync.WaitGroup
+	start := time.Now()
+	testDuration := 3 * time.Second
+
+	// Goroutine 1: Continuously Pop and re-Add
+	wg.Go(func() {
+		for time.Since(start) < testDuration {
+			// Pop blocks if empty, but we verify we don't block forever or panic
+			pInfo, err := q.Pop(logger)
+			if err != nil {
+				t.Errorf("Unexpected error during Pop: %v", err)
+				return
+			}
+			if pInfo == nil {
+				t.Errorf("Unexpected nil QueuedPodInfo during Pop")
+				return
+			}
+			if pInfo.Pod.UID != pod.UID {
+				t.Errorf("Expected pod UID %v, got %v", pod.UID, pInfo.Pod.UID)
+			}
+			// Simulate some work to widen the race window
+			time.Sleep(100 * time.Microsecond)
+			q.Done(pInfo.Pod.UID)
+			// Re-add to queue to keep the cycle going
+			q.Add(ctx, pInfo.Pod)
+		}
+	})
+
+	// Goroutine 2: Continuously Update the pod
+	wg.Go(func() {
+		iter := 0
+		currentPod := pod
+		for time.Since(start) < testDuration {
+			iter++
+			newPod := currentPod.DeepCopy()
+			newPod.Annotations = map[string]string{"ver": fmt.Sprintf("%d", iter)}
+			// Update is atomic
+			q.Update(ctx, currentPod, newPod)
+			currentPod = newPod
+			time.Sleep(50 * time.Microsecond)
+		}
+	})
+
+	wg.Wait()
+	q.Close()
 }

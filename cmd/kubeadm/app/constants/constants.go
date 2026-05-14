@@ -210,6 +210,11 @@ const (
 	// built-in ClusterRole.
 	ClusterAdminsGroupAndClusterRoleBinding = "kubeadm:cluster-admins"
 
+	// KubeletAPIAdminClusterRoleBindingName is the name of the ClusterRoleBinding for the apiserver kubelet client
+	KubeletAPIAdminClusterRoleBindingName = "kubeadm:apiserver-kubelet-client"
+	// KubeletAPIAdminClusterRoleName is the name of the built-in ClusterRole for kubelet API access
+	KubeletAPIAdminClusterRoleName = "system:kubelet-api-admin"
+
 	// KubernetesAPICallTimeout specifies how long kubeadm should wait for API calls
 	KubernetesAPICallTimeout = 1 * time.Minute
 	// KubernetesAPICallRetryInterval defines how long kubeadm should wait before retrying a failed API operation
@@ -322,7 +327,7 @@ const (
 	MinExternalEtcdVersion = "3.5.24-0"
 
 	// DefaultEtcdVersion indicates the default etcd version that kubeadm uses
-	DefaultEtcdVersion = "3.6.10-0"
+	DefaultEtcdVersion = "3.6.11-0"
 
 	// Etcd defines variable used internally when referring to etcd component
 	Etcd = "etcd"
@@ -504,9 +509,9 @@ var (
 	// an etcd version even if the map is not yet updated before a release. The user will
 	// get a warning in that case, so ideally the map should be updated for each release.
 	SupportedEtcdVersion = map[uint8]string{
-		34: "3.6.10-0",
-		35: "3.6.10-0",
-		36: "3.6.10-0",
+		34: "3.6.11-0",
+		35: "3.6.11-0",
+		36: "3.6.11-0",
 	}
 
 	// KubeadmCertsClusterRoleName sets the name for the ClusterRole that allows

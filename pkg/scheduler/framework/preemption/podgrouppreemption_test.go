@@ -88,8 +88,8 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				st.MakePod().Name("p3").UID("v3").Node("node3").Priority(lowPriority).PodGroupName("pg2").Obj(),
 			},
 			initPodGroups: []*schedulingapi.PodGroup{
-				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
-				st.MakePodGroup().Name("pg2").UID("pg2").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePod).Priority(lowPriority).Obj(),
+				st.MakePodGroup().Name("pg2").UID("pg2").DisruptionMode(schedulingapi.DisruptionModePod).Priority(lowPriority).Obj(),
 			},
 			preemptor: newPodGroupPreemptor(
 				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
@@ -112,7 +112,7 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				st.MakePod().Name("p3").UID("v3").Node("node3").Priority(midPriority).Obj(),
 			},
 			initPodGroups: []*schedulingapi.PodGroup{
-				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePod).Priority(lowPriority).Obj(),
 			},
 			preemptor: newPodGroupPreemptor(
 				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
@@ -134,7 +134,7 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				st.MakePod().Name("p2").UID("v2").Node("node2").Priority(lowPriority).PodGroupName("pg1").StartTime(metav1.Unix(0, 0)).Obj(),
 			},
 			initPodGroups: []*schedulingapi.PodGroup{
-				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePod).Priority(lowPriority).Obj(),
 			},
 			preemptor: newPodGroupPreemptor(
 				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
@@ -158,9 +158,9 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				st.MakePod().Name("p5").UID("v5").Node("node5").Priority(highPriority).PodGroupName("pg3").StartTime(metav1.Unix(0, 0)).Obj(),
 			},
 			initPodGroups: []*schedulingapi.PodGroup{
-				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
-				st.MakePodGroup().Name("pg2").UID("pg2").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
-				st.MakePodGroup().Name("pg3").UID("pg3").DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
+				st.MakePodGroup().Name("pg1").UID("pg1").DisruptionMode(schedulingapi.DisruptionModePod).Priority(lowPriority).Obj(),
+				st.MakePodGroup().Name("pg2").UID("pg2").DisruptionMode(schedulingapi.DisruptionModePod).Priority(lowPriority).Obj(),
+				st.MakePodGroup().Name("pg3").UID("pg3").DisruptionMode(schedulingapi.DisruptionModePod).Priority(highPriority).Obj(),
 			},
 			preemptor: newPodGroupPreemptor(
 				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
@@ -833,6 +833,47 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				scheduledCount := 2
 				if v1Present && !v2Present {
 					scheduledCount = 3 // v1 reprieved: this increases scheduledCount!
+				}
+
+				return &fwk.PodGroupAssignments{
+					ProposedAssignments: make([]fwk.ProposedAssignment, scheduledCount),
+				}, fwk.NewStatus(fwk.Success)
+			},
+			expectedPods:   []string{"v2"},
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "Reprieval allows more pods to schedule than initial maxScheduledCount due to greedy placement (gang > minCount)",
+			nodeNames: []string{"nodeA", "nodeB"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("v1").UID("v1").Node("nodeA").Priority(midPriority).Obj(),
+				st.MakePod().Name("v2").UID("v2").Node("nodeB").Priority(lowPriority).Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).MinCount(3).Obj(),
+				[]*v1.Pod{
+					st.MakePod().Name("p1").UID("p1").Priority(highPriority).Obj(),
+					st.MakePod().Name("p2").UID("p2").Priority(highPriority).Obj(),
+					st.MakePod().Name("p3").UID("p3").Priority(highPriority).Obj(),
+					st.MakePod().Name("p4").UID("p4").Priority(highPriority).Obj(),
+				},
+			),
+			customMockSchedulingFunc: func(ctx context.Context, domainNodes []fwk.NodeInfo) (*fwk.PodGroupAssignments, *fwk.Status) {
+				v1Present, v2Present := false, false
+				for _, n := range domainNodes {
+					for _, pod := range n.GetPods() {
+						if pod.GetPod().Name == "v1" {
+							v1Present = true
+						} else if pod.GetPod().Name == "v2" {
+							v2Present = true
+						}
+					}
+				}
+
+				scheduledCount := 3
+				if v1Present && !v2Present {
+					scheduledCount = 4 // v1 reprieved: this increases scheduledCount!
 				}
 
 				return &fwk.PodGroupAssignments{
