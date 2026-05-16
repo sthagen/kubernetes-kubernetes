@@ -996,3 +996,139 @@ func verifyNamespaceCreated(expectedNamespace string) verifyFunc {
 		return nil
 	}
 }
+
+func TestProfileCollection(t *testing.T) {
+	t.Run("successful collection", func(t *testing.T) {
+		tCtx := ktesting.Init(t)
+		tempDir := t.TempDir()
+		profilePath := filepath.Join(tempDir, "cpu-profile.out")
+
+		exec := &WorkloadExecutor{}
+		startOp := &startCollectingProfileOp{
+			Opcode:   startCollectingProfileOpcode,
+			Type:     "CPU",
+			FilePath: profilePath,
+		}
+
+		if err := exec.runOp(tCtx, startOp, 0); err != nil {
+			t.Fatalf("Failed to start CPU profile collection: %v", err)
+		}
+		if exec.cpuProfileFile == nil {
+			t.Fatalf("Expected cpuProfileFile to be set, got nil")
+		}
+
+		stopOp := &stopCollectingProfileOp{
+			Opcode: stopCollectingProfileOpcode,
+			Type:   "CPU",
+		}
+		if err := exec.runOp(tCtx, stopOp, 0); err != nil {
+			t.Fatalf("Failed to stop CPU profile collection: %v", err)
+		}
+		if exec.cpuProfileFile != nil {
+			t.Fatalf("Expected cpuProfileFile to be nil after stop, got %v", exec.cpuProfileFile)
+		}
+		if _, err := os.Stat(profilePath); err != nil {
+			t.Fatalf("Expected profile file %q to exist, got error: %v", profilePath, err)
+		}
+	})
+
+	t.Run("start while already ongoing", func(t *testing.T) {
+		tCtx := ktesting.Init(t)
+		tempDir := t.TempDir()
+		profilePath := filepath.Join(tempDir, "cpu-profile.out")
+
+		exec := &WorkloadExecutor{}
+		startOp := &startCollectingProfileOp{
+			Opcode:   startCollectingProfileOpcode,
+			Type:     "CPU",
+			FilePath: profilePath,
+		}
+
+		if err := exec.runOp(tCtx, startOp, 0); err != nil {
+			t.Fatalf("Failed to start CPU profile collection: %v", err)
+		}
+		if err := exec.runOp(tCtx, startOp, 0); err == nil {
+			t.Fatalf("Expected error starting profile collection while already ongoing, got nil")
+		}
+
+		if err := exec.runOp(tCtx, &stopCollectingProfileOp{
+			Opcode: stopCollectingProfileOpcode,
+			Type:   "CPU",
+		}, 0); err != nil {
+			t.Fatalf("Failed to stop CPU profile collection: %v", err)
+		}
+	})
+
+	t.Run("stop without starting", func(t *testing.T) {
+		tCtx := ktesting.Init(t)
+		exec := &WorkloadExecutor{}
+		stopOp := &stopCollectingProfileOp{
+			Opcode: stopCollectingProfileOpcode,
+			Type:   "CPU",
+		}
+
+		if err := exec.runOp(tCtx, stopOp, 0); err == nil {
+			t.Fatalf("Expected error stopping profile collection without starting, got nil")
+		}
+	})
+
+	t.Run("invalid profile for start", func(t *testing.T) {
+		startOp := &startCollectingProfileOp{
+			Opcode:   startCollectingProfileOpcode,
+			Type:     "MEMORY",
+			FilePath: "some-path.out",
+		}
+		if err := startOp.isValid(true); err == nil {
+			t.Fatalf("Expected error for invalid profile type, got nil")
+		}
+	})
+
+	t.Run("invalid profile for stop", func(t *testing.T) {
+		stopOp := &stopCollectingProfileOp{
+			Opcode: stopCollectingProfileOpcode,
+			Type:   "MEMORY",
+		}
+		if err := stopOp.isValid(true); err == nil {
+			t.Fatalf("Expected error for invalid profile type, got nil")
+		}
+	})
+
+	t.Run("successful collection with dataItemsDir", func(t *testing.T) {
+		tCtx := ktesting.Init(t)
+		tempDir := t.TempDir()
+		oldDataItemsDir := dataItemsDir
+		dataItemsDir = ptr.To(tempDir)
+		defer func() { dataItemsDir = oldDataItemsDir }()
+
+		profileName := "cpu-profile.out"
+		expectedPath := filepath.Join(tempDir, profileName)
+
+		exec := &WorkloadExecutor{}
+		startOp := &startCollectingProfileOp{
+			Opcode:   startCollectingProfileOpcode,
+			Type:     "CPU",
+			FilePath: profileName,
+		}
+
+		if err := exec.runOp(tCtx, startOp, 0); err != nil {
+			t.Fatalf("Failed to start CPU profile collection: %v", err)
+		}
+		if exec.cpuProfileFile == nil {
+			t.Fatalf("Expected cpuProfileFile to be set, got nil")
+		}
+
+		stopOp := &stopCollectingProfileOp{
+			Opcode: stopCollectingProfileOpcode,
+			Type:   "CPU",
+		}
+		if err := exec.runOp(tCtx, stopOp, 0); err != nil {
+			t.Fatalf("Failed to stop CPU profile collection: %v", err)
+		}
+		if exec.cpuProfileFile != nil {
+			t.Fatalf("Expected cpuProfileFile to be nil after stop, got %v", exec.cpuProfileFile)
+		}
+		if _, err := os.Stat(expectedPath); err != nil {
+			t.Fatalf("Expected profile file %q to exist, got error: %v", expectedPath, err)
+		}
+	})
+}

@@ -23,7 +23,9 @@ import (
 	"maps"
 	"math"
 	"os"
+	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"testing"
@@ -69,6 +71,7 @@ type WorkloadExecutor struct {
 	topicName                    string
 	nextNodeIndex                int
 	opts                         *schedulerPerfOptions
+	cpuProfileFile               *os.File
 }
 
 func (e *WorkloadExecutor) wait() {
@@ -98,6 +101,10 @@ func (e *WorkloadExecutor) runOp(tCtx ktesting.TContext, op realOp, opIndex int)
 		return e.runStartCollectingMetricsOp(tCtx, opIndex, concreteOp)
 	case *stopCollectingMetricsOp:
 		return e.runStopCollectingMetrics(tCtx, opIndex)
+	case *startCollectingProfileOp:
+		return e.runStartCollectingProfileOp(tCtx, opIndex, concreteOp)
+	case *stopCollectingProfileOp:
+		return e.runStopCollectingProfileOp(tCtx, opIndex, concreteOp)
 	case *createResourceDriverOp:
 		concreteOp.run(tCtx, e.scheduler.Profiles["default-scheduler"].SharedDRAManager())
 		return nil
@@ -459,6 +466,58 @@ func (e *WorkloadExecutor) runStartCollectingMetricsOp(tCtx ktesting.TContext, o
 		return err
 	}
 	return nil
+}
+
+// runStartCollectingProfileOp starts profile collection.
+// The output file is created relative to dataItemsDir if it is set.
+func (e *WorkloadExecutor) runStartCollectingProfileOp(tCtx ktesting.TContext, _ int, op *startCollectingProfileOp) error {
+	switch strings.ToUpper(op.Type) {
+	case "CPU":
+		if e.cpuProfileFile != nil {
+			return fmt.Errorf("cpu profile collection is already ongoing")
+		}
+		filePath := op.FilePath
+		if dataItemsDir != nil && *dataItemsDir != "" {
+			filePath = filepath.Join(*dataItemsDir, filePath)
+		}
+		if err := os.MkdirAll(filepath.Dir(filePath), 0750); err != nil {
+			return fmt.Errorf("failed to create directory for cpu profile: %w", err)
+		}
+		f, err := os.Create(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to create file %q for cpu profile: %w", filePath, err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			if closeErr := f.Close(); closeErr != nil {
+				err = errors.Join(err, closeErr)
+			}
+			return fmt.Errorf("failed to start cpu profile: %w", err)
+		}
+		e.cpuProfileFile = f
+		tCtx.Logf("Started CPU profile collection into %q", filePath)
+		return nil
+	default:
+		return fmt.Errorf("unsupported profile type %q", op.Type)
+	}
+}
+
+func (e *WorkloadExecutor) runStopCollectingProfileOp(tCtx ktesting.TContext, _ int, op *stopCollectingProfileOp) error {
+	switch strings.ToUpper(op.Type) {
+	case "CPU":
+		if e.cpuProfileFile == nil {
+			return fmt.Errorf("missing startCollectingProfile operation before stopping")
+		}
+		pprof.StopCPUProfile()
+		err := e.cpuProfileFile.Close()
+		e.cpuProfileFile = nil
+		if err != nil {
+			return fmt.Errorf("failed to close cpu profile file: %w", err)
+		}
+		tCtx.Log("Stopped CPU profile collection")
+		return nil
+	default:
+		return fmt.Errorf("unsupported profile type %q", op.Type)
+	}
 }
 
 func startCollectingMetrics(tCtx ktesting.TContext, collectorWG *sync.WaitGroup, podInformer coreinformers.PodInformer, mcc *metricsCollectorConfig, throughputErrorMargin float64, opIndex int, name string, namespaces []string, labelSelector map[string]string) ([]testDataCollector, func(string), error) {

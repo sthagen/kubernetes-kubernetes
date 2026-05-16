@@ -377,7 +377,7 @@ func (pl *DefaultPreemption) PodEligibleToPreemptOthers(_ context.Context, pod *
 
 		if nodeInfo, _ := nodeInfos.Get(nomNodeName); nodeInfo != nil {
 			for _, p := range nodeInfo.GetPods() {
-				if pl.isPreemptionAllowed(nodeInfo, p, pod) && podTerminatingByPreemption(p.GetPod()) {
+				if pl.isPreemptionAllowed(nodeInfo, p, pod) && preemption.PodTerminatingByPreemption(p.GetPod()) {
 					// There is a terminating pod on the nominated node.
 					return false, "not eligible due to a terminating pod on the nominated node."
 				}
@@ -396,20 +396,6 @@ func (pl *DefaultPreemption) OrderedScoreFuncs(ctx context.Context, nodesToVicti
 func (pl *DefaultPreemption) isPreemptionAllowed(nodeInfo fwk.NodeInfo, victim fwk.PodInfo, preemptor *v1.Pod) bool {
 	// The victim must have lower priority than the preemptor, in addition to any filtering implemented by IsEligiblePod
 	return corev1helpers.PodPriority(victim.GetPod()) < corev1helpers.PodPriority(preemptor) && pl.IsEligiblePod(nodeInfo, victim, preemptor)
-}
-
-// podTerminatingByPreemption returns true if the pod is in the termination state caused by scheduler preemption.
-func podTerminatingByPreemption(p *v1.Pod) bool {
-	if p.DeletionTimestamp == nil {
-		return false
-	}
-
-	for _, condition := range p.Status.Conditions {
-		if condition.Type == v1.DisruptionTarget {
-			return condition.Status == v1.ConditionTrue && condition.Reason == v1.PodReasonPreemptionByScheduler
-		}
-	}
-	return false
 }
 
 // filterPodsWithPDBViolation groups the given "pods" into two groups of "violatingPods"

@@ -700,6 +700,59 @@ func (scm stopCollectingMetricsOp) patchParams(_ *Workload) (realOp, error) {
 	return &scm, nil
 }
 
+// startCollectingProfileOp defines an op that starts profile collection.
+// stopCollectingProfileOp has to be used after this op to finish collecting.
+type startCollectingProfileOp struct {
+	// Must be "startCollectingProfile".
+	Opcode operationCode
+	// Type is the profile type to collect (currently only "CPU" is supported).
+	Type string
+	// FilePath is the path to the output profile file. If dataItemsDir is set,
+	// the file will be created relative to dataItemsDir.
+	FilePath string
+}
+
+func (scp *startCollectingProfileOp) isValid(_ bool) error {
+	if scp.FilePath == "" {
+		return fmt.Errorf("filePath cannot be empty")
+	}
+	if strings.ToUpper(scp.Type) != "CPU" {
+		return fmt.Errorf("only CPU profile type is supported, got %q", scp.Type)
+	}
+	return nil
+}
+
+func (*startCollectingProfileOp) collectsMetrics() bool {
+	return false
+}
+
+func (scp startCollectingProfileOp) patchParams(_ *Workload) (realOp, error) {
+	return &scp, nil
+}
+
+// stopCollectingProfileOp defines an op that stops profile collection.
+type stopCollectingProfileOp struct {
+	// Must be "stopCollectingProfile".
+	Opcode operationCode
+	// Type is the profile type to stop (currently only "CPU" is supported).
+	Type string
+}
+
+func (scp *stopCollectingProfileOp) isValid(_ bool) error {
+	if strings.ToUpper(scp.Type) != "CPU" {
+		return fmt.Errorf("only CPU profile type is supported, got %q", scp.Type)
+	}
+	return nil
+}
+
+func (*stopCollectingProfileOp) collectsMetrics() bool {
+	return false
+}
+
+func (scp stopCollectingProfileOp) patchParams(_ *Workload) (realOp, error) {
+	return &scp, nil
+}
+
 // resolveTemplateParams resolves the template parameters using the workload parameters.
 func resolveTemplateParams(templateParams map[string]any, w *Workload) (map[string]any, error) {
 	if len(templateParams) == 0 {

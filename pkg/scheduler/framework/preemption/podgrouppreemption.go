@@ -25,10 +25,13 @@ import (
 	v1 "k8s.io/api/core/v1"
 	policy "k8s.io/api/policy/v1"
 	schedulingapi "k8s.io/api/scheduling/v1alpha2"
+	"k8s.io/apimachinery/pkg/util/sets"
 	policylisters "k8s.io/client-go/listers/policy/v1"
 	schedulinglisters "k8s.io/client-go/listers/scheduling/v1alpha2"
+	corev1helpers "k8s.io/component-helpers/scheduling/corev1"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/names"
+	"k8s.io/kubernetes/pkg/scheduler/util"
 
 	"k8s.io/klog/v2"
 	extenderv1 "k8s.io/kube-scheduler/extender/v1"
@@ -97,15 +100,15 @@ func (ev *PodGroupEvaluator) selectVictimsOnDomain(
 	podGroupSchedulingFunc framework.PodGroupSchedulingFunc) (*extenderv1.Victims, *fwk.Status) {
 	logger := klog.FromContext(ctx)
 
-	// Ensure the preemptor is eligible to preempt other pods.
-	if ok, msg := ev.preemptorEligibleToPreemptOthers(ctx, preemptor); !ok {
-		logger.V(5).Info("Preemptor is not eligible for preemption", "preemptor", klog.KObj(preemptor.podGroup), "reason", msg)
-		return nil, fwk.NewStatus(fwk.Unschedulable, msg)
-	}
-
 	nameToNode := make(map[string]fwk.NodeInfo)
 	for _, nodeInfo := range domain.Nodes() {
 		nameToNode[nodeInfo.Node().Name] = nodeInfo
+	}
+
+	// Ensure the preemptor is eligible to preempt other pods.
+	if ok, msg := ev.preemptorEligibleToPreemptOthers(ctx, preemptor, nameToNode); !ok {
+		logger.V(5).Info("Preemptor is not eligible for preemption", "preemptor", klog.KObj(preemptor.podGroup), "reason", msg)
+		return nil, fwk.NewStatus(fwk.Unschedulable, msg)
 	}
 
 	// Compared to the default preemption algorithm do not run the runPreFilterExtensionRemovePod
@@ -254,11 +257,39 @@ func (ev *PodGroupEvaluator) isPreemptionAllowed(victim *victim, preemptor *podG
 // preemptorEligibleToPreemptOthers returns one bool and one string. The bool
 // indicates whether this preemptor should be considered for preempting other pods or
 // not. The string includes the reason if this preemptor isn't eligible.
-func (ev *PodGroupEvaluator) preemptorEligibleToPreemptOthers(_ context.Context, preemptor *podGroupPreemptor) (bool, string) {
+func (ev *PodGroupEvaluator) preemptorEligibleToPreemptOthers(_ context.Context, preemptor *podGroupPreemptor, nameToNode map[string]fwk.NodeInfo) (bool, string) {
 	if preemptor.PreemptionPolicy() == v1.PreemptNever {
 		return false, "not eligible due to preemptionPolicy=Never."
 	}
+
+	nominatedNodes := sets.New[string]()
+	for _, pod := range preemptor.Members() {
+		if len(pod.Status.NominatedNodeName) > 0 {
+			nominatedNodes.Insert(pod.Status.NominatedNodeName)
+		}
+	}
+
+	for nomNodeName := range nominatedNodes {
+		if nodeInfo, exists := nameToNode[nomNodeName]; exists {
+			for _, p := range nodeInfo.GetPods() {
+				if ev.getPodPriority(p.GetPod()) < preemptor.Priority() && PodTerminatingByPreemption(p.GetPod()) {
+					return false, "not eligible due to a terminating pod on the nominated node."
+				}
+			}
+		}
+	}
+
 	return true, ""
+}
+
+// getPodPriority returns the effective preemption priority of a pod. If the pod belongs to
+// a pod group, it returns the priority of the pod group.
+// Otherwise, it returns the pod's own priority.
+func (ev *PodGroupEvaluator) getPodPriority(p *v1.Pod) int32 {
+	if pg := getPodGroup(p, ev.podGroupLister); pg != nil {
+		return util.PodGroupPriority(pg)
+	}
+	return corev1helpers.PodPriority(p)
 }
 
 // moreImportantVictim decides which of two preemption units is considered more critical.

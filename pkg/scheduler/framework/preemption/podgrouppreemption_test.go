@@ -221,12 +221,135 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 			),
 			blockingRules: []blockingRule{
 				{nodeName: "node1", capacity: 1, blockingVictims: sets.New("p1")},
-
 				{nodeName: "node2", capacity: 1, blockingVictims: sets.New("p2")},
 				{nodeName: "node3", capacity: 1, blockingVictims: sets.New("p3")},
 			},
 			expectedPods:   []string{},
 			expectedStatus: fwk.NewStatus(fwk.Unschedulable),
+		},
+		{
+			name:      "Preemptor group is not eligible if any member has nominated node with terminating pods",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("victim").UID("v1").Node("node1").Priority(lowPriority).Condition(v1.DisruptionTarget, v1.ConditionTrue, v1.PodReasonPreemptionByScheduler).Terminating().Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{
+					st.MakePod().Name("p1").UID("p1").Priority(highPriority).Obj(),
+					st.MakePod().Name("p2").UID("p2").Priority(highPriority).NominatedNodeName("node1").Obj(),
+				},
+			),
+			blockingRules:  []blockingRule{},
+			expectedPods:   []string{},
+			expectedStatus: fwk.NewStatus(fwk.Unschedulable, "not eligible due to a terminating pod on the nominated node."),
+		},
+		{
+			name:      "Preemptor group is eligible if terminating pods are on non-nominated nodes",
+			nodeNames: []string{"node1", "node2"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("victim").UID("v1").Node("node2").Priority(lowPriority).Condition(v1.DisruptionTarget, v1.ConditionTrue, v1.PodReasonPreemptionByScheduler).Terminating().Obj(),
+				st.MakePod().Name("other-victim").UID("v2").Node("node1").Priority(lowPriority).Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{
+					st.MakePod().Name("p1").UID("p1").Priority(highPriority).Obj(),
+					st.MakePod().Name("p2").UID("p2").Priority(highPriority).NominatedNodeName("node1").Obj(),
+				},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", blockingVictims: sets.New("other-victim"), capacity: 1},
+			},
+			expectedPods:   []string{"other-victim"},
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "Preemptor group is not eligible if nominated node has terminating pod belonging to a pod group of lower priority",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("victim").UID("v1").Node("node1").Priority(highPriority).PodGroupName("victim-pg").Condition(v1.DisruptionTarget, v1.ConditionTrue, v1.PodReasonPreemptionByScheduler).Terminating().Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("victim-pg").UID("victim-pg").Priority(lowPriority).DisruptionMode(schedulingapi.DisruptionModePodGroup).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{
+					st.MakePod().Name("p1").UID("p1").Priority(highPriority).Obj(),
+					st.MakePod().Name("p2").UID("p2").Priority(highPriority).NominatedNodeName("node1").Obj(),
+				},
+			),
+			blockingRules:  []blockingRule{},
+			expectedPods:   []string{},
+			expectedStatus: fwk.NewStatus(fwk.Unschedulable, "not eligible due to a terminating pod on the nominated node."),
+		},
+		{
+			name:      "Preemptor group is eligible if nominated node has terminating pod belonging to a pod group of higher priority",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("victim").UID("v1").Node("node1").Priority(lowPriority).PodGroupName("victim-pg").Condition(v1.DisruptionTarget, v1.ConditionTrue, v1.PodReasonPreemptionByScheduler).Terminating().Obj(),
+				st.MakePod().Name("other-victim").UID("v2").Node("node1").Priority(lowPriority).Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("victim-pg").UID("victim-pg").Priority(highPriority).DisruptionMode(schedulingapi.DisruptionModePodGroup).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(midPriority).Obj(),
+				[]*v1.Pod{
+					st.MakePod().Name("p1").UID("p1").Priority(midPriority).Obj(),
+					st.MakePod().Name("p2").UID("p2").Priority(midPriority).NominatedNodeName("node1").Obj(),
+				},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", blockingVictims: sets.New("other-victim"), capacity: 1},
+			},
+			expectedPods:   []string{"other-victim"},
+			expectedStatus: fwk.NewStatus(fwk.Success),
+		},
+		{
+			name:      "Preemptor group is not eligible if nominated node has terminating pod belonging to a pod group of lower priority with DisruptionModePod",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("victim").UID("v1").Node("node1").Priority(highPriority).PodGroupName("victim-pg").Condition(v1.DisruptionTarget, v1.ConditionTrue, v1.PodReasonPreemptionByScheduler).Terminating().Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("victim-pg").UID("victim-pg").Priority(lowPriority).DisruptionMode(schedulingapi.DisruptionModePod).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(highPriority).Obj(),
+				[]*v1.Pod{
+					st.MakePod().Name("p1").UID("p1").Priority(highPriority).Obj(),
+					st.MakePod().Name("p2").UID("p2").Priority(highPriority).NominatedNodeName("node1").Obj(),
+				},
+			),
+			blockingRules:  []blockingRule{},
+			expectedPods:   []string{},
+			expectedStatus: fwk.NewStatus(fwk.Unschedulable, "not eligible due to a terminating pod on the nominated node."),
+		},
+		{
+			name:      "Preemptor group is eligible if nominated node has terminating pod belonging to a pod group of higher priority with nil DisruptionMode",
+			nodeNames: []string{"node1"},
+			initPods: []*v1.Pod{
+				st.MakePod().Name("victim").UID("v1").Node("node1").Priority(lowPriority).PodGroupName("victim-pg").Condition(v1.DisruptionTarget, v1.ConditionTrue, v1.PodReasonPreemptionByScheduler).Terminating().Obj(),
+				st.MakePod().Name("other-victim").UID("v2").Node("node1").Priority(lowPriority).Obj(),
+			},
+			initPodGroups: []*schedulingapi.PodGroup{
+				st.MakePodGroup().Name("victim-pg").UID("victim-pg").Priority(highPriority).Obj(),
+			},
+			preemptor: newPodGroupPreemptor(
+				st.MakePodGroup().Name("preemptor-pg").Priority(midPriority).Obj(),
+				[]*v1.Pod{
+					st.MakePod().Name("p1").UID("p1").Priority(midPriority).Obj(),
+					st.MakePod().Name("p2").UID("p2").Priority(midPriority).NominatedNodeName("node1").Obj(),
+				},
+			),
+			blockingRules: []blockingRule{
+				{nodeName: "node1", blockingVictims: sets.New("other-victim"), capacity: 1},
+			},
+			expectedPods:   []string{"other-victim"},
+			expectedStatus: fwk.NewStatus(fwk.Success),
 		},
 		{
 			name:      "Preempt single lower priority pod",
@@ -1027,7 +1150,9 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				return nil, fwk.NewStatus(fwk.Unschedulable)
 			}
 
-			pl := &PodGroupEvaluator{}
+			pl := &PodGroupEvaluator{
+				podGroupLister: pgLister,
+			}
 
 			victims, gotStatus := pl.selectVictimsOnDomain(ctx, tt.preemptor, domain, tt.pdbs, mockSchedulingFunc)
 			if !gotStatus.IsSuccess() {

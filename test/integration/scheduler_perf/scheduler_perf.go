@@ -77,6 +77,8 @@ const (
 	startCollectingMetricsOpcode operationCode = "startCollectingMetrics"
 	stopCollectingMetricsOpcode  operationCode = "stopCollectingMetrics"
 	waitForPodGroupsOpcode       operationCode = "waitForPodGroups"
+	startCollectingProfileOpcode operationCode = "startCollectingProfile"
+	stopCollectingProfileOpcode  operationCode = "stopCollectingProfile"
 )
 
 const (
@@ -515,6 +517,8 @@ func (op *op) UnmarshalJSON(b []byte) error {
 		startCollectingMetricsOpcode: &startCollectingMetricsOp{},
 		stopCollectingMetricsOpcode:  &stopCollectingMetricsOp{},
 		waitForPodGroupsOpcode:       &waitForPodGroups{},
+		startCollectingProfileOpcode: &startCollectingProfileOp{},
+		stopCollectingProfileOpcode:  &stopCollectingProfileOp{},
 		// TODO(#94601): add a delete nodes op to simulate scaling behaviour?
 	}
 	// First determine the opcode using lenient decoding (= ignore extra fields).
