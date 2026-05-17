@@ -82,7 +82,7 @@ func (c *endpointMappingConfig) inferComponentEndpoints(filePath string) []metri
 
 func (c *endpointMappingConfig) isSharedPath(filePath string) bool {
 	for _, pattern := range c.SharedPaths {
-		if strings.Contains(filePath, pattern) {
+		if strings.HasPrefix(filePath, pattern) {
 			return true
 		}
 	}
@@ -93,7 +93,7 @@ func (c *endpointMappingConfig) inferComponents(filePath string, components map[
 	var matchingComponents []string
 	for component, patterns := range components {
 		for _, pattern := range patterns {
-			if strings.Contains(filePath, pattern) {
+			if strings.HasPrefix(filePath, pattern) {
 				matchingComponents = append(matchingComponents, component)
 			}
 		}
