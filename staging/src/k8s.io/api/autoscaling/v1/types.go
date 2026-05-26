@@ -38,7 +38,7 @@ type CrossVersionObjectReference struct {
 
 // specification of a horizontal pod autoscaler.
 type HorizontalPodAutoscalerSpec struct {
-	// reference to scaled resource; horizontal pod autoscaler will learn the current resource consumption
+	// scaleTargetRef is the reference to scaled resource; horizontal pod autoscaler will learn the current resource consumption
 	// and will set the desired number of pods by using its Scale subresource.
 	ScaleTargetRef CrossVersionObjectReference `json:"scaleTargetRef" protobuf:"bytes,1,opt,name=scaleTargetRef"`
 	// minReplicas is the lower limit for the number of replicas to which the autoscaler
@@ -95,7 +95,7 @@ type HorizontalPodAutoscalerStatus struct {
 // +k8s:supportsSubresource="/status"
 type HorizontalPodAutoscaler struct {
 	metav1.TypeMeta `json:""`
-	// Standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+	// metadata is the standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
@@ -129,7 +129,7 @@ type HorizontalPodAutoscalerList struct {
 // Scale represents a scaling request for a resource.
 type Scale struct {
 	metav1.TypeMeta `json:""`
-	// Standard object metadata; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata.
+	// metadata is the standard object metadata; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata.
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
@@ -441,6 +441,12 @@ type HorizontalPodAutoscalerCondition struct {
 	// the transition
 	// +optional
 	Message string `json:"message,omitempty" protobuf:"bytes,5,opt,name=message"`
+
+	// observedGeneration represents the .metadata.generation that the condition was set based upon.
+	// For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+	// with respect to the current state of the instance.
+	// +optional
+	ObservedGeneration *int64 `json:"observedGeneration,omitempty" protobuf:"varint,6,opt,name=observedGeneration"`
 }
 
 // ObjectMetricStatus indicates the current value of a metric describing a

@@ -465,6 +465,7 @@
   namespace: apiserver
   help: Number of objects read from watch cache in the course of serving a LIST request
   type: Counter
+  deprecatedVersion: 1.37.0
   stabilityLevel: ALPHA
   labels:
   - group
@@ -477,6 +478,7 @@
   namespace: apiserver
   help: Number of objects returned for a LIST request from watch cache
   type: Counter
+  deprecatedVersion: 1.37.0
   stabilityLevel: ALPHA
   labels:
   - group
@@ -488,6 +490,7 @@
   namespace: apiserver
   help: Number of LIST requests served from watch cache
   type: Counter
+  deprecatedVersion: 1.37.0
   stabilityLevel: ALPHA
   labels:
   - group
@@ -2279,39 +2282,6 @@
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
-- name: watch_events_sizes
-  subsystem: apiserver
-  help: Watch event size distribution in bytes
-  type: Histogram
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  - version
-  buckets:
-  - 1024
-  - 2048
-  - 4096
-  - 8192
-  - 16384
-  - 32768
-  - 65536
-  - 131072
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: watch_events_total
-  subsystem: apiserver
-  help: Number of events sent in watch clients
-  type: Counter
-  stabilityLevel: ALPHA
-  labels:
-  - group
-  - resource
-  - version
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
 - name: watch_filtered_events_total
   namespace: apiserver
   help: Counter of events filtered out by shard selector during watch dispatch, broken
@@ -2332,28 +2302,6 @@
   labels:
   - group
   - resource
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: x509_insecure_sha1_total
-  subsystem: webhooks
-  namespace: apiserver
-  help: Counts the number of requests to servers with insecure SHA1 signatures in
-    their serving certificate OR the number of connection failures due to the insecure
-    SHA1 signatures (either/or, based on the runtime environment)
-  type: Counter
-  stabilityLevel: ALPHA
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: x509_missing_san_total
-  subsystem: webhooks
-  namespace: apiserver
-  help: Counts the number of requests to servers missing SAN extension in their serving
-    certificate OR the number of connection failures due to the lack of x509 certificate
-    SAN extension missing (either/or, based on the runtime environment)
-  type: Counter
-  stabilityLevel: ALPHA
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
@@ -7280,6 +7228,39 @@
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
+- name: watch_events_sizes
+  subsystem: apiserver
+  help: Watch event size distribution in bytes
+  type: Histogram
+  stabilityLevel: BETA
+  labels:
+  - group
+  - resource
+  - version
+  buckets:
+  - 1024
+  - 2048
+  - 4096
+  - 8192
+  - 16384
+  - 32768
+  - 65536
+  - 131072
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: watch_events_total
+  subsystem: apiserver
+  help: Number of events sent in watch clients
+  type: Counter
+  stabilityLevel: BETA
+  labels:
+  - group
+  - resource
+  - version
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
 - name: watch_list_duration_seconds
   subsystem: apiserver
   help: Response latency distribution in seconds for watch list requests broken by
@@ -7309,6 +7290,28 @@
   - 30
   - 45
   - 60
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: x509_insecure_sha1_total
+  subsystem: webhooks
+  namespace: apiserver
+  help: Counts the number of requests to servers with insecure SHA1 signatures in
+    their serving certificate OR the number of connection failures due to the insecure
+    SHA1 signatures (either/or, based on the runtime environment)
+  type: Counter
+  stabilityLevel: BETA
+  componentEndpoints:
+  - component: kube-apiserver
+    endpoint: /metrics
+- name: x509_missing_san_total
+  subsystem: webhooks
+  namespace: apiserver
+  help: Counts the number of requests to servers missing SAN extension in their serving
+    certificate OR the number of connection failures due to the lack of x509 certificate
+    SAN extension missing (either/or, based on the runtime environment)
+  type: Counter
+  stabilityLevel: BETA
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics

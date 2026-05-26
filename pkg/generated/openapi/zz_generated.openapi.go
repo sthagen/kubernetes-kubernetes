@@ -72,7 +72,7 @@ import (
 	resourcev1beta1 "k8s.io/api/resource/v1beta1"
 	resourcev1beta2 "k8s.io/api/resource/v1beta2"
 	schedulingv1 "k8s.io/api/scheduling/v1"
-	schedulingv1alpha2 "k8s.io/api/scheduling/v1alpha2"
+	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
 	schedulingv1beta1 "k8s.io/api/scheduling/v1beta1"
 	storagev1 "k8s.io/api/storage/v1"
 	storagev1alpha1 "k8s.io/api/storage/v1alpha1"
@@ -1140,24 +1140,27 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		resourcev1beta2.ResourceSliceSpec{}.OpenAPIModelName():                                                          schema_k8sio_api_resource_v1beta2_ResourceSliceSpec(ref),
 		schedulingv1.PriorityClass{}.OpenAPIModelName():                                                                 schema_k8sio_api_scheduling_v1_PriorityClass(ref),
 		schedulingv1.PriorityClassList{}.OpenAPIModelName():                                                             schema_k8sio_api_scheduling_v1_PriorityClassList(ref),
-		schedulingv1alpha2.BasicSchedulingPolicy{}.OpenAPIModelName():                                                   schema_k8sio_api_scheduling_v1alpha2_BasicSchedulingPolicy(ref),
-		schedulingv1alpha2.GangSchedulingPolicy{}.OpenAPIModelName():                                                    schema_k8sio_api_scheduling_v1alpha2_GangSchedulingPolicy(ref),
-		schedulingv1alpha2.PodGroup{}.OpenAPIModelName():                                                                schema_k8sio_api_scheduling_v1alpha2_PodGroup(ref),
-		schedulingv1alpha2.PodGroupList{}.OpenAPIModelName():                                                            schema_k8sio_api_scheduling_v1alpha2_PodGroupList(ref),
-		schedulingv1alpha2.PodGroupResourceClaim{}.OpenAPIModelName():                                                   schema_k8sio_api_scheduling_v1alpha2_PodGroupResourceClaim(ref),
-		schedulingv1alpha2.PodGroupResourceClaimStatus{}.OpenAPIModelName():                                             schema_k8sio_api_scheduling_v1alpha2_PodGroupResourceClaimStatus(ref),
-		schedulingv1alpha2.PodGroupSchedulingConstraints{}.OpenAPIModelName():                                           schema_k8sio_api_scheduling_v1alpha2_PodGroupSchedulingConstraints(ref),
-		schedulingv1alpha2.PodGroupSchedulingPolicy{}.OpenAPIModelName():                                                schema_k8sio_api_scheduling_v1alpha2_PodGroupSchedulingPolicy(ref),
-		schedulingv1alpha2.PodGroupSpec{}.OpenAPIModelName():                                                            schema_k8sio_api_scheduling_v1alpha2_PodGroupSpec(ref),
-		schedulingv1alpha2.PodGroupStatus{}.OpenAPIModelName():                                                          schema_k8sio_api_scheduling_v1alpha2_PodGroupStatus(ref),
-		schedulingv1alpha2.PodGroupTemplate{}.OpenAPIModelName():                                                        schema_k8sio_api_scheduling_v1alpha2_PodGroupTemplate(ref),
-		schedulingv1alpha2.PodGroupTemplateReference{}.OpenAPIModelName():                                               schema_k8sio_api_scheduling_v1alpha2_PodGroupTemplateReference(ref),
-		schedulingv1alpha2.TopologyConstraint{}.OpenAPIModelName():                                                      schema_k8sio_api_scheduling_v1alpha2_TopologyConstraint(ref),
-		schedulingv1alpha2.TypedLocalObjectReference{}.OpenAPIModelName():                                               schema_k8sio_api_scheduling_v1alpha2_TypedLocalObjectReference(ref),
-		schedulingv1alpha2.Workload{}.OpenAPIModelName():                                                                schema_k8sio_api_scheduling_v1alpha2_Workload(ref),
-		schedulingv1alpha2.WorkloadList{}.OpenAPIModelName():                                                            schema_k8sio_api_scheduling_v1alpha2_WorkloadList(ref),
-		schedulingv1alpha2.WorkloadPodGroupTemplateReference{}.OpenAPIModelName():                                       schema_k8sio_api_scheduling_v1alpha2_WorkloadPodGroupTemplateReference(ref),
-		schedulingv1alpha2.WorkloadSpec{}.OpenAPIModelName():                                                            schema_k8sio_api_scheduling_v1alpha2_WorkloadSpec(ref),
+		schedulingv1alpha3.AllDisruptionMode{}.OpenAPIModelName():                                                       schema_k8sio_api_scheduling_v1alpha3_AllDisruptionMode(ref),
+		schedulingv1alpha3.BasicSchedulingPolicy{}.OpenAPIModelName():                                                   schema_k8sio_api_scheduling_v1alpha3_BasicSchedulingPolicy(ref),
+		schedulingv1alpha3.DisruptionMode{}.OpenAPIModelName():                                                          schema_k8sio_api_scheduling_v1alpha3_DisruptionMode(ref),
+		schedulingv1alpha3.GangSchedulingPolicy{}.OpenAPIModelName():                                                    schema_k8sio_api_scheduling_v1alpha3_GangSchedulingPolicy(ref),
+		schedulingv1alpha3.PodGroup{}.OpenAPIModelName():                                                                schema_k8sio_api_scheduling_v1alpha3_PodGroup(ref),
+		schedulingv1alpha3.PodGroupList{}.OpenAPIModelName():                                                            schema_k8sio_api_scheduling_v1alpha3_PodGroupList(ref),
+		schedulingv1alpha3.PodGroupResourceClaim{}.OpenAPIModelName():                                                   schema_k8sio_api_scheduling_v1alpha3_PodGroupResourceClaim(ref),
+		schedulingv1alpha3.PodGroupResourceClaimStatus{}.OpenAPIModelName():                                             schema_k8sio_api_scheduling_v1alpha3_PodGroupResourceClaimStatus(ref),
+		schedulingv1alpha3.PodGroupSchedulingConstraints{}.OpenAPIModelName():                                           schema_k8sio_api_scheduling_v1alpha3_PodGroupSchedulingConstraints(ref),
+		schedulingv1alpha3.PodGroupSchedulingPolicy{}.OpenAPIModelName():                                                schema_k8sio_api_scheduling_v1alpha3_PodGroupSchedulingPolicy(ref),
+		schedulingv1alpha3.PodGroupSpec{}.OpenAPIModelName():                                                            schema_k8sio_api_scheduling_v1alpha3_PodGroupSpec(ref),
+		schedulingv1alpha3.PodGroupStatus{}.OpenAPIModelName():                                                          schema_k8sio_api_scheduling_v1alpha3_PodGroupStatus(ref),
+		schedulingv1alpha3.PodGroupTemplate{}.OpenAPIModelName():                                                        schema_k8sio_api_scheduling_v1alpha3_PodGroupTemplate(ref),
+		schedulingv1alpha3.PodGroupTemplateReference{}.OpenAPIModelName():                                               schema_k8sio_api_scheduling_v1alpha3_PodGroupTemplateReference(ref),
+		schedulingv1alpha3.SingleDisruptionMode{}.OpenAPIModelName():                                                    schema_k8sio_api_scheduling_v1alpha3_SingleDisruptionMode(ref),
+		schedulingv1alpha3.TopologyConstraint{}.OpenAPIModelName():                                                      schema_k8sio_api_scheduling_v1alpha3_TopologyConstraint(ref),
+		schedulingv1alpha3.TypedLocalObjectReference{}.OpenAPIModelName():                                               schema_k8sio_api_scheduling_v1alpha3_TypedLocalObjectReference(ref),
+		schedulingv1alpha3.Workload{}.OpenAPIModelName():                                                                schema_k8sio_api_scheduling_v1alpha3_Workload(ref),
+		schedulingv1alpha3.WorkloadList{}.OpenAPIModelName():                                                            schema_k8sio_api_scheduling_v1alpha3_WorkloadList(ref),
+		schedulingv1alpha3.WorkloadPodGroupTemplateReference{}.OpenAPIModelName():                                       schema_k8sio_api_scheduling_v1alpha3_WorkloadPodGroupTemplateReference(ref),
+		schedulingv1alpha3.WorkloadSpec{}.OpenAPIModelName():                                                            schema_k8sio_api_scheduling_v1alpha3_WorkloadSpec(ref),
 		schedulingv1beta1.PriorityClass{}.OpenAPIModelName():                                                            schema_k8sio_api_scheduling_v1beta1_PriorityClass(ref),
 		schedulingv1beta1.PriorityClassList{}.OpenAPIModelName():                                                        schema_k8sio_api_scheduling_v1beta1_PriorityClassList(ref),
 		storagev1.CSIDriver{}.OpenAPIModelName():                                                                        schema_k8sio_api_storage_v1_CSIDriver(ref),
@@ -7750,7 +7753,7 @@ func schema_k8sio_api_apps_v1_ControllerRevision(ref common.ReferenceCallback) c
 						},
 					},
 				},
-				Required: []string{"revision"},
+				Required: []string{"data"},
 			},
 		},
 		Dependencies: []string{
@@ -7851,6 +7854,7 @@ func schema_k8sio_api_apps_v1_DaemonSet(ref common.ReferenceCallback) common.Ope
 						},
 					},
 				},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -7902,7 +7906,6 @@ func schema_k8sio_api_apps_v1_DaemonSetCondition(ref common.ReferenceCallback) c
 						},
 					},
 				},
-				Required: []string{"type", "status"},
 			},
 		},
 		Dependencies: []string{
@@ -8188,6 +8191,7 @@ func schema_k8sio_api_apps_v1_Deployment(ref common.ReferenceCallback) common.Op
 						},
 					},
 				},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -8245,7 +8249,6 @@ func schema_k8sio_api_apps_v1_DeploymentCondition(ref common.ReferenceCallback) 
 						},
 					},
 				},
-				Required: []string{"type", "status"},
 			},
 		},
 		Dependencies: []string{
@@ -8545,6 +8548,7 @@ func schema_k8sio_api_apps_v1_ReplicaSet(ref common.ReferenceCallback) common.Op
 						},
 					},
 				},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -8596,7 +8600,6 @@ func schema_k8sio_api_apps_v1_ReplicaSetCondition(ref common.ReferenceCallback) 
 						},
 					},
 				},
-				Required: []string{"type", "status"},
 			},
 		},
 		Dependencies: []string{
@@ -8904,6 +8907,7 @@ func schema_k8sio_api_apps_v1_StatefulSet(ref common.ReferenceCallback) common.O
 						},
 					},
 				},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -8955,7 +8959,6 @@ func schema_k8sio_api_apps_v1_StatefulSetCondition(ref common.ReferenceCallback)
 						},
 					},
 				},
-				Required: []string{"type", "status"},
 			},
 		},
 		Dependencies: []string{
@@ -9340,7 +9343,7 @@ func schema_k8sio_api_apps_v1beta1_ControllerRevision(ref common.ReferenceCallba
 						},
 					},
 				},
-				Required: []string{"revision"},
+				Required: []string{"data"},
 			},
 		},
 		Dependencies: []string{
@@ -9441,6 +9444,7 @@ func schema_k8sio_api_apps_v1beta1_Deployment(ref common.ReferenceCallback) comm
 						},
 					},
 				},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -9498,7 +9502,6 @@ func schema_k8sio_api_apps_v1beta1_DeploymentCondition(ref common.ReferenceCallb
 						},
 					},
 				},
-				Required: []string{"type", "status"},
 			},
 		},
 		Dependencies: []string{
@@ -9608,7 +9611,7 @@ func schema_k8sio_api_apps_v1beta1_DeploymentRollback(ref common.ReferenceCallba
 						},
 					},
 				},
-				Required: []string{"name", "rollbackTo"},
+				Required: []string{"name"},
 			},
 		},
 		Dependencies: []string{
@@ -10004,7 +10007,6 @@ func schema_k8sio_api_apps_v1beta1_ScaleStatus(ref common.ReferenceCallback) com
 						},
 					},
 				},
-				Required: []string{"replicas"},
 			},
 		},
 	}
@@ -10052,6 +10054,7 @@ func schema_k8sio_api_apps_v1beta1_StatefulSet(ref common.ReferenceCallback) com
 						},
 					},
 				},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -10103,7 +10106,6 @@ func schema_k8sio_api_apps_v1beta1_StatefulSetCondition(ref common.ReferenceCall
 						},
 					},
 				},
-				Required: []string{"type", "status"},
 			},
 		},
 		Dependencies: []string{
@@ -10484,7 +10486,7 @@ func schema_k8sio_api_apps_v1beta2_ControllerRevision(ref common.ReferenceCallba
 						},
 					},
 				},
-				Required: []string{"revision"},
+				Required: []string{"data"},
 			},
 		},
 		Dependencies: []string{
@@ -10585,6 +10587,7 @@ func schema_k8sio_api_apps_v1beta2_DaemonSet(ref common.ReferenceCallback) commo
 						},
 					},
 				},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -10636,7 +10639,6 @@ func schema_k8sio_api_apps_v1beta2_DaemonSetCondition(ref common.ReferenceCallba
 						},
 					},
 				},
-				Required: []string{"type", "status"},
 			},
 		},
 		Dependencies: []string{
@@ -10921,6 +10923,7 @@ func schema_k8sio_api_apps_v1beta2_Deployment(ref common.ReferenceCallback) comm
 						},
 					},
 				},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -10978,7 +10981,6 @@ func schema_k8sio_api_apps_v1beta2_DeploymentCondition(ref common.ReferenceCallb
 						},
 					},
 				},
-				Required: []string{"type", "status"},
 			},
 		},
 		Dependencies: []string{
@@ -11277,6 +11279,7 @@ func schema_k8sio_api_apps_v1beta2_ReplicaSet(ref common.ReferenceCallback) comm
 						},
 					},
 				},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -11328,7 +11331,6 @@ func schema_k8sio_api_apps_v1beta2_ReplicaSetCondition(ref common.ReferenceCallb
 						},
 					},
 				},
-				Required: []string{"type", "status"},
 			},
 		},
 		Dependencies: []string{
@@ -11707,7 +11709,6 @@ func schema_k8sio_api_apps_v1beta2_ScaleStatus(ref common.ReferenceCallback) com
 						},
 					},
 				},
-				Required: []string{"replicas"},
 			},
 		},
 	}
@@ -11755,6 +11756,7 @@ func schema_k8sio_api_apps_v1beta2_StatefulSet(ref common.ReferenceCallback) com
 						},
 					},
 				},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -11806,7 +11808,6 @@ func schema_k8sio_api_apps_v1beta2_StatefulSetCondition(ref common.ReferenceCall
 						},
 					},
 				},
-				Required: []string{"type", "status"},
 			},
 		},
 		Dependencies: []string{
@@ -14629,7 +14630,7 @@ func schema_k8sio_api_autoscaling_v1_HorizontalPodAutoscaler(ref common.Referenc
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -14700,6 +14701,13 @@ func schema_k8sio_api_autoscaling_v1_HorizontalPodAutoscalerCondition(ref common
 							Format:      "",
 						},
 					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 				},
 				Required: []string{"type", "status"},
 			},
@@ -14768,7 +14776,7 @@ func schema_k8sio_api_autoscaling_v1_HorizontalPodAutoscalerSpec(ref common.Refe
 				Properties: map[string]spec.Schema{
 					"scaleTargetRef": {
 						SchemaProps: spec.SchemaProps{
-							Description: "reference to scaled resource; horizontal pod autoscaler will learn the current resource consumption and will set the desired number of pods by using its Scale subresource.",
+							Description: "scaleTargetRef is the reference to scaled resource; horizontal pod autoscaler will learn the current resource consumption and will set the desired number of pods by using its Scale subresource.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(autoscalingv1.CrossVersionObjectReference{}.OpenAPIModelName()),
 						},
@@ -15233,7 +15241,7 @@ func schema_k8sio_api_autoscaling_v1_Scale(ref common.ReferenceCallback) common.
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object metadata; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata.",
+							Description: "metadata is the standard object metadata; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -15697,6 +15705,13 @@ func schema_k8sio_api_autoscaling_v2_HorizontalPodAutoscalerCondition(ref common
 							Format:      "",
 						},
 					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 				},
 				Required: []string{"type", "status"},
 			},
@@ -16022,7 +16037,7 @@ func schema_k8sio_api_autoscaling_v2_MetricStatus(ref common.ReferenceCallback) 
 					},
 					"containerResource": {
 						SchemaProps: spec.SchemaProps{
-							Description: "container resource refers to a resource metric (such as those specified in requests and limits) known to Kubernetes describing a single container in each pod in the current scale target (e.g. CPU or memory). Such metrics are built in to Kubernetes, and have special scaling options on top of those available to normal per-pod metrics using the \"pods\" source.",
+							Description: "containerResource refers to a resource metric (such as those specified in requests and limits) known to Kubernetes describing a single container in each pod in the current scale target (e.g. CPU or memory). Such metrics are built in to Kubernetes, and have special scaling options on top of those available to normal per-pod metrics using the \"pods\" source.",
 							Ref:         ref(autoscalingv2.ContainerResourceMetricStatus{}.OpenAPIModelName()),
 						},
 					},
@@ -16105,7 +16120,7 @@ func schema_k8sio_api_autoscaling_v2_MetricValueStatus(ref common.ReferenceCallb
 					},
 					"averageUtilization": {
 						SchemaProps: spec.SchemaProps{
-							Description: "currentAverageUtilization is the current value of the average of the resource metric across all relevant pods, represented as a percentage of the requested value of the resource for the pods.",
+							Description: "averageUtilization is the current value of the average of the resource metric across all relevant pods, represented as a percentage of the requested value of the resource for the pods.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -16178,7 +16193,7 @@ func schema_k8sio_api_autoscaling_v2_ObjectMetricStatus(ref common.ReferenceCall
 					},
 					"describedObject": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DescribedObject specifies the descriptions of a object,such as kind,name apiVersion",
+							Description: "describedObject specifies the descriptions of a object,such as kind,name apiVersion",
 							Default:     map[string]interface{}{},
 							Ref:         ref(autoscalingv2.CrossVersionObjectReference{}.OpenAPIModelName()),
 						},
@@ -53916,7 +53931,18 @@ func schema_k8sio_api_scheduling_v1_PriorityClassList(ref common.ReferenceCallba
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_BasicSchedulingPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_AllDisruptionMode(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AllDisruptionMode specifies that children can only be disrupted together.",
+				Type:        []string{"object"},
+			},
+		},
+	}
+}
+
+func schema_k8sio_api_scheduling_v1alpha3_BasicSchedulingPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -53927,7 +53953,46 @@ func schema_k8sio_api_scheduling_v1alpha2_BasicSchedulingPolicy(ref common.Refer
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_GangSchedulingPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_DisruptionMode(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "DisruptionMode defines how individual entities within a group can be disrupted. Exactly one mode can be set.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"single": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Single specifies that children can be disrupted independently from each other.",
+							Ref:         ref(schedulingv1alpha3.SingleDisruptionMode{}.OpenAPIModelName()),
+						},
+					},
+					"all": {
+						SchemaProps: spec.SchemaProps{
+							Description: "All specifies that all children can only be disrupted together.",
+							Ref:         ref(schedulingv1alpha3.AllDisruptionMode{}.OpenAPIModelName()),
+						},
+					},
+				},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-unions": []interface{}{
+						map[string]interface{}{
+							"fields-to-discriminateBy": map[string]interface{}{
+								"all":    "All",
+								"single": "Single",
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			schedulingv1alpha3.AllDisruptionMode{}.OpenAPIModelName(), schedulingv1alpha3.SingleDisruptionMode{}.OpenAPIModelName()},
+	}
+}
+
+func schema_k8sio_api_scheduling_v1alpha3_GangSchedulingPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -53949,7 +54014,7 @@ func schema_k8sio_api_scheduling_v1alpha2_GangSchedulingPolicy(ref common.Refere
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_PodGroup(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_PodGroup(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -53981,14 +54046,14 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroup(ref common.ReferenceCallback)
 						SchemaProps: spec.SchemaProps{
 							Description: "Spec defines the desired state of the PodGroup.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(schedulingv1alpha2.PodGroupSpec{}.OpenAPIModelName()),
+							Ref:         ref(schedulingv1alpha3.PodGroupSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Status represents the current observed state of the PodGroup.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(schedulingv1alpha2.PodGroupStatus{}.OpenAPIModelName()),
+							Ref:         ref(schedulingv1alpha3.PodGroupStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -53996,11 +54061,11 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroup(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			schedulingv1alpha2.PodGroupSpec{}.OpenAPIModelName(), schedulingv1alpha2.PodGroupStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+			schedulingv1alpha3.PodGroupSpec{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_PodGroupList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_PodGroupList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54035,7 +54100,7 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupList(ref common.ReferenceCallb
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref(schedulingv1alpha2.PodGroup{}.OpenAPIModelName()),
+										Ref: ref(schedulingv1alpha3.PodGroup{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -54046,11 +54111,11 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupList(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			schedulingv1alpha2.PodGroup{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
+			schedulingv1alpha3.PodGroup{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_PodGroupResourceClaim(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_PodGroupResourceClaim(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54086,7 +54151,7 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupResourceClaim(ref common.Refer
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_PodGroupResourceClaimStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_PodGroupResourceClaimStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54115,7 +54180,7 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupResourceClaimStatus(ref common
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_PodGroupSchedulingConstraints(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_PodGroupSchedulingConstraints(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54134,7 +54199,7 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupSchedulingConstraints(ref comm
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref(schedulingv1alpha2.TopologyConstraint{}.OpenAPIModelName()),
+										Ref: ref(schedulingv1alpha3.TopologyConstraint{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -54144,11 +54209,11 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupSchedulingConstraints(ref comm
 			},
 		},
 		Dependencies: []string{
-			schedulingv1alpha2.TopologyConstraint{}.OpenAPIModelName()},
+			schedulingv1alpha3.TopologyConstraint{}.OpenAPIModelName()},
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_PodGroupSchedulingPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_PodGroupSchedulingPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54158,13 +54223,13 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupSchedulingPolicy(ref common.Re
 					"basic": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Basic specifies that the pods in this group should be scheduled using standard Kubernetes scheduling behavior.",
-							Ref:         ref(schedulingv1alpha2.BasicSchedulingPolicy{}.OpenAPIModelName()),
+							Ref:         ref(schedulingv1alpha3.BasicSchedulingPolicy{}.OpenAPIModelName()),
 						},
 					},
 					"gang": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Gang specifies that the pods in this group should be scheduled using all-or-nothing semantics.",
-							Ref:         ref(schedulingv1alpha2.GangSchedulingPolicy{}.OpenAPIModelName()),
+							Ref:         ref(schedulingv1alpha3.GangSchedulingPolicy{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -54183,11 +54248,11 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupSchedulingPolicy(ref common.Re
 			},
 		},
 		Dependencies: []string{
-			schedulingv1alpha2.BasicSchedulingPolicy{}.OpenAPIModelName(), schedulingv1alpha2.GangSchedulingPolicy{}.OpenAPIModelName()},
+			schedulingv1alpha3.BasicSchedulingPolicy{}.OpenAPIModelName(), schedulingv1alpha3.GangSchedulingPolicy{}.OpenAPIModelName()},
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_PodGroupSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_PodGroupSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54197,20 +54262,20 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupSpec(ref common.ReferenceCallb
 					"podGroupTemplateRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "PodGroupTemplateRef references an optional PodGroup template within other object (e.g. Workload) that was used to create the PodGroup. This field is immutable.",
-							Ref:         ref(schedulingv1alpha2.PodGroupTemplateReference{}.OpenAPIModelName()),
+							Ref:         ref(schedulingv1alpha3.PodGroupTemplateReference{}.OpenAPIModelName()),
 						},
 					},
 					"schedulingPolicy": {
 						SchemaProps: spec.SchemaProps{
 							Description: "SchedulingPolicy defines the scheduling policy for this instance of the PodGroup. Controllers are expected to fill this field by copying it from a PodGroupTemplate. This field is immutable.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(schedulingv1alpha2.PodGroupSchedulingPolicy{}.OpenAPIModelName()),
+							Ref:         ref(schedulingv1alpha3.PodGroupSchedulingPolicy{}.OpenAPIModelName()),
 						},
 					},
 					"schedulingConstraints": {
 						SchemaProps: spec.SchemaProps{
 							Description: "SchedulingConstraints defines optional scheduling constraints (e.g. topology) for this PodGroup. Controllers are expected to fill this field by copying it from a PodGroupTemplate. This field is immutable. This field is only available when the TopologyAwareWorkloadScheduling feature gate is enabled.",
-							Ref:         ref(schedulingv1alpha2.PodGroupSchedulingConstraints{}.OpenAPIModelName()),
+							Ref:         ref(schedulingv1alpha3.PodGroupSchedulingConstraints{}.OpenAPIModelName()),
 						},
 					},
 					"resourceClaims": {
@@ -54230,7 +54295,7 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupSpec(ref common.ReferenceCallb
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref(schedulingv1alpha2.PodGroupResourceClaim{}.OpenAPIModelName()),
+										Ref: ref(schedulingv1alpha3.PodGroupResourceClaim{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -54238,11 +54303,9 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupSpec(ref common.ReferenceCallb
 					},
 					"disruptionMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DisruptionMode defines the mode in which a given PodGroup can be disrupted. Controllers are expected to fill this field by copying it from a PodGroupTemplate. One of Pod, PodGroup. Defaults to Pod if unset. This field is immutable. This field is available only when the WorkloadAwarePreemption feature gate is enabled.\n\n\nPossible enum values:\n - `\"Pod\"` means that individual pods can be disrupted or preempted independently. It doesn't depend on exact set of pods currently running in this PodGroup.\n - `\"PodGroup\"` means that the whole PodGroup needs to be disrupted or preempted together.",
-							Default:     "Pod",
-							Type:        []string{"string"},
-							Format:      "",
-							Enum:        []interface{}{"Pod", "PodGroup"},
+							Description: "DisruptionMode defines the mode in which a given PodGroup can be disrupted. Controllers are expected to fill this field by copying it from a PodGroupTemplate. One of Single, All. Defaults to Single if unset. This field is immutable. This field is available only when the WorkloadAwarePreemption feature gate is enabled.",
+							Default:     map[string]interface{}{"single": map[string]interface{}{}},
+							Ref:         ref(schedulingv1alpha3.DisruptionMode{}.OpenAPIModelName()),
 						},
 					},
 					"priorityClassName": {
@@ -54264,11 +54327,11 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupSpec(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			schedulingv1alpha2.PodGroupResourceClaim{}.OpenAPIModelName(), schedulingv1alpha2.PodGroupSchedulingConstraints{}.OpenAPIModelName(), schedulingv1alpha2.PodGroupSchedulingPolicy{}.OpenAPIModelName(), schedulingv1alpha2.PodGroupTemplateReference{}.OpenAPIModelName()},
+			schedulingv1alpha3.DisruptionMode{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupResourceClaim{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupSchedulingConstraints{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupSchedulingPolicy{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupTemplateReference{}.OpenAPIModelName()},
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_PodGroupStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_PodGroupStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54315,7 +54378,7 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupStatus(ref common.ReferenceCal
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref(schedulingv1alpha2.PodGroupResourceClaimStatus{}.OpenAPIModelName()),
+										Ref: ref(schedulingv1alpha3.PodGroupResourceClaimStatus{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -54325,11 +54388,11 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupStatus(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
-			schedulingv1alpha2.PodGroupResourceClaimStatus{}.OpenAPIModelName(), metav1.Condition{}.OpenAPIModelName()},
+			schedulingv1alpha3.PodGroupResourceClaimStatus{}.OpenAPIModelName(), metav1.Condition{}.OpenAPIModelName()},
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_PodGroupTemplate(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_PodGroupTemplate(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54348,13 +54411,13 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupTemplate(ref common.ReferenceC
 						SchemaProps: spec.SchemaProps{
 							Description: "SchedulingPolicy defines the scheduling policy for this PodGroupTemplate.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(schedulingv1alpha2.PodGroupSchedulingPolicy{}.OpenAPIModelName()),
+							Ref:         ref(schedulingv1alpha3.PodGroupSchedulingPolicy{}.OpenAPIModelName()),
 						},
 					},
 					"schedulingConstraints": {
 						SchemaProps: spec.SchemaProps{
 							Description: "SchedulingConstraints defines optional scheduling constraints (e.g. topology) for this PodGroupTemplate. This field is only available when the TopologyAwareWorkloadScheduling feature gate is enabled.",
-							Ref:         ref(schedulingv1alpha2.PodGroupSchedulingConstraints{}.OpenAPIModelName()),
+							Ref:         ref(schedulingv1alpha3.PodGroupSchedulingConstraints{}.OpenAPIModelName()),
 						},
 					},
 					"resourceClaims": {
@@ -54374,7 +54437,7 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupTemplate(ref common.ReferenceC
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref(schedulingv1alpha2.PodGroupResourceClaim{}.OpenAPIModelName()),
+										Ref: ref(schedulingv1alpha3.PodGroupResourceClaim{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -54382,10 +54445,8 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupTemplate(ref common.ReferenceC
 					},
 					"disruptionMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DisruptionMode defines the mode in which a given PodGroup can be disrupted. One of Pod, PodGroup. This field is available only when the WorkloadAwarePreemption feature gate is enabled.\n\n\nPossible enum values:\n - `\"Pod\"` means that individual pods can be disrupted or preempted independently. It doesn't depend on exact set of pods currently running in this PodGroup.\n - `\"PodGroup\"` means that the whole PodGroup needs to be disrupted or preempted together.",
-							Type:        []string{"string"},
-							Format:      "",
-							Enum:        []interface{}{"Pod", "PodGroup"},
+							Description: "DisruptionMode defines the mode in which a given PodGroup can be disrupted. One of Single, All. This field is available only when the WorkloadAwarePreemption feature gate is enabled.",
+							Ref:         ref(schedulingv1alpha3.DisruptionMode{}.OpenAPIModelName()),
 						},
 					},
 					"priorityClassName": {
@@ -54407,11 +54468,11 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupTemplate(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
-			schedulingv1alpha2.PodGroupResourceClaim{}.OpenAPIModelName(), schedulingv1alpha2.PodGroupSchedulingConstraints{}.OpenAPIModelName(), schedulingv1alpha2.PodGroupSchedulingPolicy{}.OpenAPIModelName()},
+			schedulingv1alpha3.DisruptionMode{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupResourceClaim{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupSchedulingConstraints{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupSchedulingPolicy{}.OpenAPIModelName()},
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_PodGroupTemplateReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_PodGroupTemplateReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54421,7 +54482,7 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupTemplateReference(ref common.R
 					"workload": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Workload references the PodGroupTemplate within the Workload object that was used to create the PodGroup.",
-							Ref:         ref(schedulingv1alpha2.WorkloadPodGroupTemplateReference{}.OpenAPIModelName()),
+							Ref:         ref(schedulingv1alpha3.WorkloadPodGroupTemplateReference{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -54439,11 +54500,22 @@ func schema_k8sio_api_scheduling_v1alpha2_PodGroupTemplateReference(ref common.R
 			},
 		},
 		Dependencies: []string{
-			schedulingv1alpha2.WorkloadPodGroupTemplateReference{}.OpenAPIModelName()},
+			schedulingv1alpha3.WorkloadPodGroupTemplateReference{}.OpenAPIModelName()},
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_TopologyConstraint(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_SingleDisruptionMode(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SingleDisruptionMode specifies that children can be disrupted independently.",
+				Type:        []string{"object"},
+			},
+		},
+	}
+}
+
+func schema_k8sio_api_scheduling_v1alpha3_TopologyConstraint(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54465,7 +54537,7 @@ func schema_k8sio_api_scheduling_v1alpha2_TopologyConstraint(ref common.Referenc
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_TypedLocalObjectReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_TypedLocalObjectReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54502,7 +54574,7 @@ func schema_k8sio_api_scheduling_v1alpha2_TypedLocalObjectReference(ref common.R
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_Workload(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_Workload(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54534,7 +54606,7 @@ func schema_k8sio_api_scheduling_v1alpha2_Workload(ref common.ReferenceCallback)
 						SchemaProps: spec.SchemaProps{
 							Description: "Spec defines the desired behavior of a Workload.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(schedulingv1alpha2.WorkloadSpec{}.OpenAPIModelName()),
+							Ref:         ref(schedulingv1alpha3.WorkloadSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -54542,11 +54614,11 @@ func schema_k8sio_api_scheduling_v1alpha2_Workload(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			schedulingv1alpha2.WorkloadSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+			schedulingv1alpha3.WorkloadSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_WorkloadList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_WorkloadList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54581,7 +54653,7 @@ func schema_k8sio_api_scheduling_v1alpha2_WorkloadList(ref common.ReferenceCallb
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref(schedulingv1alpha2.Workload{}.OpenAPIModelName()),
+										Ref: ref(schedulingv1alpha3.Workload{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -54592,11 +54664,11 @@ func schema_k8sio_api_scheduling_v1alpha2_WorkloadList(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			schedulingv1alpha2.Workload{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
+			schedulingv1alpha3.Workload{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_WorkloadPodGroupTemplateReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_WorkloadPodGroupTemplateReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54626,7 +54698,7 @@ func schema_k8sio_api_scheduling_v1alpha2_WorkloadPodGroupTemplateReference(ref 
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha2_WorkloadSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_WorkloadSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -54636,7 +54708,7 @@ func schema_k8sio_api_scheduling_v1alpha2_WorkloadSpec(ref common.ReferenceCallb
 					"controllerRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ControllerRef is an optional reference to the controlling object, such as a Deployment or Job. This field is intended for use by tools like CLIs to provide a link back to the original workload definition. This field is immutable.",
-							Ref:         ref(schedulingv1alpha2.TypedLocalObjectReference{}.OpenAPIModelName()),
+							Ref:         ref(schedulingv1alpha3.TypedLocalObjectReference{}.OpenAPIModelName()),
 						},
 					},
 					"podGroupTemplates": {
@@ -54654,7 +54726,7 @@ func schema_k8sio_api_scheduling_v1alpha2_WorkloadSpec(ref common.ReferenceCallb
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref(schedulingv1alpha2.PodGroupTemplate{}.OpenAPIModelName()),
+										Ref: ref(schedulingv1alpha3.PodGroupTemplate{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -54665,7 +54737,7 @@ func schema_k8sio_api_scheduling_v1alpha2_WorkloadSpec(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			schedulingv1alpha2.PodGroupTemplate{}.OpenAPIModelName(), schedulingv1alpha2.TypedLocalObjectReference{}.OpenAPIModelName()},
+			schedulingv1alpha3.PodGroupTemplate{}.OpenAPIModelName(), schedulingv1alpha3.TypedLocalObjectReference{}.OpenAPIModelName()},
 	}
 }
 

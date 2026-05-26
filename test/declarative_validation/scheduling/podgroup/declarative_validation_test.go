@@ -22,9 +22,7 @@ import (
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/apimachinery/pkg/util/version"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
@@ -37,12 +35,8 @@ import (
 	_ "k8s.io/kubernetes/pkg/apis/scheduling/install"
 )
 
-var allowedDisruptionModes = sets.New(
-	scheduling.DisruptionModePod,
-	scheduling.DisruptionModePodGroup,
-)
-
 func TestDeclarativeValidate(t *testing.T) {
+
 	for _, apiVersion := range apiVersions {
 		t.Run(apiVersion, func(t *testing.T) {
 			testDeclarativeValidate(t, apiVersion)
@@ -173,28 +167,37 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 			expectedErrs:                  field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingConstraints", "topology").Index(0).Child("key"), nil, "").WithOrigin("format=k8s-label-key")},
 		},
 		"pod disruption mode, workload aware preemption enabled": {
-			input:                         mkValidPodGroup(setDisruptionMode(scheduling.DisruptionModePod)),
+			input:                         mkValidPodGroup(setDisruptionModeSingle()),
 			enableWorkloadAwarePreemption: true,
 		},
 		"pod disruption mode, workload aware preemption disabled": {
-			input:        mkValidPodGroup(setDisruptionMode(scheduling.DisruptionModePod)),
+			input:        mkValidPodGroup(setDisruptionModeSingle()),
 			expectedErrs: field.ErrorList{field.Forbidden(field.NewPath("spec", "disruptionMode"), "")},
 		},
 		"pod group disruption mode, workload aware preemption enabled": {
-			input:                         mkValidPodGroup(setDisruptionMode(scheduling.DisruptionModePodGroup)),
+			input:                         mkValidPodGroup(setDisruptionModeAll()),
 			enableWorkloadAwarePreemption: true,
 		},
 		"pod group disruption mode, workload aware preemption disabled": {
-			input:        mkValidPodGroup(setDisruptionMode(scheduling.DisruptionModePodGroup)),
+			input:        mkValidPodGroup(setDisruptionModeAll()),
 			expectedErrs: field.ErrorList{field.Forbidden(field.NewPath("spec", "disruptionMode"), "")},
 		},
-		"invalid disruption mode, workload aware preemption enabled": {
-			input:                         mkValidPodGroup(setDisruptionMode("Invalid")),
+		"disruption mode with neither single nor all, workload aware preemption enabled": {
+			input:                         mkValidPodGroup(setDisruptionModeNeither()),
 			enableWorkloadAwarePreemption: true,
-			expectedErrs:                  field.ErrorList{field.NotSupported(field.NewPath("spec", "disruptionMode"), "Invalid", sets.List(allowedDisruptionModes))},
+			expectedErrs:                  field.ErrorList{field.Invalid(field.NewPath("spec", "disruptionMode"), nil, "").WithOrigin("union")},
 		},
-		"invalid disruption mode, workload aware preemption disabled": {
-			input:        mkValidPodGroup(setDisruptionMode("Invalid")),
+		"disruption mode with neither single nor all, workload aware preemption disabled": {
+			input:        mkValidPodGroup(setDisruptionModeNeither()),
+			expectedErrs: field.ErrorList{field.Forbidden(field.NewPath("spec", "disruptionMode"), "")},
+		},
+		"disruption mode with both single and all, workload aware preemption enabled": {
+			input:                         mkValidPodGroup(setDisruptionModeBoth()),
+			enableWorkloadAwarePreemption: true,
+			expectedErrs:                  field.ErrorList{field.Invalid(field.NewPath("spec", "disruptionMode"), nil, "").WithOrigin("union")},
+		},
+		"disruption mode with both single and all, workload aware preemption disabled": {
+			input:        mkValidPodGroup(setDisruptionModeBoth()),
 			expectedErrs: field.ErrorList{field.Forbidden(field.NewPath("spec", "disruptionMode"), "")},
 		},
 		"valid pod group without disruption mode, workload aware preemption enabled": {
@@ -203,7 +206,7 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 			expectedErrs:                  field.ErrorList{field.Required(field.NewPath("spec", "disruptionMode"), "")},
 		},
 		"valid priority class name, workload aware preemption enabled": {
-			input:                         mkValidPodGroup(setDisruptionMode(scheduling.DisruptionModePod), setPriorityClassName("high-priority")),
+			input:                         mkValidPodGroup(setDisruptionModeSingle(), setPriorityClassName("high-priority")),
 			enableWorkloadAwarePreemption: true,
 		},
 		"valid priority class name, workload aware preemption disabled": {
@@ -211,7 +214,7 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 			expectedErrs: field.ErrorList{field.Forbidden(field.NewPath("spec", "priorityClassName"), "")},
 		},
 		"invalid priority class name, workload aware preemption enabled": {
-			input:                         mkValidPodGroup(setDisruptionMode(scheduling.DisruptionModePod), setPriorityClassName("high/priority")),
+			input:                         mkValidPodGroup(setDisruptionModeSingle(), setPriorityClassName("high/priority")),
 			enableWorkloadAwarePreemption: true,
 			expectedErrs: field.ErrorList{
 				field.Invalid(field.NewPath("spec", "priorityClassName"), nil, "").WithOrigin("format=k8s-long-name"),
@@ -222,7 +225,7 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 			expectedErrs: field.ErrorList{field.Forbidden(field.NewPath("spec", "priorityClassName"), "")},
 		},
 		"valid priority, workload aware preemption enabled": {
-			input:                         mkValidPodGroup(setDisruptionMode(scheduling.DisruptionModePod), setPriority(1000)),
+			input:                         mkValidPodGroup(setDisruptionModeSingle(), setPriority(1000)),
 			enableWorkloadAwarePreemption: true,
 		},
 		"valid priority, workload aware preemption disabled": {
@@ -230,7 +233,7 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 			expectedErrs: field.ErrorList{field.Forbidden(field.NewPath("spec", "priority"), "")},
 		},
 		"valid negative priority, workload aware preemption enabled": {
-			input:                         mkValidPodGroup(setDisruptionMode(scheduling.DisruptionModePod), setPriority(-2147483648)),
+			input:                         mkValidPodGroup(setDisruptionModeSingle(), setPriority(-2147483648)),
 			enableWorkloadAwarePreemption: true,
 		},
 		"valid negative priority, workload aware preemption disabled": {
@@ -238,7 +241,7 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 			expectedErrs: field.ErrorList{field.Forbidden(field.NewPath("spec", "priority"), "")},
 		},
 		"too high priority, workload aware preemption enabled": {
-			input:                         mkValidPodGroup(setDisruptionMode(scheduling.DisruptionModePod), setPriority(scheduling.HighestUserDefinablePriority+1)),
+			input:                         mkValidPodGroup(setDisruptionModeSingle(), setPriority(scheduling.HighestUserDefinablePriority+1)),
 			enableWorkloadAwarePreemption: true,
 			expectedErrs: field.ErrorList{
 				field.Invalid(field.NewPath("spec", "priority"), nil, "").WithOrigin("maximum"),
@@ -347,12 +350,13 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 				features.GangScheduling:                  tc.enableWorkloadAwarePreemption,
 				features.WorkloadAwarePreemption:         tc.enableWorkloadAwarePreemption,
 			})
-			apitesting.VerifyValidationEquivalence(t, ctx, &tc.input, strategy, tc.expectedErrs, apitesting.WithMinEmulationVersion(version.MustParse("1.36")))
+			apitesting.VerifyValidationEquivalence(t, ctx, &tc.input, strategy, tc.expectedErrs)
 		})
 	}
 }
 
 func TestDeclarativeValidateUpdate(t *testing.T) {
+
 	for _, apiVersion := range apiVersions {
 		t.Run(apiVersion, func(t *testing.T) {
 			testDeclarativeValidateUpdate(t, apiVersion)
@@ -528,14 +532,14 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 			expectedErrs:                    field.ErrorList{field.Invalid(field.NewPath("spec", "resourceClaims"), nil, "").WithOrigin("immutable")},
 		},
 		"invalid update of disruption mode, workload aware preemption enabled": {
-			oldObj:                        mkValidPodGroup(setResourceVersion("1"), setDisruptionMode(scheduling.DisruptionModePod)),
-			updateObj:                     mkValidPodGroup(setResourceVersion("1"), setDisruptionMode(scheduling.DisruptionModePodGroup)),
+			oldObj:                        mkValidPodGroup(setResourceVersion("1"), setDisruptionModeSingle()),
+			updateObj:                     mkValidPodGroup(setResourceVersion("1"), setDisruptionModeAll()),
 			enableWorkloadAwarePreemption: true,
-			expectedErrs:                  field.ErrorList{field.Invalid(field.NewPath("spec", "disruptionMode"), nil, "").WithOrigin("immutable")},
+			expectedErrs:                  field.ErrorList{field.Invalid(field.NewPath("spec", "disruptionMode"), &scheduling.DisruptionMode{All: &scheduling.AllDisruptionMode{}}, "field is immutable").WithOrigin("immutable")},
 		},
 		"invalid update of disruption mode, workload aware preemption disabled": {
-			oldObj:       mkValidPodGroup(setResourceVersion("1"), setDisruptionMode(scheduling.DisruptionModePod)),
-			updateObj:    mkValidPodGroup(setResourceVersion("1"), setDisruptionMode(scheduling.DisruptionModePodGroup)),
+			oldObj:       mkValidPodGroup(setResourceVersion("1"), setDisruptionModeSingle()),
+			updateObj:    mkValidPodGroup(setResourceVersion("1"), setDisruptionModeAll()),
 			expectedErrs: field.ErrorList{field.Forbidden(field.NewPath("spec", "disruptionMode"), "")},
 		},
 		"invalid update of priority class name, workload aware preemption enabled": {
@@ -571,12 +575,13 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 				features.WorkloadAwarePreemption:         tc.enableWorkloadAwarePreemption,
 			})
 			strategy := registry.NewStrategy()
-			apitesting.VerifyUpdateValidationEquivalence(t, ctx, &tc.updateObj, &tc.oldObj, strategy, tc.expectedErrs, apitesting.WithMinEmulationVersion(version.MustParse("1.36")))
+			apitesting.VerifyUpdateValidationEquivalence(t, ctx, &tc.updateObj, &tc.oldObj, strategy, tc.expectedErrs)
 		})
 	}
 }
 
 func TestDeclarativeValidateStatusUpdate(t *testing.T) {
+
 	for _, apiVersion := range apiVersions {
 		t.Run(apiVersion, func(t *testing.T) {
 			testDeclarativeValidateStatusUpdate(t, apiVersion)
@@ -853,9 +858,34 @@ func addTopologyConstraint(value string) func(obj *scheduling.PodGroup) {
 	}
 }
 
-func setDisruptionMode(mode scheduling.DisruptionMode) func(obj *scheduling.PodGroup) {
+func setDisruptionModeSingle() func(obj *scheduling.PodGroup) {
 	return func(obj *scheduling.PodGroup) {
-		obj.Spec.DisruptionMode = &mode
+		obj.Spec.DisruptionMode = &scheduling.DisruptionMode{
+			Single: &scheduling.SingleDisruptionMode{},
+		}
+	}
+}
+
+func setDisruptionModeAll() func(obj *scheduling.PodGroup) {
+	return func(obj *scheduling.PodGroup) {
+		obj.Spec.DisruptionMode = &scheduling.DisruptionMode{
+			All: &scheduling.AllDisruptionMode{},
+		}
+	}
+}
+
+func setDisruptionModeNeither() func(obj *scheduling.PodGroup) {
+	return func(obj *scheduling.PodGroup) {
+		obj.Spec.DisruptionMode = &scheduling.DisruptionMode{}
+	}
+}
+
+func setDisruptionModeBoth() func(obj *scheduling.PodGroup) {
+	return func(obj *scheduling.PodGroup) {
+		obj.Spec.DisruptionMode = &scheduling.DisruptionMode{
+			Single: &scheduling.SingleDisruptionMode{},
+			All:    &scheduling.AllDisruptionMode{},
+		}
 	}
 }
 

@@ -923,7 +923,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 	}
 
 	if kubeDeps.NodeStartupLatencyTracker == nil {
-		kubeDeps.NodeStartupLatencyTracker = kubeletutil.NewNodeStartupLatencyTracker()
+		kubeDeps.NodeStartupLatencyTracker = kubeletutil.NewNodeStartupLatencyTracker(logger)
 	}
 
 	// TODO(vmarmol): Do this through container config.
@@ -1421,7 +1421,7 @@ func getCgroupDriverFromCRI(ctx context.Context, s *options.KubeletServer, kubeD
 			}
 			// CRI implementation doesn't support RuntimeConfig, fallback
 			legacyregistry.MustRegister(kubeletmetrics.CRILosingSupport)
-			kubeletmetrics.CRILosingSupport.WithLabelValues("1.37.0").Inc()
+			kubeletmetrics.CRILosingSupport.WithLabelValues("1.38.0").Inc()
 			logger.Info("CRI implementation should be updated to support RuntimeConfig. Falling back to using cgroupDriver from kubelet config.")
 			return nil
 		}

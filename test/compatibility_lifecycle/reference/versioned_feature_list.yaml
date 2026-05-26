@@ -379,6 +379,10 @@
     lockToDefault: false
     preRelease: Deprecated
     version: "1.36"
+  - default: false
+    lockToDefault: true
+    preRelease: Deprecated
+    version: "1.37"
 - name: DeploymentReplicaSetTerminatingReplicas
   versionedSpecs:
   - default: false
@@ -1473,20 +1477,6 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.33"
-- name: RelaxedDNSSearchValidation
-  versionedSpecs:
-  - default: false
-    lockToDefault: false
-    preRelease: Alpha
-    version: "1.32"
-  - default: true
-    lockToDefault: false
-    preRelease: Beta
-    version: "1.33"
-  - default: true
-    lockToDefault: true
-    preRelease: GA
-    version: "1.34"
 - name: RelaxedEnvironmentVariableValidation
   versionedSpecs:
   - default: false

@@ -477,6 +477,12 @@ type HorizontalPodAutoscalerCondition struct {
 	// the transition
 	// +optional
 	Message string `json:"message,omitempty" protobuf:"bytes,5,opt,name=message"`
+
+	// observedGeneration represents the .metadata.generation that the condition was set based upon.
+	// For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+	// with respect to the current state of the instance.
+	// +optional
+	ObservedGeneration *int64 `json:"observedGeneration,omitempty" protobuf:"varint,6,opt,name=observedGeneration"`
 }
 
 // MetricStatus describes the last-read state of a single metric.
@@ -504,7 +510,7 @@ type MetricStatus struct {
 	// +optional
 	Resource *ResourceMetricStatus `json:"resource,omitempty" protobuf:"bytes,4,opt,name=resource"`
 
-	// container resource refers to a resource metric (such as those specified in
+	// containerResource refers to a resource metric (such as those specified in
 	// requests and limits) known to Kubernetes describing a single container in each pod in the
 	// current scale target (e.g. CPU or memory). Such metrics are built in to
 	// Kubernetes, and have special scaling options on top of those available
@@ -530,7 +536,7 @@ type ObjectMetricStatus struct {
 	// current contains the current value for the given metric
 	Current MetricValueStatus `json:"current" protobuf:"bytes,2,name=current"`
 
-	// DescribedObject specifies the descriptions of a object,such as kind,name apiVersion
+	// describedObject specifies the descriptions of a object,such as kind,name apiVersion
 	DescribedObject CrossVersionObjectReference `json:"describedObject" protobuf:"bytes,3,name=describedObject"`
 }
 
@@ -594,7 +600,7 @@ type MetricValueStatus struct {
 	// +optional
 	AverageValue *resource.Quantity `json:"averageValue,omitempty" protobuf:"bytes,2,opt,name=averageValue"`
 
-	// currentAverageUtilization is the current value of the average of the
+	// averageUtilization is the current value of the average of the
 	// resource metric across all relevant pods, represented as a percentage of
 	// the requested value of the resource for the pods.
 	// +optional
