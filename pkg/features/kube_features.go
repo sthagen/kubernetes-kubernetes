@@ -1307,6 +1307,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	DRAExtendedResource: {
 		{Version: version.MustParse("1.34"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.37"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // GA in 1.37; remove in 1.40
 	},
 
 	DRAListTypeAttributes: {
@@ -1586,6 +1587,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	MaxUnavailableStatefulSet: {
 		{Version: version.MustParse("1.24"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.35"), Default: false, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.37"), Default: true, PreRelease: featuregate.Beta},
 	},
 
 	MemoryQoS: {
@@ -2195,6 +2197,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	genericfeatures.WatchCacheInitializationPostStartHook: {
 		{Version: version.MustParse("1.31"), Default: false, PreRelease: featuregate.Beta},
 		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.37"), Default: true, PreRelease: featuregate.GA, LockToDefault: true},
 	},
 
 	genericfeatures.WatchList: {
