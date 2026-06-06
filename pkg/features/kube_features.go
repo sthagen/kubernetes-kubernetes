@@ -470,6 +470,12 @@ const (
 	// Allows to delegate reconciliation of a Job object to an external controller.
 	JobManagedBy featuregate.Feature = "JobManagedBy"
 
+	// owner: @adrianmoisey @danwinship
+	// kep: https://kep.k8s.io/5495
+	//
+	// Allow use of IPVS mode in kube-proxy
+	KubeProxyIPVS featuregate.Feature = "KubeProxyIPVS"
+
 	// owner: @marquiz
 	// kep: http://kep.k8s.io/4033
 	//
@@ -1494,6 +1500,10 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.38
 	},
 
+	KubeProxyIPVS: {
+		{Version: version.MustParse("1.11"), Default: true, PreRelease: featuregate.GA},
+	},
+
 	KubeletCgroupDriverFromCRI: {
 		{Version: version.MustParse("1.28"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.31"), Default: true, PreRelease: featuregate.Beta},
@@ -2118,6 +2128,10 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.34"), Default: true, PreRelease: featuregate.Beta},
 	},
 
+	genericfeatures.EtcdRangeStream: {
+		{Version: version.MustParse("1.37"), Default: false, PreRelease: featuregate.Beta},
+	},
+
 	genericfeatures.KMSv1: {
 		{Version: version.MustParse("1.0"), Default: true, PreRelease: featuregate.GA},
 		{Version: version.MustParse("1.28"), Default: true, PreRelease: featuregate.Deprecated},
@@ -2361,6 +2375,8 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 	InPlacePodVerticalScalingInitContainers: {InPlacePodVerticalScaling, NodeDeclaredFeatures},
 
 	JobManagedBy: {},
+
+	KubeProxyIPVS: {},
 
 	KubeletCgroupDriverFromCRI: {},
 
@@ -2608,6 +2624,8 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 	genericfeatures.DeclarativeValidationTakeover: {genericfeatures.DeclarativeValidation},
 
 	genericfeatures.DetectCacheInconsistency: {},
+
+	genericfeatures.EtcdRangeStream: {},
 
 	genericfeatures.KMSv1: {},
 

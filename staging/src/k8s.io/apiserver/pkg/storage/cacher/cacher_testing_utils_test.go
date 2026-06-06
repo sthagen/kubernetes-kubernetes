@@ -61,7 +61,7 @@ func init() {
 	utilruntime.Must(metav1.AddMetaToScheme(scheme))
 	scheme.AddUnversionedTypes(corev1.SchemeGroupVersion, &metav1.Status{})
 	pb := protobuf.NewSerializer(scheme, scheme)
-	corev1ProtoCodec = codecs.CodecForVersions(pb, pb, schema.GroupVersions{corev1.SchemeGroupVersion}, nil)
+	corev1ProtoCodec = codecs.CodecForVersions(pb, pb, schema.GroupVersions{corev1.SchemeGroupVersion}, schema.GroupVersions{corev1.SchemeGroupVersion})
 	examplev1ProtoCodec = codecs.CodecForVersions(pb, pb, schema.GroupVersions{examplev1.SchemeGroupVersion}, nil)
 }
 
@@ -160,12 +160,12 @@ func compactWatch(c *CacheDelegator, client *clientv3.Client) storagetesting.Com
 			t.Fatal(err)
 		}
 
-		err = c.cacher.watchCache.waitUntilFreshAndBlock(context.TODO(), rv)
+		c.cacher.watchCache.RLock()
+		err = c.cacher.watchCache.waitUntilFreshLocked(context.TODO(), rv)
+		c.cacher.watchCache.RUnlock()
 		if err != nil {
 			t.Fatalf("WatchCache didn't caught up to RV: %v", rv)
 		}
-		c.cacher.watchCache.RUnlock()
-
 		c.cacher.watchCache.Lock()
 		defer c.cacher.watchCache.Unlock()
 		c.cacher.Lock()

@@ -103,6 +103,7 @@ func runBenchmarkWriteThroughput(ctx context.Context, b *testing.B, store storag
 	var watchEvents atomic.Uint64
 	var listCalls atomic.Uint64
 	var listObjects atomic.Uint64
+	var index atomic.Uint64
 
 	switch loadType {
 	case loadNone:
@@ -120,16 +121,16 @@ func runBenchmarkWriteThroughput(ctx context.Context, b *testing.B, store storag
 	listCalls.Store(0)
 	listObjects.Store(0)
 	b.ResetTimer()
-	start := time.Now()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			writes.Add(runTraffic(ctx, b, store, data, trafficType))
+			i := int(index.Add(1)) % len(data.PodKeys)
+			writes.Add(runTraffic(ctx, b, store, data, trafficType, i))
 		}
 	})
-	end := time.Now()
-	elapsedSeconds := end.Sub(start).Seconds()
+	elapsedSeconds := b.Elapsed().Seconds()
+	consistentStart := time.Now()
 	require.NoError(b, waitForConsistent(ctx, store))
-	consistentDelaySeconds := float64(time.Since(end).Nanoseconds()) / float64(time.Second.Nanoseconds())
+	consistentDelaySeconds := time.Since(consistentStart).Seconds()
 	b.ReportMetric(consistentDelaySeconds, "seconds-delay")
 	b.ReportMetric(float64(writes.Load())/elapsedSeconds, "writes/s")
 
@@ -160,41 +161,30 @@ func waitForConsistent(ctx context.Context, store storage.Interface) error {
 	return nil
 }
 
-func runTraffic(ctx context.Context, b *testing.B, store storage.Interface, data BenchmarkData, trafficType string) (writes uint64) {
+func runTraffic(ctx context.Context, b *testing.B, store storage.Interface, data BenchmarkData, trafficType string, index int) (writes uint64) {
 	var podOut *example.Pod
 	switch trafficType {
 	case trafficDeleteCreate:
-		i := rand.Intn(len(data.PodKeys))
 		podOut = &example.Pod{}
-		err := store.Delete(ctx, data.PodKeys[i], podOut, nil, storage.ValidateAllObjectFunc, nil, storage.DeleteOptions{})
+		err := store.Delete(ctx, data.PodKeys[index], podOut, nil, storage.ValidateAllObjectFunc, nil, storage.DeleteOptions{})
 		if err == nil {
 			writes += 1
 		} else if !storage.IsNotFound(err) {
-			panic(fmt.Sprintf("Unexpected error on Delete %q: %v", data.PodKeys[i], err))
+			panic(fmt.Sprintf("Unexpected error on Delete %q: %v", data.PodKeys[index], err))
 		}
-		pod := data.Pods[i]
+		pod := data.Pods[index]
 		podOut = &example.Pod{}
-		err = store.Create(ctx, data.PodKeys[i], pod, podOut, 0)
+		err = store.Create(ctx, data.PodKeys[index], pod, podOut, 0)
 		if err == nil {
 			writes += 1
 		} else if !storage.IsExist(err) {
-			panic(fmt.Sprintf("Unexpected error on Create %q: %v", data.PodKeys[i], err))
+			panic(fmt.Sprintf("Unexpected error on Create %q: %v", data.PodKeys[index], err))
 		}
 	case trafficPatch:
-		i := rand.Intn(len(data.PodKeys))
 		podOut = &example.Pod{}
-		err := store.GuaranteedUpdate(ctx, data.PodKeys[i], podOut, false, nil, patchFunc(i), nil)
+		err := store.GuaranteedUpdate(ctx, data.PodKeys[index], podOut, false, nil, patchFunc(index), nil)
 		if err != nil {
-			panic(fmt.Sprintf("Unexpected error on Patch %q: %v", data.PodKeys[i], err))
-		} else {
-			writes += 1
-		}
-		// Execute patch second time to match 2 operations.
-		j := rand.Intn(len(data.PodKeys))
-		podOut = &example.Pod{}
-		err = store.GuaranteedUpdate(ctx, data.PodKeys[j], podOut, false, nil, patchFunc(j), nil)
-		if err != nil {
-			panic(fmt.Sprintf("Unexpected error on Patch %q: %v", data.PodKeys[j], err))
+			panic(fmt.Sprintf("Unexpected error on Patch %q: %v", data.PodKeys[index], err))
 		} else {
 			writes += 1
 		}
@@ -400,19 +390,24 @@ func RunBenchmarkStoreList(ctx context.Context, b *testing.B, store storage.Inte
 }
 
 func runBenchmarkStoreList(ctx context.Context, b *testing.B, store storage.Interface, limit int64, match metav1.ResourceVersionMatch, scope scope, data BenchmarkData, useIndex bool) {
-	wg := sync.WaitGroup{}
 	objectCount := atomic.Uint64{}
-	pageCount := atomic.Uint64{}
-	for i := 0; i < b.N; i++ {
-		wg.Add(1)
-		resourceVersion := ""
-		switch match {
-		case metav1.ResourceVersionMatchExact, metav1.ResourceVersionMatchNotOlderThan:
-			maxRevision := 1 + len(data.Pods)
-			resourceVersion = fmt.Sprintf("%d", maxRevision-99+i%100)
-		}
-		go func(resourceVersion, nodeName, namespaceName string) {
-			defer wg.Done()
+	listCount := atomic.Uint64{}
+	var index atomic.Uint64
+
+	b.SetParallelism(4)
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			i := int(index.Add(1))
+			resourceVersion := ""
+			switch match {
+			case metav1.ResourceVersionMatchExact, metav1.ResourceVersionMatchNotOlderThan:
+				maxRevision := 1 + len(data.Pods)
+				resourceVersion = fmt.Sprintf("%d", maxRevision-99+i%100)
+			}
+			nodeName := data.NodeNames[i%len(data.NodeNames)]
+			namespaceName := data.NamespaceNames[i%len(data.NamespaceNames)]
+
 			opts := storage.ListOptions{
 				Recursive:            true,
 				ResourceVersion:      resourceVersion,
@@ -426,36 +421,36 @@ func runBenchmarkStoreList(ctx context.Context, b *testing.B, store storage.Inte
 			}
 			switch scope {
 			case cluster:
-				objects, pages := paginateList(ctx, store, "/pods/", opts)
+				objects, lists := paginateList(ctx, store, "/pods/", opts)
 				objectCount.Add(uint64(objects))
-				pageCount.Add(uint64(pages))
+				listCount.Add(uint64(lists))
 			case node:
 				if useIndex {
 					opts.Predicate.GetAttrs = podAttr
 					opts.Predicate.IndexFields = []string{"spec.nodeName"}
 					opts.Predicate.Field = fields.SelectorFromSet(fields.Set{"spec.nodeName": nodeName})
 				}
-				objects, pages := paginateList(ctx, store, "/pods/", opts)
+				objects, lists := paginateList(ctx, store, "/pods/", opts)
 				objectCount.Add(uint64(objects))
-				pageCount.Add(uint64(pages))
+				listCount.Add(uint64(lists))
 			case namespace:
 				ctx := ctx
 				if useIndex {
 					opts.Predicate.IndexFields = []string{"metadata.namespace"}
 					ctx = request.WithRequestInfo(ctx, &request.RequestInfo{Namespace: namespaceName})
 				}
-				objects, pages := paginateList(ctx, store, "/pods/"+namespaceName, opts)
+				objects, lists := paginateList(ctx, store, "/pods/"+namespaceName, opts)
 				objectCount.Add(uint64(objects))
-				pageCount.Add(uint64(pages))
+				listCount.Add(uint64(lists))
 			}
-		}(resourceVersion, data.NodeNames[i%len(data.NodeNames)], data.NamespaceNames[i%len(data.NamespaceNames)])
-	}
-	wg.Wait()
-	b.ReportMetric(float64(objectCount.Load())/float64(b.N), "objects/op")
-	b.ReportMetric(float64(pageCount.Load())/float64(b.N), "pages/op")
+		}
+	})
+	elapsedSeconds := b.Elapsed().Seconds()
+	b.ReportMetric(float64(objectCount.Load())/elapsedSeconds, "list-objs/s")
+	b.ReportMetric(float64(listCount.Load())/elapsedSeconds, "list-calls/s")
 }
 
-func paginateList(ctx context.Context, store storage.Interface, key string, opts storage.ListOptions) (objectCount int, pageCount int) {
+func paginateList(ctx context.Context, store storage.Interface, key string, opts storage.ListOptions) (objectCount int, listCount int) {
 	listOut := &example.PodList{}
 	err := store.GetList(ctx, key, opts, listOut)
 	if err != nil {
@@ -464,7 +459,7 @@ func paginateList(ctx context.Context, store storage.Interface, key string, opts
 	opts.Predicate.Continue = listOut.Continue
 	opts.ResourceVersion = ""
 	opts.ResourceVersionMatch = ""
-	pageCount += 1
+	listCount += 1
 	objectCount += len(listOut.Items)
 	for opts.Predicate.Continue != "" {
 		listOut := &example.PodList{}
@@ -473,10 +468,10 @@ func paginateList(ctx context.Context, store storage.Interface, key string, opts
 			panic(fmt.Sprintf("Unexpected error %s", err))
 		}
 		opts.Predicate.Continue = listOut.Continue
-		pageCount += 1
+		listCount += 1
 		objectCount += len(listOut.Items)
 	}
-	return objectCount, pageCount
+	return objectCount, listCount
 }
 
 func podAttr(obj runtime.Object) (labels.Set, fields.Set, error) {
