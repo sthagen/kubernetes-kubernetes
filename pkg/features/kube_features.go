@@ -1799,6 +1799,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	RelaxedServiceNameValidation: {
 		{Version: version.MustParse("1.34"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.37"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.40
 	},
 
 	ReloadKubeletClientCAFile: {
@@ -2220,6 +2221,10 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		// switch this back to false because the json and proto streaming encoders appear to work better.
 		{Version: version.MustParse("1.33"), Default: false, PreRelease: featuregate.Beta},
 		{Version: version.MustParse("1.34"), Default: true, PreRelease: featuregate.Beta},
+	},
+
+	genericfeatures.WebhookRoundTripLoadBalancing: {
+		{Version: version.MustParse("1.37"), Default: true, PreRelease: featuregate.Beta},
 	},
 
 	kcmfeatures.CloudControllerManagerWatchBasedRoutesReconciliation: {
@@ -2662,6 +2667,8 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 	genericfeatures.WatchCacheInitializationPostStartHook: {},
 
 	genericfeatures.WatchList: {},
+
+	genericfeatures.WebhookRoundTripLoadBalancing: {},
 
 	kcmfeatures.CloudControllerManagerWatchBasedRoutesReconciliation: {},
 

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -47,6 +48,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	jsonserializer "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/apimachinery/pkg/runtime/serializer/protobuf"
+	"k8s.io/apimachinery/pkg/types"
 	rand2 "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apiserver/pkg/features"
@@ -55,6 +57,9 @@ import (
 )
 
 const benchmarkSeed = 100
+
+//go:embed testdata/exemplar_pod.yaml
+var allocatorBenchmarkExemplarPodYAML []byte
 
 func TestSerializeObjectParallel(t *testing.T) {
 	largePayload := bytes.Repeat([]byte("0123456789abcdef"), defaultGzipThresholdBytes/16+1)
@@ -252,7 +257,7 @@ func TestSerializeObject(t *testing.T) {
 				"Content-Encoding": []string{"gzip"},
 				"Vary":             []string{"Accept-Encoding"},
 			},
-			wantBody: gzipContent(largePayload, defaultGzipContentEncodingLevel),
+			wantBody: gzipContent(largePayload, gzipContentEncodingLevel),
 		},
 
 		{
@@ -290,7 +295,7 @@ func TestSerializeObject(t *testing.T) {
 				"Content-Encoding": []string{"gzip"},
 				"Vary":             []string{"Accept-Encoding"},
 			},
-			wantBody: gzipContent(largePayload, defaultGzipContentEncodingLevel),
+			wantBody: gzipContent(largePayload, gzipContentEncodingLevel),
 		},
 
 		{
@@ -348,7 +353,7 @@ func TestSerializeObject(t *testing.T) {
 				"Content-Encoding": []string{"gzip"},
 				"Vary":             []string{"Accept-Encoding"},
 			},
-			wantBody: gzipContent([]byte(": "+string(largePayload)), defaultGzipContentEncodingLevel),
+			wantBody: gzipContent([]byte(": "+string(largePayload)), gzipContentEncodingLevel),
 		},
 	}
 	for _, tt := range tests {
@@ -770,6 +775,149 @@ func BenchmarkSerializeObject(b *testing.B) {
 	}
 }
 
+func benchmarkProtobufEncodeWithAllocator(b *testing.B, encoder runtime.EncoderWithAllocator, object runtime.Object, pooled bool) {
+	simpleAllocator := &runtime.SimpleAllocator{}
+	discard := io.Discard
+
+	b.StopTimer()
+	if pooled {
+		allocator := runtime.AllocatorPool.Get().(*runtime.Allocator)
+		if err := encoder.EncodeWithAllocator(object, discard, allocator); err != nil {
+			runtime.AllocatorPool.Put(allocator)
+			b.Fatalf("warm pooled allocator: %v", err)
+		}
+		runtime.AllocatorPool.Put(allocator)
+	} else {
+		if err := encoder.EncodeWithAllocator(object, discard, simpleAllocator); err != nil {
+			b.Fatalf("warm simple allocator: %v", err)
+		}
+	}
+	b.StartTimer()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		var err error
+		if pooled {
+			allocator := runtime.AllocatorPool.Get().(*runtime.Allocator)
+			err = encoder.EncodeWithAllocator(object, discard, allocator)
+			runtime.AllocatorPool.Put(allocator)
+		} else {
+			err = encoder.EncodeWithAllocator(object, discard, simpleAllocator)
+		}
+		if err != nil {
+			b.Fatalf("unexpected encode error: %v", err)
+		}
+	}
+}
+
+func benchmarkProtobufEncodeWithAllocatorParallel(b *testing.B, encoder runtime.EncoderWithAllocator, object runtime.Object, pooled bool) {
+	discard := io.Discard
+
+	b.StopTimer()
+	if pooled {
+		allocator := runtime.AllocatorPool.Get().(*runtime.Allocator)
+		if err := encoder.EncodeWithAllocator(object, discard, allocator); err != nil {
+			runtime.AllocatorPool.Put(allocator)
+			b.Fatalf("warm pooled allocator: %v", err)
+		}
+		runtime.AllocatorPool.Put(allocator)
+	} else {
+		simpleAllocator := &runtime.SimpleAllocator{}
+		if err := encoder.EncodeWithAllocator(object, discard, simpleAllocator); err != nil {
+			b.Fatalf("warm simple allocator: %v", err)
+		}
+	}
+	b.StartTimer()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		simpleAllocator := &runtime.SimpleAllocator{}
+		for pb.Next() {
+			var err error
+			if pooled {
+				allocator := runtime.AllocatorPool.Get().(*runtime.Allocator)
+				err = encoder.EncodeWithAllocator(object, discard, allocator)
+				runtime.AllocatorPool.Put(allocator)
+			} else {
+				err = encoder.EncodeWithAllocator(object, discard, simpleAllocator)
+			}
+			if err != nil {
+				b.Fatalf("unexpected encode error: %v", err)
+			}
+		}
+	})
+}
+
+func allocatorBenchmarkItems(b *testing.B, n int) *v1.PodList {
+	b.Helper()
+	pod := v1.Pod{}
+	if len(allocatorBenchmarkExemplarPodYAML) == 0 {
+		b.Fatal("allocator benchmark exemplar pod is empty")
+	}
+	if err := yaml.Unmarshal(allocatorBenchmarkExemplarPodYAML, &pod); err != nil {
+		b.Fatalf("decode allocator benchmark exemplar pod: %v", err)
+	}
+
+	nodeNames := make([]string, 25)
+	for i := range nodeNames {
+		nodeNames[i] = rand2.String(10)
+	}
+	list := &v1.PodList{
+		Items: make([]v1.Pod, n),
+	}
+	for i := range n {
+		list.Items[i] = *pod.DeepCopy()
+		list.Items[i].Namespace = rand2.String(10)
+		list.Items[i].Name = list.Items[i].GenerateName + rand2.String(10)
+		list.Items[i].UID = types.UID(rand2.String(36))
+		list.Items[i].ResourceVersion = ""
+		list.Items[i].Spec.NodeName = nodeNames[rand.Intn(len(nodeNames))]
+	}
+	return list
+}
+
+func BenchmarkStreamingProtobufPodListAllocatorReuse(b *testing.B) {
+	counts := []int{50, 500, 5_000}
+	modes := []struct {
+		name     string
+		parallel bool
+	}{
+		{name: "Mode=Single", parallel: false},
+		{name: "Mode=Parallel", parallel: true},
+	}
+	allocators := []struct {
+		name   string
+		pooled bool
+	}{
+		{name: "Allocator=Simple", pooled: false},
+		{name: "Allocator=Pooled", pooled: true},
+	}
+
+	for _, mode := range modes {
+		b.Run(mode.name, func(b *testing.B) {
+			for _, count := range counts {
+				b.Run(fmt.Sprintf("Pods=%d", count), func(b *testing.B) {
+					podList := allocatorBenchmarkItems(b, count)
+					serializer := protobuf.NewSerializerWithOptions(nil, nil, protobuf.SerializerOptions{
+						StreamingCollectionsEncoding: true,
+					})
+					for _, allocator := range allocators {
+						b.Run(allocator.name, func(b *testing.B) {
+							if mode.parallel {
+								benchmarkProtobufEncodeWithAllocatorParallel(b, serializer, podList, allocator.pooled)
+								return
+							}
+							benchmarkProtobufEncodeWithAllocator(b, serializer, podList, allocator.pooled)
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
 type fakeResponseRecorder struct {
 	*httptest.ResponseRecorder
 	fe                 *fakeEncoder
@@ -925,4 +1073,50 @@ type writeCounter struct {
 func (b *writeCounter) Write(data []byte) (int, error) {
 	b.writeCount++
 	return b.Writer.Write(data)
+}
+
+func BenchmarkJSONStreaming(b *testing.B) {
+	scheme := runtime.NewScheme()
+	if err := v1.AddToScheme(scheme); err != nil {
+		b.Fatalf("failed to add v1 to scheme: %v", err)
+	}
+	typer := scheme
+	creater := scheme
+	serializerStreaming := jsonserializer.NewSerializerWithOptions(
+		jsonserializer.DefaultMetaFactory,
+		creater,
+		typer,
+		jsonserializer.SerializerOptions{StreamingCollectionsEncoding: true},
+	)
+	serializerNonStreaming := jsonserializer.NewSerializerWithOptions(
+		jsonserializer.DefaultMetaFactory,
+		creater,
+		typer,
+		jsonserializer.SerializerOptions{StreamingCollectionsEncoding: false},
+	)
+	podList := benchmarkItems(b, "testdata/exemplar_pod.yaml", 1000)
+	b.Run("Streaming", func(b *testing.B) {
+		var buf bytes.Buffer
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			buf.Reset()
+			err := serializerStreaming.Encode(podList, &buf)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("NonStreaming", func(b *testing.B) {
+		var buf bytes.Buffer
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			buf.Reset()
+			err := serializerNonStreaming.Encode(podList, &buf)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 }

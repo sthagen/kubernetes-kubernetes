@@ -311,8 +311,8 @@ func TestMarkConsistent(t *testing.T) {
 	if len(etcdRequests) != 0 {
 		t.Errorf("Expected no requests to etcd, got: %+v", etcdRequests)
 	}
-	if cacher.cacher.watchCache.snapshots.Len() != 2 {
-		t.Errorf("Expected cache %d snapshots, got: %d", 2, cacher.cacher.watchCache.snapshots.Len())
+	if cacher.cacher.watchCache.storage.snapshots.Len() != 2 {
+		t.Errorf("Expected cache %d snapshots, got: %d", 2, cacher.cacher.watchCache.storage.snapshots.Len())
 	}
 
 	t.Log("Inconsistent cache clears old snapshots, list hits etcd")
@@ -326,8 +326,8 @@ func TestMarkConsistent(t *testing.T) {
 	if len(etcdRequests) != 1 {
 		t.Errorf("Expected request to etcd, got: %+v", etcdRequests)
 	}
-	if cacher.cacher.watchCache.snapshots.Len() != 0 {
-		t.Errorf("Expected cache %d snapshots, got: %d", 0, cacher.cacher.watchCache.snapshots.Len())
+	if cacher.cacher.watchCache.storage.snapshots.Len() != 0 {
+		t.Errorf("Expected cache %d snapshots, got: %d", 0, cacher.cacher.watchCache.storage.snapshots.Len())
 	}
 
 	t.Log("Inconsistent cache doesn't collect new snapshot, list hits etcd")
@@ -341,8 +341,8 @@ func TestMarkConsistent(t *testing.T) {
 	if len(etcdRequests) != 1 {
 		t.Errorf("Expected request to etcd, got: %+v", etcdRequests)
 	}
-	if cacher.cacher.watchCache.snapshots.Len() != 0 {
-		t.Errorf("Expected cache %d snapshots, got: %d", 0, cacher.cacher.watchCache.snapshots.Len())
+	if cacher.cacher.watchCache.storage.snapshots.Len() != 0 {
+		t.Errorf("Expected cache %d snapshots, got: %d", 0, cacher.cacher.watchCache.storage.snapshots.Len())
 	}
 
 	t.Log("Marking cache consistent allows it to collect new snapshots, list skips etcd")
@@ -357,8 +357,8 @@ func TestMarkConsistent(t *testing.T) {
 	if len(etcdRequests) != 0 {
 		t.Errorf("Expected no requests to etcd, got: %+v", etcdRequests)
 	}
-	if cacher.cacher.watchCache.snapshots.Len() != 1 {
-		t.Errorf("Expected cache %d snapshots, got: %d", 1, cacher.cacher.watchCache.snapshots.Len())
+	if cacher.cacher.watchCache.storage.snapshots.Len() != 1 {
+		t.Errorf("Expected cache %d snapshots, got: %d", 1, cacher.cacher.watchCache.storage.snapshots.Len())
 	}
 }
 
@@ -745,15 +745,15 @@ func BenchmarkStoreWriteThroughput(b *testing.B) {
 			b.Cleanup(terminate)
 			data := storagetesting.PrepareBenchmarkData(dims.namespaceCount, dims.podPerNamespaceCount, dims.nodeCount)
 			tracker := storagetesting.NewWatchLatencyTracker(clock.RealClock{})
-			originalHandler := cacher.cacher.watchCache.eventHandler
-			cacher.cacher.watchCache.eventHandler = func(event *watchCacheEvent) {
+			originalHandler := cacher.cacher.watchCache.config.eventHandler
+			cacher.cacher.watchCache.config.eventHandler = func(event *watchCacheEvent) {
 				if originalHandler != nil {
 					originalHandler(event)
 				}
 				tracker.HandleEvent(event.Object)
 			}
 			b.Cleanup(func() {
-				cacher.cacher.watchCache.eventHandler = originalHandler
+				cacher.cacher.watchCache.config.eventHandler = originalHandler
 			})
 			storagetesting.RunBenchmarkWriteThroughput(ctx, b, cacher, data, true, tracker)
 		})

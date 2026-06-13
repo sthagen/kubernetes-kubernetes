@@ -263,7 +263,7 @@ func TestShouldDelegateList(t *testing.T) {
 			}
 			defer cacher.Stop()
 			if snapshotAvailable {
-				cacher.watchCache.snapshots.Add(uint64(mustAtoi(oldRV)), fakeIndexer{})
+				cacher.watchCache.storage.snapshots.Add(uint64(mustAtoi(oldRV)), fakeIndexer{})
 			}
 			result, err := delegator.ShouldDelegateList(toStorageOpts(opt), cacher)
 			if err != nil {
@@ -570,7 +570,7 @@ func TestMatchExactResourceVersionFallback(t *testing.T) {
 			defer cacher.Stop()
 			snapshotRequestCount := 0
 			cacher.watchCache.RWMutex.Lock()
-			cacher.watchCache.snapshots = &fakeSnapshotter{
+			cacher.watchCache.storage.snapshots = &fakeSnapshotter{
 				getLessOrEqual: func(rv uint64) (store.Snapshot, bool) {
 					snapshotAvailable := tc.snapshotsAvailable[snapshotRequestCount]
 					snapshotRequestCount++
@@ -1984,7 +1984,7 @@ func testCachingObjects(t *testing.T, watchersCount int) {
 	defer cacher.Stop()
 
 	dispatchedEvents := []*watchCacheEvent{}
-	cacher.watchCache.eventHandler = func(event *watchCacheEvent) {
+	cacher.watchCache.config.eventHandler = func(event *watchCacheEvent) {
 		dispatchedEvents = append(dispatchedEvents, event)
 		cacher.processEvent(event)
 	}
@@ -2034,7 +2034,7 @@ func testCachingObjects(t *testing.T, watchersCount int) {
 			object = event.Object.(runtime.CacheableObject).GetObject()
 
 			if event.Type == watch.Deleted {
-				resourceVersion, err := cacher.versioner.ObjectResourceVersion(cacher.watchCache.cache[index].PrevObject)
+				resourceVersion, err := cacher.versioner.ObjectResourceVersion(cacher.watchCache.history.cache[index].PrevObject)
 				if err != nil {
 					t.Fatalf("Failed to parse resource version: %v", err)
 				}
@@ -2044,9 +2044,9 @@ func testCachingObjects(t *testing.T, watchersCount int) {
 			var e runtime.Object
 			switch event.Type {
 			case watch.Added, watch.Modified:
-				e = cacher.watchCache.cache[index].Object
+				e = cacher.watchCache.history.cache[index].Object
 			case watch.Deleted:
-				e = cacher.watchCache.cache[index].PrevObject
+				e = cacher.watchCache.history.cache[index].PrevObject
 			default:
 				t.Errorf("unexpected watch event: %#v", event)
 			}
@@ -2092,11 +2092,11 @@ func TestCacheIntervalInvalidationStopsWatch(t *testing.T) {
 	}
 	once := sync.Once{}
 	indexValidator := func(index int) bool {
-		isValid := valid && (index >= cacher.watchCache.startIndex)
+		isValid := valid && (index >= cacher.watchCache.history.startIndex)
 		once.Do(invalidateCacheInterval)
 		return isValid
 	}
-	cacher.watchCache.indexValidator = indexValidator
+	cacher.watchCache.config.indexValidator = indexValidator
 
 	makePod := func(i int) *examplev1.Pod {
 		return &examplev1.Pod{

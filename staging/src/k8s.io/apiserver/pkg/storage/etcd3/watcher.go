@@ -39,6 +39,7 @@ import (
 	"k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/etcd3/metrics"
+	etcdfeature "k8s.io/apiserver/pkg/storage/feature"
 	"k8s.io/apiserver/pkg/storage/value"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	utilflowcontrol "k8s.io/apiserver/pkg/util/flowcontrol"
@@ -291,8 +292,8 @@ func (wc *watchChan) RequestWatchProgress() error {
 // The revision to watch will be set to the revision in response.
 // All events sent will have isCreated=true
 func (wc *watchChan) sync() error {
-	// TODO(jefftree): detect RangeStream support via the etcd feature checker.
-	if wc.recursive && utilfeature.DefaultFeatureGate.Enabled(features.EtcdRangeStream) {
+	if wc.recursive && utilfeature.DefaultFeatureGate.Enabled(features.EtcdRangeStream) &&
+		etcdfeature.DefaultFeatureSupportChecker.Supports(storage.RangeStream) {
 		err := wc.syncStreamRecursive()
 		if err == nil {
 			return nil
@@ -372,14 +373,19 @@ func (wc *watchChan) syncStreamRecursive() error {
 
 	startTime := time.Now()
 	streamResp, err := wc.watcher.client.KV.GetStream(wc.ctx, wc.key, opts...)
-	metrics.RecordEtcdRequest("listStream", wc.watcher.groupResource, err, startTime)
 	if err != nil {
+		if grpcstatus.Code(err) == grpccodes.Unimplemented {
+			etcdfeature.DefaultFeatureSupportChecker.MarkUnsupported(storage.RangeStream)
+		}
 		return err
 	}
+	defer func() {
+		metrics.RecordEtcdRequest("listStream", wc.watcher.groupResource, err, startTime)
+	}()
 
 	var initialRev int64
 	for r := range streamResp {
-		if err := r.Err(); err != nil {
+		if err = r.Err(); err != nil {
 			// paging=false: a compaction mid-stream can't be resumed with a
 			// continue token, so surface it as ResourceExpired for a relist.
 			return interpretListError(err, false, wc.key, wc.key)
