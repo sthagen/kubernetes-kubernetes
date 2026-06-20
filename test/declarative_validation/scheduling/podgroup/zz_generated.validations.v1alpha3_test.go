@@ -31,7 +31,6 @@ func init() {
 		schema.GroupVersionKind{Group: "scheduling.k8s.io", Version: "v1alpha3", Kind: "PodGroup"},
 		coverage.FieldRules{
 			"spec.disruptionMode": {
-				{ErrorType: "FieldValueForbidden"},
 				{ErrorType: "FieldValueInvalid", Origin: "immutable"},
 				{ErrorType: "FieldValueInvalid", Origin: "union"},
 				{ErrorType: "FieldValueRequired"},
@@ -49,12 +48,10 @@ func init() {
 				{ErrorType: "FieldValueRequired"},
 			},
 			"spec.priority": {
-				{ErrorType: "FieldValueForbidden"},
 				{ErrorType: "FieldValueInvalid", Origin: "immutable"},
 				{ErrorType: "FieldValueInvalid", Origin: "maximum"},
 			},
 			"spec.priorityClassName": {
-				{ErrorType: "FieldValueForbidden"},
 				{ErrorType: "FieldValueInvalid", Origin: "format=k8s-long-name"},
 				{ErrorType: "FieldValueInvalid", Origin: "immutable"},
 			},
@@ -88,8 +85,13 @@ func init() {
 				{ErrorType: "FieldValueRequired"},
 			},
 			"spec.schedulingPolicy": {
-				{ErrorType: "FieldValueInvalid", Origin: "immutable"},
 				{ErrorType: "FieldValueInvalid", Origin: "union"},
+			},
+			"spec.schedulingPolicy.basic": {
+				{ErrorType: "FieldValueInvalid", Origin: "immutable"},
+			},
+			"spec.schedulingPolicy.gang": {
+				{ErrorType: "FieldValueInvalid", Origin: "update"},
 			},
 			"spec.schedulingPolicy.gang.minCount": {
 				{ErrorType: "FieldValueInvalid", Origin: "minimum"},
@@ -97,6 +99,9 @@ func init() {
 			},
 			"status.conditions[*]": {
 				{ErrorType: "FieldValueDuplicate"},
+			},
+			"status.conditions[*].observedGeneration": {
+				{ErrorType: "FieldValueInvalid", Origin: "minimum"},
 			},
 			"status.conditions[*].type": {
 				{ErrorType: "FieldValueRequired"},

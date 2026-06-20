@@ -193,7 +193,7 @@ func (sched *Scheduler) podGroupCycle(ctx context.Context, schedFwk framework.Fr
 
 	// Run workload aware preemption if required. If the preemption is successful,
 	// we need to put the pods from pod group back into the scheduling queue.
-	if sched.workloadAwarePreemptionEnabled && result.status.Code() == fwk.Unschedulable {
+	if result.status.Code() == fwk.Unschedulable {
 		pgPostFilterResult, status := sched.runWorkloadAwarePreemption(ctx, schedFwk, podGroupCycleState, podGroupInfo)
 		if status.IsSuccess() {
 			result.waitingOnPreemption = true
@@ -556,7 +556,7 @@ func (sched *Scheduler) submitPodGroupAlgorithmResult(ctx context.Context, sched
 	switch {
 	case podGroupResult.status.IsSuccess():
 		condition = &metav1.Condition{
-			Type:    schedulingapi.PodGroupScheduled,
+			Type:    schedulingapi.PodGroupInitiallyScheduled,
 			Status:  metav1.ConditionTrue,
 			Reason:  "Scheduled",
 			Message: podGroupResult.status.Message(),
@@ -566,7 +566,7 @@ func (sched *Scheduler) submitPodGroupAlgorithmResult(ctx context.Context, sched
 
 	case podGroupResult.status.IsRejected():
 		condition = &metav1.Condition{
-			Type:    schedulingapi.PodGroupScheduled,
+			Type:    schedulingapi.PodGroupInitiallyScheduled,
 			Status:  metav1.ConditionFalse,
 			Reason:  schedulingapi.PodGroupReasonUnschedulable,
 			Message: podGroupResult.status.Message(),
@@ -581,7 +581,7 @@ func (sched *Scheduler) submitPodGroupAlgorithmResult(ctx context.Context, sched
 
 	default:
 		condition = &metav1.Condition{
-			Type:    schedulingapi.PodGroupScheduled,
+			Type:    schedulingapi.PodGroupInitiallyScheduled,
 			Status:  metav1.ConditionFalse,
 			Reason:  schedulingapi.PodGroupReasonSchedulerError,
 			Message: podGroupResult.status.AsError().Error(),

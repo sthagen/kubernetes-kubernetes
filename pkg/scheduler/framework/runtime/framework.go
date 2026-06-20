@@ -476,7 +476,7 @@ func NewFramework(ctx context.Context, r Registry, profile *config.KubeScheduler
 	}
 
 	// Put default preemption as the only PodGroupPostFilterPlugin
-	if utilfeature.DefaultFeatureGate.Enabled(features.WorkloadAwarePreemption) {
+	if utilfeature.DefaultFeatureGate.Enabled(features.GenericWorkload) {
 		if dp, ok := f.pluginsMap[names.DefaultPreemption]; ok {
 			if _, ok := dp.(framework.PodGroupPostFilterPlugin); ok {
 				f.podGroupPostFilterPlugins = append(f.podGroupPostFilterPlugins, dp.(framework.PodGroupPostFilterPlugin))
@@ -496,6 +496,8 @@ func NewFramework(ctx context.Context, r Registry, profile *config.KubeScheduler
 			} else {
 				return nil, fmt.Errorf("GenericWorkload is enabled, but GangScheduling plugin does not fulfill PlacementFeasiblePlugin interface")
 			}
+		} else {
+			logger.Error(nil, "GenericWorkload is enabled, but GangScheduling plugin is not set. Gang scheduling using PodGroups may not work as expected.")
 		}
 	}
 

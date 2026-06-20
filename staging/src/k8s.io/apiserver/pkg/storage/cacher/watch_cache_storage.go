@@ -21,15 +21,31 @@ import (
 	"sort"
 	"sync/atomic"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/features"
+	"k8s.io/apiserver/pkg/storage/cacher/key"
 	"k8s.io/apiserver/pkg/storage/cacher/store"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/tools/cache"
 )
 
+func newWatchCacheStorage(keyFunc func(runtime.Object) (string, error), indexers *cache.Indexers) *watchCacheStorage {
+	storage := &watchCacheStorage{
+		keyFunc:             keyFunc,
+		store:               store.NewIndexer(indexers),
+		listResourceVersion: 0,
+	}
+	if utilfeature.DefaultFeatureGate.Enabled(features.ListFromCacheSnapshot) {
+		storage.snapshottingEnabled.Store(true)
+		storage.snapshots = store.NewSnapshotter()
+	}
+	return storage
+}
+
 type watchCacheStorage struct {
-	config *ImmutableWatchCacheConfig
+	keyFunc func(runtime.Object) (string, error)
 
 	// store will effectively support LIST operation from the "end of cache
 	// history" i.e. from the moment just after the newest cached watched event.
@@ -45,12 +61,11 @@ type watchCacheStorage struct {
 	snapshottingEnabled atomic.Bool
 }
 
-func (w *watchCacheStorage) getIntervalLocked(resourceVersion uint64, key string, matchesSingle bool) (*watchCacheInterval, error) {
-	ci, err := newCacheIntervalFromStore(resourceVersion, w.store, key, matchesSingle)
-	if err != nil {
-		return nil, err
-	}
-	return ci, nil
+// StoreLocked returns the live store as a store.Snapshot.
+// Unlike GetExactSnapshotLocked this is not an immutable point-in-time copy.
+// The caller must hold the lock for the duration of use.
+func (w *watchCacheStorage) StoreLocked() store.Snapshot {
+	return w.store
 }
 
 func (w *watchCacheStorage) Compact(rev uint64) {
@@ -100,6 +115,16 @@ type orderedListSnapshot struct {
 
 var _ store.Snapshot = (*orderedListSnapshot)(nil)
 
+func (o orderedListSnapshot) GetByKey(key string) (interface{}, bool, error) {
+	for _, item := range o.Items {
+		elem, ok := item.(*store.Element)
+		if ok && elem.Key == key {
+			return item, true, nil
+		}
+	}
+	return nil, false, nil
+}
+
 func (o orderedListSnapshot) OrderedListPrefix(prefix, continueKey string) ([]interface{}, error) {
 	return o.Items, nil
 }
@@ -109,6 +134,16 @@ type listSnapshot struct {
 }
 
 var _ store.Snapshot = (*listSnapshot)(nil)
+
+func (l listSnapshot) GetByKey(key string) (interface{}, bool, error) {
+	for _, item := range l.Items {
+		elem, ok := item.(*store.Element)
+		if ok && elem.Key == key {
+			return item, true, nil
+		}
+	}
+	return nil, false, nil
+}
 
 func (l listSnapshot) OrderedListPrefix(prefix string, continueKey string) ([]interface{}, error) {
 	var result []interface{}
@@ -120,7 +155,7 @@ func (l listSnapshot) OrderedListPrefix(prefix string, continueKey string) ([]in
 		if len(continueKey) > 0 && continueKey >= elem.Key {
 			continue
 		}
-		if !hasPathPrefix(elem.Key, prefix) {
+		if !key.HasPathPrefix(elem.Key, prefix) {
 			continue
 		}
 		result = append(result, item)
@@ -150,7 +185,7 @@ func (w *watchCacheStorage) Get(obj interface{}) (interface{}, bool, error) {
 	if !ok {
 		return nil, false, fmt.Errorf("obj does not implement runtime.Object interface: %v", obj)
 	}
-	key, err := w.config.keyFunc(object)
+	key, err := w.keyFunc(object)
 	if err != nil {
 		return nil, false, fmt.Errorf("couldn't compute key: %w", err)
 	}
@@ -173,24 +208,24 @@ func (w *watchCacheStorage) List() []interface{} {
 }
 
 // UpdateStoreLocked executes a mutation (Add, Update, Delete) on the underlying store.
-func (w *watchCacheStorage) UpdateStoreLocked(eventType watch.EventType, elem *store.Element) error {
+func (w *watchCacheStorage) UpdateStoreLocked(eventType watch.EventType, elem *store.Element, resourceVersion uint64) (err error) {
 	switch eventType {
 	case watch.Added:
-		return w.store.Add(elem)
+		err = w.store.Add(elem)
 	case watch.Modified:
-		return w.store.Update(elem)
+		err = w.store.Update(elem)
 	case watch.Deleted:
-		return w.store.Delete(elem)
+		err = w.store.Delete(elem)
 	default:
-		return fmt.Errorf("unexpected event type: %v", eventType)
+		err = fmt.Errorf("unexpected event type: %v", eventType)
 	}
-}
-
-// AddSnapshotLocked collects a new snapshot if snapshotting is enabled.
-func (w *watchCacheStorage) AddSnapshotLocked(version uint64) {
+	if err != nil {
+		return err
+	}
 	if w.snapshots != nil && w.snapshottingEnabled.Load() {
-		w.snapshots.Add(version, w.store)
+		w.snapshots.Add(resourceVersion, w.store)
 	}
+	return nil
 }
 
 // CompactSnapshotsLocked prunes snapshots older than the oldest history version.
@@ -198,4 +233,41 @@ func (w *watchCacheStorage) CompactSnapshotsLocked(oldestRV uint64) {
 	if w.snapshots != nil && w.snapshottingEnabled.Load() {
 		w.snapshots.RemoveLess(oldestRV)
 	}
+}
+
+// ReplaceLocked replaces the elements in the underlying store and resets snapshots.
+func (w *watchCacheStorage) ReplaceLocked(toReplace []interface{}, resourceVersion string, version uint64) error {
+	if err := w.store.Replace(toReplace, resourceVersion); err != nil {
+		return err
+	}
+	if w.snapshots != nil {
+		w.snapshots.Reset()
+		if w.snapshottingEnabled.Load() {
+			w.snapshots.Add(version, w.store)
+		}
+	}
+	w.listResourceVersion = version
+	return nil
+}
+
+// GetExactSnapshotLocked retrieves a snapshot less than or equal to the given resource version.
+func (w *watchCacheStorage) GetExactSnapshotLocked(resourceVersion uint64) (store.Snapshot, error) {
+	if w.snapshots == nil {
+		return nil, errors.NewResourceExpired(fmt.Sprintf("too old resource version: %d", resourceVersion))
+	}
+	snap, ok := w.snapshots.GetLessOrEqual(resourceVersion)
+	if !ok {
+		return nil, errors.NewResourceExpired(fmt.Sprintf("too old resource version: %d", resourceVersion))
+	}
+	return snap, nil
+}
+
+// ByIndex retrieves elements from the indexer by index name and value.
+func (w *watchCacheStorage) ByIndex(indexName, value string) ([]interface{}, error) {
+	return w.store.ByIndex(indexName, value)
+}
+
+// ListResourceVersion returns the list resource version.
+func (w *watchCacheStorage) ListResourceVersion() uint64 {
+	return w.listResourceVersion
 }
