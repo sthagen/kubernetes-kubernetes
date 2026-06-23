@@ -2782,219 +2782,6 @@ func expectInFlightPods(t *testing.T, q *PriorityQueue, uids ...types.UID) {
 	}
 }
 
-// TestPriorityQueue_AssignedPodAdded tests AssignedPodAdded. It checks that
-// when a pod with pod affinity is in unschedulableEntities and another pod with a
-// matching label is added, the unschedulable pod is moved to activeQ.
-func TestPriorityQueue_AssignedPodAdded_(t *testing.T) {
-	tests := []struct {
-		name               string
-		unschedPod         *v1.Pod
-		unschedPlugin      string
-		updatedAssignedPod *v1.Pod
-		wantToRequeue      bool
-	}{
-		{
-			name:               "Pod rejected by pod affinity is requeued with matching Pod's update",
-			unschedPod:         st.MakePod().Name("afp").Namespace("ns1").UID("afp").Annotation("annot2", "val2").PodAffinityExists("service", "region", st.PodAffinityWithRequiredReq).Obj(),
-			unschedPlugin:      names.InterPodAffinity,
-			updatedAssignedPod: st.MakePod().Name("lbp").Namespace("ns1").Label("service", "securityscan").Node("node1").Obj(),
-			wantToRequeue:      true,
-		},
-		{
-			name:               "Pod rejected by pod affinity isn't requeued with unrelated Pod's update",
-			unschedPod:         st.MakePod().Name("afp").Namespace("ns1").UID("afp").Annotation("annot2", "val2").PodAffinityExists("service", "region", st.PodAffinityWithRequiredReq).Obj(),
-			unschedPlugin:      names.InterPodAffinity,
-			updatedAssignedPod: st.MakePod().Name("lbp").Namespace("unrelated").Label("unrelated", "unrelated").Node("node1").Obj(),
-			wantToRequeue:      false,
-		},
-		{
-			name:               "Pod rejected by pod topology spread is requeued with Pod's update in the same namespace",
-			unschedPod:         st.MakePod().Name("tsp").Namespace("ns1").UID("tsp").SpreadConstraint(1, "node", v1.DoNotSchedule, nil, nil, nil, nil, nil).Obj(),
-			unschedPlugin:      names.PodTopologySpread,
-			updatedAssignedPod: st.MakePod().Name("lbp").Namespace("ns1").Label("service", "securityscan").Node("node1").Obj(),
-			wantToRequeue:      true,
-		},
-		{
-			name:               "Pod rejected by pod topology spread isn't requeued with unrelated Pod's update",
-			unschedPod:         st.MakePod().Name("afp").Namespace("ns1").UID("afp").Annotation("annot2", "val2").PodAffinityExists("service", "region", st.PodAffinityWithRequiredReq).Obj(),
-			unschedPlugin:      names.PodTopologySpread,
-			updatedAssignedPod: st.MakePod().Name("lbp").Namespace("unrelated").Label("unrelated", "unrelated").Node("node1").Obj(),
-			wantToRequeue:      false,
-		},
-		{
-			name:               "Pod rejected by other plugins isn't requeued with any Pod's update",
-			unschedPod:         st.MakePod().Name("afp").Namespace("ns1").UID("afp").Annotation("annot2", "val2").Obj(),
-			unschedPlugin:      "fakePlugin",
-			updatedAssignedPod: st.MakePod().Name("lbp").Namespace("unrelated").Label("unrelated", "unrelated").Node("node1").Obj(),
-			wantToRequeue:      false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			logger, ctx := ktesting.NewTestContext(t)
-			ctx, cancel := context.WithCancel(ctx)
-			defer cancel()
-
-			c := testingclock.NewFakeClock(time.Now())
-			m := makeEmptyQueueingHintMapPerProfile()
-			m[""][framework.EventAssignedPodAdd] = []*QueueingHintFunction{
-				{
-					PluginName:     "fakePlugin",
-					QueueingHintFn: queueHintReturnQueue,
-				},
-				{
-					PluginName:     names.InterPodAffinity,
-					QueueingHintFn: queueHintReturnQueue,
-				},
-				{
-					PluginName:     names.PodTopologySpread,
-					QueueingHintFn: queueHintReturnQueue,
-				},
-			}
-			q := NewTestQueue(ctx, newDefaultQueueSort(), WithClock(c), WithQueueingHintMapPerProfile(m))
-
-			// To simulate the pod is failed in scheduling in the real world, Pop() the pod from activeQ before AddUnschedulablePodIfNotPresent()s below.
-			q.Add(ctx, tt.unschedPod)
-			if p, err := q.Pop(logger); err != nil {
-				t.Errorf("Pop failed: %v", err)
-			} else if diff := cmp.Diff(tt.unschedPod, p.(*framework.QueuedPodInfo).Pod); diff != "" {
-				t.Errorf("Unexpected pod after Pop (-want, +got):\n%s", diff)
-			}
-
-			err := q.AddUnschedulablePodIfNotPresent(logger, q.newQueuedPodInfo(ctx, tt.unschedPod, tt.unschedPlugin), q.SchedulingCycle())
-			if err != nil {
-				t.Fatalf("unexpected error from AddUnschedulablePodIfNotPresent: %v", err)
-			}
-
-			// Move clock to make the unschedulable pods complete backoff.
-			c.Step(DefaultPodInitialBackoffDuration + time.Second)
-
-			q.AssignedPodAdded(logger, tt.updatedAssignedPod)
-
-			if q.activeQ.has(newQueuedPodInfoForLookup(tt.unschedPod)) != tt.wantToRequeue {
-				t.Fatalf("unexpected Pod move: Pod should be requeued: %v. Pod is actually requeued: %v", tt.wantToRequeue, !tt.wantToRequeue)
-			}
-		})
-	}
-}
-
-func TestPriorityQueue_AssignedPodUpdated(t *testing.T) {
-	tests := []struct {
-		name               string
-		unschedPod         *v1.Pod
-		unschedPlugin      string
-		updatedAssignedPod *v1.Pod
-		event              fwk.ClusterEvent
-		wantToRequeue      bool
-	}{
-		{
-			name:               "Pod rejected by pod affinity is requeued with matching Pod's update",
-			unschedPod:         st.MakePod().Name("afp").Namespace("ns1").UID("afp").Annotation("annot2", "val2").PodAffinityExists("service", "region", st.PodAffinityWithRequiredReq).Obj(),
-			unschedPlugin:      names.InterPodAffinity,
-			event:              fwk.ClusterEvent{Resource: fwk.AssignedPod, ActionType: fwk.UpdatePodLabel},
-			updatedAssignedPod: st.MakePod().Name("lbp").Namespace("ns1").Label("service", "securityscan").Node("node1").Obj(),
-			wantToRequeue:      true,
-		},
-		{
-			name:               "Pod rejected by pod affinity isn't requeued with unrelated Pod's update",
-			unschedPod:         st.MakePod().Name("afp").Namespace("ns1").UID("afp").Annotation("annot2", "val2").PodAffinityExists("service", "region", st.PodAffinityWithRequiredReq).Obj(),
-			unschedPlugin:      names.InterPodAffinity,
-			event:              fwk.ClusterEvent{Resource: fwk.AssignedPod, ActionType: fwk.UpdatePodLabel},
-			updatedAssignedPod: st.MakePod().Name("lbp").Namespace("unrelated").Label("unrelated", "unrelated").Node("node1").Obj(),
-			wantToRequeue:      false,
-		},
-		{
-			name:               "Pod rejected by pod topology spread is requeued with Pod's update in the same namespace",
-			unschedPod:         st.MakePod().Name("tsp").Namespace("ns1").UID("tsp").SpreadConstraint(1, "node", v1.DoNotSchedule, nil, nil, nil, nil, nil).Obj(),
-			unschedPlugin:      names.PodTopologySpread,
-			event:              fwk.ClusterEvent{Resource: fwk.AssignedPod, ActionType: fwk.UpdatePodLabel},
-			updatedAssignedPod: st.MakePod().Name("lbp").Namespace("ns1").Label("service", "securityscan").Node("node1").Obj(),
-			wantToRequeue:      true,
-		},
-		{
-			name:               "Pod rejected by pod topology spread isn't requeued with unrelated Pod's update",
-			unschedPod:         st.MakePod().Name("afp").Namespace("ns1").UID("afp").Annotation("annot2", "val2").PodAffinityExists("service", "region", st.PodAffinityWithRequiredReq).Obj(),
-			unschedPlugin:      names.PodTopologySpread,
-			event:              fwk.ClusterEvent{Resource: fwk.AssignedPod, ActionType: fwk.UpdatePodLabel},
-			updatedAssignedPod: st.MakePod().Name("lbp").Namespace("unrelated").Label("unrelated", "unrelated").Node("node1").Obj(),
-			wantToRequeue:      false,
-		},
-		{
-			name:               "Pod rejected by resource fit is requeued with assigned Pod's scale down",
-			unschedPod:         st.MakePod().Name("rp").Namespace("ns1").UID("afp").Annotation("annot2", "val2").Req(map[v1.ResourceName]string{v1.ResourceCPU: "1"}).Obj(),
-			unschedPlugin:      names.NodeResourcesFit,
-			event:              fwk.ClusterEvent{Resource: fwk.AssignedPod, ActionType: fwk.UpdatePodScaleDown},
-			updatedAssignedPod: st.MakePod().Name("lbp").Namespace("ns2").Node("node1").Obj(),
-			wantToRequeue:      true,
-		},
-		{
-			name:               "Pod rejected by other plugins isn't requeued with any Pod's update",
-			unschedPod:         st.MakePod().Name("afp").Namespace("ns1").UID("afp").Annotation("annot2", "val2").Obj(),
-			unschedPlugin:      "fakePlugin",
-			event:              fwk.ClusterEvent{Resource: fwk.AssignedPod, ActionType: fwk.UpdatePodLabel},
-			updatedAssignedPod: st.MakePod().Name("lbp").Namespace("unrelated").Label("unrelated", "unrelated").Node("node1").Obj(),
-			wantToRequeue:      false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			logger, ctx := ktesting.NewTestContext(t)
-			ctx, cancel := context.WithCancel(ctx)
-			defer cancel()
-
-			c := testingclock.NewFakeClock(time.Now())
-			m := makeEmptyQueueingHintMapPerProfile()
-			m[""] = map[fwk.ClusterEvent][]*QueueingHintFunction{
-				{Resource: fwk.AssignedPod, ActionType: fwk.UpdatePodLabel}: {
-					{
-						PluginName:     "fakePlugin",
-						QueueingHintFn: queueHintReturnQueue,
-					},
-					{
-						PluginName:     names.InterPodAffinity,
-						QueueingHintFn: queueHintReturnQueue,
-					},
-					{
-						PluginName:     names.PodTopologySpread,
-						QueueingHintFn: queueHintReturnQueue,
-					},
-				},
-				{Resource: fwk.AssignedPod, ActionType: fwk.UpdatePodScaleDown}: {
-					{
-						PluginName:     names.NodeResourcesFit,
-						QueueingHintFn: queueHintReturnQueue,
-					},
-				},
-			}
-			q := NewTestQueue(ctx, newDefaultQueueSort(), WithClock(c), WithQueueingHintMapPerProfile(m))
-
-			// To simulate the pod is failed in scheduling in the real world, Pop() the pod from activeQ before AddUnschedulablePodIfNotPresent()s below.
-			q.Add(ctx, tt.unschedPod)
-			if p, err := q.Pop(logger); err != nil {
-				t.Errorf("Pop failed: %v", err)
-			} else if diff := cmp.Diff(tt.unschedPod, p.(*framework.QueuedPodInfo).Pod); diff != "" {
-				t.Errorf("Unexpected pod after Pop (-want, +got):\n%s", diff)
-			}
-
-			err := q.AddUnschedulablePodIfNotPresent(logger, q.newQueuedPodInfo(ctx, tt.unschedPod, tt.unschedPlugin), q.SchedulingCycle())
-			if err != nil {
-				t.Fatalf("unexpected error from AddUnschedulablePodIfNotPresent: %v", err)
-			}
-
-			// Move clock to make the unschedulable pods complete backoff.
-			c.Step(DefaultPodInitialBackoffDuration + time.Second)
-
-			q.AssignedPodUpdated(logger, nil, tt.updatedAssignedPod, tt.event)
-
-			if q.activeQ.has(newQueuedPodInfoForLookup(tt.unschedPod)) != tt.wantToRequeue {
-				t.Fatalf("unexpected Pod move: Pod should be requeued: %v. Pod is actually requeued: %v", tt.wantToRequeue, !tt.wantToRequeue)
-			}
-		})
-	}
-}
-
 func TestPriorityQueue_NominatedPodsForNode(t *testing.T) {
 	objs := []runtime.Object{medPriorityPodInfo.Pod, unschedulablePodInfo.Pod, highPriorityPodInfo.Pod}
 	logger, ctx := ktesting.NewTestContext(t)
@@ -3071,6 +2858,109 @@ func TestPriorityQueue_NominatedPodDeleted(t *testing.T) {
 
 			if got := len(q.NominatedPodsForNode(tt.podInfo.Pod.Status.NominatedNodeName)); got != tt.wantLen {
 				t.Errorf("Expected %v nominated pods for node, but got %v", tt.wantLen, got)
+			}
+		})
+	}
+}
+
+// TestPriorityQueue_NominatedNodeNameEmptyNodeKey ensures an empty NominatedNodeName does not
+// store pods under nominatedPods[""] (#138267), including ModeNoop behavior.
+func TestPriorityQueue_NominatedNodeNameEmptyNodeKey(t *testing.T) {
+	tests := []struct {
+		name                 string
+		initialNominatedNode string // if set, nominate the pod to this node before the test call
+		podNominatedNode     string // pod.Status.NominatedNodeName
+		nominatingMode       fwk.NominatingMode
+		nominatingNodeName   string // NominatedNodeName in nominatingInfo
+		wantNominatedNode    string // expected node after the call; empty means no nomination
+	}{
+		{
+			name:           "ModeOverride empty without prior nomination",
+			nominatingMode: fwk.ModeOverride,
+		},
+		{
+			name:                 "nominated then cleared with ModeOverride empty",
+			initialNominatedNode: "node1",
+			nominatingMode:       fwk.ModeOverride,
+		},
+		{
+			name:           "ModeNoop empty without prior nomination",
+			nominatingMode: fwk.ModeNoop,
+		},
+		{
+			name:                 "nominated then cleared with ModeNoop empty",
+			initialNominatedNode: "node1",
+			nominatingMode:       fwk.ModeNoop,
+		},
+		{
+			name:               "ModeNoop with non-empty nominatingInfo NNN ignored when pod NNN empty",
+			nominatingMode:     fwk.ModeNoop,
+			nominatingNodeName: "node1",
+		},
+		{
+			name:               "ModeNoop with non-empty nominatingInfo NNN uses pod NNN",
+			nominatingMode:     fwk.ModeNoop,
+			podNominatedNode:   "node2",
+			nominatingNodeName: "node1",
+			wantNominatedNode:  "node2",
+		},
+		{
+			name:              "ModeNoop empty nominatingInfo NNN with non-empty pod NNN",
+			nominatingMode:    fwk.ModeNoop,
+			podNominatedNode:  "node2",
+			wantNominatedNode: "node2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			podBuilder := st.MakePod().Name("hpp").Namespace("ns1").UID("hppns1").Priority(highPriority)
+			if tt.podNominatedNode != "" {
+				podBuilder = podBuilder.NominatedNodeName(tt.podNominatedNode)
+			}
+			podInfo := mustNewTestPodInfo(t, podBuilder.Obj())
+
+			logger, ctx := ktesting.NewTestContext(t)
+			cs := fake.NewClientset(podInfo.Pod)
+			informerFactory := informers.NewSharedInformerFactory(cs, 0)
+			q := NewPriorityQueue(newDefaultQueueSort(), informerFactory, WithPodLister(informerFactory.Core().V1().Pods().Lister()))
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			informerFactory.Start(ctx.Done())
+			informerFactory.WaitForCacheSync(ctx.Done())
+
+			if tt.initialNominatedNode != "" {
+				q.AddNominatedPod(logger, podInfo, &fwk.NominatingInfo{
+					NominatingMode:    fwk.ModeOverride,
+					NominatedNodeName: tt.initialNominatedNode,
+				})
+				if got := len(q.nominator.nominatedPods[tt.initialNominatedNode]); got != 1 {
+					t.Fatalf("expected 1 nominated pod on %s before clear, got %d", tt.initialNominatedNode, got)
+				}
+			}
+
+			q.AddNominatedPod(logger, podInfo, &fwk.NominatingInfo{
+				NominatingMode:    tt.nominatingMode,
+				NominatedNodeName: tt.nominatingNodeName,
+			})
+
+			if len(q.nominator.nominatedPods[""]) != 0 {
+				t.Errorf("expected no pods under nominatedPods[\"\"], got %v", q.nominator.nominatedPods[""])
+			}
+			if tt.wantNominatedNode == "" {
+				if len(q.nominator.nominatedPods) != 0 {
+					t.Errorf("expected nominatedPods empty, got %v", q.nominator.nominatedPods)
+				}
+				if len(q.nominator.nominatedPodToNode) != 0 {
+					t.Errorf("expected nominatedPodToNode empty, got %v", q.nominator.nominatedPodToNode)
+				}
+			} else {
+				if got := len(q.nominator.nominatedPods[tt.wantNominatedNode]); got != 1 {
+					t.Errorf("expected 1 nominated pod on %s, got %d", tt.wantNominatedNode, got)
+				}
+				if got := q.nominator.nominatedPodToNode[podInfo.Pod.UID]; got != tt.wantNominatedNode {
+					t.Errorf("expected nominatedPodToNode[%s]=%s, got %s", podInfo.Pod.UID, tt.wantNominatedNode, got)
+				}
 			}
 		})
 	}
@@ -6508,6 +6398,7 @@ func TestUpdatePodGroupMember(t *testing.T) {
 	p1 := st.MakePod().Name("pod1").Namespace("ns1").UID("pod1").Label("allow", "").PodGroupName(pgName).Obj()
 	p2 := st.MakePod().Name("pod2").Namespace("ns1").UID("pod2").Label("allow", "").PodGroupName(pgName).Obj()
 	updatedP2 := st.MakePod().Name("pod2").Namespace("ns1").UID("pod2").Label("allow", "").Label("update", "true").PodGroupName(pgName).Obj()
+	nominatedP2 := st.MakePod().Name("pod2").Namespace("ns1").UID("pod2").Label("allow", "").Label("update", "true").NominatedNodeName("node1").PodGroupName(pgName).Obj()
 	gatedP1 := st.MakePod().Name("pod1").Namespace("ns1").UID("pod1").PodGroupName(pgName).Obj()
 	ungatedP1 := st.MakePod().Name("pod1").Namespace("ns1").UID("pod1").Label("allow", "").PodGroupName(pgName).Obj()
 	updatedGatedP1 := st.MakePod().Name("pod1").Namespace("ns1").UID("pod1").Label("updated", "true").PodGroupName(pgName).Obj()
@@ -6528,6 +6419,7 @@ func TestUpdatePodGroupMember(t *testing.T) {
 		expectedPodsInPending   int
 		expectedGated           bool
 		expectedGroupSize       int
+		expectedNominatedPods   map[types.UID]string
 	}{
 		{
 			name:              "update pod in activeQ, keeps pod group in activeQ",
@@ -6605,6 +6497,54 @@ func TestUpdatePodGroupMember(t *testing.T) {
 			expectedGated:     false,
 			expectedGroupSize: 1,
 		},
+		{
+			name:              "update pod to nominated in activeQ, keeps pod group in activeQ",
+			initialPods:       []*v1.Pod{p1, p2},
+			initialState:      stateActive,
+			oldPod:            p2,
+			newPod:            nominatedP2,
+			expectedInActiveQ: true,
+			expectedGroupSize: 2,
+			expectedNominatedPods: map[types.UID]string{
+				"pod2": "node1",
+			},
+		},
+		{
+			name:               "update pod to nominated in backoffQ, keeps pod group in backoffQ",
+			initialPods:        []*v1.Pod{p1, p2},
+			initialState:       stateBackoff,
+			oldPod:             p2,
+			newPod:             nominatedP2,
+			expectedInBackoffQ: true,
+			expectedGroupSize:  2,
+			expectedNominatedPods: map[types.UID]string{
+				"pod2": "node1",
+			},
+		},
+		{
+			name:              "update pod to nominated in unschedulableEntities moves it to activeQ (ungated pod group)",
+			initialPods:       []*v1.Pod{p1, p2},
+			initialState:      stateUnschedulable,
+			oldPod:            p2,
+			newPod:            nominatedP2,
+			expectedInActiveQ: true,
+			expectedGroupSize: 2,
+			expectedNominatedPods: map[types.UID]string{
+				"pod2": "node1",
+			},
+		},
+		{
+			name:                  "update pod to nominated in pendingPodGroupPods (group in flight), updates pod in pending buffer",
+			initialPods:           []*v1.Pod{p1},
+			initialState:          statePopped,
+			pendingPods:           []*v1.Pod{p2},
+			oldPod:                p2,
+			newPod:                nominatedP2,
+			expectedPodsInPending: 1,
+			expectedNominatedPods: map[types.UID]string{
+				"pod2": "node1",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -6622,7 +6562,7 @@ func TestUpdatePodGroupMember(t *testing.T) {
 					"preEnqueuePlugin": &preEnqueuePlugin{allowlists: []string{"allow"}},
 				},
 			}
-			q := NewTestQueue(ctx, newDefaultQueueSort(), WithPreEnqueuePluginMap(preEnqueueMap))
+			q := NewTestQueueWithObjects(ctx, newDefaultQueueSort(), []runtime.Object{tt.newPod}, WithPreEnqueuePluginMap(preEnqueueMap))
 
 			setupInitialPodGroupState(t, ctx, q, tt.initialPods, tt.initialState)
 			// Add pending pods
@@ -6702,6 +6642,9 @@ func TestUpdatePodGroupMember(t *testing.T) {
 				if !inPending {
 					t.Errorf("Updated pod %s was not found in pendingPodGroupPods map", tt.newPod.Name)
 				}
+			}
+			if diff := cmp.Diff(tt.expectedNominatedPods, q.nominatedPodToNode, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("Unexpected nominated pods (-want +got):\n%s", diff)
 			}
 		})
 	}
