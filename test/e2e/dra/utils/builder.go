@@ -423,11 +423,9 @@ func (b *Builder) PodGroup(workload *schedulingv1alpha3.Workload, template sched
 			Name:      fmt.Sprintf("%s-%s-%d", workload.Name, template.Name, b.podGroupCounter),
 		},
 		Spec: schedulingv1alpha3.PodGroupSpec{
-			PodGroupTemplateRef: &schedulingv1alpha3.PodGroupTemplateReference{
-				Workload: &schedulingv1alpha3.WorkloadPodGroupTemplateReference{
-					WorkloadName:         workload.Name,
-					PodGroupTemplateName: template.Name,
-				},
+			WorkloadRef: &schedulingv1alpha3.WorkloadReference{
+				WorkloadName: workload.Name,
+				TemplateName: template.Name,
 			},
 			SchedulingPolicy: template.SchedulingPolicy,
 			ResourceClaims:   template.ResourceClaims,
@@ -491,6 +489,12 @@ func (b *Builder) Create(tCtx ktesting.TContext, objs ...klog.KMetadata) []klog.
 			createdObj, err = tCtx.Client().ResourceV1beta2().DeviceTaintRules().Create(tCtx, obj, metav1.CreateOptions{})
 			cleanupCtx(func(tCtx ktesting.TContext) {
 				err := tCtx.Client().ResourceV1beta2().DeviceTaintRules().Delete(tCtx, createdObj.GetName(), metav1.DeleteOptions{})
+				tCtx.ExpectNoError(err, "delete DeviceTaintRule")
+			})
+		case *resourceapi.DeviceTaintRule:
+			createdObj, err = tCtx.Client().ResourceV1().DeviceTaintRules().Create(tCtx, obj, metav1.CreateOptions{})
+			cleanupCtx(func(tCtx ktesting.TContext) {
+				err := tCtx.Client().ResourceV1().DeviceTaintRules().Delete(tCtx, createdObj.GetName(), metav1.DeleteOptions{})
 				tCtx.ExpectNoError(err, "delete DeviceTaintRule")
 			})
 		case *appsv1.DaemonSet:

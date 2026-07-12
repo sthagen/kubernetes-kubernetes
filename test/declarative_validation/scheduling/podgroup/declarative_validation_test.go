@@ -27,6 +27,7 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	apitesting "k8s.io/kubernetes/pkg/api/testing"
+	"k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/scheduling"
 	"k8s.io/kubernetes/pkg/features"
 	registry "k8s.io/kubernetes/pkg/registry/scheduling/podgroup"
@@ -59,6 +60,7 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 		input                           scheduling.PodGroup
 		enableTopologyAwareScheduling   bool
 		enableDRAWorkloadResourceClaims bool
+		enablePodGroupPreemptionPolicy  bool
 		expectedErrs                    field.ErrorList
 	}{
 		"valid": {
@@ -77,36 +79,39 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 			input:        mkValidPodGroup(setPodGroupMinCount(-1)),
 			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "schedulingPolicy", "gang", "minCount"), nil, "").WithOrigin("minimum")},
 		},
-		"no podGroupTemplateRef": {
-			input: mkValidPodGroup(unsetPodGroupTemplateRef()),
+		"no workloadRef": {
+			input: mkValidPodGroup(unsetWorkloadRef()),
 		},
-		"empty podGroupTemplateRef": {
-			input:        mkValidPodGroup(setEmptyPodGroupTemplateRef()),
-			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplateRef"), nil, "").WithOrigin("union")},
+		"empty workloadRef": {
+			input: mkValidPodGroup(setEmptyWorkloadRef()),
+			expectedErrs: field.ErrorList{
+				field.Required(field.NewPath("spec", "workloadRef", "workloadName"), ""),
+				field.Required(field.NewPath("spec", "workloadRef", "templateName"), ""),
+			},
 		},
-		"podGroupTemplateRef with empty template name": {
-			input:        mkValidPodGroup(setPodGroupTemplateRef("", "workload")),
-			expectedErrs: field.ErrorList{field.Required(field.NewPath("spec", "podGroupTemplateRef", "workload", "podGroupTemplateName"), "")},
+		"workloadRef with empty template name": {
+			input:        mkValidPodGroup(setWorkloadRef("", "workload")),
+			expectedErrs: field.ErrorList{field.Required(field.NewPath("spec", "workloadRef", "templateName"), "")},
 		},
-		"podGroupTemplateRef invalid template name": {
-			input:        mkValidPodGroup(setPodGroupTemplateRef("temp/late", "workload")),
-			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplateRef", "workload", "podGroupTemplateName"), nil, "").WithOrigin("format=k8s-short-name")},
+		"workloadRef invalid template name": {
+			input:        mkValidPodGroup(setWorkloadRef("temp/late", "workload")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "workloadRef", "templateName"), nil, "").WithOrigin("format=k8s-short-name")},
 		},
-		"podGroupTemplateRef with empty workload name": {
-			input:        mkValidPodGroup(setPodGroupTemplateRef("template", "")),
-			expectedErrs: field.ErrorList{field.Required(field.NewPath("spec", "podGroupTemplateRef", "workload", "workloadName"), "")},
+		"workloadRef with empty workload name": {
+			input:        mkValidPodGroup(setWorkloadRef("template", "")),
+			expectedErrs: field.ErrorList{field.Required(field.NewPath("spec", "workloadRef", "workloadName"), "")},
 		},
-		"podGroupTemplateRef invalid workload name": {
-			input:        mkValidPodGroup(setPodGroupTemplateRef("template", "work/load")),
-			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplateRef", "workload", "workloadName"), nil, "").WithOrigin("format=k8s-long-name")},
+		"workloadRef invalid workload name": {
+			input:        mkValidPodGroup(setWorkloadRef("template", "work/load")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "workloadRef", "workloadName"), nil, "").WithOrigin("format=k8s-long-name")},
 		},
-		"podGroupTemplateRef too long workload name": {
-			input:        mkValidPodGroup(setPodGroupTemplateRef("template", strings.Repeat("g", 254))),
-			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplateRef", "workload", "workloadName"), nil, "").WithOrigin("format=k8s-long-name")},
+		"workloadRef too long workload name": {
+			input:        mkValidPodGroup(setWorkloadRef("template", strings.Repeat("g", 254))),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "workloadRef", "workloadName"), nil, "").WithOrigin("format=k8s-long-name")},
 		},
-		"podGroupTemplateRef too long template name": {
-			input:        mkValidPodGroup(setPodGroupTemplateRef(strings.Repeat("g", 254), "workload")),
-			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "podGroupTemplateRef", "workload", "podGroupTemplateName"), nil, "").WithOrigin("format=k8s-short-name")},
+		"workloadRef too long template name": {
+			input:        mkValidPodGroup(setWorkloadRef(strings.Repeat("g", 254), "workload")),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "workloadRef", "templateName"), nil, "").WithOrigin("format=k8s-short-name")},
 		},
 		"policy with neither basic nor gang": {
 			input:        mkValidPodGroup(clearPodGroupPolicy()),
@@ -201,6 +206,25 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 			expectedErrs: field.ErrorList{
 				field.Invalid(field.NewPath("spec", "priority"), nil, "").WithOrigin("maximum"),
 			},
+		},
+		"preemption policy set, pod group preemptionPolicy disabled": {
+			input:        mkValidPodGroup(setPreemptionPolicy(scheduling.PreemptNever)),
+			expectedErrs: field.ErrorList{field.Forbidden(field.NewPath("spec", "preemptionPolicy"), "")},
+		},
+		"valid preemption policy (Never), pod group preemptionPolicy enabled": {
+			input:                          mkValidPodGroup(setPreemptionPolicy(scheduling.PreemptNever)),
+			enablePodGroupPreemptionPolicy: true,
+		},
+		"invalid preemption policy, pod group preemptionPolicy enabled": {
+			input:                          mkValidPodGroup(setPreemptionPolicy(scheduling.PreemptionPolicy("Invalid"))),
+			enablePodGroupPreemptionPolicy: true,
+			expectedErrs: field.ErrorList{
+				field.NotSupported(field.NewPath("spec", "preemptionPolicy"), core.PreemptionPolicy("Invalid"), []string{"Never", "PreemptLowerPriority"}),
+			},
+		},
+		"pod group without preemption policy, pod group preemptionPolicy enabled": {
+			input:                          mkValidPodGroup(clearPreemptionPolicy()),
+			enablePodGroupPreemptionPolicy: true,
 		},
 		"ok resourceClaimName reference": {
 			input: mkValidPodGroup(addResourceClaims(scheduling.PodGroupResourceClaim{Name: "claim", ResourceClaimName: new("resource-claim")})),
@@ -298,6 +322,7 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 				features.GenericWorkload:                 true,
 				features.TopologyAwareWorkloadScheduling: tc.enableTopologyAwareScheduling,
 				features.DRAWorkloadResourceClaims:       tc.enableDRAWorkloadResourceClaims,
+				features.PodGroupPreemptionPolicy:        tc.enablePodGroupPreemptionPolicy,
 			})
 			apitesting.VerifyValidationEquivalence(t, ctx, &tc.input, strategy, tc.expectedErrs)
 		})
@@ -331,6 +356,7 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 		updateObj                       scheduling.PodGroup
 		enableTopologyAwareScheduling   bool
 		enableDRAWorkloadResourceClaims bool
+		enablePodGroupPreemptionPolicy  bool
 		expectedErrs                    field.ErrorList
 	}{
 		"valid update": {
@@ -341,32 +367,32 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 			oldObj:    mkValidPodGroup(setResourceVersion("1")),
 			updateObj: mkValidPodGroup(setResourceVersion("1"), setPodGroupMinCount(10)),
 		},
-		"invalid update empty podGroupTemplateRef": {
+		"invalid update empty workloadRef": {
 			oldObj:    mkValidPodGroup(setResourceVersion("1")),
-			updateObj: mkValidPodGroup(setResourceVersion("1"), setEmptyPodGroupTemplateRef()),
+			updateObj: mkValidPodGroup(setResourceVersion("1"), setEmptyWorkloadRef()),
 			expectedErrs: field.ErrorList{
-				field.Invalid(field.NewPath("spec", "podGroupTemplateRef"), nil, "").WithOrigin("immutable"),
+				field.Invalid(field.NewPath("spec", "workloadRef"), nil, "").WithOrigin("immutable"),
 			},
 		},
-		"invalid update unset podGroupTemplateRef": {
+		"invalid update unset workloadRef": {
 			oldObj:    mkValidPodGroup(setResourceVersion("1")),
-			updateObj: mkValidPodGroup(setResourceVersion("1"), unsetPodGroupTemplateRef()),
+			updateObj: mkValidPodGroup(setResourceVersion("1"), unsetWorkloadRef()),
 			expectedErrs: field.ErrorList{
-				field.Invalid(field.NewPath("spec", "podGroupTemplateRef"), nil, "").WithOrigin("immutable"),
+				field.Invalid(field.NewPath("spec", "workloadRef"), nil, "").WithOrigin("immutable"),
 			},
 		},
-		"invalid update change podGroupTemplateRef template name": {
+		"invalid update change workloadRef template name": {
 			oldObj:    mkValidPodGroup(setResourceVersion("1")),
-			updateObj: mkValidPodGroup(setResourceVersion("1"), setPodGroupTemplateRef("other-template", "workload")),
+			updateObj: mkValidPodGroup(setResourceVersion("1"), setWorkloadRef("other-template", "workload")),
 			expectedErrs: field.ErrorList{
-				field.Invalid(field.NewPath("spec", "podGroupTemplateRef"), nil, "").WithOrigin("immutable"),
+				field.Invalid(field.NewPath("spec", "workloadRef"), nil, "").WithOrigin("immutable"),
 			},
 		},
-		"invalid update change podGroupTemplateRef workload name": {
+		"invalid update change workloadRef workload name": {
 			oldObj:    mkValidPodGroup(setResourceVersion("1")),
-			updateObj: mkValidPodGroup(setResourceVersion("1"), setPodGroupTemplateRef("template", "other-workload")),
+			updateObj: mkValidPodGroup(setResourceVersion("1"), setWorkloadRef("template", "other-workload")),
 			expectedErrs: field.ErrorList{
-				field.Invalid(field.NewPath("spec", "podGroupTemplateRef"), nil, "").WithOrigin("immutable"),
+				field.Invalid(field.NewPath("spec", "workloadRef"), nil, "").WithOrigin("immutable"),
 			},
 		},
 		"invalid update with neither basic nor gang": {
@@ -506,6 +532,28 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 			updateObj:    mkValidPodGroup(setResourceVersion("1"), setPriority(2000)),
 			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "priority"), nil, "").WithOrigin("immutable")},
 		},
+		"invalid update of preemption policy, pod group preemptionPolicy enabled": {
+			oldObj:                         mkValidPodGroup(setResourceVersion("1"), setPreemptionPolicy(scheduling.PreemptNever)),
+			updateObj:                      mkValidPodGroup(setResourceVersion("1"), setPreemptionPolicy(scheduling.PreemptLowerPriority)),
+			enablePodGroupPreemptionPolicy: true,
+			expectedErrs:                   field.ErrorList{field.Invalid(field.NewPath("spec", "preemptionPolicy"), nil, "").WithOrigin("immutable")},
+		},
+		"invalid clearing of preemption policy, pod group preemptionPolicy enabled": {
+			oldObj:                         mkValidPodGroup(setResourceVersion("1"), setPreemptionPolicy(scheduling.PreemptNever)),
+			updateObj:                      mkValidPodGroup(setResourceVersion("1"), clearPreemptionPolicy()),
+			enablePodGroupPreemptionPolicy: true,
+			expectedErrs:                   field.ErrorList{field.Invalid(field.NewPath("spec", "preemptionPolicy"), nil, "").WithOrigin("immutable")},
+		},
+		"invalid update of preemption policy, pod group preemptionPolicy disabled": {
+			oldObj:       mkValidPodGroup(setResourceVersion("1"), setPreemptionPolicy(scheduling.PreemptNever)),
+			updateObj:    mkValidPodGroup(setResourceVersion("1"), setPreemptionPolicy(scheduling.PreemptLowerPriority)),
+			expectedErrs: field.ErrorList{field.Forbidden(field.NewPath("spec", "preemptionPolicy"), ""), field.Invalid(field.NewPath("spec", "preemptionPolicy"), nil, "").WithOrigin("immutable")},
+		},
+		"invalid clearing of preemption policy, pod group preemptionPolicy disabled": {
+			oldObj:       mkValidPodGroup(setResourceVersion("1"), setPreemptionPolicy(scheduling.PreemptNever)),
+			updateObj:    mkValidPodGroup(setResourceVersion("1"), clearPreemptionPolicy()),
+			expectedErrs: field.ErrorList{field.Invalid(field.NewPath("spec", "preemptionPolicy"), nil, "").WithOrigin("immutable")},
+		},
 	}
 	for k, tc := range testCases {
 		t.Run(k, func(t *testing.T) {
@@ -513,6 +561,7 @@ func testDeclarativeValidateUpdate(t *testing.T, apiVersion string) {
 				features.GenericWorkload:                 true,
 				features.TopologyAwareWorkloadScheduling: tc.enableTopologyAwareScheduling,
 				features.DRAWorkloadResourceClaims:       tc.enableDRAWorkloadResourceClaims,
+				features.PodGroupPreemptionPolicy:        tc.enablePodGroupPreemptionPolicy,
 			})
 			strategy := registry.NewStrategy()
 			apitesting.VerifyUpdateValidationEquivalence(t, ctx, &tc.updateObj, &tc.oldObj, strategy, tc.expectedErrs)
@@ -660,11 +709,9 @@ func mkValidPodGroup(tweaks ...func(pg *scheduling.PodGroup)) scheduling.PodGrou
 	obj := scheduling.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "podgroup", Namespace: "ns"},
 		Spec: scheduling.PodGroupSpec{
-			PodGroupTemplateRef: &scheduling.PodGroupTemplateReference{
-				Workload: &scheduling.WorkloadPodGroupTemplateReference{
-					WorkloadName:         "workload",
-					PodGroupTemplateName: "template",
-				},
+			WorkloadRef: &scheduling.WorkloadReference{
+				WorkloadName: "workload",
+				TemplateName: "template",
 			},
 			SchedulingPolicy: scheduling.PodGroupSchedulingPolicy{
 				Gang: &scheduling.GangSchedulingPolicy{
@@ -688,15 +735,15 @@ func setResourceVersion(v string) func(obj *scheduling.PodGroup) {
 	}
 }
 
-func unsetPodGroupTemplateRef() func(obj *scheduling.PodGroup) {
+func unsetWorkloadRef() func(obj *scheduling.PodGroup) {
 	return func(obj *scheduling.PodGroup) {
-		obj.Spec.PodGroupTemplateRef = nil
+		obj.Spec.WorkloadRef = nil
 	}
 }
 
-func setEmptyPodGroupTemplateRef() func(obj *scheduling.PodGroup) {
+func setEmptyWorkloadRef() func(obj *scheduling.PodGroup) {
 	return func(obj *scheduling.PodGroup) {
-		obj.Spec.PodGroupTemplateRef = &scheduling.PodGroupTemplateReference{}
+		obj.Spec.WorkloadRef = &scheduling.WorkloadReference{}
 	}
 }
 
@@ -729,13 +776,11 @@ func setBothPolicies() func(obj *scheduling.PodGroup) {
 	}
 }
 
-func setPodGroupTemplateRef(templateName, workloadName string) func(obj *scheduling.PodGroup) {
+func setWorkloadRef(templateName, workloadName string) func(obj *scheduling.PodGroup) {
 	return func(obj *scheduling.PodGroup) {
-		obj.Spec.PodGroupTemplateRef = &scheduling.PodGroupTemplateReference{
-			Workload: &scheduling.WorkloadPodGroupTemplateReference{
-				PodGroupTemplateName: templateName,
-				WorkloadName:         workloadName,
-			},
+		obj.Spec.WorkloadRef = &scheduling.WorkloadReference{
+			TemplateName: templateName,
+			WorkloadName: workloadName,
 		}
 	}
 }
@@ -824,6 +869,12 @@ func setDisruptionModeBoth() func(obj *scheduling.PodGroup) {
 	}
 }
 
+func clearDisruptionMode() func(obj *scheduling.PodGroup) {
+	return func(obj *scheduling.PodGroup) {
+		obj.Spec.DisruptionMode = nil
+	}
+}
+
 func setPriorityClassName(priorityClassName string) func(obj *scheduling.PodGroup) {
 	return func(obj *scheduling.PodGroup) {
 		obj.Spec.PriorityClassName = priorityClassName
@@ -836,8 +887,14 @@ func setPriority(priority int32) func(obj *scheduling.PodGroup) {
 	}
 }
 
-func clearDisruptionMode() func(obj *scheduling.PodGroup) {
+func setPreemptionPolicy(policy scheduling.PreemptionPolicy) func(obj *scheduling.PodGroup) {
 	return func(obj *scheduling.PodGroup) {
-		obj.Spec.DisruptionMode = nil
+		obj.Spec.PreemptionPolicy = &policy
+	}
+}
+
+func clearPreemptionPolicy() func(obj *scheduling.PodGroup) {
+	return func(obj *scheduling.PodGroup) {
+		obj.Spec.PreemptionPolicy = nil
 	}
 }

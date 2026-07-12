@@ -24,7 +24,6 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/api/scheduling/v1alpha3"
 	"k8s.io/apimachinery/pkg/util/sets"
 	fwk "k8s.io/kube-scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
@@ -161,38 +160,27 @@ type SortedScoredNodes interface {
 	Len() int
 }
 
-// PodGroupSchedulingFunc is a function that will be run to check feasibility of a pod group
-// scheduling during workload-aware preemption algorithm.
-type PodGroupSchedulingFunc func(ctx context.Context) (*fwk.PodGroupAssignments, *fwk.Status)
-
-// PodGroupPostFilterResult stores information about nominated nodes for a pod group.
-type PodGroupPostFilterResult struct {
-	NominatedNodeNames map[*v1.Pod]*fwk.NominatingInfo
-}
-
-// PodGroupPostFilterPlugin is an interface for plugins that are called
-// after a PodGroup cannot be scheduled.
-// It should not be used by any other plugin but DefaultPreemption.
-type PodGroupPostFilterPlugin interface {
-	fwk.Plugin
-
-	// PodGroupPostFilter is called after a PodGroup cannot be scheduled.
-	PodGroupPostFilter(ctx context.Context, pg *v1alpha3.PodGroup, pods []*v1.Pod, pgSchedulingFunc PodGroupSchedulingFunc) (*PodGroupPostFilterResult, *fwk.Status)
-}
-
 // PlacementFeasiblePlugin is an interface for plugins that are called after each pod in a pod group is evaluated.
 // It is used to determine if a pod group is schedulable, may become schedulable or will not become schedulable regardless of the scheduling result of the remaining pods in the pod group.
 type PlacementFeasiblePlugin interface {
 	fwk.Plugin
 
 	// PlacementFeasible is called after each pod in a pod group is evaluated.
-	// Use placementCycleState to accumulate the results from the evaluated pods in current cycle.
+	// placementFeasibleArgs contains information that plugins might additionally need when determining whether pod group scheduling placement is feasible.
 	// Return Wait status if the pod group cannot be scheduled in the current partially evaluated placement, but may become schedulable once more pods are evaluated.
 	// Return Unschedulable status if the pod group cannot be scheduled in the current placement.
 	// The scheduler will give up this placement and won't even evaluate remaining pods. The placement will remain eligible for preemption.
 	// Return Success status if the pod group can be scheduled in the current partially evaluated placement.
 	// After returning Success, the plugin should keep returning Success for the remaining pods.
-	PlacementFeasible(ctx context.Context, placementCycleState fwk.PlacementCycleState, podGroupInfo fwk.PodGroupInfo) *fwk.Status
+	PlacementFeasible(ctx context.Context, placementCycleState fwk.PlacementCycleState, podGroupInfo fwk.PodGroupInfo, placementFeasibleArgs PlacementFeasibleArgs) *fwk.Status
+}
+
+// PlacementFeasibleArgs contains information that plugins implementing the PlacementFeasiblePlugin
+// interface might additionally need when determining whether pod group scheduling placement is feasible.
+type PlacementFeasibleArgs struct {
+	// Evaluated denotes the number of Pods evaluated so far by the pod group scheduling cycle
+	// for a particular pod group and placement.
+	Evaluated int
 }
 
 // Framework manages the set of plugins in use by the scheduling framework.
@@ -260,16 +248,6 @@ type Framework interface {
 	// RunPostBindPlugins runs the set of configured PostBind plugins.
 	RunPostBindPlugins(ctx context.Context, state fwk.CycleState, pod *v1.Pod, nodeName string)
 
-	// RunReservePluginsReserve runs the Reserve method of the set of
-	// configured Reserve plugins. If any of these calls returns an error, it
-	// does not continue running the remaining ones and returns the error. In
-	// such case, pod will not be scheduled.
-	RunReservePluginsReserve(ctx context.Context, state fwk.CycleState, pod *v1.Pod, nodeName string) *fwk.Status
-
-	// RunReservePluginsUnreserve runs the Unreserve method of the set of
-	// configured Reserve plugins.
-	RunReservePluginsUnreserve(ctx context.Context, state fwk.CycleState, pod *v1.Pod, nodeName string)
-
 	// RunPermitPlugins runs the set of configured Permit plugins. If any of these
 	// plugins returns a status other than "Success" or "Wait", it does not continue
 	// running the remaining plugins and returns an error. Otherwise, if any of the
@@ -283,7 +261,7 @@ type Framework interface {
 	// If any plugin returns invalid status, the result will be Error and the remaining plugins won't be invoked.
 	// Otherwise, if at least 1 plugin returns Unschedulable, the remaining plugins won't be invoked and the result will be Unschedulable. The placement will remain eligible for preemption.
 	// Otherwise, if at least 1 plugin returns Wait, the remaining plugins will be invoked and the result will be Wait.
-	RunPlacementFeasiblePlugins(ctx context.Context, placementCycleState fwk.PlacementCycleState, podGroupInfo fwk.PodGroupInfo) *fwk.Status
+	RunPlacementFeasiblePlugins(ctx context.Context, placementCycleState fwk.PlacementCycleState, podGroupInfo fwk.PodGroupInfo, placementFeasibleArgs PlacementFeasibleArgs) *fwk.Status
 
 	// AddWaitingPod creates a waiting pod instance and adds it to the framework.
 	// It takes the pluginsWaitTime map returned by the RunPermitPlugins.
@@ -311,6 +289,9 @@ type Framework interface {
 	// Each PlacementCycleState is passed to ScorePlacement for the PodGroupAssignments at the same index.
 	RunPlacementScorePlugins(ctx context.Context, state fwk.PodGroupCycleState, podGroupInfo fwk.PodGroupInfo, placements []*fwk.PodGroupAssignments, placementStates []fwk.PlacementCycleState) (ns []fwk.PlacementPluginScores, status *fwk.Status)
 
+	// RunPodGroupPostFilterPlugins runs the set of configured PodGroupPostFilter plugins.
+	RunPodGroupPostFilterPlugins(ctx context.Context, state *CycleState, podGroupInfo fwk.PodGroupInfo, pgSchedulingFunc fwk.PodGroupSchedulingFunc) (*fwk.PodGroupPostFilterResult, *fwk.Status)
+
 	// HasFilterPlugins returns true if at least one Filter plugin is defined.
 	HasFilterPlugins() bool
 
@@ -321,7 +302,7 @@ type Framework interface {
 	HasScorePlugins() bool
 
 	// PodGroupPostFilterPlugins returns registered PodGroupPostFilter plugins.
-	PodGroupPostFilterPlugins() []PodGroupPostFilterPlugin
+	PodGroupPostFilterPlugins() []fwk.PodGroupPostFilterPlugin
 
 	// ListPlugins returns a map of extension point name to list of configured Plugins.
 	ListPlugins() *config.Plugins

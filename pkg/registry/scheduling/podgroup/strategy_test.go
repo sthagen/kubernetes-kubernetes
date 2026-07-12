@@ -41,11 +41,9 @@ var podGroup = &scheduling.PodGroup{
 		Namespace: metav1.NamespaceDefault,
 	},
 	Spec: scheduling.PodGroupSpec{
-		PodGroupTemplateRef: &scheduling.PodGroupTemplateReference{
-			Workload: &scheduling.WorkloadPodGroupTemplateReference{
-				WorkloadName:         "w",
-				PodGroupTemplateName: "t",
-			},
+		WorkloadRef: &scheduling.WorkloadReference{
+			WorkloadName: "w",
+			TemplateName: "t",
 		},
 		SchedulingPolicy: scheduling.PodGroupSchedulingPolicy{
 			Gang: &scheduling.GangSchedulingPolicy{
@@ -87,6 +85,12 @@ func podGroupWithDisruptionModeBoth() *scheduling.PodGroup {
 	return pg
 }
 
+func podGroupWithPreemptionPolicy(policy scheduling.PreemptionPolicy) *scheduling.PodGroup {
+	pg := podGroup.DeepCopy()
+	pg.Spec.PreemptionPolicy = &policy
+	return pg
+}
+
 var (
 	fieldImmutableError    = "field is immutable"
 	minCountError          = "must be greater than or equal to 1"
@@ -97,6 +101,7 @@ var (
 	subdomainNameError     = "lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters"
 	forbiddenError         = "Forbidden"
 	notAllowedToUnsetError = "field cannot be cleared once set"
+	supportedPoliciesError = `supported values: "Never", "PreemptLowerPriority"`
 )
 
 func TestStrategy(t *testing.T) {
@@ -122,10 +127,11 @@ func TestStrategyCreate(t *testing.T) {
 	ctx := ctxWithRequestInfo()
 	now := metav1.Now()
 	testCases := map[string]struct {
-		obj                           *scheduling.PodGroup
-		expectObj                     *scheduling.PodGroup
-		enableTopologyAwareScheduling bool
-		expectValidationError         string
+		obj                            *scheduling.PodGroup
+		expectObj                      *scheduling.PodGroup
+		enableTopologyAwareScheduling  bool
+		enablePodGroupPreemptionPolicy bool
+		expectValidationError          string
 	}{
 		"simple": {
 			obj:       podGroup,
@@ -241,6 +247,29 @@ func TestStrategyCreate(t *testing.T) {
 			}(),
 			expectValidationError: maximumError,
 		},
+		"podgroup preemptionPolicy disabled - drop preemptionPolicy": {
+			obj:       podGroupWithPreemptionPolicy(scheduling.PreemptNever),
+			expectObj: podGroup,
+		},
+		"podgroup preemptionPolicy disabled - drop invalid preemptionPolicy": {
+			obj:       podGroupWithPreemptionPolicy(scheduling.PreemptionPolicy("Invalid")),
+			expectObj: podGroup,
+		},
+		"podgroup preemptionPolicy enabled - preserve preemptionPolicy (Never)": {
+			obj:                            podGroupWithPreemptionPolicy(scheduling.PreemptNever),
+			expectObj:                      podGroupWithPreemptionPolicy(scheduling.PreemptNever),
+			enablePodGroupPreemptionPolicy: true,
+		},
+		"podgroup preemptionPolicy enabled - preserve preemptionPolicy (PreemptLowerPriority)": {
+			obj:                            podGroupWithPreemptionPolicy(scheduling.PreemptLowerPriority),
+			expectObj:                      podGroupWithPreemptionPolicy(scheduling.PreemptLowerPriority),
+			enablePodGroupPreemptionPolicy: true,
+		},
+		"podgroup preemptionPolicy enabled - invalid preemptionPolicy": {
+			obj:                            podGroupWithPreemptionPolicy(scheduling.PreemptionPolicy("Invalid")),
+			enablePodGroupPreemptionPolicy: true,
+			expectValidationError:          supportedPoliciesError,
+		},
 	}
 
 	for name, tc := range testCases {
@@ -248,6 +277,7 @@ func TestStrategyCreate(t *testing.T) {
 			featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
 				features.GenericWorkload:                 true,
 				features.TopologyAwareWorkloadScheduling: tc.enableTopologyAwareScheduling,
+				features.PodGroupPreemptionPolicy:        tc.enablePodGroupPreemptionPolicy,
 			})
 			podGroup := tc.obj.DeepCopy()
 
@@ -286,10 +316,11 @@ func TestStrategyCreate(t *testing.T) {
 func TestStrategyUpdate(t *testing.T) {
 	ctx := ctxWithRequestInfo()
 	testCases := map[string]struct {
-		oldObj                        *scheduling.PodGroup
-		newObj                        *scheduling.PodGroup
-		enableTopologyAwareScheduling bool
-		expectValidationErrors        []string
+		oldObj                         *scheduling.PodGroup
+		newObj                         *scheduling.PodGroup
+		enableTopologyAwareScheduling  bool
+		enablePodGroupPreemptionPolicy bool
+		expectValidationErrors         []string
 	}{
 		"no changes": {
 			oldObj: podGroup,
@@ -308,11 +339,9 @@ func TestStrategyUpdate(t *testing.T) {
 			oldObj: podGroup,
 			newObj: func() *scheduling.PodGroup {
 				newPodGroup := podGroup.DeepCopy()
-				newPodGroup.Spec.PodGroupTemplateRef = &scheduling.PodGroupTemplateReference{
-					Workload: &scheduling.WorkloadPodGroupTemplateReference{
-						WorkloadName:         "foo",
-						PodGroupTemplateName: "baz",
-					},
+				newPodGroup.Spec.WorkloadRef = &scheduling.WorkloadReference{
+					WorkloadName: "foo",
+					TemplateName: "baz",
 				}
 				return newPodGroup
 			}(),
@@ -393,6 +422,17 @@ func TestStrategyUpdate(t *testing.T) {
 			}(),
 			expectValidationErrors: []string{fieldImmutableError},
 		},
+		"changing preemptionPolicy not allowed with podgroup preemptionPolicy disabled": {
+			oldObj:                 podGroupWithPreemptionPolicy(scheduling.PreemptNever),
+			newObj:                 podGroupWithPreemptionPolicy(scheduling.PreemptLowerPriority),
+			expectValidationErrors: []string{forbiddenError, fieldImmutableError},
+		},
+		"changing preemptionPolicy not allowed with podgroup preemptionPolicy enabled": {
+			oldObj:                         podGroupWithPreemptionPolicy(scheduling.PreemptNever),
+			newObj:                         podGroupWithPreemptionPolicy(scheduling.PreemptLowerPriority),
+			enablePodGroupPreemptionPolicy: true,
+			expectValidationErrors:         []string{fieldImmutableError},
+		},
 	}
 
 	for name, tc := range testCases {
@@ -400,6 +440,7 @@ func TestStrategyUpdate(t *testing.T) {
 			featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
 				features.GenericWorkload:                 true,
 				features.TopologyAwareWorkloadScheduling: tc.enableTopologyAwareScheduling,
+				features.PodGroupPreemptionPolicy:        tc.enablePodGroupPreemptionPolicy,
 			})
 			podGroup := tc.oldObj.DeepCopy()
 			newPodGroup := tc.newObj.DeepCopy()

@@ -296,6 +296,7 @@ func NewContainerManager(ctx context.Context, mountUtil mount.Interface, cadviso
 	}
 
 	cm.topologyManager, err = topologymanager.NewManager(
+		logger,
 		machineInfo.Topology,
 		nodeConfig.TopologyManagerPolicy,
 		nodeConfig.TopologyManagerScope,
@@ -307,7 +308,7 @@ func NewContainerManager(ctx context.Context, mountUtil mount.Interface, cadviso
 	}
 
 	logger.Info("Creating device plugin manager")
-	cm.deviceManager, err = devicemanager.NewManagerImpl(machineInfo.Topology, cm.topologyManager)
+	cm.deviceManager, err = devicemanager.NewManagerImpl(logger, machineInfo.Topology, cm.topologyManager)
 	if err != nil {
 		return nil, err
 	}
@@ -416,11 +417,7 @@ func (cm *containerManagerImpl) NewPodContainerManager() PodContainerManager {
 	}
 }
 
-func (cm *containerManagerImpl) PodHasExclusiveCPUs(pod *v1.Pod) bool {
-	// Use klog.TODO() because we currently do not have a proper logger to pass in.
-	// Replace this with an appropriate logger when refactoring this function to accept a logger parameter.
-	logger := klog.TODO()
-
+func (cm *containerManagerImpl) PodHasExclusiveCPUs(logger klog.Logger, pod *v1.Pod) bool {
 	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.PodLevelResourceManagers) && resourcehelper.IsPodLevelResourcesSet(pod) {
 		for _, container := range append(pod.Spec.InitContainers, pod.Spec.Containers...) {
 			if cm.cpuManager.GetResourceIsolationLevel(pod, &container) != cmqos.ResourceIsolationContainer {
@@ -435,11 +432,7 @@ func (cm *containerManagerImpl) PodHasExclusiveCPUs(pod *v1.Pod) bool {
 	return podHasExclusiveCPUs(logger, cm.cpuManager, pod)
 }
 
-func (cm *containerManagerImpl) ContainerHasExclusiveCPUs(pod *v1.Pod, container *v1.Container) bool {
-	// Use klog.TODO() because we currently do not have a proper logger to pass in.
-	// Replace this with an appropriate logger when refactoring this function to accept a logger parameter.
-	logger := klog.TODO()
-
+func (cm *containerManagerImpl) ContainerHasExclusiveCPUs(logger klog.Logger, pod *v1.Pod, container *v1.Container) bool {
 	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.PodLevelResourceManagers) {
 		if cm.cpuManager.GetResourceIsolationLevel(pod, container) != cmqos.ResourceIsolationContainer {
 			return false
@@ -452,7 +445,7 @@ func (cm *containerManagerImpl) ContainerHasExclusiveCPUs(pod *v1.Pod, container
 	return containerHasExclusiveCPUs(logger, cm.cpuManager, pod, container)
 }
 
-func (cm *containerManagerImpl) InternalContainerLifecycle() InternalContainerLifecycle {
+func (cm *containerManagerImpl) InternalContainerLifecycle(_ klog.Logger) InternalContainerLifecycle {
 	return &internalContainerLifecycleImpl{cm.cpuManager, cm.memoryManager, cm.topologyManager}
 }
 
@@ -782,7 +775,7 @@ func (cm *containerManagerImpl) UpdatePluginResources(node *schedulerframework.N
 	return cm.deviceManager.UpdatePluginResources(node, attrs)
 }
 
-func (cm *containerManagerImpl) GetAllocateResourcesPodAdmitHandler() lifecycle.PodAdmitHandler {
+func (cm *containerManagerImpl) GetAllocateResourcesPodAdmitHandler(_ klog.Logger) lifecycle.PodAdmitHandler {
 	return cm.topologyManager
 }
 
@@ -971,12 +964,9 @@ func isKernelPid(pid int) bool {
 
 // GetCapacity returns node capacity data for "cpu", "memory", "ephemeral-storage", and "huge-pages*"
 // At present this method is only invoked when introspecting ephemeral storage
-func (cm *containerManagerImpl) GetCapacity(localStorageCapacityIsolation bool) v1.ResourceList {
+func (cm *containerManagerImpl) GetCapacity(logger klog.Logger, localStorageCapacityIsolation bool) v1.ResourceList {
 	cm.RLock()
 	defer cm.RUnlock()
-	// Use klog.TODO() because we currently do not have a proper logger to pass in.
-	// Replace this with an appropriate logger when refactoring this function to accept a logger parameter.
-	logger := klog.TODO()
 	if localStorageCapacityIsolation {
 		// We store allocatable ephemeral-storage in the capacity property once we Start() the container manager
 		if _, ok := cm.capacity[v1.ResourceEphemeralStorage]; !ok {
@@ -1002,16 +992,16 @@ func (cm *containerManagerImpl) GetCapacity(localStorageCapacityIsolation bool) 
 	return cm.capacity
 }
 
-func (cm *containerManagerImpl) GetDevicePluginResourceCapacity() (v1.ResourceList, v1.ResourceList, []string) {
-	return cm.deviceManager.GetCapacity()
+func (cm *containerManagerImpl) GetDevicePluginResourceCapacity(logger klog.Logger) (v1.ResourceList, v1.ResourceList, []string) {
+	return cm.deviceManager.GetCapacity(logger)
 }
 
 func (cm *containerManagerImpl) GetDevices(podUID, containerName string) []*podresourcesapi.ContainerDevices {
 	return containerDevicesFromResourceDeviceInstances(cm.deviceManager.GetDevices(podUID, containerName))
 }
 
-func (cm *containerManagerImpl) GetAllocatableDevices() []*podresourcesapi.ContainerDevices {
-	return containerDevicesFromResourceDeviceInstances(cm.deviceManager.GetAllocatableDevices())
+func (cm *containerManagerImpl) GetAllocatableDevices(logger klog.Logger) []*podresourcesapi.ContainerDevices {
+	return containerDevicesFromResourceDeviceInstances(cm.deviceManager.GetAllocatableDevices(logger))
 }
 
 func (cm *containerManagerImpl) GetCPUs(podUID, containerName string) []int64 {
@@ -1028,30 +1018,25 @@ func (cm *containerManagerImpl) GetAllocatableCPUs() []int64 {
 	return []int64{}
 }
 
-func (cm *containerManagerImpl) GetMemory(podUID, containerName string) []*podresourcesapi.ContainerMemory {
+func (cm *containerManagerImpl) GetMemory(logger klog.Logger, podUID, containerName string) []*podresourcesapi.ContainerMemory {
+	if cm.memoryManager == nil {
+		return []*podresourcesapi.ContainerMemory{}
+	}
+
+	return containerMemoryFromBlock(cm.memoryManager.GetMemory(logger, podUID, containerName))
+}
+
+func (cm *containerManagerImpl) GetAllocatableMemory(logger klog.Logger) []*podresourcesapi.ContainerMemory {
 	if cm.memoryManager == nil {
 		return []*podresourcesapi.ContainerMemory{}
 	}
 
 	// This is tempporary as part of migration of memory manager to Contextual logging.
 	// Direct context to be passed when container manager is migrated.
-	return containerMemoryFromBlock(cm.memoryManager.GetMemory(podUID, containerName))
+	return containerMemoryFromBlock(cm.memoryManager.GetAllocatableMemory(logger))
 }
 
-func (cm *containerManagerImpl) GetAllocatableMemory() []*podresourcesapi.ContainerMemory {
-	if cm.memoryManager == nil {
-		return []*podresourcesapi.ContainerMemory{}
-	}
-
-	// This is tempporary as part of migration of memory manager to Contextual logging.
-	// Direct context to be passed when container manager is migrated.
-	return containerMemoryFromBlock(cm.memoryManager.GetAllocatableMemory())
-}
-
-func (cm *containerManagerImpl) GetDynamicResources(pod *v1.Pod, container *v1.Container) []*podresourcesapi.DynamicResource {
-	// Use klog.TODO() because we currently do not have a proper logger to pass in.
-	// Replace this with an appropriate logger when refactoring this function to accept a logger parameter.
-	logger := klog.TODO()
+func (cm *containerManagerImpl) GetDynamicResources(logger klog.Logger, pod *v1.Pod, container *v1.Container) []*podresourcesapi.DynamicResource {
 	if !utilfeature.DefaultFeatureGate.Enabled(kubefeatures.DynamicResourceAllocation) {
 		return []*podresourcesapi.DynamicResource{}
 	}
@@ -1094,8 +1079,8 @@ func (cm *containerManagerImpl) ShouldResetExtendedResourceCapacity() bool {
 	return cm.deviceManager.ShouldResetExtendedResourceCapacity()
 }
 
-func (cm *containerManagerImpl) UpdateAllocatedDevices() {
-	cm.deviceManager.UpdateAllocatedDevices()
+func (cm *containerManagerImpl) UpdateAllocatedDevices(logger klog.Logger) {
+	cm.deviceManager.UpdateAllocatedDevices(logger)
 }
 
 func containerMemoryFromBlock(blocks []memorymanagerstate.Block) []*podresourcesapi.ContainerMemory {
@@ -1132,15 +1117,15 @@ func (cm *containerManagerImpl) PodMightNeedToUnprepareResources(UID types.UID) 
 	return cm.draManager.PodMightNeedToUnprepareResources(UID)
 }
 
-func (cm *containerManagerImpl) UpdateAllocatedResourcesStatus(pod *v1.Pod, status *v1.PodStatus) {
+func (cm *containerManagerImpl) UpdateAllocatedResourcesStatus(logger klog.Logger, pod *v1.Pod, status *v1.PodStatus) {
 
 	// For now we only support Device Plugin
-	cm.deviceManager.UpdateAllocatedResourcesStatus(pod, status)
+	cm.deviceManager.UpdateAllocatedResourcesStatus(logger, pod, status)
 
 	// Update DRA resources if the feature is enabled and the manager exists
 	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.DynamicResourceAllocation) && cm.draManager != nil {
 		if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.ResourceHealthStatus) {
-			cm.draManager.UpdateAllocatedResourcesStatus(pod, status)
+			cm.draManager.UpdateAllocatedResourcesStatus(logger, pod, status)
 		}
 	}
 }

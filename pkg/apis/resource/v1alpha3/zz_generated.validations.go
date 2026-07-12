@@ -97,7 +97,7 @@ func Validate_DeviceTaint(
 			}
 			// call field-attached validations
 			earlyReturn := false
-			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkBeta().MarkShortCircuit(); len(e) != 0 {
 				errs = append(errs, e...)
 				earlyReturn = true
 			}
@@ -127,7 +127,7 @@ func Validate_DeviceTaintEffect(
 	ctx context.Context, op operation.Operation, fldPath *field.Path,
 	obj, oldObj *resourcev1alpha3.DeviceTaintEffect) (errs field.ErrorList) {
 
-	if e := validate.Enum(ctx, op, fldPath, obj, oldObj, symbolsForDeviceTaintEffect, nil).MarkAlpha(); len(e) != 0 {
+	if e := validate.Enum(ctx, op, fldPath, obj, oldObj, symbolsForDeviceTaintEffect, nil).MarkBeta(); len(e) != 0 {
 		errs = append(errs, e...)
 	}
 
@@ -141,7 +141,28 @@ func Validate_DeviceTaintRule(
 	obj, oldObj *resourcev1alpha3.DeviceTaintRule) (errs field.ErrorList) {
 
 	// field resourcev1alpha3.DeviceTaintRule.TypeMeta has no validation
-	// field resourcev1alpha3.DeviceTaintRule.ObjectMeta has no validation
+
+	{ // field resourcev1alpha3.DeviceTaintRule.ObjectMeta
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *v1.ObjectMeta,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call the type's validation function
+			errs = append(errs, validation.Validate_ObjectMeta(ctx, op, fldPath, obj, oldObj)...)
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *resourcev1alpha3.DeviceTaintRule) *v1.ObjectMeta {
+				return &oldObj.ObjectMeta
+			})
+		errs = append(errs, fn(fldPath.Child("metadata"), &obj.ObjectMeta, oldVal, oldObj != nil)...)
+	}
 
 	{ // field resourcev1alpha3.DeviceTaintRule.Spec
 		fn := func(
@@ -249,13 +270,13 @@ func Validate_DeviceTaintRuleStatus(
 				return // do not proceed
 			}
 			// lists with map semantics require unique keys
-			if e := validate.Unique(ctx, op, fldPath, obj, oldObj,
-				func(a v1.Condition, b v1.Condition) bool { return a.Type == b.Type }).MarkAlpha(); len(e) != 0 {
+			if e := validate.ValSliceUnique(ctx, op, fldPath, obj, oldObj,
+				func(a *v1.Condition, b *v1.Condition) bool { return a.Type == b.Type }).MarkAlpha(); len(e) != 0 {
 				errs = append(errs, e...)
 			}
 			// iterate the list and call the type's validation function
-			if e := validate.EachSliceVal(ctx, op, fldPath, obj, oldObj,
-				func(a v1.Condition, b v1.Condition) bool { return a.Type == b.Type }, validate.SemanticDeepEqual, validation.Validate_Condition); len(e) != 0 {
+			if e := validate.EachValSliceVal(ctx, op, fldPath, obj, oldObj,
+				func(a *v1.Condition, b *v1.Condition) bool { return a.Type == b.Type }, validate.SemanticDeepEqual, validation.Validate_Condition); len(e) != 0 {
 				errs = append(errs, e...)
 			}
 			return
@@ -599,7 +620,28 @@ func Validate_ResourcePoolStatusRequest(
 	obj, oldObj *resourcev1alpha3.ResourcePoolStatusRequest) (errs field.ErrorList) {
 
 	// field resourcev1alpha3.ResourcePoolStatusRequest.TypeMeta has no validation
-	// field resourcev1alpha3.ResourcePoolStatusRequest.ObjectMeta has no validation
+
+	{ // field resourcev1alpha3.ResourcePoolStatusRequest.ObjectMeta
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *v1.ObjectMeta,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call the type's validation function
+			errs = append(errs, validation.Validate_ObjectMeta(ctx, op, fldPath, obj, oldObj)...)
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *resourcev1alpha3.ResourcePoolStatusRequest) *v1.ObjectMeta {
+				return &oldObj.ObjectMeta
+			})
+		errs = append(errs, fn(fldPath.Child("metadata"), &obj.ObjectMeta, oldVal, oldObj != nil)...)
+	}
 
 	{ // field resourcev1alpha3.ResourcePoolStatusRequest.Spec
 		fn := func(
@@ -835,7 +877,7 @@ func Validate_ResourcePoolStatusRequestStatus(
 				return // do not proceed
 			}
 			// iterate the list and call the type's validation function
-			if e := validate.EachSliceVal(ctx, op, fldPath, obj, oldObj, nil, nil, Validate_PoolStatus); len(e) != 0 {
+			if e := validate.EachValSliceVal(ctx, op, fldPath, obj, oldObj, nil, nil, Validate_PoolStatus); len(e) != 0 {
 				errs = append(errs, e...)
 			}
 			return
@@ -871,13 +913,13 @@ func Validate_ResourcePoolStatusRequestStatus(
 				return // do not proceed
 			}
 			// lists with map semantics require unique keys
-			if e := validate.Unique(ctx, op, fldPath, obj, oldObj,
-				func(a v1.Condition, b v1.Condition) bool { return a.Type == b.Type }).MarkAlpha(); len(e) != 0 {
+			if e := validate.ValSliceUnique(ctx, op, fldPath, obj, oldObj,
+				func(a *v1.Condition, b *v1.Condition) bool { return a.Type == b.Type }).MarkAlpha(); len(e) != 0 {
 				errs = append(errs, e...)
 			}
 			// iterate the list and call the type's validation function
-			if e := validate.EachSliceVal(ctx, op, fldPath, obj, oldObj,
-				func(a v1.Condition, b v1.Condition) bool { return a.Type == b.Type }, validate.SemanticDeepEqual, validation.Validate_Condition); len(e) != 0 {
+			if e := validate.EachValSliceVal(ctx, op, fldPath, obj, oldObj,
+				func(a *v1.Condition, b *v1.Condition) bool { return a.Type == b.Type }, validate.SemanticDeepEqual, validation.Validate_Condition); len(e) != 0 {
 				errs = append(errs, e...)
 			}
 			return

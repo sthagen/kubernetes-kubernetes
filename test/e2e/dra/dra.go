@@ -115,29 +115,29 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 		   Testname: CRUD operations for devicetaintrules
 		   Description: kube-apiserver must support create/update/list/patch/delete operations for resource.k8s.io/v1beta2 DeviceTaintRule.
 		*/
-		f.It("resource.k8s.io/v1beta2 DeviceTaintRule", f.WithFeatureGate(features.DRADeviceTaintRules), func(ctx context.Context) {
+		f.It("resource.k8s.io/v1 DeviceTaintRule", f.WithFeatureGate(features.DRADeviceTaintRules), func(ctx context.Context) {
 			lastTransitionTime := metav1.Now()
 			lastTransitionTimeEncoded, err := lastTransitionTime.MarshalJSON()
 			framework.ExpectNoError(err)
 			e2econformance.TestResource(ctx, f,
-				&e2econformance.ResourceTestcase[*resourcev1beta2.DeviceTaintRule]{
-					GVR:        resourcev1beta2.SchemeGroupVersion.WithResource("devicetaintrules"),
+				&e2econformance.ResourceTestcase[*resourceapi.DeviceTaintRule]{
+					GVR:        resourceapi.SchemeGroupVersion.WithResource("devicetaintrules"),
 					Namespaced: ptr.To(false),
-					InitialSpec: &resourcev1beta2.DeviceTaintRule{
-						Spec: resourcev1beta2.DeviceTaintRuleSpec{
+					InitialSpec: &resourceapi.DeviceTaintRule{
+						Spec: resourceapi.DeviceTaintRuleSpec{
 							// Empty DeviceSelector => no devices selected, so this test is safe.
-							Taint: resourcev1beta2.DeviceTaint{
+							Taint: resourceapi.DeviceTaint{
 								Key:    "testing",
-								Effect: resourcev1beta2.DeviceTaintEffectNone,
+								Effect: resourceapi.DeviceTaintEffectNone,
 							},
 						},
 					},
-					UpdateSpec: func(obj *resourcev1beta2.DeviceTaintRule) *resourcev1beta2.DeviceTaintRule {
-						obj.Spec.Taint.Effect = resourcev1beta2.DeviceTaintEffectNoExecute
+					UpdateSpec: func(obj *resourceapi.DeviceTaintRule) *resourceapi.DeviceTaintRule {
+						obj.Spec.Taint.Effect = resourceapi.DeviceTaintEffectNoExecute
 						return obj
 					},
 					StrategicMergePatchSpec: `{"spec": {"taint": {"effect": "NoExecute"}}}`,
-					UpdateStatus: func(obj *resourcev1beta2.DeviceTaintRule) *resourcev1beta2.DeviceTaintRule {
+					UpdateStatus: func(obj *resourceapi.DeviceTaintRule) *resourceapi.DeviceTaintRule {
 						obj.Status.Conditions = append(obj.Status.Conditions, metav1.Condition{
 							Type:               "Testing",
 							Status:             metav1.ConditionTrue,
@@ -902,6 +902,44 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 
 			// We need to clean up explicitly because the normal
 			// cleanup doesn't work (driver shuts down first).
+			framework.ExpectNoError(f.ClientSet.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{}))
+			framework.ExpectNoError(e2epod.WaitForPodNotFoundInNamespace(ctx, f.ClientSet, pod.Name, pod.Namespace, f.Timeouts.PodDelete))
+		})
+
+		// Regression test for https://github.com/kubernetes/kubernetes/issues/139166:
+		// rolling-update registration sockets must stay within AF_UNIX path limits
+		// even when the driver name is longer than 28 characters.
+		f.It("rolling update with long driver name", f.WithKubeletMinVersion("1.33"), func(ctx context.Context) {
+			tCtx := f.TContext(ctx)
+			nodes := drautils.NewNodesNow(tCtx, 1, 1)
+
+			oldDriver := drautils.NewDriverInstance(tCtx)
+			oldDriver.Name = drautils.LongRollingUpdateDriverName
+			oldDriver.InstanceSuffix = "-old"
+			oldDriver.RollingUpdate = true
+			oldDriver.Run(tCtx, framework.TestContext.KubeletRootDir, nodes, drautils.DriverResourcesNow(nodes, 1))
+
+			getSlices := oldDriver.NewGetSlices()
+			tCtx.Eventually(getSlices).Should(gomega.HaveField("Items", gomega.HaveLen(len(nodes.NodeNames))))
+			initialSlices := getSlices(tCtx)
+
+			newDriver := drautils.NewDriverInstance(tCtx)
+			newDriver.Name = drautils.LongRollingUpdateDriverName
+			newDriver.InstanceSuffix = "-new"
+			newDriver.RollingUpdate = true
+			newDriver.Run(tCtx, framework.TestContext.KubeletRootDir, nodes, drautils.DriverResourcesNow(nodes, 1))
+
+			oldDriver.TearDown(tCtx)
+
+			b := drautils.NewBuilderNow(tCtx, oldDriver)
+			claim := b.ExternalClaim()
+			pod := b.PodExternal(claim.Name)
+			b.Create(tCtx, claim, pod)
+			b.TestPod(tCtx, pod)
+
+			finalSlices := getSlices(tCtx)
+			gomega.Expect(finalSlices.Items).Should(gomega.Equal(initialSlices.Items))
+
 			framework.ExpectNoError(f.ClientSet.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{}))
 			framework.ExpectNoError(e2epod.WaitForPodNotFoundInNamespace(ctx, f.ClientSet, pod.Name, pod.Namespace, f.Timeouts.PodDelete))
 		})
@@ -2284,17 +2322,17 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 
 			// Now evict it.
 			ginkgo.By("Evicting pod...")
-			taint := &resourcev1beta2.DeviceTaintRule{
+			taint := &resourceapi.DeviceTaintRule{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "device-taint-rule-" + f.UniqueName + "-",
 				},
-				Spec: resourcev1beta2.DeviceTaintRuleSpec{
+				Spec: resourceapi.DeviceTaintRuleSpec{
 					// All devices of the current driver instance.
-					DeviceSelector: &resourcev1beta2.DeviceTaintSelector{
+					DeviceSelector: &resourceapi.DeviceTaintSelector{
 						Driver: &driver.Name,
 					},
-					Taint: resourcev1beta2.DeviceTaint{
-						Effect: resourcev1beta2.DeviceTaintEffectNoExecute,
+					Taint: resourceapi.DeviceTaint{
+						Effect: resourceapi.DeviceTaintEffectNoExecute,
 						Key:    "test.example.com/evict",
 						Value:  "now",
 						// No TimeAdded, gets defaulted.
@@ -2302,7 +2340,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 				},
 			}
 			createdTaint := b.Create(tCtx, taint)
-			taint = createdTaint[0].(*resourcev1beta2.DeviceTaintRule)
+			taint = createdTaint[0].(*resourceapi.DeviceTaintRule)
 			gomega.Expect(*taint).Should(gomega.HaveField("Spec.Taint.TimeAdded.Time", gomega.BeTemporally("~", time.Now(), time.Minute /* allow for some clock drift and delays */)))
 			framework.ExpectNoError(e2epod.WaitForPodTerminatingInNamespaceTimeout(ctx, f.ClientSet, pod.Name, f.Namespace.Name, f.Timeouts.PodStart))
 			pod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(ctx, pod.Name, metav1.GetOptions{})
@@ -2373,17 +2411,17 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 
 				// Now evict it.
 				ginkgo.By("Evicting pod...")
-				taint := &resourcev1beta2.DeviceTaintRule{
+				taint := &resourceapi.DeviceTaintRule{
 					ObjectMeta: metav1.ObjectMeta{
 						GenerateName: "device-taint-rule-" + f.UniqueName + "-",
 					},
-					Spec: resourcev1beta2.DeviceTaintRuleSpec{
+					Spec: resourceapi.DeviceTaintRuleSpec{
 						// All devices of the current driver instance.
-						DeviceSelector: &resourcev1beta2.DeviceTaintSelector{
+						DeviceSelector: &resourceapi.DeviceTaintSelector{
 							Driver: &driver.Name,
 						},
-						Taint: resourcev1beta2.DeviceTaint{
-							Effect: resourcev1beta2.DeviceTaintEffectNoExecute,
+						Taint: resourceapi.DeviceTaint{
+							Effect: resourceapi.DeviceTaintEffectNoExecute,
 							Key:    "test.example.com/evict",
 							Value:  "now",
 							// No TimeAdded, gets defaulted.
@@ -2391,7 +2429,7 @@ var _ = framework.SIGDescribe("node")(framework.WithLabel("DRA"), func() {
 					},
 				}
 				createdTaint := b.Create(tCtx, taint)
-				taint = createdTaint[0].(*resourcev1beta2.DeviceTaintRule)
+				taint = createdTaint[0].(*resourceapi.DeviceTaintRule)
 				gomega.Expect(*taint).Should(gomega.HaveField("Spec.Taint.TimeAdded.Time", gomega.BeTemporally("~", time.Now(), time.Minute /* allow for some clock drift and delays */)))
 				framework.ExpectNoError(e2epod.WaitForPodTerminatingInNamespaceTimeout(ctx, f.ClientSet, pod.Name, f.Namespace.Name, f.Timeouts.PodStart))
 				pod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(ctx, pod.Name, metav1.GetOptions{})

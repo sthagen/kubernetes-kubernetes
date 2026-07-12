@@ -2340,6 +2340,7 @@ type PersistentVolumeClaimTemplate struct {
 	// validation.
 	//
 	// +optional
+	// +k8s:opaqueType
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	// The specification for the PersistentVolumeClaim. The entire content is
@@ -5532,6 +5533,7 @@ type PodTemplateSpec struct {
 	// Standard object's metadata.
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	// +optional
+	// +k8s:opaqueType
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	// Specification of the desired behavior of the pod.
@@ -5580,18 +5582,18 @@ type ReplicationControllerSpec struct {
 	// Defaults to 1.
 	// More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller#what-is-a-replicationcontroller
 	// +optional
-	// +k8s:alpha(since: "1.36")=+k8s:optional
+	// +k8s:beta(since: "1.37")=+k8s:optional
 	// +default=1
-	// +k8s:alpha(since: "1.36")=+k8s:minimum=0
+	// +k8s:beta(since: "1.37")=+k8s:minimum=0
 	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,1,opt,name=replicas"`
 
 	// Minimum number of seconds for which a newly created pod should be ready
 	// without any of its container crashing, for it to be considered available.
 	// Defaults to 0 (pod will be considered available as soon as it is ready)
 	// +optional
-	// +k8s:alpha(since: "1.36")=+k8s:optional
+	// +k8s:beta(since: "1.37")=+k8s:optional
 	// +default=0
-	// +k8s:alpha(since: "1.36")=+k8s:minimum=0
+	// +k8s:beta(since: "1.37")=+k8s:minimum=0
 	MinReadySeconds int32 `json:"minReadySeconds,omitempty" protobuf:"varint,4,opt,name=minReadySeconds"`
 
 	// Selector is a label query over pods that should match the Replicas count.
@@ -5693,8 +5695,8 @@ type ReplicationController struct {
 	// be the same as the Pod(s) that the replication controller manages.
 	// Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	// +optional
-	// +k8s:alpha(since: "1.36")=+k8s:subfield(name)=+k8s:optional
-	// +k8s:alpha(since: "1.36")=+k8s:subfield(name)=+k8s:format=k8s-long-name
+	// +k8s:beta(since: "1.37")=+k8s:subfield(name)=+k8s:optional
+	// +k8s:beta(since: "1.37")=+k8s:subfield(name)=+k8s:format=k8s-long-name
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	// Spec defines the specification of the desired behavior of the replication controller.
@@ -6548,6 +6550,9 @@ type NodeSpec struct {
 
 	// ID of the node assigned by the cloud provider in the format: <ProviderName>://<ProviderSpecificNodeID>
 	// +optional
+	// +k8s:alpha(since: "1.36")=+k8s:optional
+	// +k8s:alpha(since: "1.36")=+k8s:update=NoModify
+	// +k8s:alpha(since: "1.36")=+k8s:update=NoUnset
 	ProviderID string `json:"providerID,omitempty" protobuf:"bytes,3,opt,name=providerID"`
 	// Unschedulable controls node schedulability of new pods. By default, node is schedulable.
 	// More info: https://kubernetes.io/docs/concepts/nodes/node/#manual-node-administration
@@ -6906,6 +6911,37 @@ const (
 	NodePIDPressure NodeConditionType = "PIDPressure"
 	// NodeNetworkUnavailable means that network for the node is not correctly configured.
 	NodeNetworkUnavailable NodeConditionType = "NetworkUnavailable"
+	// NodeGracefulNodeShutdownInProgress reports whether Graceful Node Shutdown is determined to be in progress on this Node.
+	//
+	// The admin is responsible for setting and clearing this condition.
+	NodeGracefulNodeShutdownInProgress NodeConditionType = "GracefulNodeShutdownInProgress"
+	// NodeDrainInProgress reports that this Node is actively being drained,
+	// according to the admin's definition of drain.
+	// Commonly, this involves removing some amount of Pods, volumes, and networks.
+	//
+	// The admin is responsible for setting and clearing this condition.
+	NodeDrainInProgress NodeConditionType = "DrainInProgress"
+	// NodeDrained reports that this Node has reached the drain criteria selected by the admin.
+	//
+	// The admin is responsible for setting and clearing this condition.
+	NodeDrained NodeConditionType = "Drained"
+	// NodeMaintenancePlanned reports that this Node is expected to undergo a change in the future.
+	// If this change impacts Node users, the admin should drain the Node first.
+	//
+	// Admins can use the Node maintenance condition for cases like hardware or software rollout,
+	// remediation, decommissioning, or debugging.
+	//
+	// The admin is responsible for setting and clearing this condition.
+	NodeMaintenancePlanned NodeConditionType = "MaintenancePlanned"
+	// NodeMaintenanceInProgress reports that this Node is actively undergoing maintenance.
+	//
+	// The admin decides whether the change will impact Node users and require a Node drain.
+	// For example, it is recommended to drain a Node before a Kubernetes upgrade.
+	// In contrast, a kernel live patch may not require a Node drain, but it can still be useful
+	// to communicate that maintenance is in progress.
+	//
+	// The admin is responsible for setting and clearing this condition.
+	NodeMaintenanceInProgress NodeConditionType = "MaintenanceInProgress"
 )
 
 // NodeCondition contains condition information for a node.
@@ -7148,6 +7184,7 @@ type NamespaceCondition struct {
 // Namespace provides a scope for Names.
 // Use of multiple namespaces is optional.
 // +k8s:supportsSubresource="/status"
+// +k8s:supportsSubresource="/finalize"
 type Namespace struct {
 	metav1.TypeMeta `json:""`
 	// Standard object's metadata.
@@ -7191,6 +7228,7 @@ type Binding struct {
 	// Standard object's metadata.
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	// +optional
+	// +k8s:opaqueType
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	// The target object that you want to bind to the standard object.
@@ -8157,6 +8195,7 @@ type ComponentStatus struct {
 	// Standard object's metadata.
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	// +optional
+	// +k8s:opaqueType
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	// List of component conditions observed
@@ -8388,6 +8427,7 @@ type RangeAllocation struct {
 	// Standard object's metadata.
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	// +optional
+	// +k8s:opaqueType
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	// Range is string that identifies the range represented by 'data'.

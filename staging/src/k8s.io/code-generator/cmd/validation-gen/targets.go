@@ -37,9 +37,25 @@ import (
 
 // These are the comment tags that carry parameters for validation generation.
 const (
-	mainTagName           = "k8s:validation-gen"                 // defines which types to generate validation for
-	schemeRegistryTagName = "k8s:validation-gen-scheme-registry" // defaults to k8s.io/apimachinery/pkg.runtime.Scheme
-	testFixtureTagName    = "k8s:validation-gen-test-fixture"    // if set, generate go test files for test fixtures.  Supported values: "validateFalse".
+	// Defines which types to generate validation for.  There are two places
+	// this can be used:
+	//   Per-package:
+	//     * "*": generate validation for all types in this package
+	//	   * "TypesWithField=FooBar": generate validation for all types with a
+	//	     field named "FooBar"
+	//     * "TypesWithSuffix=FooBar": generate validation for all types whose
+	//       name ends with "FooBar"
+	//   Per-type:
+	//	   * "true": generate validation for this type
+	//	   * "false": do not generate validation for this type
+	mainTagName = "k8s:validation-gen"
+	// Defines the type of the scheme used to register validations. Defaults to
+	// "k8s.io/apimachinery/pkg.runtime.Scheme", but can be set to another type
+	// (e.g. in tests), or set to "nil" to disable scheme registration for this
+	// package.
+	schemeRegistryTagName = "k8s:validation-gen-scheme-registry"
+	// If set, generate go test files for test fixtures.  Supported values: "validateFalse".
+	testFixtureTagName = "k8s:validation-gen-test-fixture"
 
 	// name of the subresource that this type represents and can validate declaratively.
 	isSubresourceTagName = "k8s:isSubresource"
@@ -114,7 +130,7 @@ func checkMainTag(comments []string, require ...string) bool {
 	return reflect.DeepEqual(valueStrings, require)
 }
 
-func schemeRegistryTag(pkg *types.Package) types.Name {
+func schemeRegistryTag(pkg *types.Package) (types.Name, bool) {
 	// TODO: convert to extractAndParseTag() and update all callers to use quoted values
 	tags, err := gengo.ExtractFunctionStyleCommentTags("+", []string{schemeRegistryTagName}, pkg.Comments)
 	if err != nil {
@@ -122,12 +138,23 @@ func schemeRegistryTag(pkg *types.Package) types.Name {
 	}
 	values, found := tags[schemeRegistryTagName]
 	if !found || len(values) == 0 {
-		return schemeType // default
+		return schemeType, true // default
 	}
 	if len(values) > 1 {
 		panic(fmt.Sprintf("Package %q contains more than one usage of %q", pkg.Path, schemeRegistryTagName))
 	}
-	return types.ParseFullyQualifiedName(values[0].Value)
+	val := values[0].Value
+	if val == "nil" {
+		// no registration wanted for this package
+		return types.Name{}, false
+	}
+	return types.ParseFullyQualifiedName(val), true
+}
+
+// registerScheme reports whether pkg registers its validations with a scheme.
+func registerScheme(pkg *types.Package) bool {
+	_, ok := schemeRegistryTag(pkg)
+	return ok
 }
 
 func isSubresourceTag(t *types.Type) (string, bool) {
@@ -240,7 +267,7 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 	// it is MUCH faster.
 	inputPkgs := make([]string, 0, len(context.Inputs))
 	pkgToInput := map[string]string{}
-	inputToPkg := map[string]string{} // reverse of pkgToInput
+	inputToCanonicalPkg := map[string]string{} // types package -> the output package cross-package references resolve to
 	for _, input := range context.Inputs {
 		klog.V(4).Infof("considering pkg %q", input)
 		pkg := context.Universe[input]
@@ -256,14 +283,22 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 		// +k8s:validation-gen-input may direct the generator at types in
 		// a different package than the one where validators will be emitted.
 		inputPath := info.ExternalTypes()
+		pkgToInput[input] = inputPath
 		if inputPath != pkg.Path {
 			klog.V(4).Infof("  input pkg %v", inputPath)
 			inputPkgs = append(inputPkgs, inputPath)
-			pkgToInput[input] = inputPath
-			inputToPkg[inputPath] = input
-		} else {
-			pkgToInput[input] = input
-			inputToPkg[input] = input
+		}
+		// An input's validation may be generated into more than one package. One
+		// is canonical -- the package cross-package references resolve to. The
+		// registering package is canonical; if none registers, the first one seen
+		// wins. At most one package may register.
+		if prev, ok := inputToCanonicalPkg[inputPath]; !ok {
+			inputToCanonicalPkg[inputPath] = input
+		} else if registerScheme(pkg) {
+			if registerScheme(context.Universe[prev]) {
+				klog.Fatalf("input %q is generated into two registering packages (%q, %q); mark one +k8s:validation-gen-scheme-registry=nil", inputPath, prev, input)
+			}
+			inputToCanonicalPkg[inputPath] = input // a registering package displaces a non-registering one
 		}
 	}
 
@@ -286,8 +321,8 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 		inputPkgs = append(inputPkgs, extra)
 		pkgToInput[extra] = extra
 		// Don't let a read-only package override a generation mapping.
-		if _, ok := inputToPkg[extra]; !ok {
-			inputToPkg[extra] = extra
+		if _, ok := inputToCanonicalPkg[extra]; !ok {
+			inputToCanonicalPkg[extra] = extra
 		}
 	}
 
@@ -301,10 +336,10 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 	context.Order = orderer.OrderUniverse(context.Universe)
 
 	// Initialize all validator plugins exactly once.
-	validator := validators.InitGlobalValidator(context, inputToPkg)
+	validator := validators.InitGlobalValidator(context, inputToCanonicalPkg)
 
 	// Create a type discoverer for all types of all inputs.
-	td := NewTypeDiscoverer(validator, inputToPkg)
+	td := NewTypeDiscoverer(validator, inputToCanonicalPkg)
 	if err := td.Init(context); err != nil {
 		klog.Fatalf("Error discovering constants: %v", err)
 	}
@@ -322,22 +357,50 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 
 		pkg := context.Universe[input]
 
-		schemeRegistry := schemeRegistryTag(pkg)
+		schemeRegistry, registerThisPkg := schemeRegistryTag(pkg)
 
-		typesWith, found := validationTypeMatch(pkg, idOpts)
+		criteria, found := validationTypeMatch(pkg, idOpts)
 		if !found {
 			klog.V(2).InfoS("  did not find required tag", "tag", mainTagName)
 			continue
 		}
-		if len(typesWith) == 1 && typesWith[0] == "" {
-			klog.Fatalf("found package tag %q with no value", mainTagName)
+		if len(criteria) == 1 && criteria[0] == "" {
+			klog.Fatalf("%s: found package tag %q with no value", input, mainTagName)
+		}
+		for _, crit := range criteria {
+			if crit == "*" {
+				continue
+			}
+			if val, found := strings.CutPrefix(crit, "TypesWithField="); found {
+				if val == "" {
+					klog.Fatalf("%s: found package tag \"%s=%s\" with empty value", input, mainTagName, crit)
+				}
+				continue
+			}
+			if val, found := strings.CutPrefix(crit, "TypesWithSuffix="); found {
+				if val == "" {
+					klog.Fatalf("%s: found package tag \"%s=%s\" with empty value", input, mainTagName, crit)
+				}
+				continue
+			}
+			klog.Fatalf("%s: unknown value for package tag %q: %q", input, mainTagName, crit)
 		}
 		shouldCreateObjectValidationFn := func(t *types.Type) bool {
+			// Never generate validation for unexported types.
+			if namer.IsPrivateGoName(t.Name.Name) {
+				return false
+			}
 			// opt-out
+			if checkMainTag(t.CommentLines, "false") {
+				return false
+			}
 			if checkMainTag(t.SecondClosestCommentLines, "false") {
 				return false
 			}
 			// opt-in
+			if checkMainTag(t.CommentLines, "true") {
+				return true
+			}
 			if checkMainTag(t.SecondClosestCommentLines, "true") {
 				return true
 			}
@@ -352,17 +415,22 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 			}
 
 			// all types
-			for _, v := range typesWith {
-				if v == "*" && !namer.IsPrivateGoName(t.Name.Name) {
+			for _, v := range criteria {
+				if v == "*" {
 					return true
 				}
+				if field, found := strings.CutPrefix(v, "TypesWithField="); found {
+					if isTypeWithField(t, field) {
+						return true
+					}
+				}
+				if field, found := strings.CutPrefix(v, "TypesWithSuffix="); found {
+					if isTypeWithSuffix(t, field) {
+						return true
+					}
+				}
 			}
-			// For every k8s:validation-gen tag at the package level, interpret the value as a
-			// field name (like TypeMeta, ListMeta, ObjectMeta) and trigger validation generation
-			// for any type with any of the matching field names. Provides a more useful package
-			// level validation than global (because we only need validations on a subset of objects -
-			// usually those with TypeMeta).
-			return isTypeWith(t, typesWith)
+			return false
 		}
 
 		// Find the right input pkg, which might not be this one.
@@ -417,7 +485,7 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 
 				GeneratorsFunc: func(c *generator.Context) (generators []generator.Generator) {
 					generators = []generator.Generator{
-						NewGenValidations(args.OutputFile, pkg.Path, rootTypes, td, inputToPkg, schemeRegistry),
+						NewGenValidations(args.OutputFile, pkg.Path, typesPkg.Path, rootTypes, td, inputToCanonicalPkg, schemeRegistry, registerThisPkg),
 					}
 					testFixtureTags := testFixtureTag(pkg)
 					if testFixtureTags.Len() > 0 {
@@ -451,7 +519,10 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 			})
 
 		// Accumulate per-Kind rules; testTargets emits after the loop.
-		if args.TestOutputRoot != "" {
+		// Only the registering package contributes coverage; a non-registering
+		// package generated from the same input has identical rules, so counting
+		// it too would double-list the version for the Kind.
+		if args.TestOutputRoot != "" && registerThisPkg {
 			collectReports(typesPkg, rootTypes, td, groupKindReports)
 		}
 	}
@@ -482,15 +553,17 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 	return targetList
 }
 
-func isTypeWith(t *types.Type, typesWith []string) bool {
-	if t.Kind == types.Struct && len(typesWith) > 0 {
+func isTypeWithField(t *types.Type, fieldName string) bool {
+	if t.Kind == types.Struct {
 		for _, field := range t.Members {
-			for _, s := range typesWith {
-				if field.Name == s {
-					return true
-				}
+			if field.Name == fieldName {
+				return true
 			}
 		}
 	}
 	return false
+}
+
+func isTypeWithSuffix(t *types.Type, suffix string) bool {
+	return strings.HasSuffix(t.Name.Name, suffix)
 }

@@ -88,7 +88,7 @@ type Manager interface {
 	// wants to be consulted with when making topology hints
 	AddHintProvider(logger klog.Logger, h HintProvider)
 	// AddContainer adds pod to Manager for tracking
-	AddContainer(pod *v1.Pod, container *v1.Container, containerID string)
+	AddContainer(logger klog.Logger, pod *v1.Pod, container *v1.Container, containerID string)
 	// RemoveContainer removes pod from Manager tracking
 	RemoveContainer(logger klog.Logger, containerID string) error
 	// Store is the interface for storing pod topology hints
@@ -111,21 +111,21 @@ type HintProvider interface {
 	// this function for each hint provider, and merges the hints to produce
 	// a consensus "best" hint. The hint providers may subsequently query the
 	// topology manager to influence actual resource assignment.
-	GetTopologyHints(logger klog.Logger, pod *v1.Pod, container *v1.Container) map[string][]TopologyHint
+	GetTopologyHints(logger klog.Logger, pod *v1.Pod, container *v1.Container, operation lifecycle.Operation) map[string][]TopologyHint
 	// GetPodTopologyHints returns a map of resource names to a list of possible
 	// concrete resource allocations per Pod in terms of NUMA locality hints.
-	GetPodTopologyHints(logger klog.Logger, pod *v1.Pod) map[string][]TopologyHint
+	GetPodTopologyHints(logger klog.Logger, pod *v1.Pod, operation lifecycle.Operation) map[string][]TopologyHint
 	// AllocatePod is called to trigger the allocation of resources to a pod.
-	AllocatePod(logger klog.Logger, pod *v1.Pod) error
+	AllocatePod(logger klog.Logger, pod *v1.Pod, operation lifecycle.Operation) error
 	// Allocate triggers resource allocation to occur on the HintProvider after
 	// all hints have been gathered and the aggregated Hint is available via a
 	// call to Store.GetAffinity().
-	Allocate(ctx context.Context, pod *v1.Pod, container *v1.Container) error
+	Allocate(ctx context.Context, pod *v1.Pod, container *v1.Container, operation lifecycle.Operation) error
 }
 
 // Store interface is to allow Hint Providers to retrieve pod affinity
 type Store interface {
-	GetAffinity(podUID string, containerName string) TopologyHint
+	GetAffinity(logger klog.Logger, podUID string, containerName string) TopologyHint
 	GetPolicy() Policy
 	Name() string
 }
@@ -162,11 +162,7 @@ func (th *TopologyHint) LessThan(other TopologyHint) bool {
 var _ Manager = &manager{}
 
 // NewManager creates a new TopologyManager based on provided policy and scope
-func NewManager(topology []cadvisorapi.Node, topologyPolicyName string, topologyScopeName string, topologyPolicyOptions map[string]string) (Manager, error) {
-	// Use klog.TODO() because we currently do not have a proper logger to pass in.
-	// Replace this with an appropriate logger when refactoring this function to accept a logger parameter.
-	logger := klog.TODO()
-
+func NewManager(logger klog.Logger, topology []cadvisorapi.Node, topologyPolicyName string, topologyScopeName string, topologyPolicyOptions map[string]string) (Manager, error) {
 	// When policy is none, the scope is not relevant, so we can short circuit here.
 	if topologyPolicyName == PolicyNone {
 		logger.Info("Creating topology manager with none policy")
@@ -235,8 +231,8 @@ func (m *manager) initializeMetrics() {
 	metrics.ContainerAlignedComputeResourcesFailure.WithLabelValues(metrics.AlignScopePod, metrics.AlignedNUMANode).Add(0)
 }
 
-func (m *manager) GetAffinity(podUID string, containerName string) TopologyHint {
-	return m.scope.GetAffinity(podUID, containerName)
+func (m *manager) GetAffinity(logger klog.Logger, podUID string, containerName string) TopologyHint {
+	return m.scope.GetAffinity(logger, podUID, containerName)
 }
 
 func (m *manager) GetPolicy() Policy {
@@ -247,11 +243,11 @@ func (m *manager) Name() string {
 	return m.scope.Name()
 }
 
-func (m *manager) AddHintProvider(_ klog.Logger, h HintProvider) {
-	m.scope.AddHintProvider(h)
+func (m *manager) AddHintProvider(logger klog.Logger, h HintProvider) {
+	m.scope.AddHintProvider(logger, h)
 }
 
-func (m *manager) AddContainer(pod *v1.Pod, container *v1.Container, containerID string) {
+func (m *manager) AddContainer(_ klog.Logger, pod *v1.Pod, container *v1.Container, containerID string) {
 	m.scope.AddContainer(pod, container, containerID)
 }
 
@@ -265,7 +261,7 @@ func (m *manager) Admit(ctx context.Context, attrs *lifecycle.PodAdmitAttributes
 	metrics.TopologyManagerAdmissionRequestsTotal.Inc()
 
 	startTime := time.Now()
-	podAdmitResult := m.scope.Admit(ctx, attrs.Pod)
+	podAdmitResult := m.scope.Admit(ctx, attrs.Pod, attrs.Operation)
 	metrics.TopologyManagerAdmissionDuration.Observe(float64(time.Since(startTime).Milliseconds()))
 
 	logger.V(4).Info("Pod Admit Result", "Message", podAdmitResult.Message, "pod", klog.KObj(attrs.Pod))

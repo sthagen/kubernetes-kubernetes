@@ -71,12 +71,12 @@ type Config struct {
 	// be initialized yet.
 	TagValidator TagValidationExtractor
 
-	// InputToPkg maps each input (API types) package to the package into which
-	// validation code is generated for it.  This is the same mapping the
-	// generator uses to locate generated Validate_<Type> functions, and lets
-	// validators reference hand-written functions that live alongside the
-	// generated code (e.g. +k8s:customValidation).
-	InputToPkg map[string]string
+	// InputToCanonicalPkg maps each input (API types) package to its canonical
+	// generated validation package (the one cross-package references resolve to).
+	// This is the same mapping the generator uses to locate generated
+	// Validate_<Type> functions, and lets validators reference hand-written
+	// functions that live alongside the generated code (e.g. +k8s:customValidation).
+	InputToCanonicalPkg map[string]string
 }
 
 // Scope describes where a validation (or potential validation) is located.
@@ -587,7 +587,7 @@ type FunctionGen struct {
 	// Emits, when non-empty, declares the field.Errors the runtime validator
 	// produces on failure. Set via WithEmits; empty for wrappers and
 	// non-emitting validators. A single function call may emit errors of
-	// different types and/or at different path fragments (e.g. UpdateSlice
+	// different types and/or at different path fragments (e.g. ValSliceUpdate
 	// with NoAddItem and NoRemoveItem), so this is a slice.
 	Emits []Emission
 }

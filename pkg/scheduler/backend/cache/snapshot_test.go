@@ -18,18 +18,25 @@ package cache
 
 import (
 	"fmt"
+	"maps"
+	"slices"
+	"sort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	v1 "k8s.io/api/core/v1"
+	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/ktesting"
 	fwk "k8s.io/kube-scheduler/framework"
+	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
 )
@@ -495,8 +502,8 @@ func TestSnapshot_AssumeForget(t *testing.T) {
 
 			if tt.forgetAll {
 				snapshot.forgetAllAssumedPods(logger)
-				if len(snapshot.assumedPods) != 0 {
-					t.Errorf("Expected assumedPods to be empty, but has %d pods", len(snapshot.assumedPods))
+				if len(snapshot.assumedPodStates) != 0 {
+					t.Errorf("Expected assumedPodStates to be empty, but has %d pods", len(snapshot.assumedPodStates))
 				}
 			} else {
 				for _, p := range tt.podsToForget {
@@ -540,6 +547,269 @@ func TestSnapshot_AssumeForget(t *testing.T) {
 						}
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestSnapshot_AssumeForgetAffinityAndPVC(t *testing.T) {
+	node1 := st.MakeNode().Name("node-1").Obj()
+	node2 := st.MakeNode().Name("node-2").Obj()
+
+	affinityPod := st.MakePod().Name("affinity-pod").UID("affinity-pod").Node("node-1").
+		PodAffinity("zone", &metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}, st.PodAffinityWithRequiredReq).Obj()
+	affinityPod2 := st.MakePod().Name("affinity-pod-2").UID("affinity-pod-2").Node("node-1").
+		PodAffinity("zone", &metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}, st.PodAffinityWithRequiredReq).Obj()
+	antiAffinityPod := st.MakePod().Name("anti-affinity-pod").UID("anti-affinity-pod").Node("node-1").
+		PodAntiAffinity("zone", &metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}, st.PodAntiAffinityWithRequiredReq).Obj()
+	antiAffinityPod2 := st.MakePod().Name("anti-affinity-pod-2").UID("anti-affinity-pod-2").Node("node-1").
+		PodAntiAffinity("zone", &metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}, st.PodAntiAffinityWithRequiredReq).Obj()
+	bothPod := st.MakePod().Name("both-pod").UID("both-pod").Node("node-2").
+		PodAffinity("zone", &metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}, st.PodAffinityWithRequiredReq).
+		PodAntiAffinity("zone", &metav1.LabelSelector{MatchLabels: map[string]string{"baz": "qux"}}, st.PodAntiAffinityWithRequiredReq).Obj()
+	pvcPod := st.MakePod().Name("pvc-pod").UID("pvc-pod").Namespace("ns").Node("node-1").PVC("my-pvc").Obj()
+	// pvcPod2 references the same PVC as pvcPod on the same node, to exercise the
+	// shared-PVC reference-counting path.
+	pvcPod2 := st.MakePod().Name("pvc-pod-2").UID("pvc-pod-2").Namespace("ns").Node("node-1").PVC("my-pvc").Obj()
+	mixedVolumePod := st.MakePod().Name("mixed-pod").UID("mixed-pod").Namespace("ns").Node("node-1").
+		PVC("tracked-pvc").
+		Volume(v1.Volume{Name: "empty", VolumeSource: v1.VolumeSource{EmptyDir: &v1.EmptyDirVolumeSource{}}}).
+		Volume(v1.Volume{Name: "cm", VolumeSource: v1.VolumeSource{ConfigMap: &v1.ConfigMapVolumeSource{}}}).Obj()
+
+	// Pods that are already part of the snapshot (passed to NewSnapshot, not
+	// assumed). ForgetPod must never revert the indexes they contributed.
+	preexistingAffinityPod := st.MakePod().Name("pre-affinity-pod").UID("pre-affinity-pod").Node("node-2").
+		PodAffinity("zone", &metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}, st.PodAffinityWithRequiredReq).Obj()
+	preexistingAntiAffinityPod := st.MakePod().Name("pre-anti-pod").UID("pre-anti-pod").Node("node-2").
+		PodAntiAffinity("zone", &metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}, st.PodAntiAffinityWithRequiredReq).Obj()
+	preexistingPVCPod := st.MakePod().Name("pre-pvc-pod").UID("pre-pvc-pod").Namespace("ns").Node("node-2").PVC("pre-pvc").Obj()
+	// affinityPodNode2 is assumed onto node-2, which already hosts a pod with
+	// affinity terms, to exercise the "no double-append" path.
+	affinityPodNode2 := st.MakePod().Name("affinity-pod-n2").UID("affinity-pod-n2").Node("node-2").
+		PodAffinity("zone", &metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}, st.PodAffinityWithRequiredReq).Obj()
+	// sharedPVCPod is assumed onto node-1 but references the same PVC as the
+	// pre-existing preexistingPVCPod.
+	sharedPVCPod := st.MakePod().Name("shared-pvc-pod").UID("shared-pvc-pod").Namespace("ns").Node("node-1").PVC("pre-pvc").Obj()
+
+	mustPodInfo := func(pod *v1.Pod) *framework.PodInfo {
+		podInfo, err := framework.NewPodInfo(pod)
+		if err != nil {
+			t.Fatalf("Failed to build PodInfo for %q: %v", pod.Name, err)
+		}
+		return podInfo
+	}
+
+	tests := []struct {
+		name string
+		// initialPods are part of the snapshot from the start (passed to
+		// NewSnapshot). They are not assumed and must survive ForgetPod.
+		initialPods  []*v1.Pod
+		podsToAssume []*v1.Pod
+		podsToForget []*v1.Pod
+		// forgetAll calls forgetAllAssumedPods instead of forgetting podsToForget
+		// one by one. It exercises the LIFO revert of all leftover assumed pods.
+		forgetAll                bool
+		expectedAffinity         sets.Set[string]
+		expectedAntiAffinity     sets.Set[string]
+		expectedUsedPVCRefCounts map[string]int
+	}{
+		{
+			name:             "assume pod with required affinity",
+			podsToAssume:     []*v1.Pod{affinityPod},
+			expectedAffinity: sets.New("node-1"),
+		},
+		{
+			name:         "assume pod with required anti-affinity",
+			podsToAssume: []*v1.Pod{antiAffinityPod},
+			// A pod declaring anti-affinity also counts as having affinity terms.
+			expectedAffinity:     sets.New("node-1"),
+			expectedAntiAffinity: sets.New("node-1"),
+		},
+		{
+			name:                     "assume pod with a PVC volume",
+			podsToAssume:             []*v1.Pod{pvcPod},
+			expectedUsedPVCRefCounts: map[string]int{"ns/my-pvc": 1},
+		},
+		{
+			name:         "forget pod with affinity returns to baseline",
+			podsToAssume: []*v1.Pod{affinityPod},
+			podsToForget: []*v1.Pod{affinityPod},
+		},
+		{
+			name:         "forget pod with anti-affinity returns to baseline",
+			podsToAssume: []*v1.Pod{antiAffinityPod},
+			podsToForget: []*v1.Pod{antiAffinityPod},
+		},
+		{
+			name:         "forget pod with PVC returns to baseline",
+			podsToAssume: []*v1.Pod{pvcPod},
+			podsToForget: []*v1.Pod{pvcPod},
+		},
+		{
+			// AssumePod/ForgetPod are documented as LIFO, so we forget the
+			// pod assumed last; node-1 must remain in the list because the
+			// first pod still has affinity terms.
+			name:             "two pods with affinity on the same node, forget the last assumed",
+			podsToAssume:     []*v1.Pod{affinityPod, affinityPod2},
+			podsToForget:     []*v1.Pod{affinityPod2},
+			expectedAffinity: sets.New("node-1"),
+		},
+		{
+			// Forgetting both assumed pods (in reverse order) must return the
+			// affinity list to its empty baseline.
+			name:         "two pods with affinity on the same node, forget both returns to baseline",
+			podsToAssume: []*v1.Pod{affinityPod, affinityPod2},
+			podsToForget: []*v1.Pod{affinityPod2, affinityPod},
+		},
+		{
+			// Same as the affinity case above, but for required anti-affinity:
+			// node-1 must remain in both lists because the first pod still has
+			// (anti-)affinity terms.
+			name:                 "two pods with anti-affinity on the same node, forget the last assumed",
+			podsToAssume:         []*v1.Pod{antiAffinityPod, antiAffinityPod2},
+			podsToForget:         []*v1.Pod{antiAffinityPod2},
+			expectedAffinity:     sets.New("node-1"),
+			expectedAntiAffinity: sets.New("node-1"),
+		},
+		{
+			name:         "two pods with anti-affinity on the same node, forget both returns to baseline",
+			podsToAssume: []*v1.Pod{antiAffinityPod, antiAffinityPod2},
+			podsToForget: []*v1.Pod{antiAffinityPod2, antiAffinityPod},
+		},
+		{
+			// Same as above, but for a PVC shared by two pods on the same node:
+			// the key must remain tracked until the last referencing pod is
+			// forgotten.
+			name:                     "two pods sharing a PVC on the same node, forget the last assumed",
+			podsToAssume:             []*v1.Pod{pvcPod, pvcPod2},
+			podsToForget:             []*v1.Pod{pvcPod2},
+			expectedUsedPVCRefCounts: map[string]int{"ns/my-pvc": 1},
+		},
+		{
+			name:         "two pods sharing a PVC on the same node, forget both returns to baseline",
+			podsToAssume: []*v1.Pod{pvcPod, pvcPod2},
+			podsToForget: []*v1.Pod{pvcPod2, pvcPod},
+		},
+		{
+			// forgetAllAssumedPods must revert every leftover assumed pod in
+			// reverse assume order. Several pods are assumed across two nodes with
+			// affinity, anti-affinity and a shared PVC; after forgetting them all
+			// the snapshot must return to its empty baseline.
+			name:         "forget all assumed pods returns to baseline",
+			podsToAssume: []*v1.Pod{affinityPod, bothPod, pvcPod, pvcPod2},
+			forgetAll:    true,
+		},
+		{
+			name:                 "pod with both affinity and anti-affinity terms",
+			podsToAssume:         []*v1.Pod{bothPod},
+			expectedAffinity:     sets.New("node-2"),
+			expectedAntiAffinity: sets.New("node-2"),
+		},
+		{
+			name:                     "pod with mixed volumes only tracks the PVC",
+			podsToAssume:             []*v1.Pod{mixedVolumePod},
+			expectedUsedPVCRefCounts: map[string]int{"ns/tracked-pvc": 1},
+		},
+		{
+			// node-2 already hosts a pod with affinity terms, so assuming
+			// another one must not append node-2 to the list a second time.
+			name:             "assume affinity pod on a node that already has affinity pods",
+			initialPods:      []*v1.Pod{preexistingAffinityPod},
+			podsToAssume:     []*v1.Pod{affinityPodNode2},
+			expectedAffinity: sets.New("node-2"),
+		},
+		{
+			// Forgetting the assumed pod must keep node-2 in the list because
+			// the pre-existing pod still declares affinity terms.
+			name:             "forget assumed pod keeps the pre-existing affinity entry",
+			initialPods:      []*v1.Pod{preexistingAffinityPod},
+			podsToAssume:     []*v1.Pod{affinityPodNode2},
+			podsToForget:     []*v1.Pod{affinityPodNode2},
+			expectedAffinity: sets.New("node-2"),
+		},
+		{
+			// The assumed pod shares a PVC with a pre-existing pod, so the key
+			// is already tracked; ForgetPod must not drop it.
+			name:                     "forget assumed pod keeps a PVC shared with a pre-existing pod",
+			initialPods:              []*v1.Pod{preexistingPVCPod},
+			podsToAssume:             []*v1.Pod{sharedPVCPod},
+			podsToForget:             []*v1.Pod{sharedPVCPod},
+			expectedUsedPVCRefCounts: map[string]int{"ns/pre-pvc": 1},
+		},
+		{
+			// Pre-existing affinity, anti-affinity and PVC state on node-2,
+			// plus several pods assumed onto node-1 and partially forgotten in
+			// reverse order. node-1 must appear in the affinity list exactly
+			// once even though two assumed pods declare affinity terms there.
+			name:                     "pre-existing state with multiple assume and partial forget",
+			initialPods:              []*v1.Pod{preexistingAffinityPod, preexistingAntiAffinityPod, preexistingPVCPod},
+			podsToAssume:             []*v1.Pod{affinityPod, pvcPod, antiAffinityPod},
+			podsToForget:             []*v1.Pod{antiAffinityPod, pvcPod},
+			expectedAffinity:         sets.New("node-1", "node-2"),
+			expectedAntiAffinity:     sets.New("node-2"),
+			expectedUsedPVCRefCounts: map[string]int{"ns/pre-pvc": 1},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, _ := ktesting.NewTestContext(t)
+			snapshot := NewSnapshot(tt.initialPods, []*v1.Node{node1, node2})
+
+			for _, p := range tt.podsToAssume {
+				if err := snapshot.AssumePod(mustPodInfo(p)); err != nil {
+					t.Fatalf("Failed to assume pod %q: %v", p.Name, err)
+				}
+			}
+			if tt.forgetAll {
+				snapshot.forgetAllAssumedPods(logger)
+				if len(snapshot.assumedPodStates) != 0 {
+					t.Errorf("Expected assumedPodStates to be empty after forgetAll, but has %d entries", len(snapshot.assumedPodStates))
+				}
+				if len(snapshot.assumedPodKeys) != 0 {
+					t.Errorf("Expected assumedPodKeys to be empty after forgetAll, but has %d entries", len(snapshot.assumedPodKeys))
+				}
+			} else {
+				for _, p := range tt.podsToForget {
+					if err := snapshot.ForgetPod(logger, p); err != nil {
+						t.Fatalf("Failed to forget pod %q: %v", p.Name, err)
+					}
+				}
+			}
+
+			affinityList, err := snapshot.HavePodsWithAffinityList()
+			if err != nil {
+				t.Fatalf("HavePodsWithAffinityList failed: %v", err)
+			}
+			gotAffinity := make([]string, 0, len(affinityList))
+			for _, n := range affinityList {
+				gotAffinity = append(gotAffinity, n.Node().Name)
+			}
+			slices.Sort(gotAffinity)
+			// Comparing sorted node name slices also catches duplicated entries.
+			if diff := cmp.Diff(sets.List(tt.expectedAffinity), gotAffinity); diff != "" {
+				t.Errorf("Unexpected affinity node list (-want +got):\n%s", diff)
+			}
+
+			antiAffinityList, err := snapshot.HavePodsWithRequiredAntiAffinityList()
+			if err != nil {
+				t.Fatalf("HavePodsWithRequiredAntiAffinityList failed: %v", err)
+			}
+			gotAntiAffinity := make([]string, 0, len(antiAffinityList))
+			for _, n := range antiAffinityList {
+				gotAntiAffinity = append(gotAntiAffinity, n.Node().Name)
+			}
+			slices.Sort(gotAntiAffinity)
+			if diff := cmp.Diff(sets.List(tt.expectedAntiAffinity), gotAntiAffinity); diff != "" {
+				t.Errorf("Unexpected anti-affinity node list (-want +got):\n%s", diff)
+			}
+
+			wantPVC := tt.expectedUsedPVCRefCounts
+			if wantPVC == nil {
+				wantPVC = map[string]int{}
+			}
+			if diff := cmp.Diff(wantPVC, snapshot.usedPVCRefCounts); diff != "" {
+				t.Errorf("Unexpected usedPVCRefCounts (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -756,7 +1026,7 @@ func TestSnapshot_Placement(t *testing.T) {
 	}
 }
 
-func TestSnapshot_BackupRestore(t *testing.T) {
+func TestSnapshot_Mutations(t *testing.T) {
 	podWithAffinity := st.MakePod().Name("p-aff").Namespace("ns").UID("p-aff").PodAffinity("key", &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}}, st.PodAffinityWithRequiredReq).Node("node-1").Obj()
 	podWithAntiAffinity := st.MakePod().Name("p-anti").Namespace("ns").UID("p-anti").PodAntiAffinity("key", &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}}, st.PodAntiAffinityWithRequiredReq).Node("node-1").Obj()
 
@@ -815,6 +1085,31 @@ func TestSnapshot_BackupRestore(t *testing.T) {
 				s.nodeInfoList[0], s.nodeInfoList[1] = s.nodeInfoList[1], s.nodeInfoList[0]
 			},
 		},
+		{
+			name: "Modify usedPVCRefCounts (Add/Modify)",
+			initialPods: []*v1.Pod{
+				st.MakePod().Name("p1").Namespace("ns").Node("node-1").PVC("pvc-1").Obj(),
+			},
+			initialNodes: []*v1.Node{
+				{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}},
+			},
+			modifySnapshot: func(_ klog.Logger, s *Snapshot) {
+				s.usedPVCRefCounts["ns/pvc-1"]++
+				s.usedPVCRefCounts["ns/pvc-2"] = 1
+			},
+		},
+		{
+			name: "Modify usedPVCRefCounts (Remove)",
+			initialPods: []*v1.Pod{
+				st.MakePod().Name("p1").Namespace("ns").Node("node-1").PVC("pvc-1").Obj(),
+			},
+			initialNodes: []*v1.Node{
+				{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}},
+			},
+			modifySnapshot: func(_ klog.Logger, s *Snapshot) {
+				delete(s.usedPVCRefCounts, "ns/pvc-1")
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -823,40 +1118,51 @@ func TestSnapshot_BackupRestore(t *testing.T) {
 			s := NewSnapshot(tt.initialPods, tt.initialNodes)
 
 			// Store original state for deep verification
-			origNodeInfoMap, origNodeInfoList, origAffinityList, origAntiAffinityList := simplifySnapshot(s)
+			origNodeInfoMap, origNodeInfoList, origAffinityList, origAntiAffinityList, origUsedPVCRefCounts, origPGStates := simplifySnapshot(s)
 
-			restore, err := s.BackupSnapshot()
+			err := s.StartMutations()
 			if err != nil {
 				t.Fatalf("failed to prepare a backup")
 			}
 			tt.modifySnapshot(logger, s)
-			restore()
+			err = s.EndMutations()
+			if err != nil {
+				t.Fatalf("failed to restore a backup")
+			}
 
 			// Get state after for verification
-			postRestoreNodeInfoMap, postRestoreNodeInfoList, postRestoreAffinityList, postRestoreAntiAffinityList := simplifySnapshot(s)
+			postRestoreNodeInfoMap, postRestoreNodeInfoList, postRestoreAffinityList, postRestoreAntiAffinityList, postRestoreUsedPVCRefCounts, postRestorePGStates := simplifySnapshot(s)
 
-			if cmp.Diff(origNodeInfoMap, postRestoreNodeInfoMap) != "" {
-				t.Errorf("nodeInfoMap mismatch: want %v, got %v", origNodeInfoMap, postRestoreNodeInfoMap)
+			if diff := cmp.Diff(origNodeInfoMap, postRestoreNodeInfoMap); diff != "" {
+				t.Errorf("nodeInfoMap mismatch (-want +got):\n%s", diff)
 			}
-			if cmp.Diff(origNodeInfoList, postRestoreNodeInfoList) != "" {
-				t.Errorf("nodeInfoList mismatch: want %v, got %v", origNodeInfoList, postRestoreNodeInfoList)
+			if diff := cmp.Diff(origNodeInfoList, postRestoreNodeInfoList); diff != "" {
+				t.Errorf("nodeInfoList mismatch (-want +got):\n%s", diff)
 			}
-			if cmp.Diff(origAffinityList, postRestoreAffinityList) != "" {
-				t.Errorf("havePodsWithAffinityNodeInfoList mismatch: want %v, got %v", origAffinityList, postRestoreAffinityList)
+			if diff := cmp.Diff(origAffinityList, postRestoreAffinityList); diff != "" {
+				t.Errorf("havePodsWithAffinityNodeInfoList mismatch (-want +got):\n%s", diff)
 			}
-			if cmp.Diff(origAntiAffinityList, postRestoreAntiAffinityList) != "" {
-				t.Errorf("havePodsWithRequiredAntiAffinityNodeInfoList mismatch: want %v, got %v", origAntiAffinityList, postRestoreAntiAffinityList)
+			if diff := cmp.Diff(origAntiAffinityList, postRestoreAntiAffinityList); diff != "" {
+				t.Errorf("havePodsWithRequiredAntiAffinityNodeInfoList mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(origUsedPVCRefCounts, postRestoreUsedPVCRefCounts); diff != "" {
+				t.Errorf("usedPVCRefCounts mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(origPGStates, postRestorePGStates); diff != "" {
+				t.Errorf("podGroupStates mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
 // simplifySnapshot for comparison in unit tests
-func simplifySnapshot(s *Snapshot) (map[string][]string, []string, []string, []string) {
+func simplifySnapshot(s *Snapshot) (map[string][]string, []string, []string, []string, map[string]int, map[string][]string) {
 	nodeInfoMap := make(map[string][]string)
 	var nodeInfoList []string
 	var affinityList []string
 	var antiAffinityList []string
+	usedPVCRefCounts := make(map[string]int)
+	pgStates := make(map[string][]string)
 	for _, nodeInfo := range s.nodeInfoMap {
 		for _, p := range nodeInfo.GetPods() {
 			nodeInfoMap[nodeInfo.Node().Name] = append(nodeInfoMap[nodeInfo.Node().Name], p.GetPod().Name)
@@ -871,33 +1177,63 @@ func simplifySnapshot(s *Snapshot) (map[string][]string, []string, []string, []s
 	for _, nodeInfo := range s.havePodsWithRequiredAntiAffinityNodeInfoList {
 		antiAffinityList = append(antiAffinityList, nodeInfo.Node().Name)
 	}
-	return nodeInfoMap, nodeInfoList, affinityList, antiAffinityList
+	maps.Copy(usedPVCRefCounts, s.usedPVCRefCounts)
+
+	if s.genericWorkloadEnabled {
+		for key, pgs := range s.podGroupStates {
+			var podNames []string
+			for _, p := range pgs.ScheduledPods() {
+				podNames = append(podNames, p.Name)
+			}
+			sort.Strings(podNames)
+			pgStates[key.String()] = podNames
+		}
+	}
+
+	return nodeInfoMap, nodeInfoList, affinityList, antiAffinityList, usedPVCRefCounts, pgStates
 }
 
-func TestSnapshot_MultipleBackups(t *testing.T) {
+func TestSnapshot_MultipleMutations(t *testing.T) {
 	s := NewSnapshot(nil, nil)
 
-	restore, err := s.BackupSnapshot()
+	err := s.StartMutations()
 	if err != nil {
-		t.Fatalf("failed to prepare a backup: %v", err)
+		t.Fatalf("failed to start mutations: %v", err)
 	}
 
-	_, err = s.BackupSnapshot()
+	err = s.StartMutations()
 	if err == nil {
-		t.Fatalf("expected error when stacking backups, got nil")
+		t.Fatalf("expected error when stacking mutations, got nil")
 	}
 
-	expectedErr := "cannot stack backups"
+	expectedErr := "cannot stack mutations"
 	if err.Error() != expectedErr {
 		t.Errorf("expected error %q, got %q", expectedErr, err.Error())
 	}
 
-	// Restore the previous backup, and now it should work again
-	restore()
-
-	_, err = s.BackupSnapshot()
+	// End the previous mutations, and now it should work again
+	err = s.EndMutations()
 	if err != nil {
-		t.Fatalf("failed to prepare a backup after restoring: %v", err)
+		t.Fatalf("failed to end mutations: %v", err)
+	}
+
+	err = s.StartMutations()
+	if err != nil {
+		t.Fatalf("failed to start mutations after ending: %v", err)
+	}
+}
+
+func TestSnapshot_EndMutationsWithoutStartMutations(t *testing.T) {
+	s := NewSnapshot(nil, nil)
+
+	err := s.EndMutations()
+	if err == nil {
+		t.Fatalf("expected error when not starting mutations, got nil")
+	}
+
+	expectedErr := "no mutation session started"
+	if err.Error() != expectedErr {
+		t.Errorf("expected error %q, got %q", expectedErr, err.Error())
 	}
 }
 
@@ -996,6 +1332,376 @@ func TestSnapshot_CreateUsedPVCRefCounts(t *testing.T) {
 			actual := createUsedPVCRefCounts(tt.nodeInfoMap)
 			if diff := cmp.Diff(actual, tt.expectedPVCRefCount); diff != "" {
 				t.Errorf("Unexpected pvcRefCount (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestSnapshot_AddRemovePodWithoutMutations(t *testing.T) {
+	node := st.MakeNode().Name("node-1").Obj()
+	pod := st.MakePod().Name("p1").Node("node-1").Obj()
+	podInfo, _ := framework.NewPodInfo(pod)
+
+	tests := []struct {
+		name        string
+		podToAdd    *framework.PodInfo
+		podToRemove *v1.Pod
+	}{
+		{
+			name:     "AddPod without mutation session should fail",
+			podToAdd: podInfo,
+		},
+		{
+			name:        "RemovePod without mutation session should fail",
+			podToRemove: pod,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, _ := ktesting.NewTestContext(t)
+			s := NewSnapshot([]*v1.Pod{pod}, []*v1.Node{node})
+			var err error
+			if tt.podToAdd != nil {
+				err = s.AddPod(tt.podToAdd, tt.podToAdd.Pod.Spec.NodeName)
+			}
+			if tt.podToRemove != nil {
+				err = s.RemovePod(logger, tt.podToRemove, tt.podToRemove.Spec.NodeName)
+			}
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestSnapshot_AddRemovePod(t *testing.T) {
+	podWithAffinity := st.MakePod().Name("p-aff").Namespace("ns").UID("p-aff").PodAffinity("key", &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}}, st.PodAffinityWithRequiredReq).Node("node-1").Obj()
+	podWithAntiAffinity := st.MakePod().Name("p-anti").Namespace("ns").UID("p-anti").PodAntiAffinity("key", &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}}, st.PodAntiAffinityWithRequiredReq).Node("node-1").Obj()
+	podWithPVC := st.MakePod().Name("p-pvc").Namespace("ns").UID("p-pvc").PVC("pvc-1").Node("node-1").Obj()
+
+	type operation struct {
+		opType    string // "add" or "remove"
+		pod       *v1.Pod
+		nodeName  string // optional, defaults to pod.Spec.NodeName if empty
+		expectErr bool
+	}
+
+	tests := []struct {
+		name                  string
+		initialPods           []*v1.Pod
+		initialNodes          []*v1.Node
+		initialPodGroups      []*schedulingv1alpha3.PodGroup
+		operations            []operation
+		expectedAffinityNodes int
+		expectedAntiAffNodes  int
+		expectedPVCCount      map[string]int
+		expectedPodsOnNode    map[string][]string
+		expectedMissingNodes  []string
+		expectedPodGroups     map[string][]string
+	}{
+		{
+			name:                  "AddPod with affinity",
+			initialNodes:          []*v1.Node{st.MakeNode().Name("node-1").Obj()},
+			operations:            []operation{{opType: "add", pod: podWithAffinity}},
+			expectedAffinityNodes: 1,
+			expectedPodsOnNode:    map[string][]string{"node-1": {"p-aff"}},
+		},
+		{
+			name:                  "AddPod with anti-affinity",
+			initialNodes:          []*v1.Node{st.MakeNode().Name("node-1").Obj()},
+			operations:            []operation{{opType: "add", pod: podWithAntiAffinity}},
+			expectedAffinityNodes: 1,
+			expectedAntiAffNodes:  1,
+			expectedPodsOnNode:    map[string][]string{"node-1": {"p-anti"}},
+		},
+		{
+			name:               "AddPod with PVC updates usedPVCRefCounts",
+			initialNodes:       []*v1.Node{st.MakeNode().Name("node-1").Obj()},
+			operations:         []operation{{opType: "add", pod: podWithPVC}},
+			expectedPVCCount:   map[string]int{"ns/pvc-1": 1},
+			expectedPodsOnNode: map[string][]string{"node-1": {"p-pvc"}},
+		},
+		{
+			name:                  "RemovePod removes node from affinity list",
+			initialNodes:          []*v1.Node{st.MakeNode().Name("node-1").Obj()},
+			initialPods:           []*v1.Pod{podWithAffinity},
+			operations:            []operation{{opType: "remove", pod: podWithAffinity}},
+			expectedAffinityNodes: 0,
+			expectedPodsOnNode:    map[string][]string{"node-1": {}},
+		},
+		{
+			name:                  "RemovePod removes node from anti-affinity list",
+			initialNodes:          []*v1.Node{st.MakeNode().Name("node-1").Obj()},
+			initialPods:           []*v1.Pod{podWithAntiAffinity},
+			operations:            []operation{{opType: "remove", pod: podWithAntiAffinity}},
+			expectedAffinityNodes: 0,
+			expectedAntiAffNodes:  0,
+			expectedPodsOnNode:    map[string][]string{"node-1": {}},
+		},
+		{
+			name:               "RemovePod with PVC updates usedPVCRefCounts",
+			initialNodes:       []*v1.Node{st.MakeNode().Name("node-1").Obj()},
+			initialPods:        []*v1.Pod{podWithPVC},
+			operations:         []operation{{opType: "remove", pod: podWithPVC}},
+			expectedPVCCount:   map[string]int{},
+			expectedPodsOnNode: map[string][]string{"node-1": {}},
+		},
+		{
+			name: "Multiple nodes and pods",
+			initialNodes: []*v1.Node{
+				st.MakeNode().Name("node-1").Obj(),
+				st.MakeNode().Name("node-2").Obj(),
+			},
+			initialPods: []*v1.Pod{
+				st.MakePod().Name("p1").UID("p1").Node("node-1").Obj(),
+			},
+			operations: []operation{
+				{opType: "add", pod: st.MakePod().Name("p2").UID("p2").Node("node-2").Obj()},
+				{opType: "add", pod: podWithAffinity},
+				{opType: "remove", pod: st.MakePod().Name("p1").UID("p1").Node("node-1").Obj()},
+			},
+			expectedAffinityNodes: 1,
+			expectedPodsOnNode: map[string][]string{
+				"node-1": {"p-aff"},
+				"node-2": {"p2"},
+			},
+		},
+		{
+			name:         "AddPod, RemovePod, AddPod sequence",
+			initialNodes: []*v1.Node{st.MakeNode().Name("node-1").Obj()},
+			operations: []operation{
+				{opType: "add", pod: podWithAffinity},
+				{opType: "remove", pod: podWithAffinity},
+				{opType: "add", pod: podWithAffinity},
+			},
+			expectedAffinityNodes: 1,
+			expectedPodsOnNode:    map[string][]string{"node-1": {"p-aff"}},
+		},
+		{
+			name:         "Remove non-existent pod",
+			initialNodes: []*v1.Node{st.MakeNode().Name("node-1").Obj()},
+			initialPods:  []*v1.Pod{},
+			operations: []operation{
+				{opType: "remove", pod: podWithAffinity, expectErr: true},
+			},
+			expectedAffinityNodes: 0,
+			expectedPodsOnNode:    map[string][]string{"node-1": {}},
+		},
+		{
+			name:         "Remove pod from non-existent node",
+			initialNodes: []*v1.Node{st.MakeNode().Name("node-1").Obj()},
+			initialPods:  []*v1.Pod{},
+			operations: []operation{
+				{opType: "remove", pod: podWithAffinity, nodeName: "non-existent-node", expectErr: true},
+			},
+			expectedAffinityNodes: 0,
+			expectedPodsOnNode:    map[string][]string{"node-1": {}},
+		},
+		{
+			name:         "Node lifecycle: temp node created and deleted",
+			initialNodes: []*v1.Node{st.MakeNode().Name("real-node").Obj()},
+			initialPods:  []*v1.Pod{},
+			operations: []operation{
+				{opType: "add", pod: st.MakePod().Name("p-real").UID("uid-real").Node("real-node").Obj()},
+				{opType: "add", pod: st.MakePod().Name("p-temp").UID("uid-temp").Node("temp-node").Obj()},
+				{opType: "remove", pod: st.MakePod().Name("p-real").UID("uid-real").Node("real-node").Obj()},
+				{opType: "remove", pod: st.MakePod().Name("p-temp").UID("uid-temp").Node("temp-node").Obj()},
+			},
+			expectedPodsOnNode: map[string][]string{
+				"real-node": {},
+			},
+			expectedMissingNodes: []string{"temp-node"},
+		},
+		{
+			name:         "Partial removal of affinity pods",
+			initialNodes: []*v1.Node{st.MakeNode().Name("node-1").Obj()},
+			initialPods:  []*v1.Pod{},
+			operations: []operation{
+				{opType: "add", pod: st.MakePod().Name("p-aff-1").UID("uid-1").PodAffinity("key", &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}}, st.PodAffinityWithRequiredReq).Node("node-1").Obj()},
+				{opType: "add", pod: st.MakePod().Name("p-aff-2").UID("uid-2").PodAffinity("key", &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}}, st.PodAffinityWithRequiredReq).Node("node-1").Obj()},
+				{opType: "remove", pod: st.MakePod().Name("p-aff-1").UID("uid-1").PodAffinity("key", &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}}, st.PodAffinityWithRequiredReq).Node("node-1").Obj()},
+			},
+			expectedAffinityNodes: 1,
+			expectedPodsOnNode:    map[string][]string{"node-1": {"p-aff-2"}},
+		},
+		{
+			name:         "Shared PVC reference counting",
+			initialNodes: []*v1.Node{st.MakeNode().Name("node-1").Obj(), st.MakeNode().Name("node-2").Obj()},
+			initialPods:  []*v1.Pod{},
+			operations: []operation{
+				{opType: "add", pod: st.MakePod().Name("p-pvc-1").UID("uid-1").Namespace("ns").PVC("shared-pvc").Node("node-1").Obj()},
+				{opType: "add", pod: st.MakePod().Name("p-pvc-2").UID("uid-2").Namespace("ns").PVC("shared-pvc").Node("node-2").Obj()},
+				{opType: "remove", pod: st.MakePod().Name("p-pvc-1").UID("uid-1").Namespace("ns").PVC("shared-pvc").Node("node-1").Obj()},
+			},
+			expectedPVCCount: map[string]int{"ns/shared-pvc": 1},
+		},
+		{
+			name: "Affinity list middle removal",
+			initialNodes: []*v1.Node{
+				st.MakeNode().Name("node-1").Obj(),
+				st.MakeNode().Name("node-2").Obj(),
+				st.MakeNode().Name("node-3").Obj(),
+			},
+			initialPods: []*v1.Pod{},
+			operations: []operation{
+				{opType: "add", pod: st.MakePod().Name("p-aff-1").UID("uid-1").PodAffinity("k", &metav1.LabelSelector{}, st.PodAffinityWithRequiredReq).Node("node-1").Obj()},
+				{opType: "add", pod: st.MakePod().Name("p-aff-2").UID("uid-2").PodAffinity("k", &metav1.LabelSelector{}, st.PodAffinityWithRequiredReq).Node("node-2").Obj()},
+				{opType: "add", pod: st.MakePod().Name("p-aff-3").UID("uid-3").PodAffinity("k", &metav1.LabelSelector{}, st.PodAffinityWithRequiredReq).Node("node-3").Obj()},
+				{opType: "remove", pod: st.MakePod().Name("p-aff-2").UID("uid-2").PodAffinity("k", &metav1.LabelSelector{}, st.PodAffinityWithRequiredReq).Node("node-2").Obj()},
+			},
+			expectedAffinityNodes: 2,
+			expectedPodsOnNode: map[string][]string{
+				"node-1": {"p-aff-1"},
+				"node-3": {"p-aff-3"},
+			},
+		},
+		{
+			name:             "PodGroup state updates",
+			initialNodes:     []*v1.Node{st.MakeNode().Name("node-1").Obj(), st.MakeNode().Name("node-2").Obj()},
+			initialPods:      []*v1.Pod{},
+			initialPodGroups: []*schedulingv1alpha3.PodGroup{st.MakePodGroup().Name("pg1").Namespace("ns").Obj()},
+			operations: []operation{
+				{opType: "add", pod: st.MakePod().Name("p1").UID("uid-1").Namespace("ns").PodGroupName("pg1").Node("node-1").Obj()},
+				{opType: "add", pod: st.MakePod().Name("p2").UID("uid-2").Namespace("ns").PodGroupName("pg1").Node("node-2").Obj()},
+				{opType: "remove", pod: st.MakePod().Name("p1").UID("uid-1").Namespace("ns").PodGroupName("pg1").Node("node-1").Obj()},
+			},
+			expectedPodsOnNode: map[string][]string{
+				"node-2": {"p2"},
+			},
+			expectedPodGroups: map[string][]string{
+				"ns/pg1": {"p2"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, _ := ktesting.NewTestContext(t)
+			featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
+				features.GenericWorkload: true,
+			})
+			s := NewTestSnapshotWithPodGroups(tt.initialPods, tt.initialNodes, tt.initialPodGroups)
+
+			// Store original state for deep verification
+			origNodeInfoMap, origNodeInfoList, origAffinityList, origAntiAffinityList, origUsedPVCRefCounts, origPGStates := simplifySnapshot(s)
+
+			err := s.StartMutations()
+			if err != nil {
+				t.Fatalf("failed to start mutation: %v", err)
+			}
+
+			for _, op := range tt.operations {
+				nodeName := op.nodeName
+				if nodeName == "" {
+					nodeName = op.pod.Spec.NodeName
+				}
+				switch op.opType {
+				case "add":
+					podInfo, _ := framework.NewPodInfo(op.pod)
+					err := s.AddPod(podInfo, nodeName)
+					if op.expectErr {
+						if err == nil {
+							t.Fatalf("expected error adding pod, got nil")
+						}
+					} else if err != nil {
+						t.Fatalf("unexpected error adding pod: %v", err)
+					}
+				case "remove":
+					err := s.RemovePod(logger, op.pod, nodeName)
+					if op.expectErr {
+						if err == nil {
+							t.Fatalf("expected error removing pod, got nil")
+						}
+					} else if err != nil {
+						t.Fatalf("unexpected error removing pod: %v", err)
+					}
+				default:
+					t.Fatalf("unknown operation type %q", op.opType)
+				}
+			}
+
+			if tt.expectedMissingNodes != nil {
+				for _, nodeName := range tt.expectedMissingNodes {
+					_, err := s.Get(nodeName)
+					if err == nil {
+						t.Errorf("expected node %s to be missing, but it exists", nodeName)
+					}
+				}
+			}
+
+			// Verify state during mutation
+			affNodes, _ := s.HavePodsWithAffinityList()
+			if len(affNodes) != tt.expectedAffinityNodes {
+				t.Errorf("expected %d nodes with affinity, got %d", tt.expectedAffinityNodes, len(affNodes))
+			}
+
+			antiAffNodes, _ := s.HavePodsWithRequiredAntiAffinityList()
+			if len(antiAffNodes) != tt.expectedAntiAffNodes {
+				t.Errorf("expected %d nodes with anti-affinity, got %d", tt.expectedAntiAffNodes, len(antiAffNodes))
+			}
+
+			if tt.expectedPVCCount != nil {
+				if diff := cmp.Diff(tt.expectedPVCCount, s.usedPVCRefCounts); diff != "" {
+					t.Errorf("usedPVCRefCounts mismatch (-want +got):\n%s", diff)
+				}
+			}
+
+			if tt.expectedPodGroups != nil {
+				_, _, _, _, _, gotPGStates := simplifySnapshot(s)
+				if diff := cmp.Diff(tt.expectedPodGroups, gotPGStates); diff != "" {
+					t.Errorf("podGroupStates mismatch (-want +got):\n%s", diff)
+				}
+			}
+
+			// Verify visibility in Get()
+			if tt.expectedPodsOnNode != nil {
+				for nodeName, expectedPods := range tt.expectedPodsOnNode {
+					nodeInfo, err := s.Get(nodeName)
+					if err != nil {
+						t.Fatalf("unexpected error getting node %s: %v", nodeName, err)
+					}
+					podsOnNode := make([]string, 0, len(nodeInfo.GetPods()))
+					for _, p := range nodeInfo.GetPods() {
+						podsOnNode = append(podsOnNode, p.GetPod().Name)
+					}
+					if len(podsOnNode) == 0 {
+						podsOnNode = []string{}
+					}
+					if len(expectedPods) == 0 {
+						expectedPods = []string{}
+					}
+					if diff := cmp.Diff(expectedPods, podsOnNode); diff != "" {
+						t.Errorf("unexpected pods on node %s: (-want +got):\n%s", nodeName, diff)
+					}
+				}
+			}
+
+			err = s.EndMutations()
+			if err != nil {
+				t.Fatalf("failed to end mutation: %v", err)
+			}
+
+			// Verify state is reverted
+			postRestoreNodeInfoMap, postRestoreNodeInfoList, postRestoreAffinityList, postRestoreAntiAffinityList, postRestoreUsedPVCRefCounts, postRestorePGStates := simplifySnapshot(s)
+
+			if diff := cmp.Diff(origNodeInfoMap, postRestoreNodeInfoMap); diff != "" {
+				t.Errorf("nodeInfoMap mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(origNodeInfoList, postRestoreNodeInfoList); diff != "" {
+				t.Errorf("nodeInfoList mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(origAffinityList, postRestoreAffinityList); diff != "" {
+				t.Errorf("havePodsWithAffinityNodeInfoList mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(origAntiAffinityList, postRestoreAntiAffinityList); diff != "" {
+				t.Errorf("havePodsWithRequiredAntiAffinityNodeInfoList mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(origUsedPVCRefCounts, postRestoreUsedPVCRefCounts); diff != "" {
+				t.Errorf("usedPVCRefCounts mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(origPGStates, postRestorePGStates); diff != "" {
+				t.Errorf("podGroupStates mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

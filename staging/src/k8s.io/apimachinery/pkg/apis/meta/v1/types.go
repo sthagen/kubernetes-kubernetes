@@ -194,6 +194,8 @@ type ObjectMeta struct {
 	// A sequence number representing a specific generation of the desired state.
 	// Populated by the system. Read-only.
 	// +optional
+	// +k8s:alpha(since: "1.37")=+k8s:optional
+	// +k8s:alpha(since: "1.37")=+k8s:minimum=0
 	Generation int64 `json:"generation,omitempty" protobuf:"varint,7,opt,name=generation"`
 
 	// CreationTimestamp is a timestamp representing the server time when this object was
@@ -292,6 +294,7 @@ type ObjectMeta struct {
 	//
 	// +optional
 	// +listType=atomic
+	// +k8s:alpha(since: "1.37")=+k8s:optional
 	ManagedFields []ManagedFieldsEntry `json:"managedFields,omitempty" protobuf:"bytes,17,rep,name=managedFields"`
 }
 
@@ -1394,6 +1397,7 @@ type ManagedFieldsEntry struct {
 	Manager string `json:"manager,omitempty" protobuf:"bytes,1,opt,name=manager"`
 	// Operation is the type of operation which lead to this ManagedFieldsEntry being created.
 	// The only valid values for this field are 'Apply' and 'Update'.
+	// +k8s:alpha(since: "1.37")=+k8s:required
 	Operation ManagedFieldsOperationType `json:"operation,omitempty" protobuf:"bytes,2,opt,name=operation,casttype=ManagedFieldsOperationType"`
 	// APIVersion defines the version of this resource that this field set
 	// applies to. The format is "group/version" just like the top-level
@@ -1429,6 +1433,7 @@ type ManagedFieldsEntry struct {
 }
 
 // ManagedFieldsOperationType is the type of operation which lead to a ManagedFieldsEntry being created.
+// +k8s:alpha(since: "1.37")=+k8s:enum
 type ManagedFieldsOperationType string
 
 const (
@@ -1587,6 +1592,7 @@ type PartialObjectMetadata struct {
 	// Standard object's metadata.
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	// +optional
+	// +k8s:opaqueType
 	ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 }
 
@@ -1653,6 +1659,7 @@ type Condition struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Format=date-time
+	// +k8s:alpha(since: "1.37")=+k8s:customValidation
 	LastTransitionTime Time `json:"lastTransitionTime" protobuf:"bytes,4,opt,name=lastTransitionTime"`
 	// reason contains a programmatic identifier indicating the reason for the condition's last transition.
 	// Producers of specific condition types may define expected values and meanings for this field,

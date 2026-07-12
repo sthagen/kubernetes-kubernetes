@@ -177,12 +177,12 @@ type CertificateSigningRequestStatus struct {
 	// +listType=map
 	// +listMapKey=type
 	// +optional
-	// +k8s:alpha(since: "1.36")=+k8s:listType=map
-	// +k8s:alpha(since: "1.36")=+k8s:listMapKey=type
-	// +k8s:alpha(since: "1.36")=+k8s:customUnique
-	// +k8s:alpha(since: "1.36")=+k8s:optional
-	// +k8s:alpha(since: "1.36")=+k8s:item(type: "Approved")=+k8s:zeroOrOneOfMember
-	// +k8s:alpha(since: "1.36")=+k8s:item(type: "Denied")=+k8s:zeroOrOneOfMember
+	// +k8s:beta(since: "1.37")=+k8s:listType=map
+	// +k8s:beta(since: "1.37")=+k8s:listMapKey=type
+	// +k8s:beta(since: "1.37")=+k8s:customUnique
+	// +k8s:beta(since: "1.37")=+k8s:optional
+	// +k8s:beta(since: "1.37")=+k8s:item(type: "Approved")=+k8s:zeroOrOneOfMember
+	// +k8s:beta(since: "1.37")=+k8s:item(type: "Denied")=+k8s:zeroOrOneOfMember
 	Conditions []CertificateSigningRequestCondition `json:"conditions,omitempty" protobuf:"bytes,1,rep,name=conditions"`
 
 	// If request was approved, the controller will place the issued certificate here.
@@ -286,7 +286,7 @@ const (
 // to a cluster can read ClusterTrustBundles by impersonating a serviceaccount
 // that they have access to.
 //
-// It can be optionally associated with a particular assigner, in which case it
+// It can be optionally associated with a particular signer, in which case it
 // contains one valid set of trust anchors for that signer. Signers may have
 // multiple associated ClusterTrustBundles; each is an independent set of trust
 // anchors for that signer. Admission control is used to enforce that only users

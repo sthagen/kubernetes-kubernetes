@@ -77,6 +77,7 @@ import (
 	storagev1 "k8s.io/api/storage/v1"
 	storagev1alpha1 "k8s.io/api/storage/v1alpha1"
 	storagev1beta1 "k8s.io/api/storage/v1beta1"
+	storagemigrationv1 "k8s.io/api/storagemigration/v1"
 	storagemigrationv1beta1 "k8s.io/api/storagemigration/v1beta1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -119,6 +120,7 @@ import (
 	custommetricsv1beta1 "k8s.io/metrics/pkg/apis/custom_metrics/v1beta1"
 	custommetricsv1beta2 "k8s.io/metrics/pkg/apis/custom_metrics/v1beta2"
 	externalmetricsv1beta1 "k8s.io/metrics/pkg/apis/external_metrics/v1beta1"
+	metricsv1 "k8s.io/metrics/pkg/apis/metrics/v1"
 	metricsv1alpha1 "k8s.io/metrics/pkg/apis/metrics/v1alpha1"
 	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 )
@@ -1016,6 +1018,11 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		resourcev1.DeviceSelector{}.OpenAPIModelName():                                                                  schema_k8sio_api_resource_v1_DeviceSelector(ref),
 		resourcev1.DeviceSubRequest{}.OpenAPIModelName():                                                                schema_k8sio_api_resource_v1_DeviceSubRequest(ref),
 		resourcev1.DeviceTaint{}.OpenAPIModelName():                                                                     schema_k8sio_api_resource_v1_DeviceTaint(ref),
+		resourcev1.DeviceTaintRule{}.OpenAPIModelName():                                                                 schema_k8sio_api_resource_v1_DeviceTaintRule(ref),
+		resourcev1.DeviceTaintRuleList{}.OpenAPIModelName():                                                             schema_k8sio_api_resource_v1_DeviceTaintRuleList(ref),
+		resourcev1.DeviceTaintRuleSpec{}.OpenAPIModelName():                                                             schema_k8sio_api_resource_v1_DeviceTaintRuleSpec(ref),
+		resourcev1.DeviceTaintRuleStatus{}.OpenAPIModelName():                                                           schema_k8sio_api_resource_v1_DeviceTaintRuleStatus(ref),
+		resourcev1.DeviceTaintSelector{}.OpenAPIModelName():                                                             schema_k8sio_api_resource_v1_DeviceTaintSelector(ref),
 		resourcev1.DeviceToleration{}.OpenAPIModelName():                                                                schema_k8sio_api_resource_v1_DeviceToleration(ref),
 		resourcev1.ExactDeviceRequest{}.OpenAPIModelName():                                                              schema_k8sio_api_resource_v1_ExactDeviceRequest(ref),
 		resourcev1.NetworkDeviceData{}.OpenAPIModelName():                                                               schema_k8sio_api_resource_v1_NetworkDeviceData(ref),
@@ -1154,13 +1161,12 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		schedulingv1alpha3.PodGroupSpec{}.OpenAPIModelName():                                                            schema_k8sio_api_scheduling_v1alpha3_PodGroupSpec(ref),
 		schedulingv1alpha3.PodGroupStatus{}.OpenAPIModelName():                                                          schema_k8sio_api_scheduling_v1alpha3_PodGroupStatus(ref),
 		schedulingv1alpha3.PodGroupTemplate{}.OpenAPIModelName():                                                        schema_k8sio_api_scheduling_v1alpha3_PodGroupTemplate(ref),
-		schedulingv1alpha3.PodGroupTemplateReference{}.OpenAPIModelName():                                               schema_k8sio_api_scheduling_v1alpha3_PodGroupTemplateReference(ref),
 		schedulingv1alpha3.SingleDisruptionMode{}.OpenAPIModelName():                                                    schema_k8sio_api_scheduling_v1alpha3_SingleDisruptionMode(ref),
 		schedulingv1alpha3.TopologyConstraint{}.OpenAPIModelName():                                                      schema_k8sio_api_scheduling_v1alpha3_TopologyConstraint(ref),
 		schedulingv1alpha3.TypedLocalObjectReference{}.OpenAPIModelName():                                               schema_k8sio_api_scheduling_v1alpha3_TypedLocalObjectReference(ref),
 		schedulingv1alpha3.Workload{}.OpenAPIModelName():                                                                schema_k8sio_api_scheduling_v1alpha3_Workload(ref),
 		schedulingv1alpha3.WorkloadList{}.OpenAPIModelName():                                                            schema_k8sio_api_scheduling_v1alpha3_WorkloadList(ref),
-		schedulingv1alpha3.WorkloadPodGroupTemplateReference{}.OpenAPIModelName():                                       schema_k8sio_api_scheduling_v1alpha3_WorkloadPodGroupTemplateReference(ref),
+		schedulingv1alpha3.WorkloadReference{}.OpenAPIModelName():                                                       schema_k8sio_api_scheduling_v1alpha3_WorkloadReference(ref),
 		schedulingv1alpha3.WorkloadSpec{}.OpenAPIModelName():                                                            schema_k8sio_api_scheduling_v1alpha3_WorkloadSpec(ref),
 		schedulingv1beta1.PriorityClass{}.OpenAPIModelName():                                                            schema_k8sio_api_scheduling_v1beta1_PriorityClass(ref),
 		schedulingv1beta1.PriorityClassList{}.OpenAPIModelName():                                                        schema_k8sio_api_scheduling_v1beta1_PriorityClassList(ref),
@@ -1216,6 +1222,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		storagev1beta1.VolumeAttributesClassList{}.OpenAPIModelName():                                                   schema_k8sio_api_storage_v1beta1_VolumeAttributesClassList(ref),
 		storagev1beta1.VolumeError{}.OpenAPIModelName():                                                                 schema_k8sio_api_storage_v1beta1_VolumeError(ref),
 		storagev1beta1.VolumeNodeResources{}.OpenAPIModelName():                                                         schema_k8sio_api_storage_v1beta1_VolumeNodeResources(ref),
+		storagemigrationv1.StorageVersionMigration{}.OpenAPIModelName():                                                 schema_k8sio_api_storagemigration_v1_StorageVersionMigration(ref),
+		storagemigrationv1.StorageVersionMigrationList{}.OpenAPIModelName():                                             schema_k8sio_api_storagemigration_v1_StorageVersionMigrationList(ref),
+		storagemigrationv1.StorageVersionMigrationSpec{}.OpenAPIModelName():                                             schema_k8sio_api_storagemigration_v1_StorageVersionMigrationSpec(ref),
+		storagemigrationv1.StorageVersionMigrationStatus{}.OpenAPIModelName():                                           schema_k8sio_api_storagemigration_v1_StorageVersionMigrationStatus(ref),
 		storagemigrationv1beta1.StorageVersionMigration{}.OpenAPIModelName():                                            schema_k8sio_api_storagemigration_v1beta1_StorageVersionMigration(ref),
 		storagemigrationv1beta1.StorageVersionMigrationList{}.OpenAPIModelName():                                        schema_k8sio_api_storagemigration_v1beta1_StorageVersionMigrationList(ref),
 		storagemigrationv1beta1.StorageVersionMigrationSpec{}.OpenAPIModelName():                                        schema_k8sio_api_storagemigration_v1beta1_StorageVersionMigrationSpec(ref),
@@ -1498,6 +1508,11 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		custommetricsv1beta2.MetricValueList{}.OpenAPIModelName():                                                       schema_pkg_apis_custom_metrics_v1beta2_MetricValueList(ref),
 		externalmetricsv1beta1.ExternalMetricValue{}.OpenAPIModelName():                                                 schema_pkg_apis_external_metrics_v1beta1_ExternalMetricValue(ref),
 		externalmetricsv1beta1.ExternalMetricValueList{}.OpenAPIModelName():                                             schema_pkg_apis_external_metrics_v1beta1_ExternalMetricValueList(ref),
+		metricsv1.ContainerMetrics{}.OpenAPIModelName():                                                                 schema_pkg_apis_metrics_v1_ContainerMetrics(ref),
+		metricsv1.NodeMetrics{}.OpenAPIModelName():                                                                      schema_pkg_apis_metrics_v1_NodeMetrics(ref),
+		metricsv1.NodeMetricsList{}.OpenAPIModelName():                                                                  schema_pkg_apis_metrics_v1_NodeMetricsList(ref),
+		metricsv1.PodMetrics{}.OpenAPIModelName():                                                                       schema_pkg_apis_metrics_v1_PodMetrics(ref),
+		metricsv1.PodMetricsList{}.OpenAPIModelName():                                                                   schema_pkg_apis_metrics_v1_PodMetricsList(ref),
 		metricsv1alpha1.ContainerMetrics{}.OpenAPIModelName():                                                           schema_pkg_apis_metrics_v1alpha1_ContainerMetrics(ref),
 		metricsv1alpha1.NodeMetrics{}.OpenAPIModelName():                                                                schema_pkg_apis_metrics_v1alpha1_NodeMetrics(ref),
 		metricsv1alpha1.NodeMetricsList{}.OpenAPIModelName():                                                            schema_pkg_apis_metrics_v1alpha1_NodeMetricsList(ref),
@@ -6799,7 +6814,6 @@ func schema_k8sio_api_apidiscovery_v2_APIGroupDiscoveryList(ref common.Reference
 						},
 					},
 				},
-				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -6923,7 +6937,6 @@ func schema_k8sio_api_apidiscovery_v2_APIResourceDiscovery(ref common.ReferenceC
 						},
 					},
 				},
-				Required: []string{"resource", "scope", "singularResource", "verbs"},
 			},
 		},
 		Dependencies: []string{
@@ -6995,7 +7008,6 @@ func schema_k8sio_api_apidiscovery_v2_APISubresourceDiscovery(ref common.Referen
 						},
 					},
 				},
-				Required: []string{"subresource", "verbs"},
 			},
 		},
 		Dependencies: []string{
@@ -7047,7 +7059,6 @@ func schema_k8sio_api_apidiscovery_v2_APIVersionDiscovery(ref common.ReferenceCa
 						},
 					},
 				},
-				Required: []string{"version"},
 			},
 		},
 		Dependencies: []string{
@@ -7154,7 +7165,6 @@ func schema_k8sio_api_apidiscovery_v2beta1_APIGroupDiscoveryList(ref common.Refe
 						},
 					},
 				},
-				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
@@ -7278,7 +7288,6 @@ func schema_k8sio_api_apidiscovery_v2beta1_APIResourceDiscovery(ref common.Refer
 						},
 					},
 				},
-				Required: []string{"resource", "scope", "singularResource", "verbs"},
 			},
 		},
 		Dependencies: []string{
@@ -7350,7 +7359,6 @@ func schema_k8sio_api_apidiscovery_v2beta1_APISubresourceDiscovery(ref common.Re
 						},
 					},
 				},
-				Required: []string{"subresource", "verbs"},
 			},
 		},
 		Dependencies: []string{
@@ -7402,7 +7410,6 @@ func schema_k8sio_api_apidiscovery_v2beta1_APIVersionDiscovery(ref common.Refere
 						},
 					},
 				},
-				Required: []string{"version"},
 			},
 		},
 		Dependencies: []string{
@@ -17804,7 +17811,7 @@ func schema_k8sio_api_certificates_v1alpha1_ClusterTrustBundle(ref common.Refere
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ClusterTrustBundle is a cluster-scoped container for X.509 trust anchors (root certificates).\n\nClusterTrustBundle objects are considered to be readable by any authenticated user in the cluster, because they can be mounted by pods using the `clusterTrustBundle` projection.  All service accounts have read access to ClusterTrustBundles by default.  Users who only have namespace-level access to a cluster can read ClusterTrustBundles by impersonating a serviceaccount that they have access to.\n\nIt can be optionally associated with a particular assigner, in which case it contains one valid set of trust anchors for that signer. Signers may have multiple associated ClusterTrustBundles; each is an independent set of trust anchors for that signer. Admission control is used to enforce that only users with permissions on the signer can create or modify the corresponding bundle.",
+				Description: "ClusterTrustBundle is a cluster-scoped container for X.509 trust anchors (root certificates).\n\nClusterTrustBundle objects are considered to be readable by any authenticated user in the cluster, because they can be mounted by pods using the `clusterTrustBundle` projection.  All service accounts have read access to ClusterTrustBundles by default.  Users who only have namespace-level access to a cluster can read ClusterTrustBundles by impersonating a serviceaccount that they have access to.\n\nIt can be optionally associated with a particular signer, in which case it contains one valid set of trust anchors for that signer. Signers may have multiple associated ClusterTrustBundles; each is an independent set of trust anchors for that signer. Admission control is used to enforce that only users with permissions on the signer can create or modify the corresponding bundle.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -18232,7 +18239,7 @@ func schema_k8sio_api_certificates_v1beta1_ClusterTrustBundle(ref common.Referen
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ClusterTrustBundle is a cluster-scoped container for X.509 trust anchors (root certificates).\n\nClusterTrustBundle objects are considered to be readable by any authenticated user in the cluster, because they can be mounted by pods using the `clusterTrustBundle` projection.  All service accounts have read access to ClusterTrustBundles by default.  Users who only have namespace-level access to a cluster can read ClusterTrustBundles by impersonating a serviceaccount that they have access to.\n\nIt can be optionally associated with a particular assigner, in which case it contains one valid set of trust anchors for that signer. Signers may have multiple associated ClusterTrustBundles; each is an independent set of trust anchors for that signer. Admission control is used to enforce that only users with permissions on the signer can create or modify the corresponding bundle.",
+				Description: "ClusterTrustBundle is a cluster-scoped container for X.509 trust anchors (root certificates).\n\nClusterTrustBundle objects are considered to be readable by any authenticated user in the cluster, because they can be mounted by pods using the `clusterTrustBundle` projection.  All service accounts have read access to ClusterTrustBundles by default.  Users who only have namespace-level access to a cluster can read ClusterTrustBundles by impersonating a serviceaccount that they have access to.\n\nIt can be optionally associated with a particular signer, in which case it contains one valid set of trust anchors for that signer. Signers may have multiple associated ClusterTrustBundles; each is an independent set of trust anchors for that signer. Admission control is used to enforce that only users with permissions on the signer can create or modify the corresponding bundle.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -18652,7 +18659,7 @@ func schema_k8sio_api_coordination_v1_Lease(ref common.ReferenceCallback) common
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -18764,14 +18771,14 @@ func schema_k8sio_api_coordination_v1_LeaseSpec(ref common.ReferenceCallback) co
 					},
 					"strategy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Strategy indicates the strategy for picking the leader for coordinated leader election. If the field is not specified, there is no active coordination for this lease. (Alpha) Using this field requires the CoordinatedLeaderElection feature gate to be enabled.",
+							Description: "strategy indicates the strategy for picking the leader for coordinated leader election. If the field is not specified, there is no active coordination for this lease. (Alpha) Using this field requires the CoordinatedLeaderElection feature gate to be enabled.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"preferredHolder": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PreferredHolder signals to a lease holder that the lease has a more optimal holder and should be given up. This field can only be set if Strategy is also set.",
+							Description: "preferredHolder signals to a lease holder that the lease has a more optimal holder and should be given up. This field can only be set if Strategy is also set.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -18807,7 +18814,7 @@ func schema_k8sio_api_coordination_v1alpha2_LeaseCandidate(ref common.ReferenceC
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -18887,7 +18894,7 @@ func schema_k8sio_api_coordination_v1alpha2_LeaseCandidateSpec(ref common.Refere
 				Properties: map[string]spec.Schema{
 					"leaseName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LeaseName is the name of the lease for which this candidate is contending. This field is immutable.",
+							Description: "leaseName is the name of the lease for which this candidate is contending. This field is immutable.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -18895,19 +18902,19 @@ func schema_k8sio_api_coordination_v1alpha2_LeaseCandidateSpec(ref common.Refere
 					},
 					"pingTime": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PingTime is the last time that the server has requested the LeaseCandidate to renew. It is only done during leader election to check if any LeaseCandidates have become ineligible. When PingTime is updated, the LeaseCandidate will respond by updating RenewTime.",
+							Description: "pingTime is the last time that the server has requested the LeaseCandidate to renew. It is only done during leader election to check if any LeaseCandidates have become ineligible. When PingTime is updated, the LeaseCandidate will respond by updating RenewTime.",
 							Ref:         ref(metav1.MicroTime{}.OpenAPIModelName()),
 						},
 					},
 					"renewTime": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RenewTime is the time that the LeaseCandidate was last updated. Any time a Lease needs to do leader election, the PingTime field is updated to signal to the LeaseCandidate that they should update the RenewTime. Old LeaseCandidate objects are also garbage collected if it has been hours since the last renew. The PingTime field is updated regularly to prevent garbage collection for still active LeaseCandidates.",
+							Description: "renewTime is the time that the LeaseCandidate was last updated. Any time a Lease needs to do leader election, the PingTime field is updated to signal to the LeaseCandidate that they should update the RenewTime. Old LeaseCandidate objects are also garbage collected if it has been hours since the last renew. The PingTime field is updated regularly to prevent garbage collection for still active LeaseCandidates.",
 							Ref:         ref(metav1.MicroTime{}.OpenAPIModelName()),
 						},
 					},
 					"binaryVersion": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BinaryVersion is the binary version. It must be in a semver format without leading `v`. This field is required.",
+							Description: "binaryVersion is the binary version. It must be in a semver format without leading `v`. This field is required.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -18915,14 +18922,14 @@ func schema_k8sio_api_coordination_v1alpha2_LeaseCandidateSpec(ref common.Refere
 					},
 					"emulationVersion": {
 						SchemaProps: spec.SchemaProps{
-							Description: "EmulationVersion is the emulation version. It must be in a semver format without leading `v`. EmulationVersion must be less than or equal to BinaryVersion. This field is required when strategy is \"OldestEmulationVersion\"",
+							Description: "emulationVersion is the emulation version. It must be in a semver format without leading `v`. EmulationVersion must be less than or equal to BinaryVersion. This field is required when strategy is \"OldestEmulationVersion\"",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"strategy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Strategy is the strategy that coordinated leader election will use for picking the leader. If multiple candidates for the same Lease return different strategies, the strategy provided by the candidate with the latest BinaryVersion will be used. If there is still conflict, this is a user error and coordinated leader election will not operate the Lease until resolved.",
+							Description: "strategy is the strategy that coordinated leader election will use for picking the leader. If multiple candidates for the same Lease return different strategies, the strategy provided by the candidate with the latest BinaryVersion will be used. If there is still conflict, this is a user error and coordinated leader election will not operate the Lease until resolved.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -18959,7 +18966,7 @@ func schema_k8sio_api_coordination_v1beta1_Lease(ref common.ReferenceCallback) c
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -19002,7 +19009,7 @@ func schema_k8sio_api_coordination_v1beta1_LeaseCandidate(ref common.ReferenceCa
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -19082,7 +19089,7 @@ func schema_k8sio_api_coordination_v1beta1_LeaseCandidateSpec(ref common.Referen
 				Properties: map[string]spec.Schema{
 					"leaseName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LeaseName is the name of the lease for which this candidate is contending. The limits on this field are the same as on Lease.name. Multiple lease candidates may reference the same Lease.name. This field is immutable.",
+							Description: "leaseName is the name of the lease for which this candidate is contending. The limits on this field are the same as on Lease.name. Multiple lease candidates may reference the same Lease.name. This field is immutable.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -19090,19 +19097,19 @@ func schema_k8sio_api_coordination_v1beta1_LeaseCandidateSpec(ref common.Referen
 					},
 					"pingTime": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PingTime is the last time that the server has requested the LeaseCandidate to renew. It is only done during leader election to check if any LeaseCandidates have become ineligible. When PingTime is updated, the LeaseCandidate will respond by updating RenewTime.",
+							Description: "pingTime is the last time that the server has requested the LeaseCandidate to renew. It is only done during leader election to check if any LeaseCandidates have become ineligible. When PingTime is updated, the LeaseCandidate will respond by updating RenewTime.",
 							Ref:         ref(metav1.MicroTime{}.OpenAPIModelName()),
 						},
 					},
 					"renewTime": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RenewTime is the time that the LeaseCandidate was last updated. Any time a Lease needs to do leader election, the PingTime field is updated to signal to the LeaseCandidate that they should update the RenewTime. Old LeaseCandidate objects are also garbage collected if it has been hours since the last renew. The PingTime field is updated regularly to prevent garbage collection for still active LeaseCandidates.",
+							Description: "renewTime is the time that the LeaseCandidate was last updated. Any time a Lease needs to do leader election, the PingTime field is updated to signal to the LeaseCandidate that they should update the RenewTime. Old LeaseCandidate objects are also garbage collected if it has been hours since the last renew. The PingTime field is updated regularly to prevent garbage collection for still active LeaseCandidates.",
 							Ref:         ref(metav1.MicroTime{}.OpenAPIModelName()),
 						},
 					},
 					"binaryVersion": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BinaryVersion is the binary version. It must be in a semver format without leading `v`. This field is required.",
+							Description: "binaryVersion is the binary version. It must be in a semver format without leading `v`. This field is required.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -19110,14 +19117,14 @@ func schema_k8sio_api_coordination_v1beta1_LeaseCandidateSpec(ref common.Referen
 					},
 					"emulationVersion": {
 						SchemaProps: spec.SchemaProps{
-							Description: "EmulationVersion is the emulation version. It must be in a semver format without leading `v`. EmulationVersion must be less than or equal to BinaryVersion. This field is required when strategy is \"OldestEmulationVersion\"",
+							Description: "emulationVersion is the emulation version. It must be in a semver format without leading `v`. EmulationVersion must be less than or equal to BinaryVersion. This field is required when strategy is \"OldestEmulationVersion\"",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"strategy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Strategy is the strategy that coordinated leader election will use for picking the leader. If multiple candidates for the same Lease return different strategies, the strategy provided by the candidate with the latest BinaryVersion will be used. If there is still conflict, this is a user error and coordinated leader election will not operate the Lease until resolved.",
+							Description: "strategy is the strategy that coordinated leader election will use for picking the leader. If multiple candidates for the same Lease return different strategies, the strategy provided by the candidate with the latest BinaryVersion will be used. If there is still conflict, this is a user error and coordinated leader election will not operate the Lease until resolved.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -19223,14 +19230,14 @@ func schema_k8sio_api_coordination_v1beta1_LeaseSpec(ref common.ReferenceCallbac
 					},
 					"strategy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Strategy indicates the strategy for picking the leader for coordinated leader election (Alpha) Using this field requires the CoordinatedLeaderElection feature gate to be enabled.",
+							Description: "strategy indicates the strategy for picking the leader for coordinated leader election. (Alpha) Using this field requires the CoordinatedLeaderElection feature gate to be enabled.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"preferredHolder": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PreferredHolder signals to a lease holder that the lease has a more optimal holder and should be given up.",
+							Description: "preferredHolder signals to a lease holder that the lease has a more optimal holder and should be given up.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -33899,7 +33906,7 @@ func schema_k8sio_api_events_v1_Event(ref common.ReferenceCallback) common.OpenA
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -34029,7 +34036,7 @@ func schema_k8sio_api_events_v1_EventList(ref common.ReferenceCallback) common.O
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
@@ -34109,7 +34116,7 @@ func schema_k8sio_api_events_v1beta1_Event(ref common.ReferenceCallback) common.
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -34239,7 +34246,7 @@ func schema_k8sio_api_events_v1beta1_EventList(ref common.ReferenceCallback) com
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
@@ -40509,21 +40516,21 @@ func schema_k8sio_api_imagepolicy_v1alpha1_ImageReview(ref common.ReferenceCallb
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Spec holds information about the pod being evaluated",
+							Description: "spec holds information about the pod being evaluated",
 							Default:     map[string]interface{}{},
 							Ref:         ref(imagepolicyv1alpha1.ImageReviewSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Status is filled in by the backend and indicates whether the pod should be allowed.",
+							Description: "status is filled in by the backend and indicates whether the pod should be allowed.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(imagepolicyv1alpha1.ImageReviewStatus{}.OpenAPIModelName()),
 						},
@@ -40545,7 +40552,7 @@ func schema_k8sio_api_imagepolicy_v1alpha1_ImageReviewContainerSpec(ref common.R
 				Properties: map[string]spec.Schema{
 					"image": {
 						SchemaProps: spec.SchemaProps{
-							Description: "This can be in the form image:tag or image@SHA:012345679abcdef.",
+							Description: "image can be in the form image:tag or image@SHA:012345679abcdef.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -40570,7 +40577,7 @@ func schema_k8sio_api_imagepolicy_v1alpha1_ImageReviewSpec(ref common.ReferenceC
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Containers is a list of a subset of the information in each container of the Pod being created.",
+							Description: "containers is a list of a subset of the information in each container of the Pod being created.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -40583,7 +40590,7 @@ func schema_k8sio_api_imagepolicy_v1alpha1_ImageReviewSpec(ref common.ReferenceC
 					},
 					"annotations": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Annotations is a list of key-value pairs extracted from the Pod's annotations. It only includes keys which match the pattern `*.image-policy.k8s.io/*`. It is up to each webhook backend to determine how to interpret these annotations, if at all.",
+							Description: "annotations is a list of key-value pairs extracted from the Pod's annotations. It only includes keys which match the pattern `*.image-policy.k8s.io/*`. It is up to each webhook backend to determine how to interpret these annotations, if at all.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -40598,7 +40605,7 @@ func schema_k8sio_api_imagepolicy_v1alpha1_ImageReviewSpec(ref common.ReferenceC
 					},
 					"namespace": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Namespace is the namespace the pod is being created in.",
+							Description: "namespace is the namespace the pod is being created in.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -40620,7 +40627,7 @@ func schema_k8sio_api_imagepolicy_v1alpha1_ImageReviewStatus(ref common.Referenc
 				Properties: map[string]spec.Schema{
 					"allowed": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Allowed indicates that all images were allowed to be run.",
+							Description: "allowed indicates that all images were allowed to be run.",
 							Default:     false,
 							Type:        []string{"boolean"},
 							Format:      "",
@@ -40628,14 +40635,14 @@ func schema_k8sio_api_imagepolicy_v1alpha1_ImageReviewStatus(ref common.Referenc
 					},
 					"reason": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Reason should be empty unless Allowed is false in which case it may contain a short description of what is wrong.  Kubernetes may truncate excessively long errors when displaying to the user.",
+							Description: "reason should be empty unless Allowed is false in which case it may contain a short description of what is wrong.  Kubernetes may truncate excessively long errors when displaying to the user.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"auditAnnotations": {
 						SchemaProps: spec.SchemaProps{
-							Description: "AuditAnnotations will be added to the attributes object of the admission controller request using 'AddAnnotation'.  The keys should be prefix-less (i.e., the admission controller will add an appropriate prefix).",
+							Description: "auditAnnotations will be added to the attributes object of the admission controller request using 'AddAnnotation'.  The keys should be prefix-less (i.e., the admission controller will add an appropriate prefix).",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -43136,7 +43143,7 @@ func schema_k8sio_api_node_v1_RuntimeClass(ref common.ReferenceCallback) common.
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -43325,7 +43332,7 @@ func schema_k8sio_api_node_v1alpha1_RuntimeClass(ref common.ReferenceCallback) c
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -43537,7 +43544,7 @@ func schema_k8sio_api_node_v1beta1_RuntimeClass(ref common.ReferenceCallback) co
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -43697,14 +43704,14 @@ func schema_k8sio_api_policy_v1_Eviction(ref common.ReferenceCallback) common.Op
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ObjectMeta describes the pod that is being evicted.",
+							Description: "metadata describes the pod that is being evicted.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"deleteOptions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DeleteOptions may be provided",
+							Description: "deleteOptions may be provided",
 							Ref:         ref(metav1.DeleteOptions{}.OpenAPIModelName()),
 						},
 					},
@@ -43739,21 +43746,21 @@ func schema_k8sio_api_policy_v1_PodDisruptionBudget(ref common.ReferenceCallback
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Specification of the desired behavior of the PodDisruptionBudget.",
+							Description: "spec is the specification of the desired behavior of the PodDisruptionBudget.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(policyv1.PodDisruptionBudgetSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Most recently observed status of the PodDisruptionBudget.",
+							Description: "status is the most recently observed status of the PodDisruptionBudget.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(policyv1.PodDisruptionBudgetStatus{}.OpenAPIModelName()),
 						},
@@ -43825,7 +43832,7 @@ func schema_k8sio_api_policy_v1_PodDisruptionBudgetSpec(ref common.ReferenceCall
 				Properties: map[string]spec.Schema{
 					"minAvailable": {
 						SchemaProps: spec.SchemaProps{
-							Description: "An eviction is allowed if at least \"minAvailable\" pods selected by \"selector\" will still be available after the eviction, i.e. even in the absence of the evicted pod.  So for example you can prevent all voluntary evictions by specifying \"100%\".",
+							Description: "minAvailable indicates that an eviction is allowed if at least \"minAvailable\" pods selected by \"selector\" will still be available after the eviction, i.e. even in the absence of the evicted pod.  So for example you can prevent all voluntary evictions by specifying \"100%\".",
 							Ref:         ref(intstr.IntOrString{}.OpenAPIModelName()),
 						},
 					},
@@ -43836,19 +43843,19 @@ func schema_k8sio_api_policy_v1_PodDisruptionBudgetSpec(ref common.ReferenceCall
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Label query over pods whose evictions are managed by the disruption budget. A null selector will match no pods, while an empty ({}) selector will select all pods within the namespace.",
+							Description: "selector is a label query over pods whose evictions are managed by the disruption budget. A null selector will match no pods, while an empty ({}) selector will select all pods within the namespace.",
 							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
 						},
 					},
 					"maxUnavailable": {
 						SchemaProps: spec.SchemaProps{
-							Description: "An eviction is allowed if at most \"maxUnavailable\" pods selected by \"selector\" are unavailable after the eviction, i.e. even in absence of the evicted pod. For example, one can prevent all voluntary evictions by specifying 0. This is a mutually exclusive setting with \"minAvailable\".",
+							Description: "maxUnavailable indicates that an eviction is allowed if at most \"maxUnavailable\" pods selected by \"selector\" are unavailable after the eviction, i.e. even in absence of the evicted pod. For example, one can prevent all voluntary evictions by specifying 0. This is a mutually exclusive setting with \"minAvailable\".",
 							Ref:         ref(intstr.IntOrString{}.OpenAPIModelName()),
 						},
 					},
 					"unhealthyPodEvictionPolicy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "UnhealthyPodEvictionPolicy defines the criteria for when unhealthy pods should be considered for eviction. Current implementation considers healthy pods, as pods that have status.conditions item with type=\"Ready\",status=\"True\".\n\nValid policies are IfHealthyBudget and AlwaysAllow. If no policy is specified, the default behavior will be used, which corresponds to the IfHealthyBudget policy.\n\nIfHealthyBudget policy means that running pods (status.phase=\"Running\"), but not yet healthy can be evicted only if the guarded application is not disrupted (status.currentHealthy is at least equal to status.desiredHealthy). Healthy pods will be subject to the PDB for eviction.\n\nAlwaysAllow policy means that all running pods (status.phase=\"Running\"), but not yet healthy are considered disrupted and can be evicted regardless of whether the criteria in a PDB is met. This means perspective running pods of a disrupted application might not get a chance to become healthy. Healthy pods will be subject to the PDB for eviction.\n\nAdditional policies may be added in the future. Clients making eviction decisions should disallow eviction of unhealthy pods if they encounter an unrecognized policy in this field.\n\nPossible enum values:\n - `\"AlwaysAllow\"` policy means that all running pods (status.phase=\"Running\"), but not yet healthy are considered disrupted and can be evicted regardless of whether the criteria in a PDB is met. This means perspective running pods of a disrupted application might not get a chance to become healthy. Healthy pods will be subject to the PDB for eviction.\n - `\"IfHealthyBudget\"` policy means that running pods (status.phase=\"Running\"), but not yet healthy can be evicted only if the guarded application is not disrupted (status.currentHealthy is at least equal to status.desiredHealthy). Healthy pods will be subject to the PDB for eviction.",
+							Description: "unhealthyPodEvictionPolicy defines the criteria for when unhealthy pods should be considered for eviction. Current implementation considers healthy pods, as pods that have status.conditions item with type=\"Ready\",status=\"True\".\n\nValid policies are IfHealthyBudget and AlwaysAllow. If no policy is specified, the default behavior will be used, which corresponds to the IfHealthyBudget policy.\n\nIfHealthyBudget policy means that running pods (status.phase=\"Running\"), but not yet healthy can be evicted only if the guarded application is not disrupted (status.currentHealthy is at least equal to status.desiredHealthy). Healthy pods will be subject to the PDB for eviction.\n\nAlwaysAllow policy means that all running pods (status.phase=\"Running\"), but not yet healthy are considered disrupted and can be evicted regardless of whether the criteria in a PDB is met. This means perspective running pods of a disrupted application might not get a chance to become healthy. Healthy pods will be subject to the PDB for eviction.\n\nAdditional policies may be added in the future. Clients making eviction decisions should disallow eviction of unhealthy pods if they encounter an unrecognized policy in this field.\n\nPossible enum values:\n - `\"AlwaysAllow\"` policy means that all running pods (status.phase=\"Running\"), but not yet healthy are considered disrupted and can be evicted regardless of whether the criteria in a PDB is met. This means perspective running pods of a disrupted application might not get a chance to become healthy. Healthy pods will be subject to the PDB for eviction.\n - `\"IfHealthyBudget\"` policy means that running pods (status.phase=\"Running\"), but not yet healthy can be evicted only if the guarded application is not disrupted (status.currentHealthy is at least equal to status.desiredHealthy). Healthy pods will be subject to the PDB for eviction.",
 							Type:        []string{"string"},
 							Format:      "",
 							Enum:        []interface{}{"AlwaysAllow", "IfHealthyBudget"},
@@ -43976,14 +43983,14 @@ func schema_k8sio_api_policy_v1beta1_Eviction(ref common.ReferenceCallback) comm
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ObjectMeta describes the pod that is being evicted.",
+							Description: "metadata describes the pod that is being evicted.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"deleteOptions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DeleteOptions may be provided",
+							Description: "deleteOptions may be provided",
 							Ref:         ref(metav1.DeleteOptions{}.OpenAPIModelName()),
 						},
 					},
@@ -44018,21 +44025,21 @@ func schema_k8sio_api_policy_v1beta1_PodDisruptionBudget(ref common.ReferenceCal
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Description: "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Specification of the desired behavior of the PodDisruptionBudget.",
+							Description: "spec is the specification of the desired behavior of the PodDisruptionBudget.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(policyv1beta1.PodDisruptionBudgetSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Most recently observed status of the PodDisruptionBudget.",
+							Description: "status is the most recently observed status of the PodDisruptionBudget.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(policyv1beta1.PodDisruptionBudgetStatus{}.OpenAPIModelName()),
 						},
@@ -44104,25 +44111,25 @@ func schema_k8sio_api_policy_v1beta1_PodDisruptionBudgetSpec(ref common.Referenc
 				Properties: map[string]spec.Schema{
 					"minAvailable": {
 						SchemaProps: spec.SchemaProps{
-							Description: "An eviction is allowed if at least \"minAvailable\" pods selected by \"selector\" will still be available after the eviction, i.e. even in the absence of the evicted pod.  So for example you can prevent all voluntary evictions by specifying \"100%\".",
+							Description: "minAvailable indicates that an eviction is allowed if at least \"minAvailable\" pods selected by \"selector\" will still be available after the eviction, i.e. even in the absence of the evicted pod.  So for example you can prevent all voluntary evictions by specifying \"100%\".",
 							Ref:         ref(intstr.IntOrString{}.OpenAPIModelName()),
 						},
 					},
 					"selector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Label query over pods whose evictions are managed by the disruption budget. A null selector selects no pods. An empty selector ({}) also selects no pods, which differs from standard behavior of selecting all pods. In policy/v1, an empty selector will select all pods in the namespace.",
+							Description: "selector is a label query over pods whose evictions are managed by the disruption budget. A null selector selects no pods. An empty selector ({}) also selects no pods, which differs from standard behavior of selecting all pods. In policy/v1, an empty selector will select all pods in the namespace.",
 							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
 						},
 					},
 					"maxUnavailable": {
 						SchemaProps: spec.SchemaProps{
-							Description: "An eviction is allowed if at most \"maxUnavailable\" pods selected by \"selector\" are unavailable after the eviction, i.e. even in absence of the evicted pod. For example, one can prevent all voluntary evictions by specifying 0. This is a mutually exclusive setting with \"minAvailable\".",
+							Description: "maxUnavailable indicates that an eviction is allowed if at most \"maxUnavailable\" pods selected by \"selector\" are unavailable after the eviction, i.e. even in absence of the evicted pod. For example, one can prevent all voluntary evictions by specifying 0. This is a mutually exclusive setting with \"minAvailable\".",
 							Ref:         ref(intstr.IntOrString{}.OpenAPIModelName()),
 						},
 					},
 					"unhealthyPodEvictionPolicy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "UnhealthyPodEvictionPolicy defines the criteria for when unhealthy pods should be considered for eviction. Current implementation considers healthy pods, as pods that have status.conditions item with type=\"Ready\",status=\"True\".\n\nValid policies are IfHealthyBudget and AlwaysAllow. If no policy is specified, the default behavior will be used, which corresponds to the IfHealthyBudget policy.\n\nIfHealthyBudget policy means that running pods (status.phase=\"Running\"), but not yet healthy can be evicted only if the guarded application is not disrupted (status.currentHealthy is at least equal to status.desiredHealthy). Healthy pods will be subject to the PDB for eviction.\n\nAlwaysAllow policy means that all running pods (status.phase=\"Running\"), but not yet healthy are considered disrupted and can be evicted regardless of whether the criteria in a PDB is met. This means perspective running pods of a disrupted application might not get a chance to become healthy. Healthy pods will be subject to the PDB for eviction.\n\nAdditional policies may be added in the future. Clients making eviction decisions should disallow eviction of unhealthy pods if they encounter an unrecognized policy in this field.\n\nPossible enum values:\n - `\"AlwaysAllow\"` policy means that all running pods (status.phase=\"Running\"), but not yet healthy are considered disrupted and can be evicted regardless of whether the criteria in a PDB is met. This means perspective running pods of a disrupted application might not get a chance to become healthy. Healthy pods will be subject to the PDB for eviction.\n - `\"IfHealthyBudget\"` policy means that running pods (status.phase=\"Running\"), but not yet healthy can be evicted only if the guarded application is not disrupted (status.currentHealthy is at least equal to status.desiredHealthy). Healthy pods will be subject to the PDB for eviction.",
+							Description: "unhealthyPodEvictionPolicy defines the criteria for when unhealthy pods should be considered for eviction. Current implementation considers healthy pods, as pods that have status.conditions item with type=\"Ready\",status=\"True\".\n\nValid policies are IfHealthyBudget and AlwaysAllow. If no policy is specified, the default behavior will be used, which corresponds to the IfHealthyBudget policy.\n\nIfHealthyBudget policy means that running pods (status.phase=\"Running\"), but not yet healthy can be evicted only if the guarded application is not disrupted (status.currentHealthy is at least equal to status.desiredHealthy). Healthy pods will be subject to the PDB for eviction.\n\nAlwaysAllow policy means that all running pods (status.phase=\"Running\"), but not yet healthy are considered disrupted and can be evicted regardless of whether the criteria in a PDB is met. This means perspective running pods of a disrupted application might not get a chance to become healthy. Healthy pods will be subject to the PDB for eviction.\n\nAdditional policies may be added in the future. Clients making eviction decisions should disallow eviction of unhealthy pods if they encounter an unrecognized policy in this field.\n\nPossible enum values:\n - `\"AlwaysAllow\"` policy means that all running pods (status.phase=\"Running\"), but not yet healthy are considered disrupted and can be evicted regardless of whether the criteria in a PDB is met. This means perspective running pods of a disrupted application might not get a chance to become healthy. Healthy pods will be subject to the PDB for eviction.\n - `\"IfHealthyBudget\"` policy means that running pods (status.phase=\"Running\"), but not yet healthy can be evicted only if the guarded application is not disrupted (status.currentHealthy is at least equal to status.desiredHealthy). Healthy pods will be subject to the PDB for eviction.",
 							Type:        []string{"string"},
 							Format:      "",
 							Enum:        []interface{}{"AlwaysAllow", "IfHealthyBudget"},
@@ -44241,7 +44248,7 @@ func schema_k8sio_api_rbac_v1_AggregationRule(ref common.ReferenceCallback) comm
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "ClusterRoleSelectors holds a list of selectors which will be used to find ClusterRoles and create the rules. If any of the selectors match, then the ClusterRole's permissions will be added",
+							Description: "clusterRoleSelectors holds a list of selectors which will be used to find ClusterRoles and create the rules. If any of the selectors match, then the ClusterRole's permissions will be added",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -44283,7 +44290,7 @@ func schema_k8sio_api_rbac_v1_ClusterRole(ref common.ReferenceCallback) common.O
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
+							Description: "metadata is the standard object's metadata.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -44295,7 +44302,7 @@ func schema_k8sio_api_rbac_v1_ClusterRole(ref common.ReferenceCallback) common.O
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Rules holds all the PolicyRules for this ClusterRole",
+							Description: "rules holds all the PolicyRules for this ClusterRole",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -44308,7 +44315,7 @@ func schema_k8sio_api_rbac_v1_ClusterRole(ref common.ReferenceCallback) common.O
 					},
 					"aggregationRule": {
 						SchemaProps: spec.SchemaProps{
-							Description: "AggregationRule is an optional field that describes how to build the Rules for this ClusterRole. If AggregationRule is set, then the Rules are controller managed and direct changes to Rules will be stomped by the controller.",
+							Description: "aggregationRule is an optional field that describes how to build the Rules for this ClusterRole. If AggregationRule is set, then the Rules are controller managed and direct changes to Rules will be stomped by the controller.",
 							Ref:         ref(rbacv1.AggregationRule{}.OpenAPIModelName()),
 						},
 					},
@@ -44343,7 +44350,7 @@ func schema_k8sio_api_rbac_v1_ClusterRoleBinding(ref common.ReferenceCallback) c
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
+							Description: "metadata is the standard object's metadata.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -44355,7 +44362,7 @@ func schema_k8sio_api_rbac_v1_ClusterRoleBinding(ref common.ReferenceCallback) c
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Subjects holds references to the objects the role applies to.",
+							Description: "subjects holds references to the objects the role applies to.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -44368,7 +44375,7 @@ func schema_k8sio_api_rbac_v1_ClusterRoleBinding(ref common.ReferenceCallback) c
 					},
 					"roleRef": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RoleRef can only reference a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error. This field is immutable.",
+							Description: "roleRef can only reference a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error. This field is immutable.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(rbacv1.RoleRef{}.OpenAPIModelName()),
 						},
@@ -44496,7 +44503,7 @@ func schema_k8sio_api_rbac_v1_PolicyRule(ref common.ReferenceCallback) common.Op
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Verbs is a list of Verbs that apply to ALL the ResourceKinds contained in this rule. '*' represents all verbs.",
+							Description: "verbs is a list of Verbs that apply to ALL the ResourceKinds contained in this rule. '*' represents all verbs.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -44515,7 +44522,7 @@ func schema_k8sio_api_rbac_v1_PolicyRule(ref common.ReferenceCallback) common.Op
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "APIGroups is the name of the APIGroup that contains the resources.  If multiple API groups are specified, any action requested against one of the enumerated resources in any API group will be allowed. \"\" represents the core API group and \"*\" represents all API groups.",
+							Description: "apiGroups is the name of the APIGroup that contains the resources.  If multiple API groups are specified, any action requested against one of the enumerated resources in any API group will be allowed. \"\" represents the core API group and \"*\" represents all API groups.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -44534,7 +44541,7 @@ func schema_k8sio_api_rbac_v1_PolicyRule(ref common.ReferenceCallback) common.Op
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Resources is a list of resources this rule applies to. '*' represents all resources.",
+							Description: "resources is a list of resources this rule applies to. '*' represents all resources.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -44553,7 +44560,7 @@ func schema_k8sio_api_rbac_v1_PolicyRule(ref common.ReferenceCallback) common.Op
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "ResourceNames is an optional white list of names that the rule applies to.  An empty set means that everything is allowed.",
+							Description: "resourceNames is an optional white list of names that the rule applies to.  An empty set means that everything is allowed.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -44572,7 +44579,7 @@ func schema_k8sio_api_rbac_v1_PolicyRule(ref common.ReferenceCallback) common.Op
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "NonResourceURLs is a set of partial urls that a user should have access to.  *s are allowed, but only as the full, final step in the path Since non-resource URLs are not namespaced, this field is only applicable for ClusterRoles referenced from a ClusterRoleBinding. Rules can either apply to API resources (such as \"pods\" or \"secrets\") or non-resource URL paths (such as \"/api\"),  but not both.",
+							Description: "nonResourceURLs is a set of partial urls that a user should have access to.  *s are allowed, but only as the full, final step in the path Since non-resource URLs are not namespaced, this field is only applicable for ClusterRoles referenced from a ClusterRoleBinding. Rules can either apply to API resources (such as \"pods\" or \"secrets\") or non-resource URL paths (such as \"/api\"),  but not both.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -44614,7 +44621,7 @@ func schema_k8sio_api_rbac_v1_Role(ref common.ReferenceCallback) common.OpenAPID
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
+							Description: "metadata is the standard object's metadata.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -44626,7 +44633,7 @@ func schema_k8sio_api_rbac_v1_Role(ref common.ReferenceCallback) common.OpenAPID
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Rules holds all the PolicyRules for this Role",
+							Description: "rules holds all the PolicyRules for this Role",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -44668,7 +44675,7 @@ func schema_k8sio_api_rbac_v1_RoleBinding(ref common.ReferenceCallback) common.O
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
+							Description: "metadata is the standard object's metadata.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -44680,7 +44687,7 @@ func schema_k8sio_api_rbac_v1_RoleBinding(ref common.ReferenceCallback) common.O
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Subjects holds references to the objects the role applies to.",
+							Description: "subjects holds references to the objects the role applies to.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -44693,7 +44700,7 @@ func schema_k8sio_api_rbac_v1_RoleBinding(ref common.ReferenceCallback) common.O
 					},
 					"roleRef": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RoleRef can reference a Role in the current namespace or a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error. This field is immutable.",
+							Description: "roleRef can reference a Role in the current namespace or a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error. This field is immutable.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(rbacv1.RoleRef{}.OpenAPIModelName()),
 						},
@@ -44816,7 +44823,7 @@ func schema_k8sio_api_rbac_v1_RoleRef(ref common.ReferenceCallback) common.OpenA
 				Properties: map[string]spec.Schema{
 					"apiGroup": {
 						SchemaProps: spec.SchemaProps{
-							Description: "APIGroup is the group for the resource being referenced",
+							Description: "apiGroup is the group for the resource being referenced",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -44824,7 +44831,7 @@ func schema_k8sio_api_rbac_v1_RoleRef(ref common.ReferenceCallback) common.OpenA
 					},
 					"kind": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Kind is the type of resource being referenced",
+							Description: "kind is the type of resource being referenced",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -44832,7 +44839,7 @@ func schema_k8sio_api_rbac_v1_RoleRef(ref common.ReferenceCallback) common.OpenA
 					},
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Name is the name of resource being referenced",
+							Description: "name is the name of resource being referenced",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -44859,7 +44866,7 @@ func schema_k8sio_api_rbac_v1_Subject(ref common.ReferenceCallback) common.OpenA
 				Properties: map[string]spec.Schema{
 					"kind": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Kind of object being referenced. Values defined by this API group are \"User\", \"Group\", and \"ServiceAccount\". If the Authorizer does not recognized the kind value, the Authorizer should report an error.",
+							Description: "kind of object being referenced. Values defined by this API group are \"User\", \"Group\", and \"ServiceAccount\". If the Authorizer does not recognized the kind value, the Authorizer should report an error.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -44867,14 +44874,14 @@ func schema_k8sio_api_rbac_v1_Subject(ref common.ReferenceCallback) common.OpenA
 					},
 					"apiGroup": {
 						SchemaProps: spec.SchemaProps{
-							Description: "APIGroup holds the API group of the referenced subject. Defaults to \"\" for ServiceAccount subjects. Defaults to \"rbac.authorization.k8s.io\" for User and Group subjects.",
+							Description: "apiGroup holds the API group of the referenced subject. Defaults to \"\" for ServiceAccount subjects. Defaults to \"rbac.authorization.k8s.io\" for User and Group subjects.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Name of the object being referenced.",
+							Description: "name of the object being referenced.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -44882,7 +44889,7 @@ func schema_k8sio_api_rbac_v1_Subject(ref common.ReferenceCallback) common.OpenA
 					},
 					"namespace": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Namespace of the referenced object.  If the object kind is non-namespace, such as \"User\" or \"Group\", and this value is not empty the Authorizer should report an error.",
+							Description: "namespace of the referenced object.  If the object kind is non-namespace, such as \"User\" or \"Group\", and this value is not empty the Authorizer should report an error.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -44913,7 +44920,7 @@ func schema_k8sio_api_rbac_v1alpha1_AggregationRule(ref common.ReferenceCallback
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "ClusterRoleSelectors holds a list of selectors which will be used to find ClusterRoles and create the rules. If any of the selectors match, then the ClusterRole's permissions will be added",
+							Description: "clusterRoleSelectors holds a list of selectors which will be used to find ClusterRoles and create the rules. If any of the selectors match, then the ClusterRole's permissions will be added",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -44955,7 +44962,7 @@ func schema_k8sio_api_rbac_v1alpha1_ClusterRole(ref common.ReferenceCallback) co
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
+							Description: "metadata is the standard object's metadata.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -44967,7 +44974,7 @@ func schema_k8sio_api_rbac_v1alpha1_ClusterRole(ref common.ReferenceCallback) co
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Rules holds all the PolicyRules for this ClusterRole",
+							Description: "rules holds all the PolicyRules for this ClusterRole",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -44980,7 +44987,7 @@ func schema_k8sio_api_rbac_v1alpha1_ClusterRole(ref common.ReferenceCallback) co
 					},
 					"aggregationRule": {
 						SchemaProps: spec.SchemaProps{
-							Description: "AggregationRule is an optional field that describes how to build the Rules for this ClusterRole. If AggregationRule is set, then the Rules are controller managed and direct changes to Rules will be stomped by the controller.",
+							Description: "aggregationRule is an optional field that describes how to build the Rules for this ClusterRole. If AggregationRule is set, then the Rules are controller managed and direct changes to Rules will be stomped by the controller.",
 							Ref:         ref(rbacv1alpha1.AggregationRule{}.OpenAPIModelName()),
 						},
 					},
@@ -45015,7 +45022,7 @@ func schema_k8sio_api_rbac_v1alpha1_ClusterRoleBinding(ref common.ReferenceCallb
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
+							Description: "metadata is the standard object's metadata.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -45027,7 +45034,7 @@ func schema_k8sio_api_rbac_v1alpha1_ClusterRoleBinding(ref common.ReferenceCallb
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Subjects holds references to the objects the role applies to.",
+							Description: "subjects holds references to the objects the role applies to.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45040,7 +45047,7 @@ func schema_k8sio_api_rbac_v1alpha1_ClusterRoleBinding(ref common.ReferenceCallb
 					},
 					"roleRef": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RoleRef can only reference a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error.",
+							Description: "roleRef can only reference a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(rbacv1alpha1.RoleRef{}.OpenAPIModelName()),
 						},
@@ -45168,7 +45175,7 @@ func schema_k8sio_api_rbac_v1alpha1_PolicyRule(ref common.ReferenceCallback) com
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Verbs is a list of Verbs that apply to ALL the ResourceKinds contained in this rule. '*' represents all verbs.",
+							Description: "verbs is a list of Verbs that apply to ALL the ResourceKinds contained in this rule. '*' represents all verbs.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45187,7 +45194,7 @@ func schema_k8sio_api_rbac_v1alpha1_PolicyRule(ref common.ReferenceCallback) com
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "APIGroups is the name of the APIGroup that contains the resources.  If multiple API groups are specified, any action requested against one of the enumerated resources in any API group will be allowed. \"\" represents the core API group and \"*\" represents all API groups.",
+							Description: "apiGroups is the name of the APIGroup that contains the resources.  If multiple API groups are specified, any action requested against one of the enumerated resources in any API group will be allowed. \"\" represents the core API group and \"*\" represents all API groups.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45206,7 +45213,7 @@ func schema_k8sio_api_rbac_v1alpha1_PolicyRule(ref common.ReferenceCallback) com
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Resources is a list of resources this rule applies to. '*' represents all resources.",
+							Description: "resources is a list of resources this rule applies to. '*' represents all resources.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45225,7 +45232,7 @@ func schema_k8sio_api_rbac_v1alpha1_PolicyRule(ref common.ReferenceCallback) com
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "ResourceNames is an optional white list of names that the rule applies to.  An empty set means that everything is allowed.",
+							Description: "resourceNames is an optional white list of names that the rule applies to.  An empty set means that everything is allowed.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45244,7 +45251,7 @@ func schema_k8sio_api_rbac_v1alpha1_PolicyRule(ref common.ReferenceCallback) com
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "NonResourceURLs is a set of partial urls that a user should have access to.  *s are allowed, but only as the full, final step in the path Since non-resource URLs are not namespaced, this field is only applicable for ClusterRoles referenced from a ClusterRoleBinding. Rules can either apply to API resources (such as \"pods\" or \"secrets\") or non-resource URL paths (such as \"/api\"),  but not both.",
+							Description: "nonResourceURLs is a set of partial urls that a user should have access to.  *s are allowed, but only as the full, final step in the path Since non-resource URLs are not namespaced, this field is only applicable for ClusterRoles referenced from a ClusterRoleBinding. Rules can either apply to API resources (such as \"pods\" or \"secrets\") or non-resource URL paths (such as \"/api\"),  but not both.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45286,7 +45293,7 @@ func schema_k8sio_api_rbac_v1alpha1_Role(ref common.ReferenceCallback) common.Op
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
+							Description: "metadata is the standard object's metadata.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -45298,7 +45305,7 @@ func schema_k8sio_api_rbac_v1alpha1_Role(ref common.ReferenceCallback) common.Op
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Rules holds all the PolicyRules for this Role",
+							Description: "rules holds all the PolicyRules for this Role",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45340,7 +45347,7 @@ func schema_k8sio_api_rbac_v1alpha1_RoleBinding(ref common.ReferenceCallback) co
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
+							Description: "metadata is the standard object's metadata.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -45352,7 +45359,7 @@ func schema_k8sio_api_rbac_v1alpha1_RoleBinding(ref common.ReferenceCallback) co
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Subjects holds references to the objects the role applies to.",
+							Description: "subjects holds references to the objects the role applies to.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45365,7 +45372,7 @@ func schema_k8sio_api_rbac_v1alpha1_RoleBinding(ref common.ReferenceCallback) co
 					},
 					"roleRef": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RoleRef can reference a Role in the current namespace or a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error.",
+							Description: "roleRef can reference a Role in the current namespace or a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(rbacv1alpha1.RoleRef{}.OpenAPIModelName()),
 						},
@@ -45488,7 +45495,7 @@ func schema_k8sio_api_rbac_v1alpha1_RoleRef(ref common.ReferenceCallback) common
 				Properties: map[string]spec.Schema{
 					"apiGroup": {
 						SchemaProps: spec.SchemaProps{
-							Description: "APIGroup is the group for the resource being referenced",
+							Description: "apiGroup is the group for the resource being referenced",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -45496,7 +45503,7 @@ func schema_k8sio_api_rbac_v1alpha1_RoleRef(ref common.ReferenceCallback) common
 					},
 					"kind": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Kind is the type of resource being referenced",
+							Description: "kind is the type of resource being referenced",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -45504,7 +45511,7 @@ func schema_k8sio_api_rbac_v1alpha1_RoleRef(ref common.ReferenceCallback) common
 					},
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Name is the name of resource being referenced",
+							Description: "name is the name of resource being referenced",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -45526,7 +45533,7 @@ func schema_k8sio_api_rbac_v1alpha1_Subject(ref common.ReferenceCallback) common
 				Properties: map[string]spec.Schema{
 					"kind": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Kind of object being referenced. Values defined by this API group are \"User\", \"Group\", and \"ServiceAccount\". If the Authorizer does not recognized the kind value, the Authorizer should report an error.",
+							Description: "kind of object being referenced. Values defined by this API group are \"User\", \"Group\", and \"ServiceAccount\". If the Authorizer does not recognized the kind value, the Authorizer should report an error.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -45534,14 +45541,14 @@ func schema_k8sio_api_rbac_v1alpha1_Subject(ref common.ReferenceCallback) common
 					},
 					"apiVersion": {
 						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion holds the API group and version of the referenced subject. Defaults to \"v1\" for ServiceAccount subjects. Defaults to \"rbac.authorization.k8s.io/v1alpha1\" for User and Group subjects.",
+							Description: "apiVersion holds the API group and version of the referenced subject. Defaults to \"v1\" for ServiceAccount subjects. Defaults to \"rbac.authorization.k8s.io/v1alpha1\" for User and Group subjects.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Name of the object being referenced.",
+							Description: "name of the object being referenced.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -45549,7 +45556,7 @@ func schema_k8sio_api_rbac_v1alpha1_Subject(ref common.ReferenceCallback) common
 					},
 					"namespace": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Namespace of the referenced object.  If the object kind is non-namespace, such as \"User\" or \"Group\", and this value is not empty the Authorizer should report an error.",
+							Description: "namespace of the referenced object.  If the object kind is non-namespace, such as \"User\" or \"Group\", and this value is not empty the Authorizer should report an error.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -45575,7 +45582,7 @@ func schema_k8sio_api_rbac_v1beta1_AggregationRule(ref common.ReferenceCallback)
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "ClusterRoleSelectors holds a list of selectors which will be used to find ClusterRoles and create the rules. If any of the selectors match, then the ClusterRole's permissions will be added",
+							Description: "clusterRoleSelectors holds a list of selectors which will be used to find ClusterRoles and create the rules. If any of the selectors match, then the ClusterRole's permissions will be added",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45617,7 +45624,7 @@ func schema_k8sio_api_rbac_v1beta1_ClusterRole(ref common.ReferenceCallback) com
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
+							Description: "metadata is the standard object's metadata.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -45629,7 +45636,7 @@ func schema_k8sio_api_rbac_v1beta1_ClusterRole(ref common.ReferenceCallback) com
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Rules holds all the PolicyRules for this ClusterRole",
+							Description: "rules holds all the PolicyRules for this ClusterRole",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45642,7 +45649,7 @@ func schema_k8sio_api_rbac_v1beta1_ClusterRole(ref common.ReferenceCallback) com
 					},
 					"aggregationRule": {
 						SchemaProps: spec.SchemaProps{
-							Description: "AggregationRule is an optional field that describes how to build the Rules for this ClusterRole. If AggregationRule is set, then the Rules are controller managed and direct changes to Rules will be stomped by the controller.",
+							Description: "aggregationRule is an optional field that describes how to build the Rules for this ClusterRole. If AggregationRule is set, then the Rules are controller managed and direct changes to Rules will be stomped by the controller.",
 							Ref:         ref(rbacv1beta1.AggregationRule{}.OpenAPIModelName()),
 						},
 					},
@@ -45677,7 +45684,7 @@ func schema_k8sio_api_rbac_v1beta1_ClusterRoleBinding(ref common.ReferenceCallba
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
+							Description: "metadata is the standard object's metadata.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -45689,7 +45696,7 @@ func schema_k8sio_api_rbac_v1beta1_ClusterRoleBinding(ref common.ReferenceCallba
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Subjects holds references to the objects the role applies to.",
+							Description: "subjects holds references to the objects the role applies to.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45702,7 +45709,7 @@ func schema_k8sio_api_rbac_v1beta1_ClusterRoleBinding(ref common.ReferenceCallba
 					},
 					"roleRef": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RoleRef can only reference a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error.",
+							Description: "roleRef can only reference a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(rbacv1beta1.RoleRef{}.OpenAPIModelName()),
 						},
@@ -45830,7 +45837,7 @@ func schema_k8sio_api_rbac_v1beta1_PolicyRule(ref common.ReferenceCallback) comm
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Verbs is a list of Verbs that apply to ALL the ResourceKinds contained in this rule. '*' represents all verbs.",
+							Description: "verbs is a list of Verbs that apply to ALL the ResourceKinds contained in this rule. '*' represents all verbs.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45849,7 +45856,7 @@ func schema_k8sio_api_rbac_v1beta1_PolicyRule(ref common.ReferenceCallback) comm
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "APIGroups is the name of the APIGroup that contains the resources.  If multiple API groups are specified, any action requested against one of the enumerated resources in any API group will be allowed. \"\" represents the core API group and \"*\" represents all API groups.",
+							Description: "apiGroups is the name of the APIGroup that contains the resources.  If multiple API groups are specified, any action requested against one of the enumerated resources in any API group will be allowed. \"\" represents the core API group and \"*\" represents all API groups.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45868,7 +45875,7 @@ func schema_k8sio_api_rbac_v1beta1_PolicyRule(ref common.ReferenceCallback) comm
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Resources is a list of resources this rule applies to.  '*' represents all resources in the specified apiGroups. '*/foo' represents the subresource 'foo' for all resources in the specified apiGroups.",
+							Description: "resources is a list of resources this rule applies to.  '*' represents all resources in the specified apiGroups. '*/foo' represents the subresource 'foo' for all resources in the specified apiGroups.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45887,7 +45894,7 @@ func schema_k8sio_api_rbac_v1beta1_PolicyRule(ref common.ReferenceCallback) comm
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "ResourceNames is an optional white list of names that the rule applies to.  An empty set means that everything is allowed.",
+							Description: "resourceNames is an optional white list of names that the rule applies to.  An empty set means that everything is allowed.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45906,7 +45913,7 @@ func schema_k8sio_api_rbac_v1beta1_PolicyRule(ref common.ReferenceCallback) comm
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "NonResourceURLs is a set of partial urls that a user should have access to.  *s are allowed, but only as the full, final step in the path Since non-resource URLs are not namespaced, this field is only applicable for ClusterRoles referenced from a ClusterRoleBinding. Rules can either apply to API resources (such as \"pods\" or \"secrets\") or non-resource URL paths (such as \"/api\"),  but not both.",
+							Description: "nonResourceURLs is a set of partial urls that a user should have access to.  *s are allowed, but only as the full, final step in the path Since non-resource URLs are not namespaced, this field is only applicable for ClusterRoles referenced from a ClusterRoleBinding. Rules can either apply to API resources (such as \"pods\" or \"secrets\") or non-resource URL paths (such as \"/api\"),  but not both.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -45948,7 +45955,7 @@ func schema_k8sio_api_rbac_v1beta1_Role(ref common.ReferenceCallback) common.Ope
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
+							Description: "metadata is the standard object's metadata.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -45960,7 +45967,7 @@ func schema_k8sio_api_rbac_v1beta1_Role(ref common.ReferenceCallback) common.Ope
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Rules holds all the PolicyRules for this Role",
+							Description: "rules holds all the PolicyRules for this Role",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -46002,7 +46009,7 @@ func schema_k8sio_api_rbac_v1beta1_RoleBinding(ref common.ReferenceCallback) com
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
+							Description: "metadata is the standard object's metadata.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
@@ -46014,7 +46021,7 @@ func schema_k8sio_api_rbac_v1beta1_RoleBinding(ref common.ReferenceCallback) com
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Subjects holds references to the objects the role applies to.",
+							Description: "subjects holds references to the objects the role applies to.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -46027,7 +46034,7 @@ func schema_k8sio_api_rbac_v1beta1_RoleBinding(ref common.ReferenceCallback) com
 					},
 					"roleRef": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RoleRef can reference a Role in the current namespace or a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error.",
+							Description: "roleRef can reference a Role in the current namespace or a ClusterRole in the global namespace. If the RoleRef cannot be resolved, the Authorizer must return an error.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(rbacv1beta1.RoleRef{}.OpenAPIModelName()),
 						},
@@ -46150,7 +46157,7 @@ func schema_k8sio_api_rbac_v1beta1_RoleRef(ref common.ReferenceCallback) common.
 				Properties: map[string]spec.Schema{
 					"apiGroup": {
 						SchemaProps: spec.SchemaProps{
-							Description: "APIGroup is the group for the resource being referenced",
+							Description: "apiGroup is the group for the resource being referenced",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -46158,7 +46165,7 @@ func schema_k8sio_api_rbac_v1beta1_RoleRef(ref common.ReferenceCallback) common.
 					},
 					"kind": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Kind is the type of resource being referenced",
+							Description: "kind is the type of resource being referenced",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -46166,7 +46173,7 @@ func schema_k8sio_api_rbac_v1beta1_RoleRef(ref common.ReferenceCallback) common.
 					},
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Name is the name of resource being referenced",
+							Description: "name is the name of resource being referenced",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -46188,7 +46195,7 @@ func schema_k8sio_api_rbac_v1beta1_Subject(ref common.ReferenceCallback) common.
 				Properties: map[string]spec.Schema{
 					"kind": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Kind of object being referenced. Values defined by this API group are \"User\", \"Group\", and \"ServiceAccount\". If the Authorizer does not recognized the kind value, the Authorizer should report an error.",
+							Description: "kind of object being referenced. Values defined by this API group are \"User\", \"Group\", and \"ServiceAccount\". If the Authorizer does not recognized the kind value, the Authorizer should report an error.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -46196,14 +46203,14 @@ func schema_k8sio_api_rbac_v1beta1_Subject(ref common.ReferenceCallback) common.
 					},
 					"apiGroup": {
 						SchemaProps: spec.SchemaProps{
-							Description: "APIGroup holds the API group of the referenced subject. Defaults to \"\" for ServiceAccount subjects. Defaults to \"rbac.authorization.k8s.io\" for User and Group subjects.",
+							Description: "apiGroup holds the API group of the referenced subject. Defaults to \"\" for ServiceAccount subjects. Defaults to \"rbac.authorization.k8s.io\" for User and Group subjects.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Name of the object being referenced.",
+							Description: "name of the object being referenced.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -46211,7 +46218,7 @@ func schema_k8sio_api_rbac_v1beta1_Subject(ref common.ReferenceCallback) common.
 					},
 					"namespace": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Namespace of the referenced object.  If the object kind is non-namespace, such as \"User\" or \"Group\", and this value is not empty the Authorizer should report an error.",
+							Description: "namespace of the referenced object.  If the object kind is non-namespace, such as \"User\" or \"Group\", and this value is not empty the Authorizer should report an error.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -47666,6 +47673,208 @@ func schema_k8sio_api_resource_v1_DeviceTaint(ref common.ReferenceCallback) comm
 		},
 		Dependencies: []string{
 			metav1.Time{}.OpenAPIModelName()},
+	}
+}
+
+func schema_k8sio_api_resource_v1_DeviceTaintRule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "DeviceTaintRule adds one taint to all devices which match the selector. This has the same effect as if the taint was specified directly in the ResourceSlice by the DRA driver.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Spec specifies the selector and one taint.\n\nChanging the spec automatically increments the metadata.generation number.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(resourcev1.DeviceTaintRuleSpec{}.OpenAPIModelName()),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Status provides information about what was requested in the spec.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(resourcev1.DeviceTaintRuleStatus{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			resourcev1.DeviceTaintRuleSpec{}.OpenAPIModelName(), resourcev1.DeviceTaintRuleStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_k8sio_api_resource_v1_DeviceTaintRuleList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "DeviceTaintRuleList is a collection of DeviceTaintRules.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard list metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Items is the list of DeviceTaintRules.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(resourcev1.DeviceTaintRule{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			resourcev1.DeviceTaintRule{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_k8sio_api_resource_v1_DeviceTaintRuleSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "DeviceTaintRuleSpec specifies the selector and one taint.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"deviceSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DeviceSelector defines which device(s) the taint is applied to. All selector criteria must be satisfied for a device to match. The empty selector matches all devices. Without a selector, no devices are matches.",
+							Ref:         ref(resourcev1.DeviceTaintSelector{}.OpenAPIModelName()),
+						},
+					},
+					"taint": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The taint that gets applied to matching devices.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(resourcev1.DeviceTaint{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"taint"},
+			},
+		},
+		Dependencies: []string{
+			resourcev1.DeviceTaint{}.OpenAPIModelName(), resourcev1.DeviceTaintSelector{}.OpenAPIModelName()},
+	}
+}
+
+func schema_k8sio_api_resource_v1_DeviceTaintRuleStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "DeviceTaintRuleStatus provides information about an on-going pod eviction.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type":       "map",
+								"x-kubernetes-patch-merge-key": "type",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions provide information about the state of the DeviceTaintRule and the cluster at some point in time, in a machine-readable and human-readable format.\n\nThe following condition is currently defined as part of this API, more may get added: - Type: EvictionInProgress - Status: True if there are currently pods which need to be evicted, False otherwise\n  (includes the effects which don't cause eviction).\n- Reason: not specified, may change - Message: includes information about number of pending pods and already evicted pods\n  in a human-readable format, updated periodically, may change\n\nFor `effect: None`, the condition above gets set once for each change to the spec, with the message containing information about what would happen if the effect was `NoExecute`. This feedback can be used to decide whether changing the effect to `NoExecute` will work as intended. It only gets set once to avoid having to constantly update the status.\n\nMust have 8 or fewer entries.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(metav1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			metav1.Condition{}.OpenAPIModelName()},
+	}
+}
+
+func schema_k8sio_api_resource_v1_DeviceTaintSelector(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "DeviceTaintSelector defines which device(s) a DeviceTaintRule applies to. The empty selector matches all devices. Without a selector, no devices are matched.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"driver": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If driver is set, only devices from that driver are selected. This fields corresponds to slice.spec.driver.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"pool": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If pool is set, only devices in that pool are selected.\n\nAlso setting the driver name may be useful to avoid ambiguity when different drivers use the same pool name, but this is not required because selecting pools from different drivers may also be useful, for example when drivers with node-local devices use the node name as their pool name.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"device": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If device is set, only devices with that name are selected. This field corresponds to slice.spec.devices[].name.\n\nSetting also driver and pool may be required to avoid ambiguity, but is not required.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -54261,10 +54470,10 @@ func schema_k8sio_api_scheduling_v1alpha3_PodGroupSpec(ref common.ReferenceCallb
 				Description: "PodGroupSpec defines the desired state of a PodGroup.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"podGroupTemplateRef": {
+					"workloadRef": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PodGroupTemplateRef references an optional PodGroup template within other object (e.g. Workload) that was used to create the PodGroup. This field is immutable.",
-							Ref:         ref(schedulingv1alpha3.PodGroupTemplateReference{}.OpenAPIModelName()),
+							Description: "WorkloadRef references an optional PodGroup template within the Workload object that was used to create the PodGroup. This field is immutable.",
+							Ref:         ref(schedulingv1alpha3.WorkloadReference{}.OpenAPIModelName()),
 						},
 					},
 					"schedulingPolicy": {
@@ -54324,12 +54533,20 @@ func schema_k8sio_api_scheduling_v1alpha3_PodGroupSpec(ref common.ReferenceCallb
 							Format:      "int32",
 						},
 					},
+					"preemptionPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PreemptionPolicy is the Policy for preempting pods/podgroups with lower priority. One of Never, PreemptLowerPriority. Defaults to PreemptLowerPriority if unset. When Priority Admission Controller is enabled, it populates this field from PriorityClassName, and defaults to PreemptLowerPriority if value is unset in PriorityClass. This field is immutable. This field is available only when the PodGroupPreemptionPolicy feature gate is enabled.\n\n\nPossible enum values:\n - `\"Never\"` means that pod never preempts other pods with lower priority.\n - `\"PreemptLowerPriority\"` means that pod can preempt other pods with lower priority.",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"Never", "PreemptLowerPriority"},
+						},
+					},
 				},
 				Required: []string{"schedulingPolicy"},
 			},
 		},
 		Dependencies: []string{
-			schedulingv1alpha3.DisruptionMode{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupResourceClaim{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupSchedulingConstraints{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupSchedulingPolicy{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupTemplateReference{}.OpenAPIModelName()},
+			schedulingv1alpha3.DisruptionMode{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupResourceClaim{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupSchedulingConstraints{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupSchedulingPolicy{}.OpenAPIModelName(), schedulingv1alpha3.WorkloadReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -54471,38 +54688,6 @@ func schema_k8sio_api_scheduling_v1alpha3_PodGroupTemplate(ref common.ReferenceC
 		},
 		Dependencies: []string{
 			schedulingv1alpha3.DisruptionMode{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupResourceClaim{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupSchedulingConstraints{}.OpenAPIModelName(), schedulingv1alpha3.PodGroupSchedulingPolicy{}.OpenAPIModelName()},
-	}
-}
-
-func schema_k8sio_api_scheduling_v1alpha3_PodGroupTemplateReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "PodGroupTemplateReference references a PodGroup template defined in some object (e.g. Workload). Exactly one reference must be set.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"workload": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Workload references the PodGroupTemplate within the Workload object that was used to create the PodGroup.",
-							Ref:         ref(schedulingv1alpha3.WorkloadPodGroupTemplateReference{}.OpenAPIModelName()),
-						},
-					},
-				},
-			},
-			VendorExtensible: spec.VendorExtensible{
-				Extensions: spec.Extensions{
-					"x-kubernetes-unions": []interface{}{
-						map[string]interface{}{
-							"fields-to-discriminateBy": map[string]interface{}{
-								"workload": "Workload",
-							},
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			schedulingv1alpha3.WorkloadPodGroupTemplateReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -54670,31 +54855,31 @@ func schema_k8sio_api_scheduling_v1alpha3_WorkloadList(ref common.ReferenceCallb
 	}
 }
 
-func schema_k8sio_api_scheduling_v1alpha3_WorkloadPodGroupTemplateReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_k8sio_api_scheduling_v1alpha3_WorkloadReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "WorkloadPodGroupTemplateReference references the PodGroupTemplate within the Workload object.",
+				Description: "WorkloadReference references the Workload object together with the template that was used to create a particular PodGroup.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"workloadName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "WorkloadName defines the name of the Workload object.",
+							Description: "WorkloadName is the name of the Workload object that contains a template that was used when creating a pod group. It must be a DNS name. This field is required.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
-					"podGroupTemplateName": {
+					"templateName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PodGroupTemplateName defines the PodGroupTemplate name within the Workload object.",
+							Description: "TemplateName is the name of a template within the Workload object that was used to create a pod group. It must be a DNS label. This field is required.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 				},
-				Required: []string{"workloadName", "podGroupTemplateName"},
+				Required: []string{"workloadName", "templateName"},
 			},
 		},
 	}
@@ -57522,6 +57707,174 @@ func schema_k8sio_api_storage_v1beta1_VolumeNodeResources(ref common.ReferenceCa
 				},
 			},
 		},
+	}
+}
+
+func schema_k8sio_api_storagemigration_v1_StorageVersionMigration(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "StorageVersionMigration represents a migration of stored data to the latest storage version.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Specification of the migration.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(storagemigrationv1.StorageVersionMigrationSpec{}.OpenAPIModelName()),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Status of the migration.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(storagemigrationv1.StorageVersionMigrationStatus{}.OpenAPIModelName()),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			storagemigrationv1.StorageVersionMigrationSpec{}.OpenAPIModelName(), storagemigrationv1.StorageVersionMigrationStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_k8sio_api_storagemigration_v1_StorageVersionMigrationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "StorageVersionMigrationList is a collection of storage version migrations.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard list metadata More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Items is the list of StorageVersionMigration",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(storagemigrationv1.StorageVersionMigration{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			storagemigrationv1.StorageVersionMigration{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_k8sio_api_storagemigration_v1_StorageVersionMigrationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Spec of the storage version migration.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"resource": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The resource that is being migrated. The migrator sends requests to the endpoint serving the resource. Immutable.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.GroupResource{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"resource"},
+			},
+		},
+		Dependencies: []string{
+			metav1.GroupResource{}.OpenAPIModelName()},
+	}
+}
+
+func schema_k8sio_api_storagemigration_v1_StorageVersionMigrationStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Status of the storage version migration.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type":       "map",
+								"x-kubernetes-patch-merge-key": "type",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "The latest available observations of the migration's current state.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(metav1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+					"resourceVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ResourceVersion to compare with the GC cache for performing the migration. This is the current resource version of given group, version and resource when kube-controller-manager first observes this StorageVersionMigration resource.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			metav1.Condition{}.OpenAPIModelName()},
 	}
 }
 
@@ -69253,6 +69606,13 @@ func schema_k8sio_kube_scheduler_config_v1_Plugins(ref common.ReferenceCallback)
 							Ref:         ref(configv1.PluginSet{}.OpenAPIModelName()),
 						},
 					},
+					"podGroupPostFilter": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PodGroupPostFilter is a list of plugins that are invoked after the workload scheduling phase, but only when the PodGroup cannot be scheduled (equivalent to PostFilter for single pods).",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1.PluginSet{}.OpenAPIModelName()),
+						},
+					},
 				},
 			},
 		},
@@ -72927,6 +73287,272 @@ func schema_pkg_apis_external_metrics_v1beta1_ExternalMetricValueList(ref common
 		},
 		Dependencies: []string{
 			metav1.ListMeta{}.OpenAPIModelName(), externalmetricsv1beta1.ExternalMetricValue{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_metrics_v1_ContainerMetrics(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ContainerMetrics sets resource usage metrics of a container.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Container name corresponding to the one from pod.spec.containers.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"usage": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The memory usage is the memory working set.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(resource.Quantity{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"name", "usage"},
+			},
+		},
+		Dependencies: []string{
+			resource.Quantity{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_metrics_v1_NodeMetrics(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NodeMetrics sets resource usage metrics of a node.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"timestamp": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The following fields define time interval from which metrics were collected from the interval [Timestamp-Window, Timestamp].",
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
+						},
+					},
+					"window": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref(metav1.Duration{}.OpenAPIModelName()),
+						},
+					},
+					"usage": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The memory usage is the memory working set.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(resource.Quantity{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"timestamp", "window", "usage"},
+			},
+		},
+		Dependencies: []string{
+			resource.Quantity{}.OpenAPIModelName(), metav1.Duration{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName(), metav1.Time{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_metrics_v1_NodeMetricsList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NodeMetricsList is a list of NodeMetrics.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of node metrics.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(metricsv1.NodeMetrics{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			metav1.ListMeta{}.OpenAPIModelName(), metricsv1.NodeMetrics{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_metrics_v1_PodMetrics(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PodMetrics sets resource usage metrics of a pod.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"timestamp": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The following fields define time interval from which metrics were collected from the interval [Timestamp-Window, Timestamp].",
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
+						},
+					},
+					"window": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref(metav1.Duration{}.OpenAPIModelName()),
+						},
+					},
+					"containers": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Metrics for all containers are collected within the same time window.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(metricsv1.ContainerMetrics{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"timestamp", "window", "containers"},
+			},
+		},
+		Dependencies: []string{
+			metav1.Duration{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName(), metav1.Time{}.OpenAPIModelName(), metricsv1.ContainerMetrics{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_metrics_v1_PodMetricsList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PodMetricsList is a list of PodMetrics.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of pod metrics.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(metricsv1.PodMetrics{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			metav1.ListMeta{}.OpenAPIModelName(), metricsv1.PodMetrics{}.OpenAPIModelName()},
 	}
 }
 

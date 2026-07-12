@@ -1798,6 +1798,41 @@
               ]
             },
             {
+              "resource": "devicetaintrules",
+              "responseKind": {
+                "group": "",
+                "kind": "DeviceTaintRule",
+                "version": ""
+              },
+              "scope": "Cluster",
+              "singularResource": "devicetaintrule",
+              "subresources": [
+                {
+                  "responseKind": {
+                    "group": "",
+                    "kind": "DeviceTaintRule",
+                    "version": ""
+                  },
+                  "subresource": "status",
+                  "verbs": [
+                    "get",
+                    "patch",
+                    "update"
+                  ]
+                }
+              ],
+              "verbs": [
+                "create",
+                "delete",
+                "deletecollection",
+                "get",
+                "list",
+                "patch",
+                "update",
+                "watch"
+              ]
+            },
+            {
               "resource": "resourceclaims",
               "responseKind": {
                 "group": "",
@@ -2326,6 +2361,47 @@
         "name": "storagemigration.k8s.io"
       },
       "versions": [
+        {
+          "freshness": "Current",
+          "resources": [
+            {
+              "resource": "storageversionmigrations",
+              "responseKind": {
+                "group": "",
+                "kind": "StorageVersionMigration",
+                "version": ""
+              },
+              "scope": "Cluster",
+              "singularResource": "storageversionmigration",
+              "subresources": [
+                {
+                  "responseKind": {
+                    "group": "",
+                    "kind": "StorageVersionMigration",
+                    "version": ""
+                  },
+                  "subresource": "status",
+                  "verbs": [
+                    "get",
+                    "patch",
+                    "update"
+                  ]
+                }
+              ],
+              "verbs": [
+                "create",
+                "delete",
+                "deletecollection",
+                "get",
+                "list",
+                "patch",
+                "update",
+                "watch"
+              ]
+            }
+          ],
+          "version": "v1"
+        },
         {
           "freshness": "Current",
           "resources": [

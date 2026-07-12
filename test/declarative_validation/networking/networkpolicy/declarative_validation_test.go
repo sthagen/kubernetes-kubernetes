@@ -60,7 +60,7 @@ func TestDeclarativeValidateIPBlockCIDR(t *testing.T) {
 						field.Required(
 							field.NewPath("spec", "ingress").Index(0).Child("from").Index(0).Child("ipBlock", "cidr"),
 							"",
-						).MarkAlpha(),
+						).MarkBeta(),
 					},
 				},
 				"egress rule rejects empty CIDR in ipBlock": {
@@ -69,7 +69,7 @@ func TestDeclarativeValidateIPBlockCIDR(t *testing.T) {
 						field.Required(
 							field.NewPath("spec", "egress").Index(0).Child("to").Index(0).Child("ipBlock", "cidr"),
 							"",
-						).MarkAlpha(),
+						).MarkBeta(),
 					},
 				},
 			}
@@ -82,9 +82,6 @@ func TestDeclarativeValidateIPBlockCIDR(t *testing.T) {
 						&tc.input,
 						registry.Strategy,
 						tc.expectedErrs,
-						// extensions/v1beta1 is unserved and no longer carries
-						// declarative validation; skip it in the version sweep.
-						apitesting.WithSkipGroupVersions("extensions/v1beta1"),
 					)
 				})
 			}
@@ -130,7 +127,7 @@ func TestDeclarativeValidateIPBlockCIDRUpdate(t *testing.T) {
 						field.Required(
 							field.NewPath("spec", "ingress").Index(0).Child("from").Index(0).Child("ipBlock", "cidr"),
 							"",
-						).MarkAlpha(),
+						).MarkBeta(),
 					},
 				},
 
@@ -141,7 +138,7 @@ func TestDeclarativeValidateIPBlockCIDRUpdate(t *testing.T) {
 						field.Required(
 							field.NewPath("spec", "egress").Index(0).Child("to").Index(0).Child("ipBlock", "cidr"),
 							"",
-						).MarkAlpha(),
+						).MarkBeta(),
 					},
 				},
 			}
@@ -155,9 +152,6 @@ func TestDeclarativeValidateIPBlockCIDRUpdate(t *testing.T) {
 						&tc.oldObj,
 						registry.Strategy,
 						tc.expectedErrs,
-						// extensions/v1beta1 is unserved and no longer carries
-						// declarative validation; skip it in the version sweep.
-						apitesting.WithSkipGroupVersions("extensions/v1beta1"),
 					)
 				})
 			}

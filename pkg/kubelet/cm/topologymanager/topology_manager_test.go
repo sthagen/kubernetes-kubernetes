@@ -39,6 +39,7 @@ func NewTestBitMask(sockets ...int) bitmask.BitMask {
 }
 
 func TestNewManager(t *testing.T) {
+	logger, _ := ktesting.NewTestContext(t)
 	numaDistanceErr := "error getting NUMA distances from cadvisor"
 	if runtime.GOOS == "windows" {
 		numaDistanceErr = fmt.Sprintf("the %q policy option is not supported on Windows because NUMA node distances are not available", PreferClosestNUMANodes)
@@ -150,7 +151,7 @@ func TestNewManager(t *testing.T) {
 	for _, tc := range tcases {
 		topology := tc.topology
 
-		mngr, err := NewManager(topology, tc.policyName, "container", tc.policyOptions)
+		mngr, err := NewManager(logger, topology, tc.policyName, "container", tc.policyOptions)
 		if tc.expectedError != nil {
 			if !strings.Contains(err.Error(), tc.expectedError.Error()) {
 				t.Errorf("Unexpected error message. Have: %s wants %s", err.Error(), tc.expectedError.Error())
@@ -171,6 +172,7 @@ func TestNewManager(t *testing.T) {
 }
 
 func TestManagerScope(t *testing.T) {
+	logger, _ := ktesting.NewTestContext(t)
 	tcases := []struct {
 		description   string
 		scopeName     string
@@ -195,7 +197,7 @@ func TestManagerScope(t *testing.T) {
 	}
 
 	for _, tc := range tcases {
-		mngr, err := NewManager(nil, "best-effort", tc.scopeName, nil)
+		mngr, err := NewManager(logger, nil, "best-effort", tc.scopeName, nil)
 
 		if tc.expectedError != nil {
 			if !strings.Contains(err.Error(), tc.expectedError.Error()) {
@@ -217,19 +219,19 @@ type mockHintProvider struct {
 	//allocateError error
 }
 
-func (m *mockHintProvider) GetTopologyHints(logger klog.Logger, pod *v1.Pod, container *v1.Container) map[string][]TopologyHint {
+func (m *mockHintProvider) GetTopologyHints(logger klog.Logger, pod *v1.Pod, container *v1.Container, _ lifecycle.Operation) map[string][]TopologyHint {
 	return m.th
 }
 
-func (m *mockHintProvider) GetPodTopologyHints(logger klog.Logger, pod *v1.Pod) map[string][]TopologyHint {
+func (m *mockHintProvider) GetPodTopologyHints(logger klog.Logger, pod *v1.Pod, _ lifecycle.Operation) map[string][]TopologyHint {
 	return m.th
 }
 
-func (m *mockHintProvider) AllocatePod(logger klog.Logger, pod *v1.Pod) error {
+func (m *mockHintProvider) AllocatePod(logger klog.Logger, pod *v1.Pod, _ lifecycle.Operation) error {
 	return nil
 }
 
-func (m *mockHintProvider) Allocate(ctx context.Context, pod *v1.Pod, container *v1.Container) error {
+func (m *mockHintProvider) Allocate(ctx context.Context, pod *v1.Pod, container *v1.Container, _ lifecycle.Operation) error {
 	//return allocateError
 	return nil
 }

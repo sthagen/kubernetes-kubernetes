@@ -125,13 +125,14 @@ func (PodGroupSchedulingPolicy) SwaggerDoc() map[string]string {
 
 var map_PodGroupSpec = map[string]string{
 	"":                      "PodGroupSpec defines the desired state of a PodGroup.",
-	"podGroupTemplateRef":   "PodGroupTemplateRef references an optional PodGroup template within other object (e.g. Workload) that was used to create the PodGroup. This field is immutable.",
+	"workloadRef":           "WorkloadRef references an optional PodGroup template within the Workload object that was used to create the PodGroup. This field is immutable.",
 	"schedulingPolicy":      "SchedulingPolicy defines the scheduling policy for this instance of the PodGroup. Controllers are expected to fill this field by copying it from a PodGroupTemplate.",
 	"schedulingConstraints": "SchedulingConstraints defines optional scheduling constraints (e.g. topology) for this PodGroup. Controllers are expected to fill this field by copying it from a PodGroupTemplate. This field is immutable. This field is only available when the TopologyAwareWorkloadScheduling feature gate is enabled.",
 	"resourceClaims":        "ResourceClaims defines which ResourceClaims may be shared among Pods in the group. Pods consume the devices allocated to a PodGroup's claim by defining a claim in its own Spec.ResourceClaims that matches the PodGroup's claim exactly. The claim must have the same name and refer to the same ResourceClaim or ResourceClaimTemplate.\n\nThis is an alpha-level field and requires that the DRAWorkloadResourceClaims feature gate is enabled.\n\nThis field is immutable.",
 	"disruptionMode":        "DisruptionMode defines the mode in which a given PodGroup can be disrupted. Controllers are expected to fill this field by copying it from a PodGroupTemplate. One of Single, All. Defaults to Single if unset. This field is immutable.",
 	"priorityClassName":     "PriorityClassName defines the priority that should be considered when scheduling this pod group. Controllers are expected to fill this field by copying it from a PodGroupTemplate. Otherwise, it is validated and resolved similarly to the PriorityClassName on PodGroupTemplate (i.e. if no priority class is specified, admission control can set this to the global default priority class if it exists. Otherwise, the pod group's priority will be zero). This field is immutable.",
 	"priority":              "Priority is the value of priority of this pod group. Various system components use this field to find the priority of the pod group. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. This field is immutable.",
+	"preemptionPolicy":      "PreemptionPolicy is the Policy for preempting pods/podgroups with lower priority. One of Never, PreemptLowerPriority. Defaults to PreemptLowerPriority if unset. When Priority Admission Controller is enabled, it populates this field from PriorityClassName, and defaults to PreemptLowerPriority if value is unset in PriorityClass. This field is immutable. This field is available only when the PodGroupPreemptionPolicy feature gate is enabled.",
 }
 
 func (PodGroupSpec) SwaggerDoc() map[string]string {
@@ -161,15 +162,6 @@ var map_PodGroupTemplate = map[string]string{
 
 func (PodGroupTemplate) SwaggerDoc() map[string]string {
 	return map_PodGroupTemplate
-}
-
-var map_PodGroupTemplateReference = map[string]string{
-	"":         "PodGroupTemplateReference references a PodGroup template defined in some object (e.g. Workload). Exactly one reference must be set.",
-	"workload": "Workload references the PodGroupTemplate within the Workload object that was used to create the PodGroup.",
-}
-
-func (PodGroupTemplateReference) SwaggerDoc() map[string]string {
-	return map_PodGroupTemplateReference
 }
 
 var map_SingleDisruptionMode = map[string]string{
@@ -220,14 +212,14 @@ func (WorkloadList) SwaggerDoc() map[string]string {
 	return map_WorkloadList
 }
 
-var map_WorkloadPodGroupTemplateReference = map[string]string{
-	"":                     "WorkloadPodGroupTemplateReference references the PodGroupTemplate within the Workload object.",
-	"workloadName":         "WorkloadName defines the name of the Workload object.",
-	"podGroupTemplateName": "PodGroupTemplateName defines the PodGroupTemplate name within the Workload object.",
+var map_WorkloadReference = map[string]string{
+	"":             "WorkloadReference references the Workload object together with the template that was used to create a particular PodGroup.",
+	"workloadName": "WorkloadName is the name of the Workload object that contains a template that was used when creating a pod group. It must be a DNS name. This field is required.",
+	"templateName": "TemplateName is the name of a template within the Workload object that was used to create a pod group. It must be a DNS label. This field is required.",
 }
 
-func (WorkloadPodGroupTemplateReference) SwaggerDoc() map[string]string {
-	return map_WorkloadPodGroupTemplateReference
+func (WorkloadReference) SwaggerDoc() map[string]string {
+	return map_WorkloadReference
 }
 
 var map_WorkloadSpec = map[string]string{

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -653,6 +654,8 @@ type PodGroupInfo interface {
 	GetName() string
 	// GetNamespace returns the namespace the pod group belongs to.
 	GetNamespace() string
+	// GetPodGroup returns the PodGroup API object.
+	GetPodGroup() *schedulingv1alpha3.PodGroup
 }
 
 // Placement determines the resources to be considered when scheduling a pod group.
@@ -672,8 +675,13 @@ type Placement struct {
 type ProposedAssignment interface {
 	// GetPod returns the pod that has the proposed node assignment.
 	GetPod() *v1.Pod
+	// GetPodInfo returns the PodInfo for the pod that has the proposed node assignment.
+	// It should be treated as immutable, read only data.
+	GetPodInfo() PodInfo
 	// GetNodeName returns the name of the proposed node for the pod.
 	GetNodeName() string
+	// GetCycleState returns the CycleState computed for this pod during pod group scheduling cycle.
+	GetCycleState() CycleState
 }
 
 // PodGroupAssignments holds the temporary assignments of pods in a pod group to nodes for a placement.

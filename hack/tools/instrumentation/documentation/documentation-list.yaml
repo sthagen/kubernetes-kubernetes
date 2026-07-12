@@ -3404,30 +3404,6 @@
   componentEndpoints:
   - component: kube-apiserver
     endpoint: /metrics
-- name: pods_logs_backend_tls_failure_total
-  subsystem: pod_logs
-  namespace: kube_apiserver
-  help: Total number of requests for pods/logs that failed due to kubelet server TLS
-    verification
-  type: Counter
-  deprecatedVersion: 1.27.0
-  stabilityLevel: ALPHA
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
-- name: pods_logs_insecure_backend_total
-  subsystem: pod_logs
-  namespace: kube_apiserver
-  help: 'Total number of requests for pods/logs sliced by usage type: enforce_tls,
-    skip_tls_allowed, skip_tls_denied'
-  type: Counter
-  deprecatedVersion: 1.27.0
-  stabilityLevel: ALPHA
-  labels:
-  - usage
-  componentEndpoints:
-  - component: kube-apiserver
-    endpoint: /metrics
 - name: active_pods
   subsystem: kubelet
   help: The number of pods the kubelet considers active and which are being considered
@@ -7351,8 +7327,12 @@
   - 0.6
   - 0.8
   - 1
+  - 1.25
+  - 1.5
   - 2
+  - 3
   - 4
+  - 5
   - 6
   - 8
   - 10

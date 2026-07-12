@@ -637,6 +637,16 @@ func (m *Manager) unprepareResources(ctx context.Context, podUID types.UID, name
 				return nil
 			}
 
+			// Do nothing if the claimInfo doesn't reference this pod.
+			// PrepareResources adds the pod to PodUIDs before any driver work,
+			// so a missing reference means PrepareResources never got that far
+			// for this pod (e.g. the validation pass errored out) and there is
+			// nothing for us to unprepare. Without this check we could
+			// tear down a claim that is still in use by another pod.
+			if !claimInfo.hasPodReference(podUID) {
+				return nil
+			}
+
 			// Skip calling NodeUnprepareResource if other pods are still referencing it
 			if len(claimInfo.PodUIDs) > 1 {
 				// We delay checkpointing of this change until
@@ -815,8 +825,8 @@ func (m *Manager) GetContainerClaimInfos(pod *v1.Pod, container *v1.Container) (
 }
 
 // UpdateAllocatedResourcesStatus updates the health status of allocated DRA resources in the pod's container statuses.
-func (m *Manager) UpdateAllocatedResourcesStatus(pod *v1.Pod, status *v1.PodStatus) {
-	logger := klog.FromContext(context.Background()).WithName("dra-manager")
+func (m *Manager) UpdateAllocatedResourcesStatus(logger klog.Logger, pod *v1.Pod, status *v1.PodStatus) {
+	logger = logger.WithName("dra-manager")
 	logger = klog.LoggerWithValues(logger, "pod", klog.KObj(pod))
 	enableHealthMessage := utilfeature.DefaultFeatureGate.Enabled(kubefeatures.ResourceHealthStatusMessage)
 	for i := range status.ContainerStatuses {

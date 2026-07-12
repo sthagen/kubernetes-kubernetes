@@ -23,9 +23,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	schedulingapi "k8s.io/api/scheduling/v1alpha3"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	schedulinglisters "k8s.io/client-go/listers/scheduling/v1alpha3"
 	"k8s.io/klog/v2"
 	fwk "k8s.io/kube-scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
@@ -47,7 +45,6 @@ const (
 // belonging to a PodGroup with a Gang scheduling policy.
 type GangScheduling struct {
 	handle          fwk.Handle
-	podGroupLister  schedulinglisters.PodGroupLister
 	podGroupManager fwk.PodGroupManager
 	snapshotLister  fwk.SharedLister
 }
@@ -61,7 +58,6 @@ var _ framework.PlacementFeasiblePlugin = &GangScheduling{}
 func New(_ context.Context, _ runtime.Object, fh fwk.Handle, fts feature.Features) (fwk.Plugin, error) {
 	return &GangScheduling{
 		handle:          fh,
-		podGroupLister:  fh.SharedInformerFactory().Scheduling().V1alpha3().PodGroups().Lister(),
 		podGroupManager: fh.PodGroupManager(),
 		snapshotLister:  fh.SnapshotSharedLister(),
 	}, nil
@@ -165,14 +161,10 @@ func (pl *GangScheduling) PreEnqueue(ctx context.Context, pod *v1.Pod) *fwk.Stat
 	namespace := pod.Namespace
 	schedulingGroup := pod.Spec.SchedulingGroup
 
-	podGroup, err := pl.podGroupLister.PodGroups(namespace).Get(*schedulingGroup.PodGroupName)
+	podGroup, err := pl.podGroupManager.PodGroups().Get(namespace, *schedulingGroup.PodGroupName)
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			// The pod is unschedulable until its PodGroup object is created.
-			return fwk.NewStatus(fwk.UnschedulableAndUnresolvable, fmt.Sprintf("waiting for pods's pod group %q to appear in scheduling queue", *schedulingGroup.PodGroupName))
-		}
-		klog.FromContext(ctx).Error(err, "Failed to get pod group", "pod", klog.KObj(pod), "schedulingGroup", schedulingGroup)
-		return fwk.AsStatus(fmt.Errorf("failed to get pod group %s/%s", namespace, *schedulingGroup.PodGroupName))
+		// The pod is unschedulable until its PodGroup object is created.
+		return fwk.NewStatus(fwk.UnschedulableAndUnresolvable, fmt.Sprintf("waiting for pods's pod group %q to appear in scheduling queue", *schedulingGroup.PodGroupName))
 	}
 
 	policy := podGroup.Spec.SchedulingPolicy
@@ -205,11 +197,11 @@ func (pl *GangScheduling) Permit(ctx context.Context, state fwk.CycleState, pod 
 	namespace := pod.Namespace
 	schedulingGroup := pod.Spec.SchedulingGroup
 
-	podGroup, err := pl.podGroupLister.PodGroups(namespace).Get(*schedulingGroup.PodGroupName)
+	podGroup, err := pl.snapshotLister.PodGroups().Get(namespace, *schedulingGroup.PodGroupName)
 	if err != nil {
 		// It's likely that the pod group was removed or another error happened.
 		// Returning error to retry the Pod when the pod group is added again.
-		return fwk.AsStatus(fmt.Errorf("failed to get podGroup %s/%s: %w", namespace, *schedulingGroup.PodGroupName, err)), 0
+		return fwk.AsStatus(fmt.Errorf("failed to get podGroup %s/%s from snapshot: %w", namespace, *schedulingGroup.PodGroupName, err)), 0
 	}
 
 	policy := podGroup.Spec.SchedulingPolicy
@@ -246,36 +238,11 @@ func (pl *GangScheduling) Permit(ctx context.Context, state fwk.CycleState, pod 
 	return nil, 0
 }
 
-const placementFeasibleStateKey = "PlacementFeasible" + Name
-
-type placementFeasibleState struct {
-	evaluated, succeeded int
-}
-
-func (s *placementFeasibleState) Clone() fwk.StateData {
-	return &placementFeasibleState{
-		evaluated: s.evaluated,
-		succeeded: s.succeeded,
-	}
-}
-
-func getPlacementFeasibleState(placementCycleState fwk.PlacementCycleState) *placementFeasibleState {
-	state, err := placementCycleState.Read(placementFeasibleStateKey)
-	if err != nil {
-		state = &placementFeasibleState{}
-		placementCycleState.Write(placementFeasibleStateKey, state)
-	}
-	return state.(*placementFeasibleState)
-}
-
 // PlacementFeasible is responsible for enforcing the gang's MinCount constraint in the pod group scheduling cycle.
 // The function will only return success once the gang's MinCount is satisfied or if the pod group is not using gang scheduling policy.
 // In case there are not enough remaining pods to satisfy the gang's MinCount, it returns Unschedulable which will terminate the pod group scheduling cycle early.
-func (pl *GangScheduling) PlacementFeasible(ctx context.Context, placementCycleState fwk.PlacementCycleState, podGroupInfo fwk.PodGroupInfo) *fwk.Status {
-	pg, err := pl.podGroupLister.PodGroups(podGroupInfo.GetNamespace()).Get(podGroupInfo.GetName())
-	if err != nil {
-		return fwk.AsStatus(fmt.Errorf("failed to get podGroup %s to compute gang feasibility: %w", klog.KObj(podGroupInfo), err))
-	}
+func (pl *GangScheduling) PlacementFeasible(ctx context.Context, placementCycleState fwk.PlacementCycleState, podGroupInfo fwk.PodGroupInfo, args framework.PlacementFeasibleArgs) *fwk.Status {
+	pg := podGroupInfo.GetPodGroup()
 
 	gangPolicy := pg.Spec.SchedulingPolicy.Gang
 	// This plugin only cares about pods with a Gang scheduling policy.
@@ -288,12 +255,8 @@ func (pl *GangScheduling) PlacementFeasible(ctx context.Context, placementCycleS
 		return fwk.AsStatus(fmt.Errorf("failed to get podGroup state for podGroup %s to compute gang feasibility: %w", klog.KObj(pg), err))
 	}
 
-	// We need to keep track of how many pods have already been evaluated in the current PodGroup scheduling cycle.
-	pgState := getPlacementFeasibleState(placementCycleState)
-	pgState.evaluated++
-
 	// remaining is the number of unscheduled pods that haven't been evaluated yet in the current PodGroup scheduling cycle.
-	remaining := len(podGroupInfo.GetUnscheduledPods()) - pgState.evaluated
+	remaining := len(podGroupInfo.GetUnscheduledPods()) - args.Evaluated
 
 	// scheduled includes the pods that are assigned or assumed in the current PodGroup scheduling cycle.
 	scheduled := podGroupState.ScheduledPodsCount()

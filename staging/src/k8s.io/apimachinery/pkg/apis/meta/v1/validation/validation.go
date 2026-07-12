@@ -17,10 +17,12 @@ limitations under the License.
 package validation
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"unicode"
 
+	"k8s.io/apimachinery/pkg/api/operation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -266,14 +268,39 @@ func ValidateTableOptions(opts *metav1.TableOptions) field.ErrorList {
 
 const MaxSubresourceNameLength = 256
 
-func ValidateManagedFields(fieldsList []metav1.ManagedFieldsEntry, fldPath *field.Path) field.ErrorList {
+// ManagedFieldsValidationOption specifies options for validating managed fields.
+type ManagedFieldsValidationOption int
+
+const (
+	// CoveredByDeclarative indicates whether errors should be marked as covered by declarative validation.
+	CoveredByDeclarative ManagedFieldsValidationOption = iota + 1
+)
+
+// ValidateManagedFields validates a list of managed fields.
+func ValidateManagedFields(fieldsList []metav1.ManagedFieldsEntry, fldPath *field.Path, opts ...ManagedFieldsValidationOption) field.ErrorList {
+	coveredByDeclarative := false
+	for _, opt := range opts {
+		if opt == CoveredByDeclarative {
+			coveredByDeclarative = true
+		}
+	}
 	var allErrs field.ErrorList
 	for i, fields := range fieldsList {
 		fldPath := fldPath.Index(i)
 		switch fields.Operation {
+		case "":
+			err := field.Required(fldPath.Child("operation"), "must not be empty")
+			if coveredByDeclarative {
+				err = err.MarkCoveredByDeclarative()
+			}
+			allErrs = append(allErrs, err)
 		case metav1.ManagedFieldsOperationApply, metav1.ManagedFieldsOperationUpdate:
 		default:
-			allErrs = append(allErrs, field.Invalid(fldPath.Child("operation"), fields.Operation, "must be `Apply` or `Update`"))
+			err := field.NotSupported(fldPath.Child("operation"), fields.Operation, []metav1.ManagedFieldsOperationType{metav1.ManagedFieldsOperationApply, metav1.ManagedFieldsOperationUpdate})
+			if coveredByDeclarative {
+				err = err.MarkCoveredByDeclarative()
+			}
+			allErrs = append(allErrs, err)
 		}
 		if len(fields.FieldsType) > 0 && fields.FieldsType != "FieldsV1" {
 			allErrs = append(allErrs, field.Invalid(fldPath.Child("fieldsType"), fields.FieldsType, "must be `FieldsV1`"))
@@ -334,7 +361,7 @@ func ValidateCondition(condition metav1.Condition, fldPath *field.Path) field.Er
 	}
 
 	if condition.LastTransitionTime.IsZero() {
-		allErrs = append(allErrs, field.Required(fldPath.Child("lastTransitionTime"), ""))
+		allErrs = append(allErrs, field.Required(fldPath.Child("lastTransitionTime"), "").MarkCoveredByDeclarative())
 	}
 
 	if len(condition.Reason) == 0 {
@@ -394,4 +421,15 @@ func ValidateIgnoreStoreReadError(fldPath *field.Path, options *metav1.DeleteOpt
 	}
 
 	return allErrs
+}
+
+// ValidateCustom_Condition_LastTransitionTime is wired into the generated
+// declarative validation by +k8s:customValidation on Condition.LastTransitionTime.
+// It enforces that the field is set, mirroring the handwritten check in
+// ValidateCondition.
+func ValidateCustom_Condition_LastTransitionTime(ctx context.Context, op operation.Operation, fldPath *field.Path, value, oldValue *metav1.Time) field.ErrorList {
+	if value.IsZero() {
+		return field.ErrorList{field.Required(fldPath, "")}
+	}
+	return nil
 }

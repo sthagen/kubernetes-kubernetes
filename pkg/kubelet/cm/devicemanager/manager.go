@@ -131,10 +131,7 @@ func (s *sourcesReadyStub) AddSource(source string) {}
 func (s *sourcesReadyStub) AllReady() bool          { return true }
 
 // NewManagerImpl creates a new manager.
-func NewManagerImpl(topology []cadvisorapi.Node, topologyAffinityStore topologymanager.Store) (*ManagerImpl, error) {
-	// Use klog.TODO() because we currently do not have a proper logger to pass in.
-	// Replace this with an appropriate context when refactoring this function to accept a logger parameter.
-	logger := klog.TODO()
+func NewManagerImpl(logger klog.Logger, topology []cadvisorapi.Node, topologyAffinityStore topologymanager.Store) (*ManagerImpl, error) {
 	socketPath := pluginapi.KubeletSocket
 	if runtime.GOOS == "windows" {
 		socketPath = os.Getenv("SYSTEMDRIVE") + pluginapi.KubeletSocketWindows
@@ -306,7 +303,7 @@ func (m *ManagerImpl) genericDeviceUpdateCallback(logger klog.Logger, resourceNa
 		if utilfeature.DefaultFeatureGate.Enabled(features.ResourceHealthStatus) {
 			// compare with old device's health and send update to the channel if needed
 			updatePodUIDFn := func(deviceID string) {
-				podUID, _ := m.podDevices.getPodAndContainerForDevice(deviceID)
+				podUID, _ := m.podDevices.getPodAndContainerForDevice(resourceName, deviceID)
 				if podUID != "" {
 					podsToUpdate.Insert(podUID)
 				}
@@ -392,7 +389,12 @@ func (m *ManagerImpl) Stop(logger klog.Logger) error {
 
 // Allocate is the call that you can use to allocate a set of devices
 // from the registered device plugins.
-func (m *ManagerImpl) Allocate(ctx context.Context, pod *v1.Pod, container *v1.Container) error {
+func (m *ManagerImpl) Allocate(ctx context.Context, pod *v1.Pod, container *v1.Container, operation lifecycle.Operation) error {
+	logger := klog.LoggerWithValues(klog.FromContext(ctx), "pod", klog.KObj(pod), "containerName", container.Name, "operation", operation)
+	if operation != lifecycle.AddOperation {
+		logger.V(2).Info("Device Manager support only Allocate(add)")
+		return nil
+	}
 	if _, ok := m.devicesToReuse[string(pod.UID)]; !ok {
 		m.devicesToReuse[string(pod.UID)] = make(map[string]sets.Set[string])
 	}
@@ -467,10 +469,7 @@ func (m *ManagerImpl) markResourceUnhealthy(logger klog.Logger, resourceName str
 // cm.UpdatePluginResource() run during predicate Admit guarantees we adjust nodeinfo
 // capacity for already allocated pods so that they can continue to run. However, new pods
 // requiring device plugin resources will not be scheduled till device plugin re-registers.
-func (m *ManagerImpl) GetCapacity() (v1.ResourceList, v1.ResourceList, []string) {
-	// Use logger.TODO() because we currently do not have a proper logger to pass in.
-	// Replace this with an appropriate logger when refactoring this function to accept a logger parameter.
-	logger := klog.TODO()
+func (m *ManagerImpl) GetCapacity(logger klog.Logger) (v1.ResourceList, v1.ResourceList, []string) {
 	var capacity = v1.ResourceList{}
 	var allocatable = v1.ResourceList{}
 	deletedResources := sets.New[string]()
@@ -580,10 +579,7 @@ func (m *ManagerImpl) getCheckpoint() (checkpoint.DeviceManagerCheckpoint, error
 }
 
 // UpdateAllocatedDevices frees any Devices that are bound to terminated pods.
-func (m *ManagerImpl) UpdateAllocatedDevices() {
-	// Use klog.TODO() because we currently do not have a proper logger to pass in.
-	// Replace this with an appropriate context when refactoring this function to accept a logger parameter.
-	logger := klog.TODO()
+func (m *ManagerImpl) UpdateAllocatedDevices(logger klog.Logger) {
 	activePods := m.activePods()
 	if !m.sourcesReady.AllReady() {
 		return
@@ -709,7 +705,7 @@ func (m *ManagerImpl) devicesToAllocate(ctx context.Context, podUID, contName, r
 	}
 
 	// Filters available Devices based on NUMA affinity.
-	aligned, unaligned, noAffinity := m.filterByAffinity(podUID, contName, resource, available)
+	aligned, unaligned, noAffinity := m.filterByAffinity(logger, podUID, contName, resource, available)
 
 	// If we can allocate all remaining devices from the set of aligned ones, then
 	// give the plugin the chance to influence which ones to allocate from that set.
@@ -761,9 +757,9 @@ func (m *ManagerImpl) devicesToAllocate(ctx context.Context, podUID, contName, r
 	return nil, fmt.Errorf("unexpectedly allocated less resources than required. Requested: %d, Got: %d", required, required-needed)
 }
 
-func (m *ManagerImpl) filterByAffinity(podUID, contName, resource string, available sets.Set[string]) (sets.Set[string], sets.Set[string], sets.Set[string]) {
+func (m *ManagerImpl) filterByAffinity(logger klog.Logger, podUID, contName, resource string, available sets.Set[string]) (sets.Set[string], sets.Set[string], sets.Set[string]) {
 	// If alignment information is not available, just pass the available list back.
-	hint := m.topologyAffinityStore.GetAffinity(podUID, contName)
+	hint := m.topologyAffinityStore.GetAffinity(logger, podUID, contName)
 	if !m.deviceHasTopologyAlignment(resource) || hint.NUMANodeAffinity == nil {
 		return sets.New[string](), sets.New[string](), available
 	}
@@ -887,7 +883,7 @@ func (m *ManagerImpl) allocateContainerResources(ctx context.Context, pod *v1.Po
 		// Updates allocatedDevices to garbage collect any stranded resources
 		// before doing the device plugin allocation.
 		if !allocatedDevicesUpdated {
-			m.UpdateAllocatedDevices()
+			m.UpdateAllocatedDevices(logger)
 			allocatedDevicesUpdated = true
 		}
 		allocDevices, err := m.devicesToAllocate(ctx, podUID, contName, resource, needed, devicesToReuse[resource])
@@ -1010,7 +1006,8 @@ func (m *ManagerImpl) GetDeviceRunContainerOptions(ctx context.Context, pod *v1.
 	}
 	if needsReAllocate {
 		logger.V(2).Info("Needs to re-allocate device plugin resources for pod", "pod", klog.KObj(pod), "containerName", container.Name)
-		if err := m.Allocate(ctx, pod, container); err != nil {
+		// Device Manager support only Allocate(add)
+		if err := m.Allocate(ctx, pod, container, lifecycle.AddOperation); err != nil {
 			return nil, err
 		}
 	}
@@ -1137,10 +1134,7 @@ func isDRAExtendedResource(pod *v1.Pod, containerName, resourceName string) bool
 }
 
 // GetAllocatableDevices returns information about all the healthy devices known to the manager
-func (m *ManagerImpl) GetAllocatableDevices() ResourceDeviceInstances {
-	// Use klog.TODO() because we currently do not have a proper logger to pass in.
-	// Replace this with an appropriate context when refactoring this function to accept a logger parameter.
-	logger := klog.TODO()
+func (m *ManagerImpl) GetAllocatableDevices(logger klog.Logger) ResourceDeviceInstances {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	resp := m.allDevices.Filter(m.healthyDevices)
@@ -1149,8 +1143,9 @@ func (m *ManagerImpl) GetAllocatableDevices() ResourceDeviceInstances {
 }
 
 // AllocatePod is called to trigger the allocation of resources to a pod.
-func (m *ManagerImpl) AllocatePod(_ klog.Logger, _ *v1.Pod) error {
+func (m *ManagerImpl) AllocatePod(logger klog.Logger, pod *v1.Pod, _ lifecycle.Operation) error {
 	// Device Manager does not support pod level resource allocation.
+	logger.V(2).Info("Device Manager does not support pod level resource allocation")
 	return nil
 }
 
@@ -1159,7 +1154,7 @@ func (m *ManagerImpl) GetDevices(podUID, containerName string) ResourceDeviceIns
 	return m.podDevices.getContainerDevices(podUID, containerName)
 }
 
-func (m *ManagerImpl) UpdateAllocatedResourcesStatus(pod *v1.Pod, status *v1.PodStatus) {
+func (m *ManagerImpl) UpdateAllocatedResourcesStatus(logger klog.Logger, pod *v1.Pod, status *v1.PodStatus) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 

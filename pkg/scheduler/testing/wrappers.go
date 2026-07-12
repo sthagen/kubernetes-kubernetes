@@ -1619,13 +1619,11 @@ func (wrapper *PodGroupWrapper) BasicPolicy() *PodGroupWrapper {
 	return wrapper
 }
 
-// TemplateRef sets appropriate PodGroupTemplateRef field of the inner PodGroup.
-func (wrapper *PodGroupWrapper) TemplateRef(templateName, workloadName string) *PodGroupWrapper {
-	wrapper.PodGroup.Spec.PodGroupTemplateRef = &schedulingapi.PodGroupTemplateReference{
-		Workload: &schedulingapi.WorkloadPodGroupTemplateReference{
-			PodGroupTemplateName: templateName,
-			WorkloadName:         workloadName,
-		},
+// WorkloadRef sets appropriate WorkloadRef field of the inner PodGroup.
+func (wrapper *PodGroupWrapper) WorkloadRef(templateName, workloadName string) *PodGroupWrapper {
+	wrapper.PodGroup.Spec.WorkloadRef = &schedulingapi.WorkloadReference{
+		TemplateName: templateName,
+		WorkloadName: workloadName,
 	}
 	return wrapper
 }
@@ -1669,6 +1667,12 @@ func (wrapper *PodGroupWrapper) DisruptionModeSingle() *PodGroupWrapper {
 // Priority sets the priority of the inner PodGroup.
 func (wrapper *PodGroupWrapper) Priority(priority int32) *PodGroupWrapper {
 	wrapper.PodGroup.Spec.Priority = &priority
+	return wrapper
+}
+
+// PreemptionPolicy sets the preemption policy of the inner PodGroup.
+func (wrapper *PodGroupWrapper) PreemptionPolicy(policy schedulingapi.PreemptionPolicy) *PodGroupWrapper {
+	wrapper.PodGroup.Spec.PreemptionPolicy = &policy
 	return wrapper
 }
 

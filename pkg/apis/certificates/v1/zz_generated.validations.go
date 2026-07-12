@@ -30,6 +30,8 @@ import (
 	operation "k8s.io/apimachinery/pkg/api/operation"
 	safe "k8s.io/apimachinery/pkg/api/safe"
 	validate "k8s.io/apimachinery/pkg/api/validate"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	validation "k8s.io/apimachinery/pkg/apis/meta/v1/validation"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	field "k8s.io/apimachinery/pkg/util/validation/field"
 )
@@ -64,7 +66,29 @@ func Validate_CertificateSigningRequest(
 	obj, oldObj *certificatesv1.CertificateSigningRequest) (errs field.ErrorList) {
 
 	// field certificatesv1.CertificateSigningRequest.TypeMeta has no validation
-	// field certificatesv1.CertificateSigningRequest.ObjectMeta has no validation
+
+	{ // field certificatesv1.CertificateSigningRequest.ObjectMeta
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *metav1.ObjectMeta,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call the type's validation function
+			errs = append(errs, validation.Validate_ObjectMeta(ctx, op, fldPath, obj, oldObj)...)
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *certificatesv1.CertificateSigningRequest) *metav1.ObjectMeta {
+				return &oldObj.ObjectMeta
+			})
+		errs = append(errs, fn(fldPath.Child("metadata"), &obj.ObjectMeta, oldVal, oldObj != nil)...)
+	}
+
 	// field certificatesv1.CertificateSigningRequest.Spec has no validation
 
 	{ // field certificatesv1.CertificateSigningRequest.Status
@@ -114,7 +138,7 @@ func Validate_CertificateSigningRequestStatus(
 			}
 			// call field-attached validations
 			earlyReturn := false
-			if e := validate.OptionalSlice(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+			if e := validate.OptionalSlice(ctx, op, fldPath, obj, oldObj).MarkBeta().MarkShortCircuit(); len(e) != 0 {
 				earlyReturn = true
 			}
 			if earlyReturn {
@@ -136,7 +160,7 @@ func Validate_CertificateSigningRequestStatus(
 						}
 					}
 					return false
-				}).MarkAlpha(); len(e) != 0 {
+				}).MarkBeta(); len(e) != 0 {
 				errs = append(errs, e...)
 			}
 			return

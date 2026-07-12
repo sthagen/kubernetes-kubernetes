@@ -147,7 +147,7 @@ linters:
       # Commentstart - Ignore commentstart issues for existing API group
       # TODO: For each existing API group, we aim to remove it over time.
       - text: "godoc for field .* should start with '.* ...'"
-        path: "staging/src/k8s.io/api/(apps|batch|certificates|coordination|core|discovery|events|extensions|flowcontrol|imagepolicy|networking|node|policy|rbac|resource|scheduling|storage|storagemigration)"
+        path: "staging/src/k8s.io/api/(apps|batch|certificates|core|extensions|flowcontrol|networking|resource|scheduling|storage|storagemigration)"
       
       # notimestamp: Legacy 'Timestamp' fields retained for backward compatibility
       - text: 'notimestamp: naming convention "notimestamp": field TokenRequestStatus.ExpirationTimestamp: prefer use of the term ''time'' over ''timestamp'''
@@ -163,7 +163,7 @@ linters:
       # optionalfields - Ignore optionalfields issues for existing API group
       # TODO: For each existing API group, we aim to remove it over time.
       - text: "optionalfields: field .* should (?:be a pointer|have the omitempty tag)\\."
-        path: "staging/src/k8s.io/api/(admission|admissionregistration|apps|authentication|authorization|autoscaling|batch|certificates|coordination|core|discovery|events|extensions|flowcontrol|imagepolicy|networking|node|policy|rbac|resource|scheduling|storage|storagemigration)"
+        path: "staging/src/k8s.io/api/(admission|admissionregistration|apidiscovery|apps|authentication|authorization|autoscaling|batch|certificates|coordination|core|discovery|events|extensions|flowcontrol|imagepolicy|networking|node|policy|rbac|resource|scheduling|storage|storagemigration)"
       
       # optionalfields - Ignore existing issues for apiserverinternal API group
       - text: "optionalfields: field StorageVersionCondition.(ObservedGeneration|LastTransitionTime) should be a pointer."
@@ -231,7 +231,7 @@ linters:
       # OptionalOrRequired is being enabled over time. For now, each API group should be added to this list until we comb through each group and fix the missing tags.
       # The nonpointerstructs linter is included here as well as these two should be enabled hand-in-hand on each API group.
       - text: "must be marked as optional or required|is a non-pointer struct with no required fields."
-        path: "staging/src/k8s.io/api/(admissionregistration|apidiscovery|authorization|autoscaling|batch|certificates|core|discovery|events|extensions|flowcontrol|networking|storage)"
+        path: "staging/src/k8s.io/api/(admissionregistration|authorization|autoscaling|batch|certificates|core|discovery|events|extensions|flowcontrol|networking|storage)"
       
       # OptionalOrRequired - Existing fields that are marked as both optional and required (based on standard optional vs kubebuilder:validation:Required) and should not be fixed.
       - text: "field (PortStatus|IngressPortStatus)\\.Error must not be marked as both optional and required"
@@ -247,6 +247,11 @@ linters:
       # Validation makes this require at least one of the fields within to be set.
       - text: "nonpointerstructs: field (PodGroupSpec|PodGroupTemplate).SchedulingPolicy is a non-pointer struct with no required fields."
         path: "staging/src/k8s.io/api/scheduling/v1alpha3/types.go"
+      
+      # NoReferences - Existing fields that use Reference/References suffixes instead of Ref/Refs.
+      # These fields use the Reference suffix, but renaming them would be a breaking change, so they are allowlisted.
+      - text: 'noreferences: naming convention "reference-to-ref": field (SerializedReference|ImageVolumeSource)\.Reference:'
+        path: "staging/src/k8s.io/api/core/v1/types.go"
 
       - linters:
         - forbidigo
@@ -374,6 +379,7 @@ linters:
               - "commentstart" # Ensure comments start with the serialized version of the field name.
               - "conditions" # Ensure conditions have the correct json tags and markers.
               - "conflictingmarkers" # Detect mutually exclusive markers on the same field.
+              - "defaultorrequired" # Prevent the usage of default tags with required fields.
               - "integers" # Ensure only int32 and int64 are used for integers.
               - "jsontags" # Ensure every field has a json tag.
               # - "maxlength" # Ensure all strings and arrays have maximum lengths/maximum items. ONLY for CRDs until declarative markers exist in core types.
@@ -392,6 +398,7 @@ linters:
               - "duplicatemarkers" #Prevent identical markers from being present on types and fields
               - "dependenttags" # Ensure markers dependent on other markers are present.
               - "nodurations" # Ensure duration types are not used.
+              - "noreferences" # Ensure field names use Ref/Refs suffixes instead of Reference/References.
           lintersConfig:
             conditions:
               isFirstField: Ignore
@@ -404,11 +411,6 @@ linters:
                 - ["k8s:optional", "optional", "kubebuilder:validation:Optional"]
                 - ["k8s:required", "required", "kubebuilder:validation:Required"]
                 description: "fields cannot be both optional and required"
-              - name: "required_vs_default"
-                sets:
-                - ["k8s:required", "required", "kubebuilder:validation:Required"]
-                - ["default"]
-                description: "fields with default values are always optional"
             dependenttags:
               rules:
                 - identifier: "k8s:unionMember"

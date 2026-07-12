@@ -28,12 +28,12 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	resourceapi "k8s.io/api/resource/v1"
-	resourcebetaapi "k8s.io/api/resource/v1beta2"
 	schedulingapi "k8s.io/api/scheduling/v1alpha3"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -279,74 +279,86 @@ func withPodName(pod *v1.Pod, name string) *v1.Pod {
 // test for informers of resources we care about is registered
 func TestAddAllEventHandlers(t *testing.T) {
 	tests := []struct {
-		name                      string
-		gvkMap                    map[fwk.EventResource]fwk.ActionType
-		enableDRA                 bool
-		enableDRADeviceTaints     bool
-		enableDRADeviceTaintRules bool
-		enableDRAExtendedResource bool
-		enableGenericWorkload     bool
-		expectStaticInformers     map[reflect.Type]bool
-		expectDynamicInformers    map[schema.GroupVersionResource]bool
+		name                   string
+		gvkMap                 map[fwk.EventResource]fwk.ActionType
+		emulatedVersion        string
+		overrides              featuregatetesting.FeatureOverrides
+		expectStaticInformers  map[reflect.Type]bool
+		expectDynamicInformers map[schema.GroupVersionResource]bool
 	}{
 		{
 			name:   "default handlers in framework",
 			gvkMap: map[fwk.EventResource]fwk.ActionType{},
 			expectStaticInformers: map[reflect.Type]bool{
-				reflect.TypeOf(&v1.Pod{}):       true,
-				reflect.TypeOf(&v1.Node{}):      true,
-				reflect.TypeOf(&v1.Namespace{}): true,
+				reflect.TypeFor[*v1.Pod]():                      true,
+				reflect.TypeFor[*v1.Node]():                     true,
+				reflect.TypeFor[*v1.Namespace]():                true,
+				reflect.TypeFor[*resourceapi.ResourceClaim]():   true,
+				reflect.TypeFor[*resourceapi.ResourceSlice]():   true,
+				reflect.TypeFor[*resourceapi.DeviceTaintRule](): true,
+				reflect.TypeFor[*resourceapi.DeviceClass]():     true,
 			},
 			expectDynamicInformers: map[schema.GroupVersionResource]bool{},
 		},
 		{
-			name: "DRA events disabled",
+			name:            "DRA events disabled",
+			emulatedVersion: "1.34",
+			overrides: featuregatetesting.FeatureOverrides{
+				features.DynamicResourceAllocation: false,
+			},
 			gvkMap: map[fwk.EventResource]fwk.ActionType{
 				fwk.ResourceClaim: fwk.Add,
 				fwk.ResourceSlice: fwk.Add,
 				fwk.DeviceClass:   fwk.Add,
 			},
 			expectStaticInformers: map[reflect.Type]bool{
-				reflect.TypeOf(&v1.Pod{}):       true,
-				reflect.TypeOf(&v1.Node{}):      true,
-				reflect.TypeOf(&v1.Namespace{}): true,
+				reflect.TypeFor[*v1.Pod]():       true,
+				reflect.TypeFor[*v1.Node]():      true,
+				reflect.TypeFor[*v1.Namespace](): true,
 			},
 			expectDynamicInformers: map[schema.GroupVersionResource]bool{},
 		},
 		{
-			name: "core DRA events enabled",
+			name:            "core DRA events enabled",
+			emulatedVersion: "1.35",
+			overrides: featuregatetesting.FeatureOverrides{
+				features.DRADeviceTaints:     false,
+				features.DRADeviceTaintRules: false,
+				features.DRAExtendedResource: false,
+			},
 			gvkMap: map[fwk.EventResource]fwk.ActionType{
 				fwk.ResourceClaim: fwk.Add,
 				fwk.ResourceSlice: fwk.Add,
 				fwk.DeviceClass:   fwk.Add,
 			},
-			enableDRA: true,
 			expectStaticInformers: map[reflect.Type]bool{
-				reflect.TypeOf(&v1.Pod{}):                    true,
-				reflect.TypeOf(&v1.Node{}):                   true,
-				reflect.TypeOf(&v1.Namespace{}):              true,
-				reflect.TypeOf(&resourceapi.ResourceClaim{}): true,
-				reflect.TypeOf(&resourceapi.ResourceSlice{}): true,
-				reflect.TypeOf(&resourceapi.DeviceClass{}):   true,
+				reflect.TypeFor[*v1.Pod]():                    true,
+				reflect.TypeFor[*v1.Node]():                   true,
+				reflect.TypeFor[*v1.Namespace]():              true,
+				reflect.TypeFor[*resourceapi.ResourceClaim](): true,
+				reflect.TypeFor[*resourceapi.ResourceSlice](): true,
+				reflect.TypeFor[*resourceapi.DeviceClass]():   true,
 			},
 			expectDynamicInformers: map[schema.GroupVersionResource]bool{},
 		},
 		{
-			name: "device taints partially enabled",
+			name:            "DRA device taints partially enabled",
+			emulatedVersion: "1.35",
+			overrides: featuregatetesting.FeatureOverrides{
+				features.DRADeviceTaintRules: false,
+			},
 			gvkMap: map[fwk.EventResource]fwk.ActionType{
 				fwk.ResourceClaim: fwk.Add,
 				fwk.ResourceSlice: fwk.Add,
 				fwk.DeviceClass:   fwk.Add,
 			},
-			enableDRA:             true,
-			enableDRADeviceTaints: true,
 			expectStaticInformers: map[reflect.Type]bool{
-				reflect.TypeOf(&v1.Pod{}):                    true,
-				reflect.TypeOf(&v1.Node{}):                   true,
-				reflect.TypeOf(&v1.Namespace{}):              true,
-				reflect.TypeOf(&resourceapi.ResourceClaim{}): true,
-				reflect.TypeOf(&resourceapi.ResourceSlice{}): true,
-				reflect.TypeOf(&resourceapi.DeviceClass{}):   true,
+				reflect.TypeFor[*v1.Pod]():                    true,
+				reflect.TypeFor[*v1.Node]():                   true,
+				reflect.TypeFor[*v1.Namespace]():              true,
+				reflect.TypeFor[*resourceapi.ResourceClaim](): true,
+				reflect.TypeFor[*resourceapi.ResourceSlice](): true,
+				reflect.TypeFor[*resourceapi.DeviceClass]():   true,
 			},
 			expectDynamicInformers: map[schema.GroupVersionResource]bool{},
 		},
@@ -357,17 +369,14 @@ func TestAddAllEventHandlers(t *testing.T) {
 				fwk.ResourceSlice: fwk.Add,
 				fwk.DeviceClass:   fwk.Add,
 			},
-			enableDRA:                 true,
-			enableDRADeviceTaints:     true,
-			enableDRADeviceTaintRules: true,
 			expectStaticInformers: map[reflect.Type]bool{
-				reflect.TypeOf(&v1.Pod{}):                          true,
-				reflect.TypeOf(&v1.Node{}):                         true,
-				reflect.TypeOf(&v1.Namespace{}):                    true,
-				reflect.TypeOf(&resourceapi.ResourceClaim{}):       true,
-				reflect.TypeOf(&resourceapi.ResourceSlice{}):       true,
-				reflect.TypeOf(&resourcebetaapi.DeviceTaintRule{}): true,
-				reflect.TypeOf(&resourceapi.DeviceClass{}):         true,
+				reflect.TypeFor[*v1.Pod]():                      true,
+				reflect.TypeFor[*v1.Node]():                     true,
+				reflect.TypeFor[*v1.Namespace]():                true,
+				reflect.TypeFor[*resourceapi.ResourceClaim]():   true,
+				reflect.TypeFor[*resourceapi.ResourceSlice]():   true,
+				reflect.TypeFor[*resourceapi.DeviceTaintRule](): true,
+				reflect.TypeFor[*resourceapi.DeviceClass]():     true,
 			},
 			expectDynamicInformers: map[schema.GroupVersionResource]bool{},
 		},
@@ -377,26 +386,33 @@ func TestAddAllEventHandlers(t *testing.T) {
 				fwk.PodGroup: fwk.Add,
 			},
 			expectStaticInformers: map[reflect.Type]bool{
-				reflect.TypeOf(&v1.Pod{}):       true,
-				reflect.TypeOf(&v1.Node{}):      true,
-				reflect.TypeOf(&v1.Namespace{}): true,
+				reflect.TypeFor[*v1.Pod]():                      true,
+				reflect.TypeFor[*v1.Node]():                     true,
+				reflect.TypeFor[*v1.Namespace]():                true,
+				reflect.TypeFor[*resourceapi.ResourceClaim]():   true,
+				reflect.TypeFor[*resourceapi.ResourceSlice]():   true,
+				reflect.TypeFor[*resourceapi.DeviceTaintRule](): true,
+				reflect.TypeFor[*resourceapi.DeviceClass]():     true,
 			},
 			expectDynamicInformers: map[schema.GroupVersionResource]bool{},
 		},
 		{
 			name: "PodGroup events enabled",
+			overrides: featuregatetesting.FeatureOverrides{
+				features.GenericWorkload: true,
+			},
 			gvkMap: map[fwk.EventResource]fwk.ActionType{
 				fwk.PodGroup: fwk.Add,
 			},
-			enableDRA:             true,
-			enableGenericWorkload: true,
 			expectStaticInformers: map[reflect.Type]bool{
-				reflect.TypeOf(&v1.Pod{}):                    true,
-				reflect.TypeOf(&v1.Node{}):                   true,
-				reflect.TypeOf(&v1.Namespace{}):              true,
-				reflect.TypeOf(&resourceapi.ResourceClaim{}): true,
-				reflect.TypeOf(&resourceapi.ResourceSlice{}): true,
-				reflect.TypeOf(&schedulingapi.PodGroup{}):    true,
+				reflect.TypeFor[*v1.Pod]():                      true,
+				reflect.TypeFor[*v1.Node]():                     true,
+				reflect.TypeFor[*v1.Namespace]():                true,
+				reflect.TypeFor[*resourceapi.ResourceClaim]():   true,
+				reflect.TypeFor[*resourceapi.ResourceSlice]():   true,
+				reflect.TypeFor[*resourceapi.DeviceTaintRule](): true,
+				reflect.TypeFor[*resourceapi.DeviceClass]():     true,
+				reflect.TypeFor[*schedulingapi.PodGroup]():      true,
 			},
 			expectDynamicInformers: map[schema.GroupVersionResource]bool{},
 		},
@@ -408,11 +424,15 @@ func TestAddAllEventHandlers(t *testing.T) {
 				"storage.k8s.io/CSIStorageCapacity": fwk.Update,
 			},
 			expectStaticInformers: map[reflect.Type]bool{
-				reflect.TypeOf(&v1.Pod{}):                       true,
-				reflect.TypeOf(&v1.Node{}):                      true,
-				reflect.TypeOf(&v1.Namespace{}):                 true,
-				reflect.TypeOf(&v1.PersistentVolume{}):          true,
-				reflect.TypeOf(&storagev1.CSIStorageCapacity{}): true,
+				reflect.TypeFor[*v1.Pod]():                       true,
+				reflect.TypeFor[*v1.Node]():                      true,
+				reflect.TypeFor[*v1.Namespace]():                 true,
+				reflect.TypeFor[*v1.PersistentVolume]():          true,
+				reflect.TypeFor[*storagev1.CSIStorageCapacity](): true,
+				reflect.TypeFor[*resourceapi.ResourceClaim]():    true,
+				reflect.TypeFor[*resourceapi.ResourceSlice]():    true,
+				reflect.TypeFor[*resourceapi.DeviceTaintRule]():  true,
+				reflect.TypeFor[*resourceapi.DeviceClass]():      true,
 			},
 			expectDynamicInformers: map[schema.GroupVersionResource]bool{},
 		},
@@ -423,9 +443,13 @@ func TestAddAllEventHandlers(t *testing.T) {
 				"cronjobs.v1.batch":  fwk.Delete,
 			},
 			expectStaticInformers: map[reflect.Type]bool{
-				reflect.TypeOf(&v1.Pod{}):       true,
-				reflect.TypeOf(&v1.Node{}):      true,
-				reflect.TypeOf(&v1.Namespace{}): true,
+				reflect.TypeFor[*v1.Pod]():                      true,
+				reflect.TypeFor[*v1.Node]():                     true,
+				reflect.TypeFor[*v1.Namespace]():                true,
+				reflect.TypeFor[*resourceapi.ResourceClaim]():   true,
+				reflect.TypeFor[*resourceapi.ResourceSlice]():   true,
+				reflect.TypeFor[*resourceapi.DeviceTaintRule](): true,
+				reflect.TypeFor[*resourceapi.DeviceClass]():     true,
 			},
 			expectDynamicInformers: map[schema.GroupVersionResource]bool{
 				{Group: "apps", Version: "v1", Resource: "daemonsets"}: true,
@@ -439,9 +463,13 @@ func TestAddAllEventHandlers(t *testing.T) {
 				"custommetrics.v1beta1": fwk.Update,
 			},
 			expectStaticInformers: map[reflect.Type]bool{
-				reflect.TypeOf(&v1.Pod{}):       true,
-				reflect.TypeOf(&v1.Node{}):      true,
-				reflect.TypeOf(&v1.Namespace{}): true,
+				reflect.TypeFor[*v1.Pod]():                      true,
+				reflect.TypeFor[*v1.Node]():                     true,
+				reflect.TypeFor[*v1.Namespace]():                true,
+				reflect.TypeFor[*resourceapi.ResourceClaim]():   true,
+				reflect.TypeFor[*resourceapi.ResourceSlice]():   true,
+				reflect.TypeFor[*resourceapi.DeviceTaintRule](): true,
+				reflect.TypeFor[*resourceapi.DeviceClass]():     true,
 			},
 			expectDynamicInformers: map[schema.GroupVersionResource]bool{
 				{Group: "apps", Version: "v1", Resource: "daemonsets"}: true,
@@ -458,22 +486,10 @@ func TestAddAllEventHandlers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			overrides := featuregatetesting.FeatureOverrides{
-				features.DynamicResourceAllocation: tt.enableDRA,
-				features.DRADeviceTaints:           tt.enableDRADeviceTaints,
-				features.DRAExtendedResource:       tt.enableDRAExtendedResource,
+			if tt.emulatedVersion != "" {
+				featuregatetesting.SetFeatureGateEmulationVersionDuringTest(t, utilfeature.DefaultFeatureGate, version.MustParse(tt.emulatedVersion))
 			}
-			if !tt.enableDRA {
-				featuregatetesting.SetFeatureGateEmulationVersionDuringTest(t, utilfeature.DefaultFeatureGate, version.MustParse("1.34"))
-			} else {
-				if !tt.enableDRAExtendedResource {
-					featuregatetesting.SetFeatureGateEmulationVersionDuringTest(t, utilfeature.DefaultFeatureGate, version.MustParse("1.36"))
-				}
-				// Making this depend on the emulated version avoids "cannot set feature gate DRADeviceTaintRules to false, feature is PreAlpha at emulated version 1.34".
-				overrides[features.DRADeviceTaintRules] = tt.enableDRADeviceTaintRules
-				overrides[features.GenericWorkload] = tt.enableGenericWorkload
-			}
-			featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, overrides)
+			featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, tt.overrides)
 
 			logger, ctx := ktesting.NewTestContext(t)
 			ctx, cancel := context.WithCancel(ctx)
@@ -501,16 +517,14 @@ func TestAddAllEventHandlers(t *testing.T) {
 					SliceInformer:          informerFactory.Resource().V1().ResourceSlices(),
 				}
 				if opts.EnableDeviceTaintRules {
-					opts.TaintInformer = informerFactory.Resource().V1beta2().DeviceTaintRules()
-					opts.ClassInformer = informerFactory.Resource().V1().DeviceClasses()
-
+					opts.TaintInformer = informerFactory.Resource().V1().DeviceTaintRules()
 				}
 				resourceSliceTracker, err = resourceslicetracker.StartTracker(ctx, opts)
 				if err != nil {
 					t.Fatalf("couldn't start resource slice tracker: %v", err)
 				}
 
-				if tt.enableDRAExtendedResource {
+				if utilfeature.DefaultFeatureGate.Enabled(features.DRAExtendedResource) {
 					draManager = dynamicresources.NewDRAManager(ctx, resourceClaimCache, resourceSliceTracker, informerFactory)
 				}
 			}
@@ -531,6 +545,67 @@ func TestAddAllEventHandlers(t *testing.T) {
 				t.Errorf("Unexpected diff (-want, +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestAddAllEventHandlersPodEventResources(t *testing.T) {
+	logger, ctx := ktesting.NewTestContext(t)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	informerFactory := informers.NewSharedInformerFactory(fake.NewClientset(), 0)
+	schedulingQueue := internalqueue.NewTestQueueWithInformerFactory(ctx, nil, informerFactory)
+	testSched := Scheduler{
+		StopEverything:  ctx.Done(),
+		SchedulingQueue: schedulingQueue,
+		logger:          logger,
+	}
+
+	dynclient := dyfake.NewSimpleDynamicClient(runtime.NewScheme())
+	dynInformerFactory := dynamicinformer.NewDynamicSharedInformerFactory(dynclient, 0)
+	gvkMap := map[fwk.EventResource]fwk.ActionType{
+		fwk.AssignedPod:    fwk.Add | fwk.Update | fwk.Delete,
+		fwk.UnscheduledPod: fwk.Add | fwk.Update | fwk.Delete,
+		fwk.TargetPod:      fwk.Update,
+	}
+
+	handledErrorMessages := []string{}
+	oldErrorHandlers := utilruntime.ErrorHandlers
+	t.Cleanup(func() {
+		utilruntime.ErrorHandlers = oldErrorHandlers
+	})
+	utilruntime.ErrorHandlers = []utilruntime.ErrorHandler{
+		func(_ context.Context, _ error, msg string, _ ...interface{}) {
+			handledErrorMessages = append(handledErrorMessages, msg)
+		},
+	}
+
+	err := addAllEventHandlers(&testSched, informerFactory, dynInformerFactory, nil, nil, nil, gvkMap)
+	utilruntime.ErrorHandlers = oldErrorHandlers
+	if err != nil {
+		t.Fatalf("Add event handlers failed, error = %v", err)
+	}
+	for _, msg := range handledErrorMessages {
+		if msg == "Incorrect event registration" {
+			t.Fatalf("expected no incorrect event registration, got handled errors: %v", handledErrorMessages)
+		}
+	}
+
+	informerFactory.Start(testSched.StopEverything)
+	dynInformerFactory.Start(testSched.StopEverything)
+	staticInformers := informerFactory.WaitForCacheSync(testSched.StopEverything)
+	dynamicInformers := dynInformerFactory.WaitForCacheSync(testSched.StopEverything)
+
+	expectStaticInformers := map[reflect.Type]bool{
+		reflect.TypeFor[*v1.Pod]():       true,
+		reflect.TypeFor[*v1.Node]():      true,
+		reflect.TypeFor[*v1.Namespace](): true,
+	}
+	if diff := cmp.Diff(expectStaticInformers, staticInformers); diff != "" {
+		t.Errorf("Unexpected diff (-want, +got):\n%s", diff)
+	}
+	if len(dynamicInformers) != 0 {
+		t.Errorf("expected no dynamic informers, got %v", dynamicInformers)
 	}
 }
 
@@ -1268,6 +1343,143 @@ func TestDeletePod(t *testing.T) {
 				}
 			} else if err == nil {
 				t.Errorf("Unexpected pod group state in cache after pod removal")
+			}
+		})
+	}
+}
+
+func TestAddPodGroup(t *testing.T) {
+	podGroup := st.MakePodGroup().Namespace("ns1").Name("pg1").Obj()
+
+	tests := []struct {
+		name     string
+		podGroup *schedulingapi.PodGroup
+	}{
+		{
+			name:     "add valid pod group",
+			podGroup: podGroup,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, ctx := ktesting.NewTestContext(t)
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+
+			sched := &Scheduler{
+				Cache:           internalcache.New(ctx, nil, true),
+				SchedulingQueue: internalqueue.NewTestQueue(ctx, nil),
+				logger:          logger,
+			}
+
+			sched.addPodGroup(tt.podGroup)
+
+			gotPodGroup, err := sched.Cache.PodGroups().Get(podGroup.Namespace, podGroup.Name)
+			if err != nil {
+				t.Errorf("Expected pod group to be in cache, got error: %v", err)
+			}
+			if diff := cmp.Diff(podGroup, gotPodGroup); diff != "" {
+				t.Errorf("Unexpected pod group in cache (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestUpdatePodGroup(t *testing.T) {
+	oldPodGroup := st.MakePodGroup().Namespace("ns1").Name("pg1").MinCount(1).Obj()
+	oldPodGroup.ResourceVersion = "1"
+	newPodGroup := st.MakePodGroup().Namespace("ns1").Name("pg1").MinCount(2).Obj()
+	newPodGroup.ResourceVersion = "2"
+
+	tests := []struct {
+		name           string
+		oldPodGroup    *schedulingapi.PodGroup
+		newPodGroup    *schedulingapi.PodGroup
+		expectPodGroup *schedulingapi.PodGroup
+	}{
+		{
+			name:           "update valid pod group",
+			oldPodGroup:    oldPodGroup,
+			newPodGroup:    newPodGroup,
+			expectPodGroup: newPodGroup,
+		},
+		{
+			name:           "update pod group with same resource version should be no-op",
+			oldPodGroup:    oldPodGroup,
+			newPodGroup:    oldPodGroup,
+			expectPodGroup: oldPodGroup,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, ctx := ktesting.NewTestContext(t)
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+
+			sched := &Scheduler{
+				Cache:           internalcache.New(ctx, nil, true),
+				SchedulingQueue: internalqueue.NewTestQueue(ctx, nil),
+				logger:          logger,
+			}
+
+			sched.Cache.AddPodGroup(tt.oldPodGroup)
+
+			sched.updatePodGroup(tt.oldPodGroup, tt.newPodGroup)
+
+			gotPodGroup, err := sched.Cache.PodGroups().Get(tt.expectPodGroup.Namespace, tt.expectPodGroup.Name)
+			if err != nil {
+				t.Errorf("Expected pod group to be in cache, got error: %v", err)
+			}
+			if diff := cmp.Diff(tt.expectPodGroup, gotPodGroup); diff != "" {
+				t.Errorf("Unexpected pod group in cache (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestDeletePodGroup(t *testing.T) {
+	podGroup := st.MakePodGroup().Namespace("ns1").Name("pg1").Obj()
+
+	tests := []struct {
+		name             string
+		initPodGroup     *schedulingapi.PodGroup
+		podGroupToDelete any
+	}{
+		{
+			name:             "delete pod group",
+			initPodGroup:     podGroup,
+			podGroupToDelete: podGroup,
+		},
+		{
+			name:             "delete DeletedFinalStateUnknown tombstone with pod group",
+			initPodGroup:     podGroup,
+			podGroupToDelete: cache.DeletedFinalStateUnknown{Obj: podGroup},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, ctx := ktesting.NewTestContext(t)
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+
+			sched := &Scheduler{
+				Cache:           internalcache.New(ctx, nil, true),
+				SchedulingQueue: internalqueue.NewTestQueue(ctx, nil),
+				logger:          logger,
+			}
+
+			if tt.initPodGroup != nil {
+				sched.Cache.AddPodGroup(tt.initPodGroup)
+			}
+
+			sched.deletePodGroup(tt.podGroupToDelete)
+
+			_, err := sched.Cache.PodGroups().Get(tt.initPodGroup.Namespace, tt.initPodGroup.Name)
+			if err == nil {
+				t.Errorf("Expected pod group to be deleted from cache, but it still exists")
 			}
 		})
 	}

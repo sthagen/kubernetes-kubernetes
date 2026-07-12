@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/dynamic-resource-allocation/structured"
+	"k8s.io/klog/v2"
 )
 
 // NodeInfoLister interface represents anything that can list/get NodeInfo objects from node name.
@@ -50,6 +51,36 @@ type SharedLister interface {
 	NodeInfos() NodeInfoLister
 	StorageInfos() StorageInfoLister
 	PodGroupStates() PodGroupStateLister
+	// PodGroups provides access to cached pod group objects.
+	PodGroups() PodGroupLister
+}
+
+// PodGroupLister provides read access to cached pod group objects.
+type PodGroupLister interface {
+	// Get returns the PodGroup with the given namespace and name.
+	Get(namespace, name string) (*schedulingapi.PodGroup, error)
+}
+
+// MutableSnapshotSharedLister interface represents a lister that allows mutating snapshot and restoring it afterwards.
+// It extends SharedLister interface.
+// Only PodGroupPostFilter extension point can use this.
+type MutableSnapshotSharedLister interface {
+	SharedLister
+	// StartMutations starts a mutation session.
+	// It is used for operations requiring modifying snapshot state for checking multiple scenarios.
+	// There can be only one mutation session at the moment.
+	// If StartMutations() is called, EndMutations() must be called in the same scheduling cycle.
+	StartMutations() error
+	// EndMutations ends the mutation session and restores the snapshot state to the one before StartMutations.
+	EndMutations() error
+	// AddPod adds a given pod to the snapshot.
+	// AddPod should be called only if the mutation was started via StartMutations.
+	// This function is not thread safe, so it should be executed when no other routines can write/read from the snapshot.
+	AddPod(podInfo PodInfo, nodeName string) error
+	// RemovePod removes a given pod from the snapshot.
+	// RemovePod should be called only if the mutation was started via StartMutations.
+	// The state will be reverted when EndMutations is called.
+	RemovePod(logger klog.Logger, pod *v1.Pod, nodeName string) error
 }
 
 // PodGroupStateLister provides read access to pod group states.
@@ -138,12 +169,6 @@ type DeviceClassResolver interface {
 	GetDeviceClass(resourceName v1.ResourceName) *resourceapi.DeviceClass
 }
 
-// PodGroupLister can be used to obtain PodGroups.
-type PodGroupLister interface {
-	// Get returns the PodGroup with the given podGroupName.
-	Get(namespace, podGroupName string) (*schedulingapi.PodGroup, error)
-}
-
 // SharedDRAManager can be used to obtain DRA objects, and track modifications to them in-memory - mainly by the DRA plugin.
 // The plugin's default implementation obtains the objects from the API. A different implementation can be
 // plugged into the framework in order to simulate the state of DRA objects. For example, Cluster Autoscaler
@@ -153,7 +178,6 @@ type SharedDRAManager interface {
 	ResourceSlices() ResourceSliceLister
 	DeviceClasses() DeviceClassLister
 	DeviceClassResolver() DeviceClassResolver
-	PodGroups() PodGroupLister
 }
 
 // CSIManager can be used to obtain CSINode objects, and track changes to CSINode objects in-memory.
@@ -168,6 +192,8 @@ type CSIManager interface {
 type PodGroupManager interface {
 	// PodGroupStates returns the PodGroupStateLister.
 	PodGroupStates() PodGroupStateLister
+	// PodGroups returns the PodGroupLister.
+	PodGroups() PodGroupLister
 }
 
 // PodGroupState provides an interface to view the state of a single pod group.

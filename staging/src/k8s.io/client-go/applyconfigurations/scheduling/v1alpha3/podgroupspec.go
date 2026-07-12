@@ -18,14 +18,19 @@ limitations under the License.
 
 package v1alpha3
 
+import (
+	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
+)
+
 // PodGroupSpecApplyConfiguration represents a declarative configuration of the PodGroupSpec type for use
 // with apply.
 //
 // PodGroupSpec defines the desired state of a PodGroup.
 type PodGroupSpecApplyConfiguration struct {
-	// PodGroupTemplateRef references an optional PodGroup template within other object
-	// (e.g. Workload) that was used to create the PodGroup. This field is immutable.
-	PodGroupTemplateRef *PodGroupTemplateReferenceApplyConfiguration `json:"podGroupTemplateRef,omitempty"`
+	// WorkloadRef references an optional PodGroup template within the Workload
+	// object that was used to create the PodGroup.
+	// This field is immutable.
+	WorkloadRef *WorkloadReferenceApplyConfiguration `json:"workloadRef,omitempty"`
 	// SchedulingPolicy defines the scheduling policy for this instance of the PodGroup.
 	// Controllers are expected to fill this field by copying it from a PodGroupTemplate.
 	SchedulingPolicy *PodGroupSchedulingPolicyApplyConfiguration `json:"schedulingPolicy,omitempty"`
@@ -64,6 +69,13 @@ type PodGroupSpecApplyConfiguration struct {
 	// The higher the value, the higher the priority.
 	// This field is immutable.
 	Priority *int32 `json:"priority,omitempty"`
+	// PreemptionPolicy is the Policy for preempting pods/podgroups with lower priority.
+	// One of Never, PreemptLowerPriority. Defaults to PreemptLowerPriority if unset.
+	// When Priority Admission Controller is enabled, it populates this field from PriorityClassName,
+	// and defaults to PreemptLowerPriority if value is unset in PriorityClass.
+	// This field is immutable.
+	// This field is available only when the PodGroupPreemptionPolicy feature gate is enabled.
+	PreemptionPolicy *schedulingv1alpha3.PreemptionPolicy `json:"preemptionPolicy,omitempty"`
 }
 
 // PodGroupSpecApplyConfiguration constructs a declarative configuration of the PodGroupSpec type for use with
@@ -72,11 +84,11 @@ func PodGroupSpec() *PodGroupSpecApplyConfiguration {
 	return &PodGroupSpecApplyConfiguration{}
 }
 
-// WithPodGroupTemplateRef sets the PodGroupTemplateRef field in the declarative configuration to the given value
+// WithWorkloadRef sets the WorkloadRef field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the PodGroupTemplateRef field is set to the value of the last call.
-func (b *PodGroupSpecApplyConfiguration) WithPodGroupTemplateRef(value *PodGroupTemplateReferenceApplyConfiguration) *PodGroupSpecApplyConfiguration {
-	b.PodGroupTemplateRef = value
+// If called multiple times, the WorkloadRef field is set to the value of the last call.
+func (b *PodGroupSpecApplyConfiguration) WithWorkloadRef(value *WorkloadReferenceApplyConfiguration) *PodGroupSpecApplyConfiguration {
+	b.WorkloadRef = value
 	return b
 }
 
@@ -130,5 +142,13 @@ func (b *PodGroupSpecApplyConfiguration) WithPriorityClassName(value string) *Po
 // If called multiple times, the Priority field is set to the value of the last call.
 func (b *PodGroupSpecApplyConfiguration) WithPriority(value int32) *PodGroupSpecApplyConfiguration {
 	b.Priority = &value
+	return b
+}
+
+// WithPreemptionPolicy sets the PreemptionPolicy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the PreemptionPolicy field is set to the value of the last call.
+func (b *PodGroupSpecApplyConfiguration) WithPreemptionPolicy(value schedulingv1alpha3.PreemptionPolicy) *PodGroupSpecApplyConfiguration {
+	b.PreemptionPolicy = &value
 	return b
 }

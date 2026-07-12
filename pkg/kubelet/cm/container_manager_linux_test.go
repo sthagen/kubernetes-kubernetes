@@ -183,7 +183,9 @@ func TestSoftRequirementsValidationSuccess(t *testing.T) {
 	req := require.New(t)
 	tempDir, err := os.MkdirTemp("", "")
 	req.NoError(err)
-	defer os.RemoveAll(tempDir)
+	t.Cleanup(func() {
+		require.NoErrorf(t, os.RemoveAll(tempDir), "unable to remove dir %s", tempDir)
+	})
 	req.NoError(os.WriteFile(path.Join(tempDir, "cpu.cfs_period_us"), []byte("0"), os.ModePerm))
 	req.NoError(os.WriteFile(path.Join(tempDir, "cpu.cfs_quota_us"), []byte("0"), os.ModePerm))
 	mountInt := mount.NewFakeMounter(
@@ -213,6 +215,8 @@ func TestSoftRequirementsValidationSuccess(t *testing.T) {
 func TestGetCapacity(t *testing.T) {
 	ephemeralStorageFromCapacity := int64(2000)
 	ephemeralStorageFromCadvisor := int64(8000)
+
+	logger, _ := ktesting.NewTestContext(t)
 
 	mockCadvisor := cadvisortest.NewMockInterface(t)
 	rootfs := cadvisorapi.FsInfo{
@@ -279,7 +283,7 @@ func TestGetCapacity(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			ret := c.cm.GetCapacity(!c.disablelocalStorageCapacityIsolation)
+			ret := c.cm.GetCapacity(logger, !c.disablelocalStorageCapacityIsolation)
 			if v, exists := ret[v1.ResourceEphemeralStorage]; !exists {
 				if !c.expectedNoEphemeralStorage {
 					t.Errorf("did not get any ephemeral storage data")
@@ -380,6 +384,7 @@ func TestNewPodContainerManager(t *testing.T) {
 }
 
 func TestContainerHasExclusiveCPUs(t *testing.T) {
+	logger, _ := ktesting.NewTestContext(t)
 	guaranteedQOSResources := v1.ResourceRequirements{
 		Requests: v1.ResourceList{
 			v1.ResourceCPU:    resource.MustParse("1"),
@@ -558,13 +563,14 @@ func TestContainerHasExclusiveCPUs(t *testing.T) {
 			}
 			require.NotNil(t, targetContainer, "container %s not found in pod spec", tc.containerName)
 
-			result := cm.ContainerHasExclusiveCPUs(tc.pod, targetContainer)
+			result := cm.ContainerHasExclusiveCPUs(logger, tc.pod, targetContainer)
 			assert.Equal(t, tc.expectExclusiveCPUs, result)
 		})
 	}
 }
 
 func TestPodHasExclusiveCPUs(t *testing.T) {
+	logger, _ := ktesting.NewTestContext(t)
 	testCases := []struct {
 		name                            string
 		pod                             *v1.Pod
@@ -717,7 +723,7 @@ func TestPodHasExclusiveCPUs(t *testing.T) {
 				cpuManager: mockReader,
 			}
 
-			result := cm.PodHasExclusiveCPUs(tc.pod)
+			result := cm.PodHasExclusiveCPUs(logger, tc.pod)
 			assert.Equal(t, tc.expectExclusiveCPUs, result)
 		})
 	}

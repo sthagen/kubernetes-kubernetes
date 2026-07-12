@@ -27,6 +27,7 @@ import (
 
 	cadvisorapi "github.com/google/cadvisor/lib/model"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/klog/v2"
 
 	v1 "k8s.io/api/core/v1"
@@ -38,6 +39,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/cm/containermap"
 	"k8s.io/kubernetes/pkg/kubelet/cm/memorymanager/state"
 	"k8s.io/kubernetes/pkg/kubelet/cm/topologymanager"
+	"k8s.io/kubernetes/pkg/kubelet/lifecycle"
 	"k8s.io/kubernetes/test/utils/ktesting"
 )
 
@@ -79,7 +81,7 @@ func returnPolicyByName(logger klog.Logger, testCase testMemoryManager) Policy {
 			err: fmt.Errorf("fake reg error"),
 		}
 	case PolicyTypeStatic:
-		policy, _ := NewPolicyStatic(logger, &testCase.machineInfo, testCase.reserved, topologymanager.NewFakeManager())
+		policy, _ := NewPolicyStatic(logger, &testCase.machineInfo, testCase.reserved, topologymanager.NewFakeManager(logger))
 		return policy
 	case policyTypeNone:
 		return NewPolicyNone(logger)
@@ -99,22 +101,22 @@ func (p *mockPolicy) Start(klog.Logger, state.State) error {
 	return p.err
 }
 
-func (p *mockPolicy) Allocate(context.Context, state.State, *v1.Pod, *v1.Container) error {
+func (p *mockPolicy) Allocate(context.Context, state.State, *v1.Pod, *v1.Container, lifecycle.Operation) error {
 	return p.err
 }
 
 func (p *mockPolicy) RemoveContainer(klog.Logger, state.State, string, string) {
 }
 
-func (p *mockPolicy) GetTopologyHints(klog.Logger, state.State, *v1.Pod, *v1.Container) map[string][]topologymanager.TopologyHint {
+func (p *mockPolicy) GetTopologyHints(klog.Logger, state.State, *v1.Pod, *v1.Container, lifecycle.Operation) map[string][]topologymanager.TopologyHint {
 	return nil
 }
 
-func (p *mockPolicy) GetPodTopologyHints(klog.Logger, state.State, *v1.Pod) map[string][]topologymanager.TopologyHint {
+func (p *mockPolicy) GetPodTopologyHints(klog.Logger, state.State, *v1.Pod, lifecycle.Operation) map[string][]topologymanager.TopologyHint {
 	return nil
 }
 
-func (p *mockPolicy) AllocatePod(_ klog.Logger, s state.State, pod *v1.Pod) error {
+func (p *mockPolicy) AllocatePod(_ klog.Logger, s state.State, pod *v1.Pod, _ lifecycle.Operation) error {
 	return p.err
 }
 
@@ -1418,7 +1420,7 @@ func TestAddContainer(t *testing.T) {
 			}
 			pod := testCase.podAllocate
 			container := &pod.Spec.Containers[0]
-			err := mgr.Allocate(ctx, pod, container)
+			err := mgr.Allocate(ctx, pod, container, lifecycle.AddOperation)
 			if !reflect.DeepEqual(err, testCase.expectedAllocateError) {
 				t.Errorf("Memory Manager Allocate() error (%v), expected error: %v, but got: %v",
 					testCase.description, testCase.expectedAllocateError, err)
@@ -1945,7 +1947,7 @@ func TestNewManager(t *testing.T) {
 					Limits:   v1.ResourceList{v1.ResourceMemory: *resource.NewQuantity(gb, resource.BinarySI)},
 				},
 			},
-			affinity:         topologymanager.NewFakeManager(),
+			affinity:         topologymanager.NewFakeManager(logger),
 			expectedError:    nil,
 			expectedReserved: expectedReserved,
 		},
@@ -1968,7 +1970,7 @@ func TestNewManager(t *testing.T) {
 					},
 				},
 			},
-			affinity:         topologymanager.NewFakeManager(),
+			affinity:         topologymanager.NewFakeManager(logger),
 			expectedError:    fmt.Errorf("the total amount \"3Gi\" of type %q is not equal to the value \"2Gi\" determined by Node Allocatable feature", v1.ResourceMemory),
 			expectedReserved: expectedReserved,
 		},
@@ -1978,7 +1980,7 @@ func TestNewManager(t *testing.T) {
 			machineInfo:                machineInfo,
 			nodeAllocatableReservation: v1.ResourceList{},
 			systemReservedMemory:       []kubeletconfig.MemoryReservation{},
-			affinity:                   topologymanager.NewFakeManager(),
+			affinity:                   topologymanager.NewFakeManager(logger),
 			expectedError:              fmt.Errorf("[memorymanager] you should specify the system reserved memory"),
 			expectedReserved:           expectedReserved,
 		},
@@ -1988,7 +1990,7 @@ func TestNewManager(t *testing.T) {
 			machineInfo:                machineInfo,
 			nodeAllocatableReservation: v1.ResourceList{},
 			systemReservedMemory:       []kubeletconfig.MemoryReservation{},
-			affinity:                   topologymanager.NewFakeManager(),
+			affinity:                   topologymanager.NewFakeManager(logger),
 			expectedError:              fmt.Errorf("unknown policy: \"fake\""),
 			expectedReserved:           expectedReserved,
 		},
@@ -1998,7 +2000,7 @@ func TestNewManager(t *testing.T) {
 			machineInfo:                machineInfo,
 			nodeAllocatableReservation: v1.ResourceList{},
 			systemReservedMemory:       []kubeletconfig.MemoryReservation{},
-			affinity:                   topologymanager.NewFakeManager(),
+			affinity:                   topologymanager.NewFakeManager(logger),
 			expectedError:              nil,
 			expectedReserved:           expectedReserved,
 		},
@@ -2009,7 +2011,9 @@ func TestNewManager(t *testing.T) {
 			if err != nil {
 				t.Errorf("Cannot create state file: %s", err.Error())
 			}
-			defer os.RemoveAll(stateFileDirectory)
+			t.Cleanup(func() {
+				require.NoErrorf(t, os.RemoveAll(stateFileDirectory), "unable to remove dir %s", stateFileDirectory)
+			})
 
 			mgr, err := NewManager(logger, string(testCase.policyName), &testCase.machineInfo, testCase.nodeAllocatableReservation, testCase.systemReservedMemory, stateFileDirectory, testCase.affinity)
 
@@ -2177,7 +2181,7 @@ func TestGetTopologyHints(t *testing.T) {
 
 			pod := getPod("fakePod1", "fakeContainer1", requirementsGuaranteed)
 			container := &pod.Spec.Containers[0]
-			hints := mgr.GetTopologyHints(logger, pod, container)
+			hints := mgr.GetTopologyHints(logger, pod, container, lifecycle.AddOperation)
 			if !reflect.DeepEqual(hints, testCase.expectedHints) {
 				t.Errorf("Hints were not generated correctly. Hints generated: %+v, hints expected: %+v",
 					hints, testCase.expectedHints)
@@ -2355,7 +2359,7 @@ func TestAllocateAndAddPodWithInitContainers(t *testing.T) {
 
 			// Allocates memory for init containers
 			for i := range testCase.podAllocate.Spec.InitContainers {
-				err := mgr.Allocate(ctx, testCase.podAllocate, &testCase.podAllocate.Spec.InitContainers[i])
+				err := mgr.Allocate(ctx, testCase.podAllocate, &testCase.podAllocate.Spec.InitContainers[i], lifecycle.AddOperation)
 				if !reflect.DeepEqual(err, testCase.expectedError) {
 					t.Fatalf("The actual error %v is different from the expected one %v", err, testCase.expectedError)
 				}
@@ -2363,7 +2367,7 @@ func TestAllocateAndAddPodWithInitContainers(t *testing.T) {
 
 			// Allocates memory for apps containers
 			for i := range testCase.podAllocate.Spec.Containers {
-				err := mgr.Allocate(ctx, testCase.podAllocate, &testCase.podAllocate.Spec.Containers[i])
+				err := mgr.Allocate(ctx, testCase.podAllocate, &testCase.podAllocate.Spec.Containers[i], lifecycle.AddOperation)
 				if !reflect.DeepEqual(err, testCase.expectedError) {
 					t.Fatalf("The actual error %v is different from the expected one %v", err, testCase.expectedError)
 				}

@@ -19,6 +19,7 @@ package framework
 import (
 	"errors"
 	"fmt"
+	"iter"
 	"slices"
 	"sort"
 	"strings"
@@ -26,17 +27,17 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	corev1helpers "k8s.io/component-helpers/scheduling/corev1"
-	"k8s.io/klog/v2"
-
-	"k8s.io/apimachinery/pkg/api/resource"
 	ndf "k8s.io/component-helpers/nodedeclaredfeatures"
 	resourcehelper "k8s.io/component-helpers/resource"
+	corev1helpers "k8s.io/component-helpers/scheduling/corev1"
+	"k8s.io/klog/v2"
 	fwk "k8s.io/kube-scheduler/framework"
 	"k8s.io/kubernetes/pkg/features"
 	schedutil "k8s.io/kubernetes/pkg/scheduler/util"
@@ -512,12 +513,7 @@ func (n *NodeInfo) updateUsedPorts(pod *v1.Pod, add bool) {
 
 // updatePVCRefCounts updates the PVCRefCounts of NodeInfo.
 func (n *NodeInfo) updatePVCRefCounts(pod *v1.Pod, add bool) {
-	for _, v := range pod.Spec.Volumes {
-		if v.PersistentVolumeClaim == nil {
-			continue
-		}
-
-		key := GetNamespacedName(pod.Namespace, v.PersistentVolumeClaim.ClaimName)
+	for key := range PodPVCKeys(pod) {
 		if add {
 			n.PVCRefCounts[key] += 1
 		} else {
@@ -897,10 +893,8 @@ func (pgqi *QueuedPodGroupInfo) Gated() bool {
 }
 
 // GetPriority returns the pod group's priority.
-// It returns the priority of the first member pod, because all member pods should have the same priority.
 func (pgqi *QueuedPodGroupInfo) GetPriority() int32 {
-	// TODO(macsko): Update this to return PodGroup object's priority instead.
-	return pgqi.QueuedPodInfos[0].GetPriority()
+	return schedutil.PodGroupPriority(pgqi.PodGroup)
 }
 
 func (pgqi *QueuedPodGroupInfo) Size() int {
@@ -963,6 +957,8 @@ type PodGroupInfo struct {
 	// PodGroupManager.PodGroupState can be used for that.
 	// The order of the pods is deterministic and based on signature, priority and timestamp.
 	UnscheduledPods []*v1.Pod
+	// PodGroup is a PodGroup API object.
+	PodGroup *schedulingv1alpha3.PodGroup
 }
 
 func (pgi *PodGroupInfo) GetName() string {
@@ -975,6 +971,10 @@ func (pgi *PodGroupInfo) GetNamespace() string {
 
 func (pgi *PodGroupInfo) GetUnscheduledPods() []*v1.Pod {
 	return pgi.UnscheduledPods
+}
+
+func (pgi *PodGroupInfo) GetPodGroup() *schedulingv1alpha3.PodGroup {
+	return pgi.PodGroup
 }
 
 // PodInfo is a wrapper to a Pod with additional pre-computed information to
@@ -1454,4 +1454,20 @@ func GetPodNamespacedName(pod *v1.Pod) string {
 // GetNamespacedName returns the string format of a namespaced resource name.
 func GetNamespacedName(namespace, name string) string {
 	return fmt.Sprintf("%s/%s", namespace, name)
+}
+
+// PodPVCKeys returns an iterator over the namespaced keys ("namespace/name") of
+// the PersistentVolumeClaims referenced by the pod's volumes. Volumes that are
+// not backed by a PVC are skipped.
+func PodPVCKeys(pod *v1.Pod) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for _, v := range pod.Spec.Volumes {
+			if v.PersistentVolumeClaim == nil {
+				continue
+			}
+			if !yield(GetNamespacedName(pod.Namespace, v.PersistentVolumeClaim.ClaimName)) {
+				return
+			}
+		}
+	}
 }

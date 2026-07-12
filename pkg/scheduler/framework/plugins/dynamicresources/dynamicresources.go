@@ -389,7 +389,7 @@ func (pl *DynamicResources) podResourceClaimBindings(pod *v1.Pod) ([]resourceapi
 	}
 
 	bindings := make([]resourceapi.ResourceClaimConsumerReference, 0, len(pod.Spec.ResourceClaims))
-	podGroup, err := pl.getPodGroup(pod)
+	podGroup, err := pl.getPodGroupSnapshot(pod)
 	if err != nil {
 		return nil, err
 	}
@@ -491,13 +491,11 @@ func (pl *DynamicResources) PreFilter(ctx context.Context, state fwk.CycleState,
 		}
 
 		if claim.Status.Allocation != nil {
-			if claim.Status.Allocation.NodeSelector != nil {
-				nodeSelector, err := nodeaffinity.NewNodeSelector(claim.Status.Allocation.NodeSelector)
-				if err != nil {
-					return nil, statusError(logger, err)
-				}
-				s.informationsForClaim[index].availableOnNodes = nodeSelector
+			nodeSelector, err := nodeSelectorFromAllocation(claim.Status.Allocation)
+			if err != nil {
+				return nil, statusError(logger, err)
 			}
+			s.informationsForClaim[index].availableOnNodes = nodeSelector
 		} else {
 			numClaimsToAllocate++
 
@@ -524,6 +522,11 @@ func (pl *DynamicResources) PreFilter(ctx context.Context, state fwk.CycleState,
 			if podGroupState != nil && podGroupState.pendingAllocations.Has(claim.UID) {
 				if pendingAllocation := pl.draManager.ResourceClaims().GetPendingAllocation(claim.UID); pendingAllocation != nil {
 					s.informationsForClaim[index].allocation = pendingAllocation
+					nodeSelector, err := nodeSelectorFromAllocation(pendingAllocation)
+					if err != nil {
+						return nil, statusError(logger, err)
+					}
+					s.informationsForClaim[index].availableOnNodes = nodeSelector
 					logger.V(5).Info("reusing pending allocation", "pod", klog.KObj(pod), "resourceclaim", klog.KObj(claim), "uid", claim.UID, "allocation", klog.Format(pendingAllocation))
 					continue
 				}
@@ -921,11 +924,12 @@ func (pl *DynamicResources) Filter(ctx context.Context, cs fwk.CycleState, pod *
 // requests its deallocation.  This only gets called when filtering found no
 // suitable node.
 func (pl *DynamicResources) PostFilter(ctx context.Context, cs fwk.CycleState, pod *v1.Pod, filteredNodeStatusMap fwk.NodeToStatusReader) (*fwk.PostFilterResult, *fwk.Status) {
+	logger := klog.FromContext(ctx)
 	if !pl.enabled {
-		return nil, fwk.NewStatus(fwk.Unschedulable, "plugin disabled")
+		logger.V(5).Info("Nothing to do in PostFilter, plugin disabled", "pod", klog.KObj(pod))
+		return nil, fwk.NewStatus(fwk.Unschedulable)
 	}
 
-	logger := klog.FromContext(ctx)
 	state, err := getStateData(cs)
 	if err != nil {
 		return nil, statusError(logger, err)
@@ -933,7 +937,8 @@ func (pl *DynamicResources) PostFilter(ctx context.Context, cs fwk.CycleState, p
 	// If a Pod doesn't have any resource claims attached to it, there is no need for further processing.
 	// Thus we provide a fast path for this case to avoid unnecessary computations.
 	if state.claims.empty() {
-		return nil, fwk.NewStatus(fwk.Unschedulable, "no new claims to deallocate")
+		logger.V(5).Info("No new claims to deallocate", "pod", klog.KObj(pod))
+		return nil, fwk.NewStatus(fwk.Unschedulable)
 	}
 	extendedResourceClaim := state.claims.extendedResourceClaim()
 
@@ -986,7 +991,7 @@ func (pl *DynamicResources) PostFilter(ctx context.Context, cs fwk.CycleState, p
 		}
 	}
 
-	return nil, fwk.NewStatus(fwk.Unschedulable, "still not schedulable")
+	return nil, fwk.NewStatus(fwk.Unschedulable)
 }
 
 func (pl *DynamicResources) unreservePodGroupClaims(ctx context.Context, pod *v1.Pod) *fwk.Status {
@@ -1008,7 +1013,7 @@ func (pl *DynamicResources) unreservePodGroupClaims(ctx context.Context, pod *v1
 	if podGroupState.ScheduledPodsCount() > 0 {
 		return nil
 	}
-	podGroup, err := pl.getPodGroup(pod)
+	podGroup, err := pl.getPodGroupSnapshot(pod)
 	if err != nil {
 		return statusError(logger, err)
 	}
@@ -1236,7 +1241,7 @@ func (pl *DynamicResources) Reserve(ctx context.Context, cs fwk.CycleState, pod 
 			claim.Status.Allocation = allocation
 			err := pl.draManager.ResourceClaims().SignalClaimPendingAllocation(claim.UID, claim)
 			if err != nil {
-				return statusError(logger, fmt.Errorf("internal error, couldn't signal allocation for claim %s", claim.Name))
+				return statusError(logger, fmt.Errorf("internal error, couldn't signal allocation for claim %s: %w", claim.Name, err))
 			}
 			logger.V(5).Info("Reserved resource in allocation result", "claim", klog.KObj(claim), "uid", claim.UID, "resourceVersion", claim.ResourceVersion, "allocation", klog.Format(allocation))
 			allocIndex++
@@ -1731,12 +1736,12 @@ func (pl *DynamicResources) isPodReadyForBinding(state *stateData) (bool, error)
 	return true, nil
 }
 
-func (pl *DynamicResources) getPodGroup(pod *v1.Pod) (*schedulingapi.PodGroup, error) {
+func (pl *DynamicResources) getPodGroupSnapshot(pod *v1.Pod) (*schedulingapi.PodGroup, error) {
 	if !pl.fts.EnableDRAWorkloadResourceClaims ||
 		pod.Spec.SchedulingGroup == nil || pod.Spec.SchedulingGroup.PodGroupName == nil {
 		return nil, nil
 	}
-	return pl.draManager.PodGroups().Get(pod.Namespace, *pod.Spec.SchedulingGroup.PodGroupName)
+	return pl.fh.SnapshotSharedLister().PodGroups().Get(pod.Namespace, *pod.Spec.SchedulingGroup.PodGroupName)
 }
 
 // hasBindingConditions checks whether any of the claims in the state
@@ -1916,4 +1921,13 @@ func formatBCStatusOneLine(devs []BindingConditionsStatus) string {
 		parts = append(parts, base)
 	}
 	return strings.Join(parts, "; ")
+}
+
+// nodeSelectorFromAllocation returns a NodeSelector for the given allocation,
+// or nil if the allocation has no NodeSelector (meaning available on all nodes).
+func nodeSelectorFromAllocation(allocation *resourceapi.AllocationResult) (*nodeaffinity.NodeSelector, error) {
+	if allocation.NodeSelector == nil {
+		return nil, nil
+	}
+	return nodeaffinity.NewNodeSelector(allocation.NodeSelector)
 }
