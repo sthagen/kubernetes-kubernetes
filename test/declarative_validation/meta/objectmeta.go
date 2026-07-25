@@ -127,8 +127,39 @@ func RunObjectMetaTestCases[T runtime.Object](t *testing.T, ctx context.Context,
 				})
 			},
 			ExpectedErrs: field.ErrorList{
-				field.Invalid(fldPath.Child("ownerReferences").Child("apiVersion"), "", "version must not be empty").MarkFromImperative(),
+				field.Required(fldPath.Child("ownerReferences").Index(0).Child("apiVersion"), "must not be empty").MarkAlpha(),
 			},
+		},
+		{
+			Name: "ownerReferences: invalid apiVersion with too many slashes",
+			Modify: func(meta metav1.Object) {
+				meta.SetOwnerReferences([]metav1.OwnerReference{
+					mkOwnerReference(tweakAPIVersion("a/b/c")),
+				})
+			},
+			ExpectedErrs: field.ErrorList{
+				field.Invalid(fldPath.Child("ownerReferences").Index(0).Child("apiVersion"), "a/b/c", "must be <group>/<version> or <version>").MarkFromImperative(),
+			},
+		},
+		{
+			Name: "ownerReferences: invalid apiVersion with empty version",
+			Modify: func(meta metav1.Object) {
+				meta.SetOwnerReferences([]metav1.OwnerReference{
+					mkOwnerReference(tweakAPIVersion("foo/")),
+				})
+			},
+			ExpectedErrs: field.ErrorList{
+				field.Invalid(fldPath.Child("ownerReferences").Index(0).Child("apiVersion"), "foo/", "must be <group>/<version> or <version>").MarkFromImperative(),
+			},
+		},
+		{
+			Name: "valid: ownerReferences: apiVersion with no slashes",
+			Modify: func(meta metav1.Object) {
+				meta.SetOwnerReferences([]metav1.OwnerReference{
+					mkOwnerReference(tweakAPIVersion("v1")),
+				})
+			},
+			ExpectedErrs: field.ErrorList{},
 		},
 		{
 			Name: "ownerReferences: empty kind",
@@ -138,7 +169,7 @@ func RunObjectMetaTestCases[T runtime.Object](t *testing.T, ctx context.Context,
 				})
 			},
 			ExpectedErrs: field.ErrorList{
-				field.Invalid(fldPath.Child("ownerReferences").Child("kind"), "", "must not be empty").MarkFromImperative(),
+				field.Required(fldPath.Child("ownerReferences").Index(0).Child("kind"), "must not be empty").MarkAlpha(),
 			},
 		},
 		{
@@ -149,7 +180,7 @@ func RunObjectMetaTestCases[T runtime.Object](t *testing.T, ctx context.Context,
 				})
 			},
 			ExpectedErrs: field.ErrorList{
-				field.Invalid(fldPath.Child("ownerReferences").Child("name"), "", "must not be empty").MarkFromImperative(),
+				field.Required(fldPath.Child("ownerReferences").Index(0).Child("name"), "must not be empty").MarkAlpha(),
 			},
 		},
 		{
@@ -160,7 +191,7 @@ func RunObjectMetaTestCases[T runtime.Object](t *testing.T, ctx context.Context,
 				})
 			},
 			ExpectedErrs: field.ErrorList{
-				field.Invalid(fldPath.Child("ownerReferences").Child("uid"), "", "must not be empty").MarkFromImperative(),
+				field.Required(fldPath.Child("ownerReferences").Index(0).Child("uid"), "must not be empty").MarkAlpha(),
 			},
 		},
 		{
@@ -171,7 +202,7 @@ func RunObjectMetaTestCases[T runtime.Object](t *testing.T, ctx context.Context,
 				})
 			},
 			ExpectedErrs: field.ErrorList{
-				field.Invalid(fldPath.Child("ownerReferences"), "", "v1, Kind=Event is disallowed from being an owner").MarkFromImperative(),
+				field.Invalid(fldPath.Child("ownerReferences").Index(0), "", "v1, Kind=Event is disallowed from being an owner").MarkFromImperative(),
 			},
 		},
 		{
@@ -464,6 +495,35 @@ func RunObjectMetaUpdateTestCases[T runtime.Object](t *testing.T, ctx context.Co
 			},
 		},
 		{
+			Name: "update: generation: valid zero",
+			Modify: func(old, new metav1.Object) {
+				old.SetGeneration(0)
+				new.SetGeneration(0)
+			},
+			ExpectedErrs: field.ErrorList{},
+		},
+		{
+			Name: "update: generation: decremented to zero",
+			Modify: func(old, new metav1.Object) {
+				old.SetGeneration(1)
+				new.SetGeneration(0)
+			},
+			ExpectedErrs: field.ErrorList{
+				field.Invalid(fldPath.Child("generation"), "", "must not be decremented").MarkFromImperative(),
+			},
+		},
+		{
+			Name: "update: generation: negative",
+			Modify: func(old, new metav1.Object) {
+				old.SetGeneration(0)
+				new.SetGeneration(-1)
+			},
+			ExpectedErrs: field.ErrorList{
+				field.Invalid(fldPath.Child("generation"), "", "").WithOrigin("minimum").MarkAlpha(),
+				field.Invalid(fldPath.Child("generation"), "", "must not be decremented").MarkFromImperative(),
+			},
+		},
+		{
 			Name: "update: resourceVersion: missing",
 			Modify: func(old, new metav1.Object) {
 				new.SetResourceVersion("")
@@ -479,7 +539,7 @@ func RunObjectMetaUpdateTestCases[T runtime.Object](t *testing.T, ctx context.Co
 				new.SetUID("uid-2")
 			},
 			ExpectedErrs: field.ErrorList{
-				field.Invalid(fldPath.Child("uid"), "", "field is immutable").MarkFromImperative(),
+				field.Invalid(fldPath.Child("uid"), "", "field is immutable").WithOrigin("immutable").MarkAlpha(),
 			},
 		},
 		{
@@ -489,7 +549,7 @@ func RunObjectMetaUpdateTestCases[T runtime.Object](t *testing.T, ctx context.Co
 				new.SetCreationTimestamp(t2)
 			},
 			ExpectedErrs: field.ErrorList{
-				field.Invalid(fldPath.Child("creationTimestamp"), "", "field is immutable").MarkFromImperative(),
+				field.Invalid(fldPath.Child("creationTimestamp"), "", "field is immutable").WithOrigin("immutable").MarkAlpha(),
 			},
 		},
 		{
@@ -499,7 +559,7 @@ func RunObjectMetaUpdateTestCases[T runtime.Object](t *testing.T, ctx context.Co
 				new.SetDeletionTimestamp(&t2)
 			},
 			ExpectedErrs: field.ErrorList{
-				field.Invalid(fldPath.Child("deletionTimestamp"), "", "field is immutable").MarkFromImperative(),
+				field.Invalid(fldPath.Child("deletionTimestamp"), "", "field is immutable").WithOrigin("immutable").MarkAlpha(),
 			},
 		},
 		{
@@ -511,7 +571,7 @@ func RunObjectMetaUpdateTestCases[T runtime.Object](t *testing.T, ctx context.Co
 				new.SetDeletionGracePeriodSeconds(&g2)
 			},
 			ExpectedErrs: field.ErrorList{
-				field.Invalid(fldPath.Child("deletionGracePeriodSeconds"), "", "field is immutable").MarkFromImperative(),
+				field.Invalid(fldPath.Child("deletionGracePeriodSeconds"), "", "field is immutable").WithOrigin("immutable").MarkAlpha(),
 			},
 		},
 		{

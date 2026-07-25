@@ -29,6 +29,7 @@ import (
 	safe "k8s.io/apimachinery/pkg/api/safe"
 	validate "k8s.io/apimachinery/pkg/api/validate"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	types "k8s.io/apimachinery/pkg/types"
 	sets "k8s.io/apimachinery/pkg/util/sets"
 	field "k8s.io/apimachinery/pkg/util/validation/field"
 )
@@ -155,7 +156,38 @@ func Validate_Condition(
 		errs = append(errs, fn(fldPath.Child("lastTransitionTime"), &obj.LastTransitionTime, oldVal, oldObj != nil)...)
 	}
 
-	// field v1.Condition.Reason has no validation
+	{ // field v1.Condition.Reason
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.MaxBytes(ctx, op, fldPath, obj, oldObj, 1024).MarkAlpha(); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *v1.Condition) *string {
+				return &oldObj.Reason
+			})
+		errs = append(errs, fn(fldPath.Child("reason"), &obj.Reason, oldVal, oldObj != nil)...)
+	}
+
 	// field v1.Condition.Message has no validation
 	return errs
 }
@@ -247,7 +279,39 @@ func Validate_ObjectMeta(
 	// field v1.ObjectMeta.GenerateName has no validation
 	// field v1.ObjectMeta.Namespace has no validation
 	// field v1.ObjectMeta.SelfLink has no validation
-	// field v1.ObjectMeta.UID has no validation
+
+	{ // field v1.ObjectMeta.UID
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *types.UID,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.OptionalValue(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+				earlyReturn = true
+			}
+			if e := validate.Immutable(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *v1.ObjectMeta) *types.UID {
+				return &oldObj.UID
+			})
+		errs = append(errs, fn(fldPath.Child("uid"), &obj.UID, oldVal, oldObj != nil)...)
+	}
+
 	// field v1.ObjectMeta.ResourceVersion has no validation
 
 	{ // field v1.ObjectMeta.Generation
@@ -281,12 +345,134 @@ func Validate_ObjectMeta(
 		errs = append(errs, fn(fldPath.Child("generation"), &obj.Generation, oldVal, oldObj != nil)...)
 	}
 
-	// field v1.ObjectMeta.CreationTimestamp has no validation
-	// field v1.ObjectMeta.DeletionTimestamp has no validation
-	// field v1.ObjectMeta.DeletionGracePeriodSeconds has no validation
+	{ // field v1.ObjectMeta.CreationTimestamp
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *v1.Time,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.Immutable(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *v1.ObjectMeta) *v1.Time {
+				return &oldObj.CreationTimestamp
+			})
+		errs = append(errs, fn(fldPath.Child("creationTimestamp"), &obj.CreationTimestamp, oldVal, oldObj != nil)...)
+	}
+
+	{ // field v1.ObjectMeta.DeletionTimestamp
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *v1.Time,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.OptionalPointer(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+				earlyReturn = true
+			}
+			if e := validate.Immutable(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *v1.ObjectMeta) *v1.Time {
+				return oldObj.DeletionTimestamp
+			})
+		errs = append(errs, fn(fldPath.Child("deletionTimestamp"), obj.DeletionTimestamp, oldVal, oldObj != nil)...)
+	}
+
+	{ // field v1.ObjectMeta.DeletionGracePeriodSeconds
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *int64,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.OptionalPointer(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+				earlyReturn = true
+			}
+			if e := validate.Immutable(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *v1.ObjectMeta) *int64 {
+				return oldObj.DeletionGracePeriodSeconds
+			})
+		errs = append(errs, fn(fldPath.Child("deletionGracePeriodSeconds"), obj.DeletionGracePeriodSeconds, oldVal, oldObj != nil)...)
+	}
+
 	// field v1.ObjectMeta.Labels has no validation
 	// field v1.ObjectMeta.Annotations has no validation
-	// field v1.ObjectMeta.OwnerReferences has no validation
+
+	{ // field v1.ObjectMeta.OwnerReferences
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj []v1.OwnerReference,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if equality.Semantic.DeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.OptionalSlice(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			// iterate the list and call the type's validation function
+			if e := validate.EachValSliceVal(ctx, op, fldPath, obj, oldObj, nil, nil, Validate_OwnerReference); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *v1.ObjectMeta) []v1.OwnerReference {
+				return oldObj.OwnerReferences
+			})
+		errs = append(errs, fn(fldPath.Child("ownerReferences"), obj.OwnerReferences, oldVal, oldObj != nil)...)
+	}
+
 	// field v1.ObjectMeta.Finalizers has no validation
 
 	{ // field v1.ObjectMeta.ManagedFields
@@ -321,5 +507,132 @@ func Validate_ObjectMeta(
 		errs = append(errs, fn(fldPath.Child("managedFields"), obj.ManagedFields, oldVal, oldObj != nil)...)
 	}
 
+	return errs
+}
+
+// Validate_OwnerReference validates an instance of OwnerReference according
+// to declarative validation rules in the API schema.
+func Validate_OwnerReference(
+	ctx context.Context, op operation.Operation, fldPath *field.Path,
+	obj, oldObj *v1.OwnerReference) (errs field.ErrorList) {
+
+	{ // field v1.OwnerReference.APIVersion
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *v1.OwnerReference) *string {
+				return &oldObj.APIVersion
+			})
+		errs = append(errs, fn(fldPath.Child("apiVersion"), &obj.APIVersion, oldVal, oldObj != nil)...)
+	}
+
+	{ // field v1.OwnerReference.Kind
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *v1.OwnerReference) *string {
+				return &oldObj.Kind
+			})
+		errs = append(errs, fn(fldPath.Child("kind"), &obj.Kind, oldVal, oldObj != nil)...)
+	}
+
+	{ // field v1.OwnerReference.Name
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *v1.OwnerReference) *string {
+				return &oldObj.Name
+			})
+		errs = append(errs, fn(fldPath.Child("name"), &obj.Name, oldVal, oldObj != nil)...)
+	}
+
+	{ // field v1.OwnerReference.UID
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *types.UID,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkAlpha().MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *v1.OwnerReference) *types.UID {
+				return &oldObj.UID
+			})
+		errs = append(errs, fn(fldPath.Child("uid"), &obj.UID, oldVal, oldObj != nil)...)
+	}
+
+	// field v1.OwnerReference.Controller has no validation
+	// field v1.OwnerReference.BlockOwnerDeletion has no validation
 	return errs
 }

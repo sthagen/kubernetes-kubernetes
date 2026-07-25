@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	resourceapi "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apiserver/pkg/cel/environment"
@@ -203,7 +204,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {StringValues: []string{"fish", "bird"}}},
 		driver:      "dra.example.com",
 		expectMatch: true,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"list-of-bool": {
 		expression:  `device.attributes["dra.example.com"].names.size() == 2`,
@@ -270,7 +271,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"attr": {StringValue: new("fish")}},
 		driver:      "dra.example.com",
 		expectMatch: true,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"includes-function-on-bool-scalar-positive": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -278,7 +279,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {BoolValue: new(true)}},
 		driver:      "dra.example.com",
 		expectMatch: true,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"includes-function-on-bool-scalar-negative": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -287,7 +288,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {BoolValue: new(false)}},
 		driver:      "dra.example.com",
 		expectMatch: false,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"includes-function-on-bool-list-positive": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -295,7 +296,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {BoolValues: []bool{true, false}}},
 		driver:      "dra.example.com",
 		expectMatch: true,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"includes-function-on-bool-list-negative": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -303,7 +304,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {BoolValues: []bool{true, true}}},
 		driver:      "dra.example.com",
 		expectMatch: false,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"includes-function-on-int-scalar-positive": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -311,7 +312,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {IntValue: new(int64(1))}},
 		driver:      "dra.example.com",
 		expectMatch: true,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"includes-function-on-int-scalar-negative": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -319,7 +320,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {IntValue: new(int64(2))}},
 		driver:      "dra.example.com",
 		expectMatch: false,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"includes-function-on-int-list-positive": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -327,7 +328,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {IntValues: []int64{1, 2}}},
 		driver:      "dra.example.com",
 		expectMatch: true,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"includes-function-on-int-list-negative": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -335,7 +336,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {IntValues: []int64{1, 2}}},
 		driver:      "dra.example.com",
 		expectMatch: false,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"includes-function-on-string-scalar-positive": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -343,7 +344,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {StringValue: new("fish")}},
 		driver:      "dra.example.com",
 		expectMatch: true,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"includes-function-on-string-scalar-negative": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -351,7 +352,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {StringValue: new("fish")}},
 		driver:      "dra.example.com",
 		expectMatch: false,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"includes-function-on-string-list-positive": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -359,7 +360,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {StringValues: []string{"fish", "bird"}}},
 		driver:      "dra.example.com",
 		expectMatch: true,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"includes-function-on-string-list-negative": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -367,7 +368,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {StringValues: []string{"fish", "bird"}}},
 		driver:      "dra.example.com",
 		expectMatch: false,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"includes-function-on-semver-scalar-positive": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -375,7 +376,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {VersionValue: new("1.0.0")}},
 		driver:      "dra.example.com",
 		expectMatch: true,
-		expectCost:  4 + 48 /* cost of "includes" is max list length */ + 1,
+		expectCost:  4 + 64 /* cost of "includes" on dynamic type */ + 1,
 	},
 	"includes-function-on-semver-scalar-negative": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -383,7 +384,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {VersionValue: new("1.0.0")}},
 		driver:      "dra.example.com",
 		expectMatch: false,
-		expectCost:  4 + 48 /* cost of "includes" is max list length */ + 1,
+		expectCost:  4 + 64 /* cost of "includes" on dynamic type */ + 1,
 	},
 	"includes-function-on-semver-list-positive": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -391,7 +392,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {VersionValues: []string{"1.0.0", "2.0.0"}}},
 		driver:      "dra.example.com",
 		expectMatch: true,
-		expectCost:  4 + 48 /* cost of "includes" is max list length */ + 1,
+		expectCost:  4 + 64 /* cost of "includes" on dynamic type */ + 1,
 	},
 	"includes-function-on-semver-list-negative": {
 		features:    &Features{EnableListTypeAttributes: true},
@@ -399,7 +400,7 @@ var testcases = map[string]struct {
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {VersionValues: []string{"1.0.0", "2.0.0"}}},
 		driver:      "dra.example.com",
 		expectMatch: false,
-		expectCost:  4 + 48 /* cost of "includes" is max list length */ + 1,
+		expectCost:  4 + 64 /* cost of "includes" on dynamic type */ + 1,
 	},
 	"includes-function-on-very-long-list-positive": {
 		features:   &Features{EnableListTypeAttributes: true},
@@ -413,29 +414,12 @@ var testcases = map[string]struct {
 		}()}},
 		driver:      "dra.example.com",
 		expectMatch: false,
-		expectCost:  4 + 48, /* cost of "includes" is max list length */
-	},
-	"includes-function-on-very-long-list-runtime-error": {
-		features:   &Features{EnableListTypeAttributes: true},
-		expression: fmt.Sprintf(`device.attributes["dra.example.com"].name.includes("value-%d")`, resourceapi.ResourceSliceMaxAttributeValuesPerDevice+1),
-		attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"name": {StringValues: func() []string {
-			values := make([]string, resourceapi.ResourceSliceMaxAttributeValuesPerDevice+1)
-			for i := range values {
-				values[i] = fmt.Sprintf("value-%d", i)
-			}
-			return values
-		}()}},
-		driver:           "dra.example.com",
-		expectMatchError: fmt.Sprintf("'includes' function cannot be applied to lists longer than %d values", resourceapi.ResourceSliceMaxAttributeValuesPerDevice),
-		expectCost:       4 + 48, /* cost of "includes" is max list length */
+		expectCost:  4 + 64, /* cost of "includes" on dynamic type */
 	},
 	"in-operator-on-list": {
 		// This case is for documenting purpose to present the difference of call cost estimation
 		// between "in" operator and "includes" function.
-		// The cost estimation of "includes" is based on resourceapi.ResourceSliceMaxAttributeValuesPerDevice
-		// because it's designed for checking whether a value is included in an device attribute list.
-		// Instead, the cost estimation of "in" operator is based on maxElementsListTypeEnabled
-		// (MaxElements in AttributeType(cel.DeclType)) as this operator is CEL standard one.
+		// The cost estimation of both "in" operator and "includes" function is based on maxElementsListTypeEnabled.
 		expression:  `1 in device.attributes["dra.example.com"].names`,
 		attributes:  map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{"names": {IntValues: []int64{1, 2, 3}}},
 		driver:      "dra.example.com",
@@ -811,6 +795,328 @@ func BenchmarkDeviceMatches(b *testing.B) {
 		b.Run(name, func(b *testing.B) {
 			// Performance shouldn't depend on feature enablement, so don't bother testing all variants.
 			run(b, Features{ /* ignored because of stored expression */ }, environment.StoredExpressions)
+		})
+	}
+}
+
+func TestCompileDerivedAttributes(t *testing.T) {
+	testCases := []struct {
+		name                      string
+		expression                string
+		listTypeAttributesEnabled bool
+		envType                   *environment.Type // defaults to environment.NewExpressions
+		expectCompileError        string
+	}{
+		{
+			name:                      "valid-bool",
+			expression:                "true",
+			listTypeAttributesEnabled: false,
+		},
+		{
+			name:                      "valid-bool-list-when-listType-enabled",
+			expression:                `[true, false]`,
+			listTypeAttributesEnabled: true,
+		},
+		{
+			name:                      "valid-int",
+			expression:                "1",
+			listTypeAttributesEnabled: false,
+		},
+		{
+			name:                      "valid-int-list-when-listType-enabled",
+			expression:                `[1, 2, 3]`,
+			listTypeAttributesEnabled: true,
+		},
+		{
+			name:                      "valid-string",
+			expression:                `"fish"`,
+			listTypeAttributesEnabled: false,
+		},
+		{
+			name:                      "valid-string-list-when-listType-enabled",
+			expression:                `["a", "b"]`,
+			listTypeAttributesEnabled: true,
+		},
+		{
+			name:                      "valid-semver",
+			expression:                `semver("1.0.0")`,
+			listTypeAttributesEnabled: false,
+		},
+		{
+			name:                      "valid-semver-list-when-listType-enabled",
+			expression:                `[semver("1.0.0"), semver("2.0.0")]`,
+			listTypeAttributesEnabled: true,
+		},
+		{
+			name:                      "valid-any",
+			expression:                `device.attributes["dra.example.com"]["numa"]`,
+			listTypeAttributesEnabled: false,
+		},
+		{
+			name:                      "valid-any-list-when-listType-enabled",
+			expression:                `[device.attributes["dra.example.com"]["numa"]]`,
+			listTypeAttributesEnabled: true,
+		},
+		{
+			name:                      "valid-dyn",
+			expression:                `dyn("foo")`,
+			listTypeAttributesEnabled: false,
+		},
+		{
+			name:                      "valid-dyn-list-when-listType-enabled",
+			expression:                `[dyn("foo"), dyn(1)]`,
+			listTypeAttributesEnabled: true,
+		},
+		{
+			name:                      "valid-int-list-in-stored-expression-despite-disabled-feature-gate",
+			expression:                `[1, 2, 3]`,
+			listTypeAttributesEnabled: false,
+			envType:                   new(environment.StoredExpressions),
+		},
+		{
+			name:                      "invalid-map",
+			expression:                `device.attributes`,
+			listTypeAttributesEnabled: false,
+			expectCompileError:        "must evaluate to a primitive scalar (string, integer, boolean, semver), not map(string, map(string, google.protobuf.Any))",
+		},
+		{
+			name:                      "invalid-int-list-when-listType-disabled",
+			expression:                `[1, 2, 3]`,
+			listTypeAttributesEnabled: false,
+			expectCompileError:        "must evaluate to a primitive scalar (string, integer, boolean, semver), not list(int)",
+		},
+		{
+			name:                      "invalid-list-of-maps",
+			expression:                `[device.attributes]`,
+			listTypeAttributesEnabled: true,
+			expectCompileError:        "must evaluate to a primitive scalar (string, integer, boolean, semver) or a list of these scalars, not list(map(string, map(string, dyn)))",
+		},
+		{
+			name:                      "invalid-null-literal",
+			expression:                `null`,
+			listTypeAttributesEnabled: true,
+			expectCompileError:        "must evaluate to a primitive scalar (string, integer, boolean, semver) or a list of these scalars, not null_type",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			compiler := GetCompiler(Features{
+				EnableListTypeAttributes: tc.listTypeAttributesEnabled,
+			})
+			envType := environment.NewExpressions
+			if tc.envType != nil {
+				envType = *tc.envType
+			}
+			result := compiler.CompileCELExpression(tc.expression, Options{
+				EnvType:          new(envType),
+				DerivedAttribute: true,
+			})
+
+			if tc.expectCompileError != "" {
+				if result.Error == nil {
+					t.Fatalf("expected compile error %q, got none", tc.expectCompileError)
+				}
+				if !strings.Contains(result.Error.Error(), tc.expectCompileError) {
+					t.Fatalf("expected compile error to contain %q, but got: %v", tc.expectCompileError, result.Error)
+				}
+			} else if result.Error != nil {
+				t.Fatalf("unexpected compile error: %v", result.Error)
+			}
+		})
+	}
+}
+func TestEvaluateDerivedAttributes(t *testing.T) {
+	mockDevice := Device{
+		Driver: "driver-a",
+		Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+			"bool-attr":      {BoolValue: new(true)},
+			"int-attr":       {IntValue: new(int64(42))},
+			"str-attr":       {StringValue: new("hello")},
+			"ver-attr":       {VersionValue: new("1.0.0")},
+			"bool-list-attr": {BoolValues: []bool{true, false}},
+			"int-list-attr":  {IntValues: []int64{1, 2, 3}},
+			"str-list-attr":  {StringValues: []string{"hello", "world"}},
+			"ver-list-attr":  {VersionValues: []string{"1.0.0", "2.0.0"}},
+		},
+	}
+
+	testCases := []struct {
+		name            string
+		expression      string
+		device          Device
+		expectAttr      *resourceapi.DeviceAttribute
+		expectEvalError string
+	}{
+		// Scalar Literal cases
+		{
+			name:       "bool-scalar-literal",
+			expression: "true",
+			expectAttr: &resourceapi.DeviceAttribute{BoolValue: new(true)},
+		},
+		{
+			name:       "int-scalar-literal",
+			expression: "42",
+			expectAttr: &resourceapi.DeviceAttribute{IntValue: new(int64(42))},
+		},
+		{
+			name:       "string-scalar-literal",
+			expression: `"hello"`,
+			expectAttr: &resourceapi.DeviceAttribute{StringValue: new("hello")},
+		},
+		{
+			name:       "semver-scalar-literal",
+			expression: `semver("1.0.0")`,
+			expectAttr: &resourceapi.DeviceAttribute{VersionValue: new("1.0.0")},
+		},
+
+		// Scalar Device Attribute cases
+		{
+			name:       "bool-scalar-device",
+			expression: `device.attributes["driver-a"]["bool-attr"]`,
+			device:     mockDevice,
+			expectAttr: &resourceapi.DeviceAttribute{BoolValue: new(true)},
+		},
+		{
+			name:       "int-scalar-device",
+			expression: `device.attributes["driver-a"]["int-attr"]`,
+			device:     mockDevice,
+			expectAttr: &resourceapi.DeviceAttribute{IntValue: new(int64(42))},
+		},
+		{
+			name:       "string-scalar-device",
+			expression: `device.attributes["driver-a"]["str-attr"]`,
+			device:     mockDevice,
+			expectAttr: &resourceapi.DeviceAttribute{StringValue: new("hello")},
+		},
+		{
+			name:       "semver-scalar-device",
+			expression: `device.attributes["driver-a"]["ver-attr"]`,
+			device:     mockDevice,
+			expectAttr: &resourceapi.DeviceAttribute{VersionValue: new("1.0.0")},
+		},
+
+		// List Literal cases
+		{
+			name:       "bool-list-literal",
+			expression: `[true, false]`,
+			expectAttr: &resourceapi.DeviceAttribute{BoolValues: []bool{true, false}},
+		},
+		{
+			name:       "int-list-literal",
+			expression: `[1, 2, 3]`,
+			expectAttr: &resourceapi.DeviceAttribute{IntValues: []int64{1, 2, 3}},
+		},
+		{
+			name:       "string-list-literal",
+			expression: `["hello", "world"]`,
+			expectAttr: &resourceapi.DeviceAttribute{StringValues: []string{"hello", "world"}},
+		},
+		{
+			name:       "semver-list-literal",
+			expression: `[semver("1.0.0"), semver("2.0.0")]`,
+			expectAttr: &resourceapi.DeviceAttribute{VersionValues: []string{"1.0.0", "2.0.0"}},
+		},
+
+		// List Device Attribute cases
+		{
+			name:       "bool-list-device",
+			expression: `device.attributes["driver-a"]["bool-list-attr"]`,
+			device:     mockDevice,
+			expectAttr: &resourceapi.DeviceAttribute{BoolValues: []bool{true, false}},
+		},
+		{
+			name:       "int-list-device",
+			expression: `device.attributes["driver-a"]["int-list-attr"]`,
+			device:     mockDevice,
+			expectAttr: &resourceapi.DeviceAttribute{IntValues: []int64{1, 2, 3}},
+		},
+		{
+			name:       "string-list-device",
+			expression: `device.attributes["driver-a"]["str-list-attr"]`,
+			device:     mockDevice,
+			expectAttr: &resourceapi.DeviceAttribute{StringValues: []string{"hello", "world"}},
+		},
+		{
+			name:       "semver-list-device",
+			expression: `device.attributes["driver-a"]["ver-list-attr"]`,
+			device:     mockDevice,
+			expectAttr: &resourceapi.DeviceAttribute{VersionValues: []string{"1.0.0", "2.0.0"}},
+		},
+
+		// Error cases
+		{
+			name:            "runtime-error-heterogeneous-list-semver",
+			expression:      `[dyn(device.attributes["driver-a"]["ver-attr"]), dyn(device.attributes["driver-a"]["str-attr"])]`,
+			device:          mockDevice,
+			expectEvalError: "expected list element at index 1 to be semver, got string",
+		},
+		{
+			name:            "runtime-error-heterogeneous-list-bool",
+			expression:      `[dyn(device.attributes["driver-a"]["bool-attr"]), dyn(device.attributes["driver-a"]["str-attr"])]`,
+			device:          mockDevice,
+			expectEvalError: "expected list element at index 1 to be bool, got string",
+		},
+		{
+			name:            "runtime-error-heterogeneous-list-int",
+			expression:      `[dyn(device.attributes["driver-a"]["int-attr"]), dyn(device.attributes["driver-a"]["str-attr"])]`,
+			device:          mockDevice,
+			expectEvalError: "expected list element at index 1 to be int, got string",
+		},
+		{
+			name:            "runtime-error-heterogeneous-list-string",
+			expression:      `[dyn(device.attributes["driver-a"]["str-attr"]), dyn(device.attributes["driver-a"]["int-attr"])]`,
+			device:          mockDevice,
+			expectEvalError: "expected list element at index 1 to be string, got int64",
+		},
+		{
+			name:            "runtime-error-attribute-not-found",
+			expression:      `device.attributes["driver-a"]["non-existent-attr"]`,
+			device:          mockDevice,
+			expectEvalError: "no such key",
+		},
+		{
+			name:            "runtime-error-type-mismatch-op",
+			expression:      `device.attributes["driver-a"]["int-attr"] + "hello"`, // attempt to add an int and string together should fail.
+			device:          mockDevice,
+			expectEvalError: "no such overload",
+		},
+		{
+			name:            "runtime-error-null-dynamic",
+			expression:      `dyn(null)`,
+			device:          mockDevice,
+			expectEvalError: "unsupported CEL return type: structpb.NullValue",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			compiler := GetCompiler(Features{
+				EnableListTypeAttributes: true,
+			})
+			result := compiler.CompileCELExpression(tc.expression, Options{
+				DerivedAttribute: true,
+			})
+			if result.Error != nil {
+				t.Fatalf("unexpected compile error: %v", result.Error)
+			}
+
+			attr, _, err := result.EvaluateDerivedAttribute(context.Background(), tc.device)
+			if tc.expectEvalError != "" {
+				if err == nil {
+					t.Fatalf("expected evaluation error %q, got none", tc.expectEvalError)
+				}
+				if !strings.Contains(err.Error(), tc.expectEvalError) {
+					t.Fatalf("expected evaluation error to contain %q, but got: %v", tc.expectEvalError, err)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected evaluation error: %v", err)
+				}
+				if diff := cmp.Diff(tc.expectAttr, attr); diff != "" {
+					t.Fatalf("unexpected attribute (-want +got):\n%s", diff)
+				}
+			}
 		})
 	}
 }

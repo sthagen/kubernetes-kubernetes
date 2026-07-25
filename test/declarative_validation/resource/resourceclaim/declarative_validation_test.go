@@ -502,6 +502,78 @@ func testDeclarativeValidate(t *testing.T, apiVersion string) {
 				field.Invalid(field.NewPath("spec", "devices", "constraints").Index(0).Child("matchAttribute"), "", "").WithOrigin("format=k8s-resource-fully-qualified-name").MarkBeta(),
 			},
 		},
+		"invalid distinct attribute": {
+			input: mkValidResourceClaim(tweakDistinctAttribute("nodomain")),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("spec", "devices", "constraints").Index(0).Child("distinctAttribute"), "nodomain", "a fully qualified name must be a domain and a name separated by a slash").WithOrigin("format=k8s-resource-fully-qualified-name").MarkBeta(),
+			},
+		},
+
+		"valid exactly derived attributes, valid name": {
+			input: mkValidResourceClaim(tweakExactlyDerivedAttributeName("derived/attribute")),
+		},
+		"invalid exactly derived attributes, invalid name": {
+			input: mkValidResourceClaim(tweakExactlyDerivedAttributeName("invalid name")),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("spec", "devices", "requests").Index(0).Child("exactly", "derivedAttributes").Index(0).Child("name"), "invalid name", "name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')").WithOrigin("format=k8s-resource-fully-qualified-name"),
+				field.Invalid(field.NewPath("spec", "devices", "constraints").Index(0).Child("matchAttribute"), "invalid name", "name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')").WithOrigin("format=k8s-resource-fully-qualified-name").MarkBeta(),
+			},
+		},
+		"invalid exactly derived attributes, empty name": {
+			input: mkValidResourceClaim(tweakExactlyDerivedAttributeName("")),
+			expectedErrs: field.ErrorList{
+				field.Required(field.NewPath("spec", "devices", "requests").Index(0).Child("exactly", "derivedAttributes").Index(0).Child("name"), ""),
+			},
+		},
+		"invalid exactly derived attributes, empty expression": {
+			input: mkValidResourceClaim(tweakExactlyDerivedAttributeExpression("")),
+			expectedErrs: field.ErrorList{
+				field.Required(field.NewPath("spec", "devices", "requests").Index(0).Child("exactly", "derivedAttributes").Index(0).Child("expression"), ""),
+			},
+		},
+		"invalid exactly derived attributes, too many": {
+			input: mkValidResourceClaim(tweakExactlyDerivedAttributesCount(33)),
+			expectedErrs: field.ErrorList{
+				field.TooMany(field.NewPath("spec", "devices", "requests").Index(0).Child("exactly", "derivedAttributes"), 33, 32).WithOrigin("maxItems"),
+				field.TooMany(field.NewPath("spec", "devices", "constraints"), 33, 32).WithOrigin("maxItems").MarkBeta(),
+			},
+		},
+		"valid exactly derived attributes, max allowed": {
+			input: mkValidResourceClaim(tweakExactlyDerivedAttributesCount(32)),
+		},
+
+		"valid firstAvailable derived attributes, valid name": {
+			input: mkValidResourceClaim(tweakFirstAvailableDerivedAttributeName("derived/attribute")),
+		},
+		"invalid firstAvailable derived attributes, invalid name": {
+			input: mkValidResourceClaim(tweakFirstAvailableDerivedAttributeName("invalid name")),
+			expectedErrs: field.ErrorList{
+				field.Invalid(field.NewPath("spec", "devices", "requests").Index(0).Child("firstAvailable").Index(0).Child("derivedAttributes").Index(0).Child("name"), "invalid name", "name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')").WithOrigin("format=k8s-resource-fully-qualified-name"),
+				field.Invalid(field.NewPath("spec", "devices", "constraints").Index(0).Child("matchAttribute"), "invalid name", "name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')").WithOrigin("format=k8s-resource-fully-qualified-name").MarkBeta(),
+			},
+		},
+		"invalid firstAvailable derived attributes, empty name": {
+			input: mkValidResourceClaim(tweakFirstAvailableDerivedAttributeName("")),
+			expectedErrs: field.ErrorList{
+				field.Required(field.NewPath("spec", "devices", "requests").Index(0).Child("firstAvailable").Index(0).Child("derivedAttributes").Index(0).Child("name"), ""),
+			},
+		},
+		"invalid firstAvailable derived attributes, empty expression": {
+			input: mkValidResourceClaim(tweakFirstAvailableDerivedAttributeExpression("")),
+			expectedErrs: field.ErrorList{
+				field.Required(field.NewPath("spec", "devices", "requests").Index(0).Child("firstAvailable").Index(0).Child("derivedAttributes").Index(0).Child("expression"), ""),
+			},
+		},
+		"invalid firstAvailable derived attributes, too many": {
+			input: mkValidResourceClaim(tweakFirstAvailableDerivedAttributesCount(33)),
+			expectedErrs: field.ErrorList{
+				field.TooMany(field.NewPath("spec", "devices", "requests").Index(0).Child("firstAvailable").Index(0).Child("derivedAttributes"), 33, 32).WithOrigin("maxItems"),
+				field.TooMany(field.NewPath("spec", "devices", "constraints"), 33, 32).WithOrigin("maxItems").MarkBeta(),
+			},
+		},
+		"valid firstAvailable derived attributes, max allowed": {
+			input: mkValidResourceClaim(tweakFirstAvailableDerivedAttributesCount(32)),
+		},
 		// TODO: Add more test cases
 	}
 	for k, tc := range testCases {
@@ -866,6 +938,7 @@ func testDeclarativeValidateStatusUpdate(t *testing.T, apiVersion string) {
 	driverPath := field.NewPath("status", "allocation", "devices", "results").Index(0).Child("driver")
 	configOpaqueDriverPath := field.NewPath("status", "allocation", "devices", "config").Index(0).Child("opaque", "driver")
 	resultTolerationPath := field.NewPath("status", "allocation", "devices", "results").Index(0).Child("tolerations").Index(0)
+	skipNodeOperationsPath := field.NewPath("status", "allocation", "devices", "results").Index(0).Child("skipNodeOperations")
 
 	testCases := map[string]struct {
 		old          resource.ResourceClaim
@@ -1239,6 +1312,33 @@ func testDeclarativeValidateStatusUpdate(t *testing.T, apiVersion string) {
 			})),
 			expectedErrs: field.ErrorList{
 				field.NotSupported(resultTolerationPath.Child("effect"), resource.DeviceTaintEffect("InvalidEffect"), []string{"NoExecute", "NoSchedule"}).MarkBeta(),
+			},
+		},
+		// .Status.Allocation.Devices.Results[%d].SkipNodeOperations
+		"valid status.allocation.devices.results skipNodeOperations All": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultSkipNodeOperations(resource.SkipNodeOperationAll)),
+		},
+		"valid status.allocation.devices.results skipNodeOperations NodeUnprepareResources": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultSkipNodeOperations(resource.SkipNodeOperationNodeUnprepareResources)),
+		},
+		"valid status.allocation.devices.results skipNodeOperations, old value is invalid and new value is the same": {
+			old:    mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultSkipNodeOperations("InvalidOption")),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultSkipNodeOperations("InvalidOption")),
+		},
+		"invalid status.allocation.devices.results skipNodeOperations": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultSkipNodeOperations("InvalidOption")),
+			expectedErrs: field.ErrorList{
+				field.NotSupported(skipNodeOperationsPath.Index(0), resource.SkipNodeOperation("InvalidOption"), []string{"*", "NodePrepareResources", "NodeUnprepareResources"}),
+			},
+		},
+		"invalid status.allocation.devices.results skipNodeOperations duplicate": {
+			old:    mkValidResourceClaim(),
+			update: mkResourceClaimWithStatus(tweakStatusDeviceRequestAllocationResultSkipNodeOperations(resource.SkipNodeOperationAll, resource.SkipNodeOperationAll)),
+			expectedErrs: field.ErrorList{
+				field.Duplicate(skipNodeOperationsPath.Index(1), resource.SkipNodeOperationAll),
 			},
 		},
 		// .Status.Devices
@@ -1622,6 +1722,14 @@ func tweakStatusDeviceRequestAllocationResultShareID(shareID types.UID) func(rc 
 	}
 }
 
+func tweakStatusDeviceRequestAllocationResultSkipNodeOperations(skipNodeOperations ...resource.SkipNodeOperation) func(rc *resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		for i := range rc.Status.Allocation.Devices.Results {
+			rc.Status.Allocation.Devices.Results[i].SkipNodeOperations = skipNodeOperations
+		}
+	}
+}
+
 func tweakSpecChangeClassName(deviceClassName string) func(rc *resource.ResourceClaim) {
 	return func(rc *resource.ResourceClaim) {
 		if len(rc.Spec.Devices.Requests) > 0 && rc.Spec.Devices.Requests[0].Exactly != nil {
@@ -1902,6 +2010,16 @@ func tweakMatchAttribute(val string) func(*resource.ResourceClaim) {
 		}
 	}
 }
+func tweakDistinctAttribute(val string) func(*resource.ResourceClaim) {
+	return func(obj *resource.ResourceClaim) {
+		fullyQualifiedName := resource.FullyQualifiedName(val)
+		obj.Spec.Devices.Constraints = []resource.DeviceConstraint{
+			{
+				DistinctAttribute: &fullyQualifiedName,
+			},
+		}
+	}
+}
 
 func tweakAddStatusAllocationConfigRequest(req string) func(rc *resource.ResourceClaim) {
 	return func(rc *resource.ResourceClaim) {
@@ -1976,4 +2094,133 @@ func (f *fakeAuthorizer) Authorize(ctx context.Context, a authorizer.Attributes)
 		return authorizer.DecisionDeny, "denied", nil
 	}
 	return authorizer.DecisionAllow, "default accept", nil
+}
+
+func tweakExactlyDerivedAttributeName(name string) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		if len(rc.Spec.Devices.Requests) > 0 && rc.Spec.Devices.Requests[0].Exactly != nil {
+			attrName := resource.FullyQualifiedName(name)
+			rc.Spec.Devices.Requests[0].Exactly.DerivedAttributes = []resource.DeviceDerivedAttribute{
+				{Name: attrName, Expression: "true"},
+			}
+			if name != "" {
+				rc.Spec.Devices.Constraints = append(rc.Spec.Devices.Constraints, resource.DeviceConstraint{
+					Requests:       []string{rc.Spec.Devices.Requests[0].Name},
+					MatchAttribute: &attrName,
+				})
+			}
+		}
+	}
+}
+
+func tweakFirstAvailableDerivedAttributeName(name string) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		if len(rc.Spec.Devices.Requests) > 0 {
+			rc.Spec.Devices.Requests[0].Exactly = nil
+			attrName := resource.FullyQualifiedName(name)
+			rc.Spec.Devices.Requests[0].FirstAvailable = []resource.DeviceSubRequest{
+				{
+					Name:            "sub-0",
+					DeviceClassName: "class",
+					AllocationMode:  resource.DeviceAllocationModeAll,
+					DerivedAttributes: []resource.DeviceDerivedAttribute{
+						{Name: attrName, Expression: "true"},
+					},
+				},
+			}
+			if name != "" {
+				rc.Spec.Devices.Constraints = append(rc.Spec.Devices.Constraints, resource.DeviceConstraint{
+					Requests:       []string{rc.Spec.Devices.Requests[0].Name},
+					MatchAttribute: &attrName,
+				})
+			}
+		}
+	}
+}
+
+func tweakExactlyDerivedAttributesCount(count int) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		if len(rc.Spec.Devices.Requests) > 0 && rc.Spec.Devices.Requests[0].Exactly != nil {
+			rc.Spec.Devices.Requests[0].Exactly.DerivedAttributes = nil
+			for i := range count {
+				attrName := resource.FullyQualifiedName(fmt.Sprintf("derived/attr%d", i))
+				rc.Spec.Devices.Requests[0].Exactly.DerivedAttributes = append(rc.Spec.Devices.Requests[0].Exactly.DerivedAttributes,
+					resource.DeviceDerivedAttribute{
+						Name:       attrName,
+						Expression: "true",
+					},
+				)
+				rc.Spec.Devices.Constraints = append(rc.Spec.Devices.Constraints, resource.DeviceConstraint{
+					Requests:       []string{rc.Spec.Devices.Requests[0].Name},
+					MatchAttribute: &attrName,
+				})
+			}
+		}
+	}
+}
+
+func tweakFirstAvailableDerivedAttributesCount(count int) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		if len(rc.Spec.Devices.Requests) > 0 {
+			rc.Spec.Devices.Requests[0].Exactly = nil
+			rc.Spec.Devices.Requests[0].FirstAvailable = []resource.DeviceSubRequest{
+				{
+					Name:            "sub-0",
+					DeviceClassName: "class",
+					AllocationMode:  resource.DeviceAllocationModeAll,
+				},
+			}
+			for i := range count {
+				attrName := resource.FullyQualifiedName(fmt.Sprintf("derived/attr%d", i))
+				rc.Spec.Devices.Requests[0].FirstAvailable[0].DerivedAttributes = append(rc.Spec.Devices.Requests[0].FirstAvailable[0].DerivedAttributes,
+					resource.DeviceDerivedAttribute{
+						Name:       attrName,
+						Expression: "true",
+					},
+				)
+				rc.Spec.Devices.Constraints = append(rc.Spec.Devices.Constraints, resource.DeviceConstraint{
+					Requests:       []string{rc.Spec.Devices.Requests[0].Name},
+					MatchAttribute: &attrName,
+				})
+			}
+		}
+	}
+}
+
+func tweakExactlyDerivedAttributeExpression(expr string) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		if len(rc.Spec.Devices.Requests) > 0 && rc.Spec.Devices.Requests[0].Exactly != nil {
+			attrName := resource.FullyQualifiedName("derived/attr")
+			rc.Spec.Devices.Requests[0].Exactly.DerivedAttributes = []resource.DeviceDerivedAttribute{
+				{Name: attrName, Expression: expr},
+			}
+			rc.Spec.Devices.Constraints = append(rc.Spec.Devices.Constraints, resource.DeviceConstraint{
+				Requests:       []string{rc.Spec.Devices.Requests[0].Name},
+				MatchAttribute: &attrName,
+			})
+		}
+	}
+}
+
+func tweakFirstAvailableDerivedAttributeExpression(expr string) func(*resource.ResourceClaim) {
+	return func(rc *resource.ResourceClaim) {
+		if len(rc.Spec.Devices.Requests) > 0 {
+			rc.Spec.Devices.Requests[0].Exactly = nil
+			attrName := resource.FullyQualifiedName("derived/attr")
+			rc.Spec.Devices.Requests[0].FirstAvailable = []resource.DeviceSubRequest{
+				{
+					Name:            "sub-0",
+					DeviceClassName: "class",
+					AllocationMode:  resource.DeviceAllocationModeAll,
+					DerivedAttributes: []resource.DeviceDerivedAttribute{
+						{Name: attrName, Expression: expr},
+					},
+				},
+			}
+			rc.Spec.Devices.Constraints = append(rc.Spec.Devices.Constraints, resource.DeviceConstraint{
+				Requests:       []string{rc.Spec.Devices.Requests[0].Name},
+				MatchAttribute: &attrName,
+			})
+		}
+	}
 }

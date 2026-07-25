@@ -30,6 +30,15 @@ func init() {
 	coverage.RegisterDeclaredRules(
 		schema.GroupVersionKind{Group: "resource.k8s.io", Version: "v1alpha3", Kind: "ResourcePoolStatusRequest"},
 		coverage.FieldRules{
+			"metadata.creationTimestamp": {
+				{ErrorType: "FieldValueInvalid", Origin: "immutable"},
+			},
+			"metadata.deletionGracePeriodSeconds": {
+				{ErrorType: "FieldValueInvalid", Origin: "immutable"},
+			},
+			"metadata.deletionTimestamp": {
+				{ErrorType: "FieldValueInvalid", Origin: "immutable"},
+			},
 			"metadata.generation": {
 				{ErrorType: "FieldValueInvalid", Origin: "minimum"},
 			},
@@ -37,8 +46,27 @@ func init() {
 				{ErrorType: "FieldValueNotSupported"},
 				{ErrorType: "FieldValueRequired"},
 			},
+			"metadata.ownerReferences[*].apiVersion": {
+				{ErrorType: "FieldValueRequired"},
+			},
+			"metadata.ownerReferences[*].kind": {
+				{ErrorType: "FieldValueRequired"},
+			},
+			"metadata.ownerReferences[*].name": {
+				{ErrorType: "FieldValueRequired"},
+			},
+			"metadata.ownerReferences[*].uid": {
+				{ErrorType: "FieldValueRequired"},
+			},
+			"metadata.uid": {
+				{ErrorType: "FieldValueInvalid", Origin: "immutable"},
+			},
 			"spec": {
 				{ErrorType: "FieldValueInvalid", Origin: "immutable"},
+			},
+			"spec.defaultPartitionTypeAttribute": {
+				{ErrorType: "FieldValueForbidden"},
+				{ErrorType: "FieldValueInvalid", Origin: "format=k8s-resource-fully-qualified-name"},
 			},
 			"spec.driver": {
 				{ErrorType: "FieldValueInvalid", Origin: "format=k8s-long-name-caseless"},
@@ -60,6 +88,10 @@ func init() {
 			},
 			"status.conditions[*].observedGeneration": {
 				{ErrorType: "FieldValueInvalid", Origin: "minimum"},
+			},
+			"status.conditions[*].reason": {
+				{ErrorType: "FieldValueRequired"},
+				{ErrorType: "FieldValueTooLong", Origin: "maxBytes"},
 			},
 			"status.conditions[*].status": {
 				{ErrorType: "FieldValueNotSupported"},
@@ -92,12 +124,55 @@ func init() {
 			"status.pools[*].nodeName": {
 				{ErrorType: "FieldValueInvalid", Origin: "format=k8s-long-name"},
 			},
+			"status.pools[*].partitionSummary": {
+				{ErrorType: "FieldValueTooMany", Origin: "maxItems"},
+			},
+			"status.pools[*].partitionSummary[*]": {
+				{ErrorType: "FieldValueDuplicate"},
+			},
+			"status.pools[*].partitionSummary[*].allocatable": {
+				{ErrorType: "FieldValueInvalid", Origin: "minimum"},
+				{ErrorType: "FieldValueRequired"},
+			},
+			"status.pools[*].partitionSummary[*].attribute": {
+				{ErrorType: "FieldValueRequired"},
+			},
+			"status.pools[*].partitionSummary[*].total": {
+				{ErrorType: "FieldValueInvalid", Origin: "minimum"},
+				{ErrorType: "FieldValueRequired"},
+			},
+			"status.pools[*].partitionSummary[*].type": {
+				{ErrorType: "FieldValueRequired"},
+			},
 			"status.pools[*].poolName": {
 				{ErrorType: "FieldValueInvalid", Origin: "format=k8s-resource-pool-name"},
 				{ErrorType: "FieldValueRequired"},
 			},
 			"status.pools[*].resourceSliceCount": {
 				{ErrorType: "FieldValueInvalid", Origin: "minimum"},
+			},
+			"status.pools[*].shareableSummary.capacity": {
+				{ErrorType: "FieldValueTooMany", Origin: "maxItems"},
+			},
+			"status.pools[*].shareableSummary.capacity[*].available": {
+				{ErrorType: "FieldValueRequired"},
+			},
+			"status.pools[*].shareableSummary.capacity[*].consumed": {
+				{ErrorType: "FieldValueRequired"},
+			},
+			"status.pools[*].shareableSummary.capacity[*].name": {
+				{ErrorType: "FieldValueRequired"},
+			},
+			"status.pools[*].shareableSummary.capacity[*].total": {
+				{ErrorType: "FieldValueRequired"},
+			},
+			"status.pools[*].shareableSummary.fullyAvailableDevices": {
+				{ErrorType: "FieldValueInvalid", Origin: "minimum"},
+				{ErrorType: "FieldValueRequired"},
+			},
+			"status.pools[*].shareableSummary.partiallyAvailableDevices": {
+				{ErrorType: "FieldValueInvalid", Origin: "minimum"},
+				{ErrorType: "FieldValueRequired"},
 			},
 			"status.pools[*].totalDevices": {
 				{ErrorType: "FieldValueInvalid", Origin: "minimum"},

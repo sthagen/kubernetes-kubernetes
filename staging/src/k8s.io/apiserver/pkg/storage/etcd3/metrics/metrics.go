@@ -96,16 +96,6 @@ var (
 		},
 		[]string{"group", "resource"},
 	)
-	dbTotalSize = compbasemetrics.NewGaugeVec(
-		&compbasemetrics.GaugeOpts{
-			Subsystem:         "apiserver",
-			Name:              "storage_db_total_size_in_bytes",
-			Help:              "Total size of the storage database file physically allocated in bytes.",
-			StabilityLevel:    compbasemetrics.ALPHA,
-			DeprecatedVersion: "1.28.0",
-		},
-		[]string{"endpoint"},
-	)
 	storageSizeDescription   = compbasemetrics.NewDesc("apiserver_storage_size_bytes", "Size of the storage database file physically allocated in bytes.", []string{"storage_cluster_id"}, nil, compbasemetrics.STABLE, "")
 	storageMonitor           = &monitorCollector{monitorGetter: func() ([]Monitor, error) { return nil, nil }}
 	etcdEventsReceivedCounts = compbasemetrics.NewCounterVec(
@@ -152,6 +142,17 @@ var (
 		},
 		[]string{"group", "resource"},
 	)
+	listLatency = compbasemetrics.NewHistogramVec(
+		&compbasemetrics.HistogramOpts{
+			Namespace: "apiserver",
+			Name:      "storage_list_duration_seconds",
+			Help:      "Latency of the storage layer GetList call in seconds, including object decode, split by whether etcd RangeStream was used.",
+			Buckets: []float64{0.005, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.25, 1.5, 2, 3,
+				4, 5, 6, 8, 10, 15, 20, 30, 45, 60},
+			StabilityLevel: compbasemetrics.ALPHA,
+		},
+		[]string{"streamed", "group", "resource"},
+	)
 )
 
 var registerMetrics sync.Once
@@ -166,13 +167,13 @@ func Register() {
 		legacyregistry.MustRegister(objectCounts)
 		legacyregistry.MustRegister(resourceSizeEstimate)
 		legacyregistry.MustRegister(newObjectCounts)
-		legacyregistry.MustRegister(dbTotalSize)
 		legacyregistry.CustomMustRegister(storageMonitor)
 		legacyregistry.MustRegister(etcdEventsReceivedCounts)
 		legacyregistry.MustRegister(etcdBookmarkCounts)
 		legacyregistry.MustRegister(etcdBookmarkTotal)
 		legacyregistry.MustRegister(etcdLeaseObjectCounts)
 		legacyregistry.MustRegister(decodeErrorCounts)
+		legacyregistry.MustRegister(listLatency)
 	})
 }
 
@@ -216,6 +217,15 @@ func RecordEtcdRequest(verb string, groupResource schema.GroupResource, err erro
 	}
 }
 
+// RecordListLatency sets the storage_list_duration_seconds metric.
+func RecordListLatency(groupResource schema.GroupResource, streamed bool, startTime time.Time) {
+	streamedLabel := "false"
+	if streamed {
+		streamedLabel = "true"
+	}
+	listLatency.WithLabelValues(streamedLabel, groupResource.Group, groupResource.Resource).Observe(sinceInSeconds(startTime))
+}
+
 // RecordEtcdEvent updated the etcd_events_received_total metric.
 func RecordEtcdEvent(groupResource schema.GroupResource) {
 	etcdEventsReceivedCounts.WithLabelValues(groupResource.Group, groupResource.Resource).Inc()
@@ -242,12 +252,6 @@ func Reset() {
 // This is a variable to facilitate testing.
 var sinceInSeconds = func(start time.Time) float64 {
 	return time.Since(start).Seconds()
-}
-
-// UpdateEtcdDbSize sets the etcd_db_total_size_in_bytes metric.
-// Deprecated: Metric etcd_db_total_size_in_bytes will be replaced with apiserver_storage_size_bytes
-func UpdateEtcdDbSize(ep string, size int64) {
-	dbTotalSize.WithLabelValues(ep).Set(float64(size))
 }
 
 // SetStorageMonitorGetter sets monitor getter to allow monitoring etcd stats.

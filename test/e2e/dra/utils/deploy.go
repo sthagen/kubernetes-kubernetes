@@ -73,6 +73,7 @@ import (
 	testdrivergomega "k8s.io/kubernetes/test/e2e/dra/test-driver/gomega"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	e2ereplicaset "k8s.io/kubernetes/test/e2e/framework/replicaset"
 	e2eskipper "k8s.io/kubernetes/test/e2e/framework/skipper"
 	"k8s.io/kubernetes/test/e2e/storage/drivers/proxy"
@@ -393,8 +394,20 @@ type Driver struct {
 	// Register the DRA test driver with the kubelet and expect DRA to work (= feature.DynamicResourceAllocation).
 	WithKubelet bool
 
+	// UsePrivilegedClient lets the test driver publish cluster-wide ResourceSlices.
+	// The default node-scoped client is intentionally restricted by admission to
+	// ResourceSlices for its own node.
+	UsePrivilegedClient bool
+
 	// Run driver pods. If false, only set up slices and class.
 	WithRealNodes bool
+
+	EnableDeviceMetadata   bool
+	DeviceMetadataVersions []schema.GroupVersion // Must be non-empty when EnableDeviceMetadata is true.
+
+	// ReconcilePoolWithName configures the ResourceSlice controller in each
+	// test driver plugin to reconcile only the pool with this name.
+	ReconcilePoolWithName string
 
 	mutex      sync.Mutex
 	fail       map[MethodInstance]bool
@@ -450,9 +463,11 @@ func (d *Driver) SetUp(tCtx ktesting.TContext, kubeletRootDir string, nodes *Nod
 	}
 
 	driverResource, useMultiHostDriverResources := driverResources[multiHostDriverResources]
-	if useMultiHostDriverResources || !d.WithKubelet {
+	if useMultiHostDriverResources || !d.WithKubelet || d.UsePrivilegedClient {
 		// We have to remove ResourceSlices ourselves.
-		// Otherwise the kubelet does it after unregistering the driver.
+		// Otherwise the kubelet does it after unregistering the driver. A
+		// privileged client can create cluster-wide slices which the kubelet
+		// does not own and therefore cannot remove.
 		tCtx.CleanupCtx(func(tCtx ktesting.TContext) {
 			err := tCtx.Client().ResourceV1().ResourceSlices().DeleteCollection(tCtx, metav1.DeleteOptions{}, metav1.ListOptions{FieldSelector: resourceapi.ResourceSliceSelectorDriver + "=" + d.Name})
 			tCtx.ExpectNoError(err, "delete ResourceSlices of the driver")
@@ -476,8 +491,11 @@ func (d *Driver) SetUp(tCtx ktesting.TContext, kubeletRootDir string, nodes *Nod
 							Generation:         pool.Generation,
 							ResourceSliceCount: int64(len(pool.Slices)),
 						},
-						NodeSelector: pool.NodeSelector,
-						Devices:      slice.Devices,
+						NodeSelector:           pool.NodeSelector,
+						Devices:                slice.Devices,
+						SharedCounters:         slice.SharedCounters,
+						PerDeviceNodeSelection: slice.PerDeviceNodeSelection,
+						PartitionTypeAttribute: slice.PartitionTypeAttribute,
 					},
 				}
 				_, err := tCtx.Client().ResourceV1().ResourceSlices().Create(tCtx, resourceSlice, metav1.CreateOptions{})
@@ -627,6 +645,9 @@ func (d *Driver) SetUp(tCtx ktesting.TContext, kubeletRootDir string, nodes *Nod
 		//
 		// Here we merely use impersonation, which is faster.
 		driverClient := d.ImpersonateKubeletPlugin(tCtx, &pod)
+		if d.UsePrivilegedClient {
+			driverClient = tCtx.Client()
+		}
 
 		logger := klog.LoggerWithValues(klog.LoggerWithName(logger, "kubelet-plugin"), "node", pod.Spec.NodeName, "pod", klog.KObj(&pod))
 		loggerCtx := klog.NewContext(tCtx, logger)
@@ -691,7 +712,7 @@ func (d *Driver) SetUp(tCtx ktesting.TContext, kubeletRootDir string, nodes *Nod
 			serialize = false
 		}
 
-		plugin, err := app.StartPlugin(loggerCtx, "/cdi", d.Name, driverClient, nodename, fileOps,
+		pluginOpts := []any{
 			app.Options{EnableHealthService: true},
 			kubeletplugin.GRPCVerbosity(0),
 			kubeletplugin.GRPCInterceptor(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
@@ -712,7 +733,22 @@ func (d *Driver) SetUp(tCtx ktesting.TContext, kubeletRootDir string, nodes *Nod
 
 			kubeletplugin.RegistrarDirectoryPath(registrarDirectoryPath),
 			kubeletplugin.RegistrarListener(d.listen(tCtx, &pod, &listenerPort)),
-		)
+
+			kubeletplugin.EnableDeviceMetadata(d.EnableDeviceMetadata, d.DeviceMetadataVersions),
+		}
+		if d.ReconcilePoolWithName != "" {
+			pluginOpts = append(pluginOpts, kubeletplugin.ReconcilePoolWithName(d.ReconcilePoolWithName))
+		}
+		if d.EnableDeviceMetadata {
+			if !d.IsLocal {
+				pluginOpts = append(pluginOpts,
+					kubeletplugin.MetadataFileOps(d.buildRemoteMetadataFileOps(tCtx, &pod)),
+					kubeletplugin.CDIDirectory("/cdi"),
+				)
+			}
+		}
+
+		plugin, err := app.StartPlugin(loggerCtx, "/cdi", d.Name, driverClient, nodename, fileOps, pluginOpts...)
 		tCtx.ExpectNoError(err, "start kubelet plugin for node %s", pod.Spec.NodeName)
 		d.cleanup = append(d.cleanup, func(tCtx ktesting.TContext) {
 			// Depends on cancel being called first.
@@ -848,6 +884,59 @@ func (d *Driver) podIO(tCtx ktesting.TContext, pod *v1.Pod) proxy.PodDirIO {
 		PodName:       pod.Name,
 		ContainerName: pod.Spec.Containers[0].Name,
 		Logger:        &logger,
+	}
+}
+
+func (d *Driver) buildRemoteMetadataFileOps(tCtx ktesting.TContext, pod *v1.Pod) kubeletplugin.MetadataFileOperations {
+	execInPod := func(command []string) (string, error) {
+		stdout, stderr, err := e2epod.Exec(tCtx, e2epod.ExecOptions{
+			Command:       command,
+			Namespace:     pod.Namespace,
+			PodName:       pod.Name,
+			ContainerName: pod.Spec.Containers[0].Name,
+			CaptureStdout: true,
+			CaptureStderr: true,
+			Quiet:         true,
+		})
+		if err != nil {
+			return "", fmt.Errorf("%v: stderr=%q, %w", command, stderr, err)
+		}
+		return stdout, nil
+	}
+
+	return kubeletplugin.MetadataFileOperations{
+		WriteFile: func(name string, data []byte, perm os.FileMode) error {
+			return d.createFile(tCtx, pod, name, data)
+		},
+		ReadFile: func(name string) ([]byte, error) {
+			stdout, err := execInPod([]string{"cat", name})
+			if err != nil {
+				return nil, err
+			}
+			return []byte(stdout), nil
+		},
+		MkdirAll: func(p string, perm os.FileMode) error {
+			_, err := execInPod([]string{"mkdir", "-p", p})
+			return err
+		},
+		RemoveAll: func(p string) error {
+			return d.podIO(tCtx, pod).RemoveAll(p)
+		},
+		Remove: func(name string) error {
+			_, err := execInPod([]string{"rm", "-f", name})
+			return err
+		},
+		Glob: func(pattern string) ([]string, error) {
+			stdout, err := execInPod([]string{"sh", "-c", fmt.Sprintf("ls -1d %s 2>/dev/null || true", pattern)})
+			if err != nil {
+				return nil, err
+			}
+			stdout = strings.TrimSpace(stdout)
+			if stdout == "" {
+				return nil, nil
+			}
+			return strings.Split(stdout, "\n"), nil
+		},
 	}
 }
 

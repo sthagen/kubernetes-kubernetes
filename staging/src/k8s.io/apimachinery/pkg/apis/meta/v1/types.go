@@ -176,6 +176,8 @@ type ObjectMeta struct {
 	// Read-only.
 	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#uids
 	// +optional
+	// +k8s:alpha(since: "1.37")=+k8s:optional
+	// +k8s:alpha(since: "1.37")=+k8s:immutable
 	UID types.UID `json:"uid,omitempty" protobuf:"bytes,5,opt,name=uid,casttype=k8s.io/kubernetes/pkg/types.UID"`
 
 	// An opaque value that represents the internal version of this object that can
@@ -207,6 +209,7 @@ type ObjectMeta struct {
 	// Null for lists.
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	// +optional
+	// +k8s:alpha(since: "1.37")=+k8s:immutable
 	CreationTimestamp Time `json:"creationTimestamp,omitempty,omitzero" protobuf:"bytes,8,opt,name=creationTimestamp"`
 
 	// DeletionTimestamp is RFC 3339 date and time at which this resource will be deleted. This
@@ -228,6 +231,8 @@ type ObjectMeta struct {
 	// Read-only.
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	// +optional
+	// +k8s:alpha(since: "1.37")=+k8s:optional
+	// +k8s:alpha(since: "1.37")=+k8s:immutable
 	DeletionTimestamp *Time `json:"deletionTimestamp,omitempty" protobuf:"bytes,9,opt,name=deletionTimestamp"`
 
 	// Number of seconds allowed for this object to gracefully terminate before
@@ -235,6 +240,8 @@ type ObjectMeta struct {
 	// May only be shortened.
 	// Read-only.
 	// +optional
+	// +k8s:alpha(since: "1.37")=+k8s:optional
+	// +k8s:alpha(since: "1.37")=+k8s:immutable
 	DeletionGracePeriodSeconds *int64 `json:"deletionGracePeriodSeconds,omitempty" protobuf:"varint,10,opt,name=deletionGracePeriodSeconds"`
 
 	// Map of string keys and values that can be used to organize and categorize
@@ -260,6 +267,7 @@ type ObjectMeta struct {
 	// +patchStrategy=merge
 	// +listType=map
 	// +listMapKey=uid
+	// +k8s:alpha(since:"1.37")=+k8s:optional
 	OwnerReferences []OwnerReference `json:"ownerReferences,omitempty" patchStrategy:"merge" patchMergeKey:"uid" protobuf:"bytes,13,rep,name=ownerReferences"`
 
 	// Must be empty before the object is deleted from the registry. Each entry
@@ -317,15 +325,19 @@ const (
 // +structType=atomic
 type OwnerReference struct {
 	// API version of the referent.
+	// +k8s:alpha(since:"1.37")=+k8s:required
 	APIVersion string `json:"apiVersion" protobuf:"bytes,5,opt,name=apiVersion"`
 	// Kind of the referent.
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+	// +k8s:alpha(since:"1.37")=+k8s:required
 	Kind string `json:"kind" protobuf:"bytes,1,opt,name=kind"`
 	// Name of the referent.
 	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#names
+	// +k8s:alpha(since:"1.37")=+k8s:required
 	Name string `json:"name" protobuf:"bytes,3,opt,name=name"`
 	// UID of the referent.
 	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#uids
+	// +k8s:alpha(since:"1.37")=+k8s:required
 	UID types.UID `json:"uid" protobuf:"bytes,4,opt,name=uid,casttype=k8s.io/apimachinery/pkg/types.UID"`
 	// If true, this reference points to the managing controller.
 	// +optional
@@ -1671,6 +1683,8 @@ type Condition struct {
 	// +kubebuilder:validation:MaxLength=1024
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Pattern=`^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$`
+	// +k8s:alpha(since: "1.37")=+k8s:required
+	// +k8s:alpha(since: "1.37")=+k8s:maxBytes=1024
 	Reason string `json:"reason" protobuf:"bytes,5,opt,name=reason"`
 	// message is a human readable message indicating details about the transition.
 	// This may be an empty string.

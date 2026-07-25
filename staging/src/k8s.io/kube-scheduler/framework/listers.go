@@ -19,7 +19,8 @@ package framework
 import (
 	v1 "k8s.io/api/core/v1"
 	resourceapi "k8s.io/api/resource/v1"
-	schedulingapi "k8s.io/api/scheduling/v1alpha3"
+	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
+	schedulingapi "k8s.io/api/scheduling/v1beta1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -31,10 +32,14 @@ import (
 type NodeInfoLister interface {
 	// List returns the list of NodeInfos.
 	List() ([]NodeInfo, error)
-	// HavePodsWithAffinityList returns the list of NodeInfos of nodes with pods with affinity terms.
+	// HavePodsWithAffinityList returns the list of NodeInfos of nodes with pods with inter-pod (anti-)affinity terms.
 	HavePodsWithAffinityList() ([]NodeInfo, error)
-	// HavePodsWithRequiredAntiAffinityList returns the list of NodeInfos of nodes with pods with required anti-affinity terms.
+	// HavePodsWithRequiredAntiAffinityList returns the list of NodeInfos of nodes with pods with required inter-pod anti-affinity terms.
 	HavePodsWithRequiredAntiAffinityList() ([]NodeInfo, error)
+	// HavePodsWithRequiredNonHostScopedAntiAffinityList returns nodes containing pods that require a wider topology scan (topologyKey other than hostname).
+	// PreFilter uses this to identify existing pods whose non-hostname scoped anti-affinity rules might conflict with the incoming pod, allowing it to skip scanning nodes that cannot possibly conflict.
+	// It returns an empty list and no error if the InterPodAffinityHostnameFastPath feature gate is disabled.
+	HavePodsWithRequiredNonHostScopedAntiAffinityList() ([]NodeInfo, error)
 	// Get returns the NodeInfo of the given node name.
 	Get(nodeName string) (NodeInfo, error)
 }
@@ -50,9 +55,14 @@ type StorageInfoLister interface {
 type SharedLister interface {
 	NodeInfos() NodeInfoLister
 	StorageInfos() StorageInfoLister
+	// PodGroupStates provides access to dynamic state information for pod groups.
 	PodGroupStates() PodGroupStateLister
 	// PodGroups provides access to cached pod group objects.
 	PodGroups() PodGroupLister
+	// CompositePodGroupStates provides access to dynamic state information for composite pod groups.
+	CompositePodGroupStates() CompositePodGroupStateLister
+	// CompositePodGroups provides access to cached composite pod group objects.
+	CompositePodGroups() CompositePodGroupLister
 }
 
 // PodGroupLister provides read access to cached pod group objects.
@@ -87,6 +97,18 @@ type MutableSnapshotSharedLister interface {
 type PodGroupStateLister interface {
 	// Get returns the PodGroupState of the given pod group.
 	Get(namespace string, podGroupName string) (PodGroupState, error)
+}
+
+// CompositePodGroupLister provides read access to cached composite pod group objects.
+type CompositePodGroupLister interface {
+	// Get returns the CompositePodGroup with the given namespace and name.
+	Get(namespace, name string) (*schedulingv1alpha3.CompositePodGroup, error)
+}
+
+// CompositePodGroupStateLister provides read access to composite pod group states.
+type CompositePodGroupStateLister interface {
+	// Get returns the CompositePodGroupState of the given composite pod group.
+	Get(namespace string, compositePodGroupName string) (CompositePodGroupState, error)
 }
 
 type CSINodeLister interface {
@@ -194,6 +216,14 @@ type PodGroupManager interface {
 	PodGroupStates() PodGroupStateLister
 	// PodGroups returns the PodGroupLister.
 	PodGroups() PodGroupLister
+	// CompositePodGroupStates returns the CompositePodGroupStateLister.
+	CompositePodGroupStates() CompositePodGroupStateLister
+	// CompositePodGroups returns the CompositePodGroupLister.
+	CompositePodGroups() CompositePodGroupLister
+	// BuildHierarchySnapshotFromPod builds a hierarchy snapshot from the given pod.
+	BuildHierarchySnapshotFromPod(pod *v1.Pod) (PodGroupManager, error)
+	// GetRootKeyForGroup returns the root key of the given EntityKey.
+	GetRootKeyForGroup(key EntityKey) (EntityKey, bool, error)
 }
 
 // PodGroupState provides an interface to view the state of a single pod group.
@@ -215,4 +245,10 @@ type PodGroupState interface {
 	ScheduledPods() []*v1.Pod
 	// ScheduledPodsCount returns the number of pods for this group that are either assumed or assigned.
 	ScheduledPodsCount() int
+}
+
+// CompositePodGroupState provides an interface to view the state of a single composite pod group.
+type CompositePodGroupState interface {
+	// GetChildren returns the keys of child groups.
+	GetChildren() []EntityKey
 }

@@ -64,6 +64,12 @@ func (nodes nodeInfoLister) HavePodsWithRequiredAntiAffinityList() ([]fwk.NodeIn
 	return nodes, nil
 }
 
+// HavePodsWithRequiredNonHostScopedAntiAffinityList is supposed to list nodes with at least one pod with
+// required non-host-scoped anti-affinity. For the fake lister we just return everything.
+func (nodes nodeInfoLister) HavePodsWithRequiredNonHostScopedAntiAffinityList() ([]fwk.NodeInfo, error) {
+	return nodes, nil
+}
+
 type sharedLister struct {
 	nodes nodeInfoLister
 }
@@ -87,6 +93,14 @@ func (s sharedLister) PodGroupStates() fwk.PodGroupStateLister {
 }
 
 func (s sharedLister) PodGroups() fwk.PodGroupLister {
+	return nil
+}
+
+func (s sharedLister) CompositePodGroupStates() fwk.CompositePodGroupStateLister {
+	return nil
+}
+
+func (s sharedLister) CompositePodGroups() fwk.CompositePodGroupLister {
 	return nil
 }
 
@@ -174,14 +188,22 @@ type testSortedScoredNodes struct {
 
 var _ framework.SortedScoredNodes = &testSortedScoredNodes{}
 
-func (t *testSortedScoredNodes) Pop() string {
-	ret := t.Nodes[0]
+func (t *testSortedScoredNodes) Pop() fwk.NodePluginScores {
+	ret := fwk.NodePluginScores{Name: t.Nodes[0]}
 	t.Nodes = t.Nodes[1:]
 	return ret
 }
 
 func (t *testSortedScoredNodes) Len() int {
 	return len(t.Nodes)
+}
+
+func (t *testSortedScoredNodes) UnorderedList() []fwk.NodePluginScores {
+	result := make([]fwk.NodePluginScores, len(t.Nodes))
+	for i, name := range t.Nodes {
+		result[i] = fwk.NodePluginScores{Name: name}
+	}
+	return result
 }
 
 func newTestNodes(n []string) *testSortedScoredNodes {
