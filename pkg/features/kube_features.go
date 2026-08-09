@@ -220,6 +220,20 @@ const (
 	// enabled.
 	DRADeviceBindingConditions featuregate.Feature = "DRADeviceBindingConditions"
 
+	// owner: @omeryahud
+	// kep: https://kep.k8s.io/5963
+	//
+	// Enables drivers to declare opaque compatibility groups on each
+	// device.consumesCounters[] entry of a ResourceSlice. The scheduler then
+	// only co-allocates devices drawing from the same counter set when their
+	// declared groups intersect, moving detection of incompatible co-allocation
+	// (e.g. GPU MIG vs vGPU on one physical device) from preparation-time
+	// failure to scheduling-time rejection.
+	//
+	// DRAPartitionableDevices also needs to be enabled, since the field lives
+	// on consumesCounters[] entries which only exist for partitionable devices.
+	DRADeviceCompatibilityGroups featuregate.Feature = "DRADeviceCompatibilityGroups"
+
 	// owner: @pohly
 	// kep: http://kep.k8s.io/5055
 	//
@@ -1454,6 +1468,10 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Beta},
 	},
 
+	DRADeviceCompatibilityGroups: {
+		{Version: version.MustParse("1.37"), Default: false, PreRelease: featuregate.Alpha},
+	},
+
 	DRADeviceTaintRules: {
 		{Version: version.MustParse("1.35"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.36"), Default: false, PreRelease: featuregate.Beta},                    // Depends on an off-by-default beta API.
@@ -1526,6 +1544,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	DRAWorkloadResourceClaims: {
 		{Version: version.MustParse("1.36"), Default: false, PreRelease: featuregate.Alpha},
+		{Version: version.MustParse("1.37"), Default: false, PreRelease: featuregate.Beta},
 	},
 
 	DefaultPodSysctls: {
@@ -1940,7 +1959,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	PodLevelResourceManagers: {
 		{Version: version.MustParse("1.36"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.37"), Default: true, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.37"), Default: false, PreRelease: featuregate.Beta},
 	},
 
 	PodLevelResources: {
@@ -2101,7 +2120,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.33"), Default: true, PreRelease: featuregate.Beta},
 	},
 	SchedulerPreQueueingHints: {
-		{Version: version.MustParse("1.37"), Default: true, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.37"), Default: false, PreRelease: featuregate.Alpha},
 	},
 
 	SeparateTaintEvictionController: {
@@ -2568,6 +2587,8 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 	DRADerivedAttributes: {DynamicResourceAllocation},
 
 	DRADeviceBindingConditions: {DynamicResourceAllocation, DRAResourceClaimDeviceStatus},
+
+	DRADeviceCompatibilityGroups: {DynamicResourceAllocation, DRAPartitionableDevices},
 
 	DRADeviceTaintRules: {DRADeviceTaints}, // DynamicResourceAllocation is indirect.
 

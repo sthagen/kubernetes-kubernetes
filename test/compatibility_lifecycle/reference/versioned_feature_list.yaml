@@ -529,6 +529,12 @@
     lockToDefault: false
     preRelease: Beta
     version: "1.36"
+- name: DRADeviceCompatibilityGroups
+  versionedSpecs:
+  - default: false
+    lockToDefault: false
+    preRelease: Alpha
+    version: "1.37"
 - name: DRADeviceTaintRules
   versionedSpecs:
   - default: false
@@ -671,6 +677,10 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.36"
+  - default: false
+    lockToDefault: false
+    preRelease: Beta
+    version: "1.37"
 - name: DynamicResourceAllocation
   versionedSpecs:
   - default: false
@@ -1543,7 +1553,7 @@
     lockToDefault: false
     preRelease: Alpha
     version: "1.36"
-  - default: true
+  - default: false
     lockToDefault: false
     preRelease: Beta
     version: "1.37"
@@ -1835,9 +1845,9 @@
     version: "1.33"
 - name: SchedulerPreQueueingHints
   versionedSpecs:
-  - default: true
+  - default: false
     lockToDefault: false
-    preRelease: Beta
+    preRelease: Alpha
     version: "1.37"
 - name: SELinuxChangePolicy
   versionedSpecs:
