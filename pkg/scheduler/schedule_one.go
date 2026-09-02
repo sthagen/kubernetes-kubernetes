@@ -28,6 +28,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -39,6 +40,7 @@ import (
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/pkg/apis/core/validation"
 	"k8s.io/kubernetes/pkg/features"
+	"k8s.io/kubernetes/pkg/scheduler/backend/queue"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework/parallelize"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/dynamicresources"
@@ -526,9 +528,7 @@ func (sched *Scheduler) handleBindingCycleError(
 		// It's intentional to "defer" this operation; otherwise MoveAllToActiveOrBackoffQueue() would
 		// add this event to in-flight events and thus move the assumed pod to backoffQ anyways if the plugins don't have appropriate QueueingHint.
 		if status.IsRejected() {
-			defer sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, framework.EventAssignedPodDelete, assumedPod, nil, func(pod *v1.Pod) bool {
-				return assumedPod.UID != pod.UID
-			})
+			defer sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, framework.EventAssignedPodDelete, assumedPod, nil, getDifferentUIDPreCheck(assumedPod.UID))
 		} else {
 			sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, framework.EventAssignedPodDelete, assumedPod, nil, nil)
 		}
@@ -537,12 +537,21 @@ func (sched *Scheduler) handleBindingCycleError(
 	sched.FailureHandler(ctx, fwk, podInfo, status, clearNominatedNode, start)
 }
 
-func (sched *Scheduler) frameworkForPod(pod *v1.Pod) (framework.Framework, error) {
-	fwk, ok := sched.Profiles[pod.Spec.SchedulerName]
-	if !ok {
-		return nil, fmt.Errorf("profile not found for scheduler name %q", pod.Spec.SchedulerName)
+// getDifferentUIDPreCheck is a PreEnqueueCheck function that selects only entities
+// that don't contain a pod with a specific UID.
+func getDifferentUIDPreCheck(uid types.UID) queue.PreEnqueueCheck {
+	return func(entity framework.QueuedEntityInfo) bool {
+		for pInfo := range entity.ForEachPodInfo() {
+			if pInfo.Pod.UID == uid {
+				return false
+			}
+		}
+		return true
 	}
-	return fwk, nil
+}
+
+func (sched *Scheduler) frameworkForPod(pod *v1.Pod) (framework.Framework, error) {
+	return sched.Profiles.FrameworkForPod(pod)
 }
 
 // skipPodSchedule returns true if we could skip scheduling the pod for specified cases.
@@ -1188,11 +1197,16 @@ func (sched *Scheduler) handleSchedulingFailure(ctx context.Context, podFwk fram
 
 	if err == ErrNoNodesAvailable {
 		logger.V(2).Info("Unable to schedule pod; no nodes are registered to the cluster; waiting", "pod", klog.KObj(pod))
-	} else if fitError, ok := err.(*framework.FitError); ok { // Inject UnschedulablePlugins to PodInfo, which will be used later for moving Pods between queues efficiently.
+	} else if fitError, ok := errors.AsType[*framework.FitError](err); ok { // Inject UnschedulablePlugins to PodInfo, which will be used later for moving Pods between queues efficiently.
 		podInfo.UnschedulablePlugins = fitError.Diagnosis.UnschedulablePlugins
 		podInfo.PendingPlugins = fitError.Diagnosis.PendingPlugins
 		logger.V(2).Info("Unable to schedule pod; no fit; waiting", "pod", klog.KObj(pod), "err", errMsg)
-	} else if errors.Is(err, errPodGroupUnschedulable) {
+	} else if fitError, ok := errors.AsType[*podGroupFitError](err); ok {
+		// Clone the plugin sets to ensure other readers of the same podGroupFitError
+		// won't modify them afterwards.
+		podInfo.UnschedulablePlugins = fitError.unschedulablePlugins.Clone()
+		podInfo.PendingPlugins = fitError.pendingPlugins.Clone()
+		errMsg = fmt.Sprintf("parent pod group is unschedulable: %s", errMsg)
 		logger.V(2).Info("Unable to schedule pod belonging to a pod group; waiting", "pod", klog.KObj(pod), "err", errMsg)
 	} else {
 		utilruntime.HandleErrorWithContext(ctx, err, "Error scheduling pod; retrying", "pod", klog.KObj(pod))

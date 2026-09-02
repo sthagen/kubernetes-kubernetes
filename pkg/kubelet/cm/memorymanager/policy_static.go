@@ -74,7 +74,7 @@ type staticPolicy struct {
 var _ Policy = &staticPolicy{}
 
 // NewPolicyStatic returns new static policy instance
-func NewPolicyStatic(logger klog.Logger, machineInfo *cadvisorapi.MachineInfo, reserved systemReservedMemory, affinity topologymanager.Store) (Policy, error) {
+func NewPolicyStatic(_ klog.Logger, machineInfo *cadvisorapi.MachineInfo, reserved systemReservedMemory, affinity topologymanager.Store) (Policy, error) {
 	var totalSystemReserved uint64
 	for _, node := range reserved {
 		if _, ok := node[v1.ResourceMemory]; !ok {
@@ -200,6 +200,10 @@ func (p *staticPolicy) AllocatePod(logger klog.Logger, s state.State, pod *v1.Po
 	podUID := string(pod.UID)
 	qos := v1qos.GetPodQOS(pod)
 	if qos != v1.PodQOSGuaranteed {
+		return nil
+	}
+	if blocks := s.GetPodMemoryBlocks(podUID); blocks != nil {
+		logger.V(4).Info("Pod already present in state, skipping")
 		return nil
 	}
 

@@ -6334,6 +6334,14 @@ func validateNodeAllocatableResourceClaimStatus(podStatus core.PodStatus, podSpe
 				}
 			}
 		}
+		// Extended resources backed by DRA are satisfied by a scheduler-created
+		// ResourceClaim that is not referenced in podSpec.ResourceClaims nor in
+		// podStatus.ResourceClaimStatuses. Its name is recorded in
+		// podStatus.ExtendedResourceClaimStatus instead.
+		if !found && podStatus.ExtendedResourceClaimStatus != nil &&
+			podStatus.ExtendedResourceClaimStatus.ResourceClaimName == nodeAllocatableStatus.ResourceClaimName {
+			found = true
+		}
 
 		if !found {
 			allErrs = append(allErrs, field.Invalid(statusFldPath.Child("resourceClaimName"), nodeAllocatableStatus.ResourceClaimName, "no mapping found in pod reference"))
@@ -7480,13 +7488,8 @@ func ValidatePodTemplateSpecForRC(template *core.PodTemplateSpec, selectorMap ma
 // ValidateReplicationControllerSpec tests if required fields in the replication controller spec are set.
 func ValidateReplicationControllerSpec(spec, oldSpec *core.ReplicationControllerSpec, fldPath *field.Path, opts PodValidationOptions) field.ErrorList {
 	allErrs := field.ErrorList{}
-	allErrs = append(allErrs, ValidateNonnegativeField(int64(spec.MinReadySeconds), fldPath.Child("minReadySeconds")).MarkCoveredByDeclarative()...)
+	// replicas and minReadySeconds are covered by declarative validation.
 	allErrs = append(allErrs, ValidateNonEmptySelector(spec.Selector, fldPath.Child("selector"))...)
-	if spec.Replicas == nil {
-		allErrs = append(allErrs, field.Required(fldPath.Child("replicas"), "").MarkCoveredByDeclarative())
-	} else {
-		allErrs = append(allErrs, ValidateNonnegativeField(int64(*spec.Replicas), fldPath.Child("replicas")).MarkCoveredByDeclarative()...)
-	}
 	allErrs = append(allErrs, ValidatePodTemplateSpecForRC(spec.Template, spec.Selector, fldPath.Child("template"), opts)...)
 	return allErrs
 }
@@ -8240,8 +8243,16 @@ func ValidateConfigMapUpdate(newCfg, oldCfg *core.ConfigMap) field.ErrorList {
 }
 
 func validateBasicResource(quantity resource.Quantity, fldPath *field.Path) field.ErrorList {
-	if quantity.Value() < 0 {
-		return field.ErrorList{field.Invalid(fldPath, quantity.Value(), "must be a valid resource quantity")}
+	// Sign() rather than Value(): the check only cares about the sign, and Value()
+	// does not report it reliably. It overflows to a positive number for negative
+	// quantities such as -9.5Gi, and falls back to zero when its conversion fails,
+	// as for -1e30 -- both of which pass a "Value() < 0" test. Sign() is correct
+	// for every quantity, and does not depend on how overflow is handled.
+	//
+	// String() rather than Value() in the error for the same reason: the reported
+	// value would otherwise be the overflowed one rather than what was submitted.
+	if quantity.Sign() < 0 {
+		return field.ErrorList{field.Invalid(fldPath, quantity.String(), "must be a valid resource quantity")}
 	}
 	return field.ErrorList{}
 }

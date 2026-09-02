@@ -17569,6 +17569,55 @@ func TestValidateNodeAllocatableResourceClaimStatus(t *testing.T) {
 			errorField:  "status.nodeAllocatableResourceClaimStatuses[0].overhead[0].name",
 			errorMsg:    "must be a node allocatable resource name",
 		},
+		{
+			name: "Valid ResourceClaimName from ExtendedResourceClaimStatus",
+			spec: core.PodSpec{
+				Containers: []core.Container{
+					{Name: "c1", Image: "image"},
+				},
+			},
+			podStatus: core.PodStatus{
+				ExtendedResourceClaimStatus: &core.PodExtendedResourceClaimStatus{
+					ResourceClaimName: "extended-claim1",
+				},
+				NodeAllocatableResourceClaimStatuses: []core.NodeAllocatableResourceClaimStatus{
+					{
+						ResourceClaimName: "extended-claim1",
+						Containers:        []string{"c1"},
+						Mapping: []core.NodeAllocatableMappedResources{
+							{Name: core.ResourceCPU, Quantity: new(resource.MustParse("1"))},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Invalid ResourceClaimName not matching ExtendedResourceClaimStatus",
+			spec: core.PodSpec{
+				Containers: []core.Container{
+					{Name: "c1", Image: "image"},
+				},
+			},
+			podStatus: core.PodStatus{
+				ExtendedResourceClaimStatus: &core.PodExtendedResourceClaimStatus{
+					ResourceClaimName: "extended-claim1",
+				},
+				NodeAllocatableResourceClaimStatuses: []core.NodeAllocatableResourceClaimStatus{
+					{
+						ResourceClaimName: "some-other-claim",
+						Containers:        []string{"c1"},
+						Mapping: []core.NodeAllocatableMappedResources{
+							{Name: core.ResourceCPU, Quantity: new(resource.MustParse("1"))},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorType:   field.ErrorTypeInvalid,
+			errorField:  "status.nodeAllocatableResourceClaimStatuses[0].resourceClaimName",
+			errorMsg:    "no mapping found in pod reference",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -19716,33 +19765,6 @@ func TestValidateReplicationControllerUpdate(t *testing.T) {
 				field.Required(field.NewPath("spec.template"), ""),
 			},
 		},
-		"negative replicas": {
-			old: mkValidReplicationController(func(rc *core.ReplicationController) {}),
-			update: mkValidReplicationController(func(rc *core.ReplicationController) {
-				rc.Spec.Replicas = ptr.To[int32](-1)
-			}),
-			expectedErrs: field.ErrorList{
-				field.Invalid(field.NewPath("spec.replicas"), nil, "").WithOrigin("minimum"),
-			},
-		},
-		"nil replicas": {
-			old: mkValidReplicationController(func(rc *core.ReplicationController) {}),
-			update: mkValidReplicationController(func(rc *core.ReplicationController) {
-				rc.Spec.Replicas = nil
-			}),
-			expectedErrs: field.ErrorList{
-				field.Required(field.NewPath("spec.replicas"), ""),
-			},
-		},
-		"negative minReadySeconds": {
-			old: mkValidReplicationController(func(rc *core.ReplicationController) {}),
-			update: mkValidReplicationController(func(rc *core.ReplicationController) {
-				rc.Spec.MinReadySeconds = -1
-			}),
-			expectedErrs: field.ErrorList{
-				field.Invalid(field.NewPath("spec.minReadySeconds"), nil, "").WithOrigin("minimum"),
-			},
-		},
 	}
 	for k, tc := range errorCases {
 		t.Run(k, func(t *testing.T) {
@@ -19826,24 +19848,6 @@ func TestValidateReplicationController(t *testing.T) {
 			input: mkValidReplicationController(func(rc *core.ReplicationController) { rc.Spec.Template = nil }),
 			expectedErrs: field.ErrorList{
 				field.Required(field.NewPath("spec.template"), ""),
-			},
-		},
-		"negative replicas": {
-			input: mkValidReplicationController(func(rc *core.ReplicationController) { rc.Spec.Replicas = ptr.To[int32](-1) }),
-			expectedErrs: field.ErrorList{
-				field.Invalid(field.NewPath("spec.replicas"), nil, "").WithOrigin("minimum"),
-			},
-		},
-		"negative minReadySeconds": {
-			input: mkValidReplicationController(func(rc *core.ReplicationController) { rc.Spec.MinReadySeconds = -1 }),
-			expectedErrs: field.ErrorList{
-				field.Invalid(field.NewPath("spec.minReadySeconds"), nil, "").WithOrigin("minimum"),
-			},
-		},
-		"nil replicas": {
-			input: mkValidReplicationController(func(rc *core.ReplicationController) { rc.Spec.Replicas = nil }),
-			expectedErrs: field.ErrorList{
-				field.Required(field.NewPath("spec.replicas"), ""),
 			},
 		},
 		"invalid label": {
@@ -32940,6 +32944,59 @@ func TestValidatePodBinding(t *testing.T) {
 			} else {
 				if len(errs) != 0 {
 					t.Errorf("Expected no error but got %v", errs)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateBasicResource(t *testing.T) {
+	// Value() is not a reliable way to ask for the sign of a quantity: it overflows
+	// to a positive number for some negative values and falls back to zero for
+	// others. Every negative case below passes a "Value() < 0" check.
+	cases := []struct {
+		name     string
+		quantity string
+		wantErr  bool
+	}{
+		{name: "zero", quantity: "0"},
+		{name: "positive", quantity: "1Gi"},
+		{name: "positive, above MaxInt64", quantity: "1000E"},
+		{name: "positive, far above MaxInt64", quantity: "1e30"},
+		{name: "positive, Value() wraps negative", quantity: "9223372036854775808"},
+
+		{name: "negative", quantity: "-1Gi", wantErr: true},
+		{name: "negative, Value() overflows positive", quantity: "-9.5Gi", wantErr: true},
+		{name: "negative, Value() overflows positive with more digits", quantity: "-9.5000000001Gi", wantErr: true},
+		{name: "negative, Value() falls back to zero", quantity: "-1e30", wantErr: true},
+		{name: "negative, suffixed, Value() falls back to zero", quantity: "-100E", wantErr: true},
+		{name: "negative, at the int64 boundary", quantity: "-9223372036854775808", wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			q := resource.MustParse(tc.quantity)
+			errs := validateBasicResource(q, field.NewPath("resources").Key("storage"))
+
+			if tc.wantErr && len(errs) == 0 {
+				t.Errorf("%s: expected an error, got none (Value() reports %d)", tc.quantity, q.Value())
+			}
+			if !tc.wantErr && len(errs) != 0 {
+				t.Errorf("%s: expected no error, got %v", tc.quantity, errs)
+			}
+			// The quantity belongs in the error, not the overflowed integer. String()
+			// canonicalizes, so compare by value rather than by spelling.
+			if tc.wantErr && len(errs) == 1 {
+				reported, ok := errs[0].BadValue.(string)
+				if !ok {
+					t.Fatalf("%s: error reports %T, want the quantity as a string", tc.quantity, errs[0].BadValue)
+				}
+				got, err := resource.ParseQuantity(reported)
+				if err != nil {
+					t.Fatalf("%s: error reports %q, which is not a quantity: %v", tc.quantity, reported, err)
+				}
+				if got.Cmp(q) != 0 {
+					t.Errorf("%s: error reports %q, want a quantity equal to the one submitted", tc.quantity, reported)
 				}
 			}
 		})

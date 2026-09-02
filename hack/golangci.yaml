@@ -162,7 +162,7 @@ linters:
       # Commentstart - Ignore commentstart issues for existing API group
       # TODO: For each existing API group, we aim to remove it over time.
       - text: "godoc for field .* should start with '.* ...'"
-        path: "staging/src/k8s.io/api/(apps|batch|certificates|core|extensions|flowcontrol|resource|storagemigration)"
+        path: "staging/src/k8s.io/api/(apps|batch|certificates|core|resource|storagemigration)"
       
       # notimestamp: Legacy 'Timestamp' fields retained for backward compatibility
       - text: 'notimestamp: naming convention "notimestamp": field TokenRequestStatus.ExpirationTimestamp: prefer use of the term ''time'' over ''timestamp'''
@@ -178,13 +178,22 @@ linters:
       # optionalfields - Ignore optionalfields issues for existing API group
       # TODO: For each existing API group, we aim to remove it over time.
       - text: "optionalfields: field .* should (?:be a pointer|have the omitempty tag)\\."
-        path: "staging/src/k8s.io/api/(admission|admissionregistration|apidiscovery|apps|authentication|authorization|autoscaling|batch|certificates|coordination|core|discovery|events|extensions|flowcontrol|imagepolicy|networking|node|policy|rbac|resource|scheduling|storage|storagemigration)"
+        path: "staging/src/k8s.io/api/(admission|admissionregistration|apidiscovery|apps|authentication|authorization|autoscaling|batch|certificates|core|events|extensions|flowcontrol|imagepolicy|networking|policy|rbac|resource|scheduling|storage)"
+      
+      # optionalfields - Ignore existing issues for node API group
+      - text: "optionalfields: field RuntimeClass.Handler should be a pointer."
+        path: "staging/src/k8s.io/api/node/(v1|v1beta1)/types.go"
       
       # optionalfields - Ignore existing issues for apiserverinternal API group
       - text: "optionalfields: field StorageVersionCondition.(ObservedGeneration|LastTransitionTime) should be a pointer."
         path: "staging/src/k8s.io/api/apiserverinternal/v1alpha1/types.go"
       - text: "optionalfields: field StorageVersion.(Spec|Status) should (?:be a pointer|have the omitempty tag)\\."
         path: "staging/src/k8s.io/api/apiserverinternal/v1alpha1/types.go"
+      # optionalfields - Ignore existing issues for coordination API group
+      - text: "optionalfields: field Lease.Spec should be a pointer."
+        path: "staging/src/k8s.io/api/coordination/(v1|v1beta1)/types.go"
+      - text: "optionalfields: field LeaseCandidateSpec.EmulationVersion should be a pointer."
+        path: "staging/src/k8s.io/api/coordination/(v1beta1|v1alpha2)/types.go"
       
       # Pre-existing issues from the conflictmarkers linter
       # The Error field in some older API types is marked as both optional and required.
@@ -247,7 +256,7 @@ linters:
       # OptionalOrRequired is being enabled over time. For now, each API group should be added to this list until we comb through each group and fix the missing tags.
       # The nonpointerstructs linter is included here as well as these two should be enabled hand-in-hand on each API group.
       - text: "must be marked as optional or required|is a non-pointer struct with no required fields."
-        path: "staging/src/k8s.io/api/(admissionregistration|authorization|autoscaling|batch|certificates|core|discovery|events|extensions|networking|storage)"
+        path: "staging/src/k8s.io/api/(admissionregistration|autoscaling|certificates|core|extensions|networking|storage)"
       
       # OptionalOrRequired - Existing fields that are marked as both optional and required (based on standard optional vs kubebuilder:validation:Required) and should not be fixed.
       - text: "field (PortStatus|IngressPortStatus)\\.Error must not be marked as both optional and required"
@@ -273,6 +282,11 @@ linters:
       # WorkloadSpec.CompositePodGroupTemplates is a union member that is conditionally optional (+k8s:ifEnabled("CompositePodGroup")=+k8s:optional), but the linter requires a static +k8s:optional tag.
       - text: "dependenttags: field WorkloadSpec\\.CompositePodGroupTemplates with marker \\+k8s:unionMember is missing required marker.*"
         path: "staging/src/k8s.io/api/scheduling/(v1alpha3|v1beta1)/types\\.go"
+      
+      # The (SubjectAccessReview|SelfSubjectAccessReview|LocalSubjectAccessReview).Spec fields hold a union type, but nonpointerstructs does not understand unions today.
+      # Validation requires exactly one of spec.resourceAttributes or spec.nonResourceAttributes, so an empty spec is always rejected and the field is required in practice.
+      - text: "nonpointerstructs: field (SubjectAccessReview|SelfSubjectAccessReview|LocalSubjectAccessReview)\\.Spec is a non-pointer struct with no required fields\\..*"
+        path: "staging/src/k8s.io/api/authorization/(v1|v1beta1)/types\\.go"
       
       # NoReferences - Existing fields that use Reference/References suffixes instead of Ref/Refs.
       # These fields use the Reference suffix, but renaming them would be a breaking change, so they are allowlisted.

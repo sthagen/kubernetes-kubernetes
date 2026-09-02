@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	v1 "k8s.io/api/core/v1"
+	schedulingv1beta1 "k8s.io/api/scheduling/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -917,26 +918,20 @@ func TestRunPodGroupPostFilterPlugins(t *testing.T) {
 		expectedResult      *fwk.PodGroupPostFilterResult
 	}{
 		{
-			name: "no registered plugins",
-			podGroupInfo: &framework.QueuedPodGroupInfo{
-				PodGroupInfo: &framework.PodGroupInfo{Namespace: "default", Name: "pg1"},
-			},
+			name:                "no registered plugins",
+			podGroupInfo:        newQueuedPodGroupInfoForTest("default", "pg1"),
 			featureFlagEnabeled: true,
 			expectedStatus:      fwk.NewStatus(fwk.Unschedulable),
 		},
 		{
-			name: "generic workload feature is disabled",
-			podGroupInfo: &framework.QueuedPodGroupInfo{
-				PodGroupInfo: &framework.PodGroupInfo{Namespace: "default", Name: "pg1"},
-			},
+			name:                "generic workload feature is disabled",
+			podGroupInfo:        newQueuedPodGroupInfoForTest("default", "pg1"),
 			featureFlagEnabeled: false,
 			expectedStatus:      fwk.NewStatus(fwk.Unschedulable, "generic workload feature is disabled, cannot perform PodGroupPostFilter"),
 		},
 		{
-			name: "first plugin returns error",
-			podGroupInfo: &framework.QueuedPodGroupInfo{
-				PodGroupInfo: &framework.PodGroupInfo{Namespace: "default", Name: "pg1"},
-			},
+			name:         "first plugin returns error",
+			podGroupInfo: newQueuedPodGroupInfoForTest("default", "pg1"),
 			plugins: []*TestPlugin{
 				{
 					name: "plugin1",
@@ -949,10 +944,8 @@ func TestRunPodGroupPostFilterPlugins(t *testing.T) {
 			expectedStatus:      fwk.NewStatus(fwk.Error, "error in \"plugin1\" PodGroupPostFilter plugins: "+injectReason).WithPlugin("plugin1"),
 		},
 		{
-			name: "first plugin returns non supported status: Skip",
-			podGroupInfo: &framework.QueuedPodGroupInfo{
-				PodGroupInfo: &framework.PodGroupInfo{Namespace: "default", Name: "pg1"},
-			},
+			name:         "first plugin returns non supported status: Skip",
+			podGroupInfo: newQueuedPodGroupInfoForTest("default", "pg1"),
 			plugins: []*TestPlugin{
 				{
 					name: "plugin1",
@@ -965,10 +958,8 @@ func TestRunPodGroupPostFilterPlugins(t *testing.T) {
 			expectedStatus:      fwk.NewStatus(fwk.Error, "error in \"plugin1\" PodGroupPostFilter plugins: "+injectReason).WithPlugin("plugin1"),
 		},
 		{
-			name: "first plugin returns success",
-			podGroupInfo: &framework.QueuedPodGroupInfo{
-				PodGroupInfo: &framework.PodGroupInfo{Namespace: "default", Name: "pg1"},
-			},
+			name:         "first plugin returns success",
+			podGroupInfo: newQueuedPodGroupInfoForTest("default", "pg1"),
 			plugins: []*TestPlugin{
 				{
 					name: "plugin1",
@@ -997,10 +988,8 @@ func TestRunPodGroupPostFilterPlugins(t *testing.T) {
 			},
 		},
 		{
-			name: "first plugin returns UnschedulableAndUnresolvable",
-			podGroupInfo: &framework.QueuedPodGroupInfo{
-				PodGroupInfo: &framework.PodGroupInfo{Namespace: "default", Name: "pg1"},
-			},
+			name:         "first plugin returns UnschedulableAndUnresolvable",
+			podGroupInfo: newQueuedPodGroupInfoForTest("default", "pg1"),
 			plugins: []*TestPlugin{
 				{
 					name: "plugin1",
@@ -1019,10 +1008,8 @@ func TestRunPodGroupPostFilterPlugins(t *testing.T) {
 			expectedStatus:      fwk.NewStatus(fwk.UnschedulableAndUnresolvable, injectReason).WithPlugin("plugin1"),
 		},
 		{
-			name: "first plugin returns Unschedulable, second returns success",
-			podGroupInfo: &framework.QueuedPodGroupInfo{
-				PodGroupInfo: &framework.PodGroupInfo{Namespace: "default", Name: "pg1"},
-			},
+			name:         "first plugin returns Unschedulable, second returns success",
+			podGroupInfo: newQueuedPodGroupInfoForTest("default", "pg1"),
 			plugins: []*TestPlugin{
 				{
 					name: "plugin1",
@@ -1051,10 +1038,8 @@ func TestRunPodGroupPostFilterPlugins(t *testing.T) {
 			},
 		},
 		{
-			name: "all plugins return Unschedulable, aggregate reasons",
-			podGroupInfo: &framework.QueuedPodGroupInfo{
-				PodGroupInfo: &framework.PodGroupInfo{Namespace: "default", Name: "pg1"},
-			},
+			name:         "all plugins return Unschedulable, aggregate reasons",
+			podGroupInfo: newQueuedPodGroupInfoForTest("default", "pg1"),
 			plugins: []*TestPlugin{
 				{
 					name: "plugin1",
@@ -1226,7 +1211,7 @@ func TestRunPlacementFeasiblePlugins(t *testing.T) {
 				{name: "p1", status: fwk.NewStatus(fwk.Skip, "error")},
 				{name: "p2", status: nil},
 			},
-			expectedStatus: fwk.AsStatus(fmt.Errorf("unexpected status from PlacementFeasible plugin: Skip")).WithPlugin("p1"),
+			expectedStatus: fwk.AsStatus(fmt.Errorf("unexpected status code (Skip) from PlacementFeasible plugin: error")).WithPlugin("p1"),
 			expectedCalled: []bool{true, false},
 		},
 	}
@@ -4620,7 +4605,7 @@ func TestRecordingMetrics(t *testing.T) {
 				var pgSchedulingFunc fwk.PodGroupSchedulingFunc = func(_ context.Context) (*fwk.PodGroupAssignments, *fwk.Status) {
 					return &fwk.PodGroupAssignments{}, nil
 				}
-				f.RunPodGroupPostFilterPlugins(ctx, state, &framework.QueuedPodGroupInfo{PodGroupInfo: &framework.PodGroupInfo{}}, pgSchedulingFunc)
+				f.RunPodGroupPostFilterPlugins(ctx, state, newQueuedPodGroupInfoForTest("", ""), pgSchedulingFunc)
 			},
 			inject:             injectedResult{PodGroupPostFilterStatus: int(fwk.Success)},
 			wantExtensionPoint: "PodGroupPostFilter",
@@ -4718,7 +4703,7 @@ func TestRecordingMetrics(t *testing.T) {
 				var pgSchedulingFunc fwk.PodGroupSchedulingFunc = func(_ context.Context) (*fwk.PodGroupAssignments, *fwk.Status) {
 					return &fwk.PodGroupAssignments{}, nil
 				}
-				f.RunPodGroupPostFilterPlugins(ctx, state, &framework.QueuedPodGroupInfo{PodGroupInfo: &framework.PodGroupInfo{}}, pgSchedulingFunc)
+				f.RunPodGroupPostFilterPlugins(ctx, state, newQueuedPodGroupInfoForTest("", ""), pgSchedulingFunc)
 			},
 			inject:             injectedResult{PodGroupPostFilterStatus: int(fwk.Error)},
 			wantExtensionPoint: "PodGroupPostFilter",
@@ -5767,7 +5752,7 @@ func TestPluginEvaluationTotalMetric(t *testing.T) {
 		t.Fatalf("RunFilterPlugins returned unexpected status: %v", st)
 	}
 
-	want := `# HELP scheduler_plugin_evaluation_total Number of attempts to schedule pods by each plugin and the extension point (available only in PreFilter, Filter, PreScore, and Score).
+	want := `# HELP scheduler_plugin_evaluation_total Number of attempts to schedule pods by each plugin and the extension point (available only in PreFilter, Filter, PreScore, and Score), by scheduler profile.
 # TYPE scheduler_plugin_evaluation_total counter
 scheduler_plugin_evaluation_total{extension_point="Filter",plugin="plugin-eval-filter-a",profile="test-profile"} 1
 scheduler_plugin_evaluation_total{extension_point="Filter",plugin="plugin-eval-filter-b",profile="test-profile-2"} 1
@@ -5777,5 +5762,18 @@ scheduler_plugin_evaluation_total{extension_point="Score",plugin="plugin-eval-sc
 `
 	if err := testutil.GatherAndCompare(metrics.GetGather(), strings.NewReader(want), metrics.PluginEvaluationTotal.Name); err != nil {
 		t.Fatalf("unexpected plugin_evaluation_total metric output:\n%v", err)
+	}
+}
+
+func newQueuedPodGroupInfoForTest(ns, name string) *framework.QueuedPodGroupInfo {
+	return &framework.QueuedPodGroupInfo{
+		PodGroupInfo: &framework.PodGroupInfo{
+			GenericPodGroup: framework.NewGenericPodGroup(&schedulingv1beta1.PodGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: ns,
+					Name:      name,
+				},
+			}),
+		},
 	}
 }

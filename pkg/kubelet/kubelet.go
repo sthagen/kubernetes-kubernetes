@@ -109,6 +109,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/logs"
 	"k8s.io/kubernetes/pkg/kubelet/metrics"
 	"k8s.io/kubernetes/pkg/kubelet/metrics/collectors"
+	"k8s.io/kubernetes/pkg/kubelet/metrics/cri"
 	"k8s.io/kubernetes/pkg/kubelet/network/dns"
 	"k8s.io/kubernetes/pkg/kubelet/nodeshutdown"
 	oomwatcher "k8s.io/kubernetes/pkg/kubelet/oom"
@@ -419,6 +420,7 @@ func PreInitRuntimeService(ctx context.Context, kubeCfg *kubeletconfiginternal.K
 		Build(ctx); err != nil {
 		return err
 	}
+	kubeDeps.RemoteRuntimeService = cri.NewInstrumentedRuntimeService(kubeDeps.RemoteRuntimeService)
 	if kubeDeps.RemoteImageService, err = remote.NewRemoteImageServiceBuilder().
 		WithEndpoint(remoteImageEndpoint).
 		WithConnectionTimeout(kubeCfg.RuntimeRequestTimeout.Duration).
@@ -427,6 +429,7 @@ func PreInitRuntimeService(ctx context.Context, kubeCfg *kubeletconfiginternal.K
 		Build(ctx); err != nil {
 		return err
 	}
+	kubeDeps.RemoteImageService = cri.NewInstrumentedImageManagerService(kubeDeps.RemoteImageService)
 
 	kubeDeps.useLegacyCadvisorStats = cadvisor.UsingLegacyCadvisorStats(kubeCfg.ContainerRuntimeEndpoint)
 
@@ -847,7 +850,7 @@ func NewMainKubelet(ctx context.Context,
 	}
 	klet.containerRuntime = runtime
 	klet.streamingRuntime = runtime
-	klet.runner = runtime
+	klet.runner = kubecontainer.NewCommandRunner(kubeDeps.RemoteRuntimeService)
 	resizeAdmitHandler := allocation.NewPodResizesAdmitHandler(klet.containerManager, runtime, klet.allocationManager)
 
 	runtimeCache, err := kubecontainer.NewRuntimeCache(klet.containerRuntime, runtimeCacheRefreshPeriod)
@@ -931,7 +934,7 @@ func NewMainKubelet(ctx context.Context,
 
 		// kubelet configuration that automatically rotates serving certs
 		if kubeCfg.ServerTLSBootstrap && utilfeature.DefaultFeatureGate.Enabled(features.RotateKubeletServerCertificate) {
-			klet.serverCertificateManager, err = kubeletcertificate.NewKubeletServerCertificateManager(klet.kubeClient, kubeCfg, klet.nodeName, func() []v1.NodeAddress {
+			klet.serverCertificateManager, err = kubeletcertificate.NewKubeletServerCertificateManager(logger, klet.kubeClient, kubeCfg, klet.nodeName, func() []v1.NodeAddress {
 				return klet.getLastObservedNodeAddresses(ctx)
 			}, certDirectory)
 			if err != nil {
@@ -2892,8 +2895,6 @@ func (kl *Kubelet) HandlePodAdditions(ctx context.Context, pods []*v1.Pod) {
 		// the apiserver and no action (other than cleanup) is required.
 		kl.podManager.AddPod(pod)
 
-		kl.podCertificateManager.TrackPod(ctx, pod)
-
 		pod, mirrorPod, wasMirror := kl.podManager.GetPodAndMirrorPod(pod)
 		if wasMirror {
 			if pod == nil {
@@ -2930,6 +2931,8 @@ func (kl *Kubelet) HandlePodAdditions(ctx context.Context, pods []*v1.Pod) {
 				continue
 			}
 			recordPodLevelResourcesAdmission(pod)
+
+			kl.podCertificateManager.TrackPod(ctx, pod)
 
 			if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScaling) {
 				// Backfill the queue of pending resizes, but only after all the pods have

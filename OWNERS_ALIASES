@@ -184,6 +184,7 @@ aliases:
   sig-scheduling:
     - ania-borowiec
     - AxeZhan
+    - brejman
     - damemi
     - denkensk
     - dom4ha
@@ -193,6 +194,7 @@ aliases:
     - tosi3k
     - utam0k
     - kerthcet
+    - Argh4k
   # emeritus:
   # - adtac
   # - liu-cong
@@ -609,6 +611,7 @@ aliases:
   # - logicalhan # Instrumentation
   # conformance aliases https://git.k8s.io/enhancements/keps/sig-architecture/20190412-conformance-behaviors.md
   conformance-behavior-approvers:
+    - BenTheElder
     - smarterclayton
     - johnbelamaric
     - dims

@@ -391,10 +391,10 @@ func (sched *Scheduler) deletePodFromSchedulingQueue(pod *v1.Pod, inBinding bool
 	}
 }
 
-// getLEPriorityPreCheck is a PreEnqueueCheck function that selects only lower or equal priority pods.
+// getLEPriorityPreCheck is a PreEnqueueCheck function that selects only lower or equal priority entities.
 func getLEPriorityPreCheck(priority int32) queue.PreEnqueueCheck {
-	return func(pod *v1.Pod) bool {
-		return corev1helpers.PodPriority(pod) <= priority
+	return func(entity framework.QueuedEntityInfo) bool {
+		return entity.GetPriority() <= priority
 	}
 }
 
@@ -476,8 +476,9 @@ func (sched *Scheduler) addPodGroup(obj any) {
 	}
 
 	logger.V(3).Info("Add event for pod group", "podGroup", klog.KObj(pg))
-	sched.Cache.AddPodGroup(pg)
-	sched.SchedulingQueue.AddPodGroup(logger, pg)
+	apg := framework.NewGenericPodGroup(pg)
+	sched.Cache.AddGenericPodGroup(apg)
+	sched.SchedulingQueue.AddGenericPodGroup(logger, apg)
 	sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, evt, nil, pg, nil)
 }
 
@@ -501,8 +502,9 @@ func (sched *Scheduler) updatePodGroup(oldObj, newObj any) {
 	}
 
 	logger.V(4).Info("Update event for pod group", "podGroup", klog.KObj(newPG))
-	sched.Cache.UpdatePodGroup(logger, oldPG, newPG)
-	sched.SchedulingQueue.UpdatePodGroup(logger, newPG)
+	apg := framework.NewGenericPodGroup(newPG)
+	sched.Cache.UpdateGenericPodGroup(logger, apg)
+	sched.SchedulingQueue.UpdateGenericPodGroup(logger, apg)
 	sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, evt, oldPG, newPG, nil)
 }
 
@@ -528,8 +530,9 @@ func (sched *Scheduler) deletePodGroup(obj any) {
 	}
 
 	logger.V(3).Info("Delete event for pod group", "podGroup", klog.KObj(pg))
-	sched.Cache.RemovePodGroup(logger, pg)
-	sched.SchedulingQueue.DeletePodGroup(logger, pg)
+	apg := framework.NewGenericPodGroup(pg)
+	sched.Cache.RemoveGenericPodGroup(logger, apg)
+	sched.SchedulingQueue.DeleteGenericPodGroup(logger, apg)
 	sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, evt, pg, nil, nil)
 }
 
@@ -544,8 +547,9 @@ func (sched *Scheduler) addCompositePodGroup(obj any) {
 	}
 
 	logger.V(3).Info("Add event for composite pod group", "compositePodGroup", klog.KObj(cpg))
-	sched.Cache.AddCompositePodGroup(logger, cpg)
-	sched.SchedulingQueue.AddCompositePodGroup(logger, cpg)
+	apg := framework.NewGenericCompositePodGroup(cpg)
+	sched.Cache.AddGenericPodGroup(apg)
+	sched.SchedulingQueue.AddGenericPodGroup(logger, apg)
 	sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, evt, nil, cpg, nil)
 }
 
@@ -569,8 +573,9 @@ func (sched *Scheduler) updateCompositePodGroup(oldObj, newObj any) {
 	}
 
 	logger.V(4).Info("Update event for composite pod group", "compositePodGroup", klog.KObj(newCPG))
-	sched.Cache.UpdateCompositePodGroup(logger, oldCPG, newCPG)
-	sched.SchedulingQueue.UpdateCompositePodGroup(logger, newCPG)
+	apg := framework.NewGenericCompositePodGroup(newCPG)
+	sched.Cache.UpdateGenericPodGroup(logger, apg)
+	sched.SchedulingQueue.UpdateGenericPodGroup(logger, apg)
 	sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, evt, oldCPG, newCPG, nil)
 }
 
@@ -596,8 +601,9 @@ func (sched *Scheduler) deleteCompositePodGroup(obj any) {
 	}
 
 	logger.V(3).Info("Delete event for composite pod group", "compositePodGroup", klog.KObj(cpg))
-	sched.Cache.RemoveCompositePodGroup(logger, cpg)
-	sched.SchedulingQueue.DeleteCompositePodGroup(logger, cpg)
+	apg := framework.NewGenericCompositePodGroup(cpg)
+	sched.Cache.RemoveGenericPodGroup(logger, apg)
+	sched.SchedulingQueue.DeleteGenericPodGroup(logger, apg)
 	sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, evt, cpg, nil, nil)
 }
 

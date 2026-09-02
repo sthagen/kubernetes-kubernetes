@@ -85,14 +85,15 @@ func TestSchedulerCreation(t *testing.T) {
 	validRegistry := map[string]frameworkruntime.PluginFactory{
 		"Foo": defaultbinder.New,
 	}
-	customSnapshot := internalcache.NewEmptySnapshot()
 	cases := []struct {
-		name                 string
-		opts                 []Option
-		wantErr              string
-		wantProfiles         []string
-		wantExtenders        []string
-		wantNodeInfoSnapshot *internalcache.Snapshot
+		name                            string
+		isSchedulerAsyncAPICallsEnabled bool
+		opts                            []Option
+		wantErr                         string
+		wantProfiles                    []string
+		wantExtenders                   []string
+		wantNodeInfoSnapshot            *internalcache.Snapshot
+		wantAPIDispatcher               bool
 	}{
 		{
 			name: "valid out-of-tree registry",
@@ -196,17 +197,27 @@ func TestSchedulerCreation(t *testing.T) {
 			wantExtenders: []string{"http://extender.kube-system/"},
 		},
 		{
-			name: "With custom nodeInfoSnapshot",
+			name:                            "With SchedulerAsyncAPICalls enabled",
+			isSchedulerAsyncAPICallsEnabled: true,
 			opts: []Option{
-				WithNodeInfoSnapshot(customSnapshot),
+				WithProfiles(
+					schedulerapi.KubeSchedulerProfile{
+						SchedulerName: "default-scheduler",
+						Plugins: &schedulerapi.Plugins{
+							QueueSort: schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{{Name: "PrioritySort"}}},
+							Bind:      schedulerapi.PluginSet{Enabled: []schedulerapi.Plugin{{Name: "DefaultBinder"}}},
+						},
+					},
+				),
 			},
-			wantProfiles:         []string{"default-scheduler"},
-			wantNodeInfoSnapshot: customSnapshot,
+			wantProfiles:      []string{"default-scheduler"},
+			wantAPIDispatcher: true,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			featuregatetesting.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, features.SchedulerAsyncAPICalls, tc.isSchedulerAsyncAPICallsEnabled)
 			client := fake.NewClientset()
 			informerFactory := informers.NewSharedInformerFactory(client, 0)
 
@@ -233,6 +244,10 @@ func TestSchedulerCreation(t *testing.T) {
 			}
 			if err != nil {
 				t.Fatalf("Failed to create scheduler: %v", err)
+			}
+
+			if gotAPIDispatcher := s.APIDispatcher != nil; tc.wantAPIDispatcher != gotAPIDispatcher {
+				t.Errorf("Unexpected APIDispatcher state, want: %v, got: %v", tc.wantAPIDispatcher, gotAPIDispatcher)
 			}
 
 			// Profiles
@@ -266,11 +281,6 @@ func TestSchedulerCreation(t *testing.T) {
 						t.Errorf("unexpected extenders (-want, +got):\n%s", diff)
 					}
 				}
-			}
-
-			// nodeInfoSnapshot
-			if tc.wantNodeInfoSnapshot != nil && s.nodeInfoSnapshot != tc.wantNodeInfoSnapshot {
-				t.Errorf("unexpected nodeInfoSnapshot: got %p, want %p", s.nodeInfoSnapshot, tc.wantNodeInfoSnapshot)
 			}
 		})
 	}

@@ -577,12 +577,6 @@ const (
 	// Enables the fast path for inter-pod affinity calculations when the topology key is kubernetes.io/hostname.
 	InterPodAffinityHostnameFastPath featuregate.Feature = "InterPodAffinityHostnameFastPath"
 
-	// owner: @mimowo
-	// kep: https://kep.k8s.io/4368
-	//
-	// Allows to delegate reconciliation of a Job object to an external controller.
-	JobManagedBy featuregate.Feature = "JobManagedBy"
-
 	// owner: @adrianmoisey @danwinship
 	// kep: https://kep.k8s.io/5495
 	//
@@ -695,12 +689,6 @@ const (
 	// Enable kubelet to send the service account token bound to the pod for which the image
 	// is being pulled to the credential provider plugin.
 	KubeletServiceAccountTokenForCredentialProviders featuregate.Feature = "KubeletServiceAccountTokenForCredentialProviders"
-
-	// owner: @sallyom
-	// kep: https://kep.k8s.io/2832
-	//
-	// Add support for distributed tracing in the kubelet
-	KubeletTracing featuregate.Feature = "KubeletTracing"
 
 	// owner: @RobertKrawitz
 	//
@@ -915,12 +903,6 @@ const (
 	// (if requested) dynamic resource allocation are complete.
 	PodReadyToStartContainersCondition featuregate.Feature = "PodReadyToStartContainersCondition"
 
-	// owner: @Huang-Wei
-	// kep: https://kep.k8s.io/3521
-	//
-	// Enable users to specify when a Pod is ready for scheduling.
-	PodSchedulingReadiness featuregate.Feature = "PodSchedulingReadiness"
-
 	// owner: @munnerz
 	// kep: https://kep.k8s.io/4742
 	// alpha: v1.33
@@ -1117,13 +1099,6 @@ const (
 	//
 	// Controls whether the apiserver will validate Node claims in service account tokens.
 	ServiceAccountTokenNodeBindingValidation featuregate.Feature = "ServiceAccountTokenNodeBindingValidation"
-
-	// owner: @munnerz
-	// kep: http://kep.k8s.io/4193
-	//
-	// Controls whether the apiserver embeds the node name and uid for the associated node when issuing
-	// service account tokens bound to Pod objects.
-	ServiceAccountTokenPodNodeInfo featuregate.Feature = "ServiceAccountTokenPodNodeInfo"
 
 	// owner: @jpbetz
 	//
@@ -1591,6 +1566,7 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	EnvFiles: {
 		{Version: version.MustParse("1.34"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.Beta},
+		{Version: version.MustParse("1.38"), Default: true, PreRelease: featuregate.GA, LockToDefault: true},
 	},
 	EventedPLEG: {
 		{Version: version.MustParse("1.26"), Default: false, PreRelease: featuregate.Alpha},
@@ -1726,12 +1702,6 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.37"), Default: false, PreRelease: featuregate.Alpha},
 	},
 
-	JobManagedBy: {
-		{Version: version.MustParse("1.30"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.32"), Default: true, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.38
-	},
-
 	KubeProxyIPVS: {
 		{Version: version.MustParse("1.0"), Default: true, PreRelease: featuregate.GA},
 		{Version: version.MustParse("1.37"), Default: true, PreRelease: featuregate.Deprecated},
@@ -1808,12 +1778,6 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	KubeletServiceAccountTokenForCredentialProviders: {
 		{Version: version.MustParse("1.33"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.34"), Default: true, PreRelease: featuregate.Beta},
-	},
-
-	KubeletTracing: {
-		{Version: version.MustParse("1.25"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.27"), Default: true, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.34"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.37
 	},
 
 	LocalStorageCapacityIsolationFSQuotaMonitoring: {
@@ -1991,12 +1955,6 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.37"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // GA in 1.37, remove in 1.40
 	},
 
-	PodSchedulingReadiness: {
-		{Version: version.MustParse("1.26"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.27"), Default: true, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.30"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // GA in 1.30; remove in 1.32
-	},
-
 	PodTopologyLabelsAdmission: {
 		{Version: version.MustParse("1.33"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.Beta},
@@ -2146,12 +2104,6 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	},
 
 	ServiceAccountTokenNodeBindingValidation: {
-		{Version: version.MustParse("1.29"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.30"), Default: true, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.32"), Default: true, PreRelease: featuregate.GA, LockToDefault: true},
-	},
-
-	ServiceAccountTokenPodNodeInfo: {
 		{Version: version.MustParse("1.29"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.30"), Default: true, PreRelease: featuregate.Beta},
 		{Version: version.MustParse("1.32"), Default: true, PreRelease: featuregate.GA, LockToDefault: true},
@@ -2692,8 +2644,6 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 
 	InterPodAffinityHostnameFastPath: {},
 
-	JobManagedBy: {},
-
 	KubeProxyIPVS: {},
 
 	KubeProxyNFTablesLocalhostNodePorts: {},
@@ -2723,8 +2673,6 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 	KubeletSeparateDiskGC: {},
 
 	KubeletServiceAccountTokenForCredentialProviders: {},
-
-	KubeletTracing: {},
 
 	LocalStorageCapacityIsolationFSQuotaMonitoring: {},
 
@@ -2794,8 +2742,6 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 
 	PodReadyToStartContainersCondition: {},
 
-	PodSchedulingReadiness: {},
-
 	PodTopologyLabelsAdmission: {},
 
 	PodsAPI: {},
@@ -2856,8 +2802,6 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 	ServiceAccountTokenNodeBinding: {ServiceAccountTokenNodeBindingValidation},
 
 	ServiceAccountTokenNodeBindingValidation: {},
-
-	ServiceAccountTokenPodNodeInfo: {},
 
 	ServiceCIDRStatusFieldWiping: {},
 

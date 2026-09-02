@@ -256,7 +256,7 @@ func newFakePodClient(f *calcScenario) *fake.Clientset {
 	fakeClient.AddReactor("list", "pods", func(action core.Action) (handled bool, ret runtime.Object, err error) {
 		obj := &v1.PodList{}
 		podsCount := int(f.currentReplicas)
-		// Failed pods aren't included in currentReplicas.
+		// Terminal pods aren't included in currentReplicas.
 		if f.podPhase != nil && len(f.podPhase) > podsCount {
 			podsCount = len(f.podPhase)
 		}
@@ -623,6 +623,39 @@ func TestReplicaCalcResourceScale(t *testing.T) {
 			expectedRawValue:    600,
 		},
 		{
+			name: "scale up: succeeded pods ignored",
+			fixture: calcScenario{
+				currentReplicas: 2,
+				podReadiness:    []v1.ConditionStatus{v1.ConditionTrue, v1.ConditionTrue, v1.ConditionFalse, v1.ConditionFalse},
+				podPhase:        []v1.PodPhase{v1.PodRunning, v1.PodRunning, v1.PodSucceeded, v1.PodSucceeded},
+				resource: &cpuResource{
+					requests: cpuRequests(4, "1.0"),
+					levels:   makePodMetricLevels(500, 700),
+				},
+			},
+			targetUtilization:   30,
+			expectedReplicas:    4,
+			expectedUtilization: 60,
+			expectedRawValue:    numContainersPerPod * 600,
+		},
+		{
+			name: "scale up: container metric with succeeded pods ignored",
+			fixture: calcScenario{
+				currentReplicas: 2,
+				podReadiness:    []v1.ConditionStatus{v1.ConditionTrue, v1.ConditionTrue, v1.ConditionFalse, v1.ConditionFalse},
+				podPhase:        []v1.PodPhase{v1.PodRunning, v1.PodRunning, v1.PodSucceeded, v1.PodSucceeded},
+				container:       "container2",
+				resource: &cpuResource{
+					requests: cpuRequests(4, "1.0"),
+					levels:   [][]int64{{1000, 500}, {9000, 700}},
+				},
+			},
+			targetUtilization:   30,
+			expectedReplicas:    4,
+			expectedUtilization: 60,
+			expectedRawValue:    600,
+		},
+		{
 			name: "scale up: pods being deleted are ignored",
 			fixture: calcScenario{
 				currentReplicas:      2,
@@ -815,6 +848,39 @@ func TestReplicaCalcResourceScale(t *testing.T) {
 			expectedRawValue:    280,
 		},
 		{
+			name: "scale down: succeeded pods ignored",
+			fixture: calcScenario{
+				currentReplicas: 5,
+				podReadiness:    []v1.ConditionStatus{v1.ConditionTrue, v1.ConditionTrue, v1.ConditionTrue, v1.ConditionTrue, v1.ConditionTrue, v1.ConditionFalse, v1.ConditionFalse},
+				podPhase:        []v1.PodPhase{v1.PodRunning, v1.PodRunning, v1.PodRunning, v1.PodRunning, v1.PodRunning, v1.PodSucceeded, v1.PodSucceeded},
+				resource: &cpuResource{
+					requests: cpuRequests(7, "1.0"),
+					levels:   makePodMetricLevels(100, 300, 500, 250, 250),
+				},
+			},
+			targetUtilization:   50,
+			expectedReplicas:    3,
+			expectedUtilization: 28,
+			expectedRawValue:    numContainersPerPod * 280,
+		},
+		{
+			name: "scale down: container metric with succeeded pods ignored",
+			fixture: calcScenario{
+				currentReplicas: 5,
+				podReadiness:    []v1.ConditionStatus{v1.ConditionTrue, v1.ConditionTrue, v1.ConditionTrue, v1.ConditionTrue, v1.ConditionTrue, v1.ConditionFalse, v1.ConditionFalse},
+				podPhase:        []v1.PodPhase{v1.PodRunning, v1.PodRunning, v1.PodRunning, v1.PodRunning, v1.PodRunning, v1.PodSucceeded, v1.PodSucceeded},
+				container:       "container2",
+				resource: &cpuResource{
+					requests: cpuRequests(7, "1.0"),
+					levels:   [][]int64{{1000, 100}, {1000, 300}, {1000, 500}, {1000, 250}, {1000, 250}},
+				},
+			},
+			targetUtilization:   50,
+			expectedReplicas:    3,
+			expectedUtilization: 28,
+			expectedRawValue:    280,
+		},
+		{
 			name: "scale down: pods being deleted are ignored",
 			fixture: calcScenario{
 				currentReplicas:      5,
@@ -897,6 +963,26 @@ func TestReplicaCalcExternalPerPodMetric(t *testing.T) {
 			perPodTargetUsage: math.MaxInt64,
 			expectedReplicas:  1,
 			expectedUsage:     math.MaxInt64,
+		},
+		{
+			name: "statusReplicas zero does not overflow usage",
+			fixture: calcScenario{
+				currentReplicas: 0,
+				metric:          externalPerPodMetric(20000),
+			},
+			perPodTargetUsage: 5000,
+			expectedReplicas:  4,
+			expectedUsage:     0,
+		},
+		{
+			name: "statusReplicas zero and metric zero does not underflow",
+			fixture: calcScenario{
+				currentReplicas: 0,
+				metric:          externalPerPodMetric(0),
+			},
+			perPodTargetUsage: 5000,
+			expectedReplicas:  0,
+			expectedUsage:     0,
 		},
 		{
 			name: "scale up",
@@ -1168,6 +1254,16 @@ func TestReplicaCalcObjectPerPodMetric(t *testing.T) {
 
 	cases := []perPodMetricCase{
 		{
+			name: "usage overflow with huge target leaves replicas unchanged",
+			fixture: calcScenario{
+				currentReplicas: 1,
+				metric:          perPodMetric(math.MaxInt64),
+			},
+			perPodTargetUsage: math.MaxInt64,
+			expectedReplicas:  1,
+			expectedUsage:     math.MaxInt64,
+		},
+		{
 			name: "scale up",
 			fixture: calcScenario{
 				currentReplicas: 3,
@@ -1207,6 +1303,26 @@ func TestReplicaCalcObjectPerPodMetric(t *testing.T) {
 			perPodTargetUsage: 5000,
 			expectedReplicas:  5,
 			expectedUsage:     5052,
+		},
+		{
+			name: "statusReplicas zero does not overflow usage",
+			fixture: calcScenario{
+				currentReplicas: 0,
+				metric:          perPodMetric(20000),
+			},
+			perPodTargetUsage: 5000,
+			expectedReplicas:  4,
+			expectedUsage:     0,
+		},
+		{
+			name: "statusReplicas zero and metric zero does not underflow",
+			fixture: calcScenario{
+				currentReplicas: 0,
+				metric:          perPodMetric(0),
+			},
+			perPodTargetUsage: 5000,
+			expectedReplicas:  0,
+			expectedUsage:     0,
 		},
 	}
 
@@ -1769,7 +1885,7 @@ func TestGroupPods(t *testing.T) {
 						Name: "bentham",
 					},
 					Status: v1.PodStatus{
-						Phase: v1.PodSucceeded,
+						Phase: v1.PodRunning,
 					},
 				},
 			},
@@ -1789,7 +1905,7 @@ func TestGroupPods(t *testing.T) {
 						Name: "lucretius",
 					},
 					Status: v1.PodStatus{
-						Phase: v1.PodSucceeded,
+						Phase: v1.PodRunning,
 						StartTime: &metav1.Time{
 							Time: time.Now(),
 						},
@@ -1812,7 +1928,7 @@ func TestGroupPods(t *testing.T) {
 						Name: "bentham",
 					},
 					Status: v1.PodStatus{
-						Phase: v1.PodSucceeded,
+						Phase: v1.PodRunning,
 						StartTime: &metav1.Time{
 							Time: time.Now().Add(-1 * time.Minute),
 						},
@@ -1842,7 +1958,7 @@ func TestGroupPods(t *testing.T) {
 						Name: "bentham",
 					},
 					Status: v1.PodStatus{
-						Phase: v1.PodSucceeded,
+						Phase: v1.PodRunning,
 						StartTime: &metav1.Time{
 							Time: time.Now().Add(-1 * time.Minute),
 						},
@@ -1872,7 +1988,7 @@ func TestGroupPods(t *testing.T) {
 						Name: "lucretius",
 					},
 					Status: v1.PodStatus{
-						Phase: v1.PodSucceeded,
+						Phase: v1.PodRunning,
 						StartTime: &metav1.Time{
 							Time: time.Now().Add(-10 * time.Minute),
 						},
@@ -1902,7 +2018,7 @@ func TestGroupPods(t *testing.T) {
 						Name: "bentham",
 					},
 					Status: v1.PodStatus{
-						Phase: v1.PodSucceeded,
+						Phase: v1.PodRunning,
 						StartTime: &metav1.Time{
 							Time: time.Now().Add(-3 * time.Minute),
 						},
@@ -1932,7 +2048,7 @@ func TestGroupPods(t *testing.T) {
 						Name: "lucretius",
 					},
 					Status: v1.PodStatus{
-						Phase: v1.PodSucceeded,
+						Phase: v1.PodRunning,
 						StartTime: &metav1.Time{
 							Time: time.Now().Add(-10 * time.Minute),
 						},
@@ -1962,7 +2078,7 @@ func TestGroupPods(t *testing.T) {
 						Name: "lucretius",
 					},
 					Status: v1.PodStatus{
-						Phase: v1.PodSucceeded,
+						Phase: v1.PodRunning,
 						StartTime: &metav1.Time{
 							Time: time.Now().Add(-10 * time.Minute),
 						},
@@ -1992,7 +2108,7 @@ func TestGroupPods(t *testing.T) {
 						Name: "epicurus",
 					},
 					Status: v1.PodStatus{
-						Phase: v1.PodSucceeded,
+						Phase: v1.PodRunning,
 						StartTime: &metav1.Time{
 							Time: time.Now().Add(-3 * time.Minute),
 						},
@@ -2013,7 +2129,7 @@ func TestGroupPods(t *testing.T) {
 						Name: "lucretius",
 					},
 					Status: v1.PodStatus{
-						Phase: v1.PodSucceeded,
+						Phase: v1.PodRunning,
 						StartTime: &metav1.Time{
 							Time: time.Now(),
 						},
@@ -2024,7 +2140,7 @@ func TestGroupPods(t *testing.T) {
 						Name: "niccolo",
 					},
 					Status: v1.PodStatus{
-						Phase: v1.PodSucceeded,
+						Phase: v1.PodRunning,
 						StartTime: &metav1.Time{
 							Time: time.Now().Add(-3 * time.Minute),
 						},
@@ -2042,7 +2158,7 @@ func TestGroupPods(t *testing.T) {
 						Name: "epicurus",
 					},
 					Status: v1.PodStatus{
-						Phase: v1.PodSucceeded,
+						Phase: v1.PodRunning,
 						StartTime: &metav1.Time{
 							Time: time.Now().Add(-3 * time.Minute),
 						},
@@ -2117,6 +2233,26 @@ func TestGroupPods(t *testing.T) {
 			expectUnreadyPods:   sets.New[string](),
 			expectMissingPods:   sets.New[string](),
 			expectIgnoredPods:   sets.New[string]("failed"),
+		}, {
+			name: "ignore pods in a succeeded state",
+			pods: []*v1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "succeeded",
+					},
+					Status: v1.PodStatus{
+						Phase: v1.PodSucceeded,
+					},
+				},
+			},
+			metrics: metricsclient.PodMetricsInfo{
+				"succeeded": metricsclient.PodMetric{Value: 1},
+			},
+			resource:            v1.ResourceCPU,
+			expectReadyPodCount: 0,
+			expectUnreadyPods:   sets.New[string](),
+			expectMissingPods:   sets.New[string](),
+			expectIgnoredPods:   sets.New[string]("succeeded"),
 		},
 	}
 	for _, tc := range tests {
@@ -2366,4 +2502,39 @@ func TestCalculatePodRequestsFromContainers_NonExistentContainer(t *testing.T) {
 	expectedErr := "container non-existent-container not found in Pod test-pod"
 	assert.Equal(t, expectedErr, err.Error(), "error message should match expected format")
 	assert.Equal(t, int64(0), request, "request should be 0 when container does not exist")
+}
+
+// TestGetPerPodUsage tests the per-pod usage helper function.
+func TestGetPerPodUsage(t *testing.T) {
+	cases := []struct {
+		name           string
+		usage          int64
+		statusReplicas int32
+		expected       int64
+	}{
+		{
+			name:           "zero replicas returns zero",
+			usage:          20000,
+			statusReplicas: 0,
+			expected:       0,
+		},
+		{
+			name:           "normal division with ceiling",
+			usage:          1000,
+			statusReplicas: 3,
+			expected:       334,
+		},
+		{
+			name:           "overflow returns MaxInt64",
+			usage:          math.MaxInt64,
+			statusReplicas: 1,
+			expected:       math.MaxInt64,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := getPerPodUsage(tc.usage, tc.statusReplicas)
+			assert.Equal(t, tc.expected, actual, "unexpected usage value")
+		})
+	}
 }

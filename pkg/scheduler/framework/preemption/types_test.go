@@ -278,7 +278,7 @@ func TestNewPodGroupPreemptorResolvesPreemptionPolicy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			preemptor := newPodGroupPreemptor(&testPodGroupInfo{pg: tt.pg, cpg: tt.cpg, pods: tt.pods}, tt.enablePodGroupPreemptionPolicy)
+			preemptor := newPodGroupPreemptor(newTestPodGroupInfo(tt.pg, tt.cpg, tt.pods), tt.enablePodGroupPreemptionPolicy)
 			if preemptor.preemptionPolicy != tt.wantPolicy {
 				t.Errorf("expected preemption policy %q, got %q", tt.wantPolicy, preemptor.preemptionPolicy)
 			}
@@ -894,11 +894,11 @@ func TestNewDomainForWorkloadPreemption(t *testing.T) {
 			}
 
 			for _, pg := range pgs {
-				cache.AddPodGroup(pg)
+				cache.AddGenericPodGroup(framework.NewGenericPodGroup(pg))
 			}
 			if tt.enableCompositePodGroup {
 				for _, cpg := range cpgs {
-					cache.AddCompositePodGroup(logger, cpg)
+					cache.AddGenericPodGroup(framework.NewGenericCompositePodGroup(cpg))
 				}
 			}
 
@@ -1153,61 +1153,21 @@ func TestNewDomainVictim(t *testing.T) {
 	}
 }
 
-type testPodGroupInfo struct {
-	pg   *schedulingv1beta1.PodGroup
-	cpg  *schedulingv1alpha3.CompositePodGroup
-	pods []*v1.Pod
-}
-
-func (t *testPodGroupInfo) GetName() string {
-	if t.cpg != nil {
-		return t.cpg.Name
+func newTestPodGroupInfo(pg *schedulingv1beta1.PodGroup, cpg *schedulingv1alpha3.CompositePodGroup, pods []*v1.Pod) *framework.PodGroupInfo {
+	if cpg != nil {
+		return &framework.PodGroupInfo{
+			GenericPodGroup: framework.NewGenericCompositePodGroup(cpg),
+			UnscheduledPods: pods,
+			Children: []*framework.PodGroupInfo{
+				{
+					GenericPodGroup: framework.NewGenericPodGroup(&schedulingv1beta1.PodGroup{}),
+					UnscheduledPods: pods,
+				},
+			},
+		}
 	}
-	if t.pg != nil {
-		return t.pg.Name
+	return &framework.PodGroupInfo{
+		GenericPodGroup: framework.NewGenericPodGroup(pg),
+		UnscheduledPods: pods,
 	}
-	return ""
-}
-
-func (t *testPodGroupInfo) GetNamespace() string {
-	if t.cpg != nil {
-		return t.cpg.Namespace
-	}
-	if t.pg != nil {
-		return t.pg.Namespace
-	}
-	return ""
-}
-
-func (t *testPodGroupInfo) GetType() fwk.EntityKeyType {
-	if t.cpg != nil {
-		return fwk.CompositePodGroupKeyType
-	}
-	return fwk.PodGroupKeyType
-}
-
-func (t *testPodGroupInfo) GetKey() string {
-	if t.cpg != nil {
-		return t.cpg.Name
-	}
-	if t.pg != nil {
-		return t.pg.Name
-	}
-	return ""
-}
-
-func (t *testPodGroupInfo) GetUnscheduledPods() []*v1.Pod {
-	return t.pods
-}
-
-func (t *testPodGroupInfo) GetPodGroup() *schedulingv1beta1.PodGroup {
-	return t.pg
-}
-
-func (t *testPodGroupInfo) GetCompositePodGroup() *schedulingv1alpha3.CompositePodGroup {
-	return t.cpg
-}
-
-func (t *testPodGroupInfo) GetChildren() []fwk.PodGroupInfo {
-	return nil
 }

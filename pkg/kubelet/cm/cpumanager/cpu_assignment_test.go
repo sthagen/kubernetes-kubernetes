@@ -83,6 +83,18 @@ func TestCPUAccumulatorFreeSockets(t *testing.T) {
 			[]int{},
 		},
 		{
+			"dual socket, non-uniform CPUs per socket, HT, 1 socket free",
+			topoDualSocketMultiNumaPerSocketMixedChips,
+			mustParseCPUSet(t, "4-47,52-95"),
+			[]int{1},
+		},
+		{
+			"dual socket, non-uniform CPUs per socket, HT, 0 socket free",
+			topoDualSocketMultiNumaPerSocketMixedChips,
+			mustParseCPUSet(t, "4-15,17-47,52-63,65-95"),
+			[]int{},
+		},
+		{
 			"dual numa, multi socket per per socket, HT, 4 sockets free",
 			fakeTopoMultiSocketDualSocketPerNumaHT,
 			mustParseCPUSet(t, "0-79"),
@@ -319,6 +331,18 @@ func TestCPUAccumulatorFreeCores(t *testing.T) {
 			[]int{},
 		},
 		{
+			"single socket, 7 HT cores free (1 partially consumed) + 4 ST cores free",
+			topoSingleSocketSingleNumaPerSocketPCoreHTECoreST,
+			mustParseCPUSet(t, "1-15,24-27"),
+			[]int{40, 41, 42, 43, 4, 8, 12, 16, 20, 24, 28},
+		},
+		{
+			"single socket, 0 HT cores free (8 partially consumed) + 12 ST cores free",
+			topoSingleSocketSingleNumaPerSocketPCoreHTECoreST,
+			mustParseCPUSet(t, "0,2,4,6,8,10,12,14,16-27"),
+			[]int{32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43},
+		},
+		{
 			"dual socket HT, 6 cores free",
 			topoDualSocketHT,
 			cpuset.New(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11),
@@ -399,6 +423,208 @@ func TestCPUAccumulatorFreeCPUs(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			acc := newCPUAccumulator(logger, tc.topo, tc.availableCPUs, 0, CPUSortingStrategyPacked)
 			result := acc.freeCPUs()
+			if !reflect.DeepEqual(result, tc.expect) {
+				t.Errorf("expected %v to equal %v", result, tc.expect)
+			}
+		})
+	}
+}
+
+func TestCPUAccumulatorFreeCPUsSpreadRoundRobin(t *testing.T) {
+	logger, _ := ktesting.NewTestContext(t)
+	testCases := []struct {
+		description   string
+		topo          *topology.CPUTopology
+		availableCPUs cpuset.CPUSet
+		expect        []int
+	}{
+		// Synthetic topology: contiguous sibling IDs, not representative of known hardware.
+		{
+			description: "contiguous sibling CPU IDs",
+			topo: &topology.CPUTopology{
+				NumCPUs:    8,
+				NumSockets: 1,
+				NumCores:   4,
+				CPUDetails: map[int]topology.CPUInfo{
+					0: {CoreID: 0, SocketID: 0, NUMANodeID: 0},
+					1: {CoreID: 0, SocketID: 0, NUMANodeID: 0},
+					2: {CoreID: 1, SocketID: 0, NUMANodeID: 0},
+					3: {CoreID: 1, SocketID: 0, NUMANodeID: 0},
+					4: {CoreID: 2, SocketID: 0, NUMANodeID: 0},
+					5: {CoreID: 2, SocketID: 0, NUMANodeID: 0},
+					6: {CoreID: 3, SocketID: 0, NUMANodeID: 0},
+					7: {CoreID: 3, SocketID: 0, NUMANodeID: 0},
+				},
+			},
+			availableCPUs: cpuset.New(0, 1, 2, 3, 4, 5, 6, 7),
+			expect:        []int{0, 2, 4, 6, 1, 3, 5, 7},
+		},
+		{
+			description:   "interleaved sibling CPU IDs",
+			topo:          topoSingleSocketHT,
+			availableCPUs: cpuset.New(0, 1, 2, 3, 4, 5, 6, 7),
+			expect:        []int{0, 1, 2, 3, 4, 5, 6, 7},
+		},
+		// Synthetic topology: arbitrary CPU numbering, does not correspond to known hardware.
+		{
+			description: "arbitrary logical CPU numbering",
+			topo: &topology.CPUTopology{
+				NumCPUs:    8,
+				NumSockets: 1,
+				NumCores:   4,
+				CPUDetails: map[int]topology.CPUInfo{
+					0:  {CoreID: 0, SocketID: 0, NUMANodeID: 0},
+					7:  {CoreID: 0, SocketID: 0, NUMANodeID: 0},
+					2:  {CoreID: 1, SocketID: 0, NUMANodeID: 0},
+					11: {CoreID: 1, SocketID: 0, NUMANodeID: 0},
+					5:  {CoreID: 2, SocketID: 0, NUMANodeID: 0},
+					9:  {CoreID: 2, SocketID: 0, NUMANodeID: 0},
+					1:  {CoreID: 3, SocketID: 0, NUMANodeID: 0},
+					14: {CoreID: 3, SocketID: 0, NUMANodeID: 0},
+				},
+			},
+			availableCPUs: cpuset.New(0, 1, 2, 5, 7, 9, 11, 14),
+			expect:        []int{0, 2, 5, 1, 7, 11, 9, 14},
+		},
+		// Synthetic topology: dual-socket layout synthesized for spread verification, not a specific product.
+		{
+			description: "multiple sockets",
+			topo: &topology.CPUTopology{
+				NumCPUs:    16,
+				NumSockets: 2,
+				NumCores:   8,
+				CPUDetails: map[int]topology.CPUInfo{
+					0:  {CoreID: 0, SocketID: 0, NUMANodeID: 0},
+					1:  {CoreID: 0, SocketID: 0, NUMANodeID: 0},
+					2:  {CoreID: 1, SocketID: 0, NUMANodeID: 0},
+					3:  {CoreID: 1, SocketID: 0, NUMANodeID: 0},
+					4:  {CoreID: 2, SocketID: 0, NUMANodeID: 0},
+					5:  {CoreID: 2, SocketID: 0, NUMANodeID: 0},
+					6:  {CoreID: 3, SocketID: 0, NUMANodeID: 0},
+					7:  {CoreID: 3, SocketID: 0, NUMANodeID: 0},
+					8:  {CoreID: 4, SocketID: 1, NUMANodeID: 1},
+					9:  {CoreID: 4, SocketID: 1, NUMANodeID: 1},
+					10: {CoreID: 5, SocketID: 1, NUMANodeID: 1},
+					11: {CoreID: 5, SocketID: 1, NUMANodeID: 1},
+					12: {CoreID: 6, SocketID: 1, NUMANodeID: 1},
+					13: {CoreID: 6, SocketID: 1, NUMANodeID: 1},
+					14: {CoreID: 7, SocketID: 1, NUMANodeID: 1},
+					15: {CoreID: 7, SocketID: 1, NUMANodeID: 1},
+				},
+			},
+			availableCPUs: cpuset.New(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15),
+			expect:        []int{0, 2, 4, 6, 1, 3, 5, 7, 8, 10, 12, 14, 9, 11, 13, 15},
+		},
+		// Synthetic topology: partially populated cores on contiguous sibling layout, not modeled on real hardware.
+		{
+			description: "partially allocated cores",
+			topo: &topology.CPUTopology{
+				NumCPUs:    8,
+				NumSockets: 1,
+				NumCores:   4,
+				CPUDetails: map[int]topology.CPUInfo{
+					0: {CoreID: 0, SocketID: 0, NUMANodeID: 0},
+					1: {CoreID: 0, SocketID: 0, NUMANodeID: 0},
+					2: {CoreID: 1, SocketID: 0, NUMANodeID: 0},
+					3: {CoreID: 1, SocketID: 0, NUMANodeID: 0},
+					4: {CoreID: 2, SocketID: 0, NUMANodeID: 0},
+					5: {CoreID: 2, SocketID: 0, NUMANodeID: 0},
+					6: {CoreID: 3, SocketID: 0, NUMANodeID: 0},
+					7: {CoreID: 3, SocketID: 0, NUMANodeID: 0},
+				},
+			},
+			availableCPUs: cpuset.New(0, 2, 3, 4, 6, 7),
+			expect:        []int{0, 4, 2, 6, 3, 7},
+		},
+		// Synthetic topology: 3 threads per core is not common hardware; validates multi-thread spread.
+		{
+			description: "more than two CPUs per core",
+			topo: &topology.CPUTopology{
+				NumCPUs:    9,
+				NumSockets: 1,
+				NumCores:   3,
+				CPUDetails: map[int]topology.CPUInfo{
+					0: {CoreID: 0, SocketID: 0, NUMANodeID: 0},
+					1: {CoreID: 0, SocketID: 0, NUMANodeID: 0},
+					2: {CoreID: 0, SocketID: 0, NUMANodeID: 0},
+					3: {CoreID: 1, SocketID: 0, NUMANodeID: 0},
+					4: {CoreID: 1, SocketID: 0, NUMANodeID: 0},
+					5: {CoreID: 1, SocketID: 0, NUMANodeID: 0},
+					6: {CoreID: 2, SocketID: 0, NUMANodeID: 0},
+					7: {CoreID: 2, SocketID: 0, NUMANodeID: 0},
+					8: {CoreID: 2, SocketID: 0, NUMANodeID: 0},
+				},
+			},
+			availableCPUs: cpuset.New(0, 1, 2, 3, 4, 5, 6, 7, 8),
+			expect:        []int{0, 3, 6, 1, 4, 7, 2, 5, 8},
+		},
+		// Synthetic topology: multi-NUMA per socket, shows spread ignores NUMA hierarchy and still round-robins per core within each socket.
+		{
+			description: "spread across multi-NUMA sockets round-robins per core",
+			topo: &topology.CPUTopology{
+				NumCPUs:      8,
+				NumSockets:   2,
+				NumCores:     4,
+				NumNUMANodes: 4,
+				CPUDetails: map[int]topology.CPUInfo{
+					0: {CoreID: 0, SocketID: 0, NUMANodeID: 0},
+					1: {CoreID: 0, SocketID: 0, NUMANodeID: 0},
+					2: {CoreID: 1, SocketID: 0, NUMANodeID: 1},
+					3: {CoreID: 1, SocketID: 0, NUMANodeID: 1},
+					4: {CoreID: 2, SocketID: 1, NUMANodeID: 2},
+					5: {CoreID: 2, SocketID: 1, NUMANodeID: 2},
+					6: {CoreID: 3, SocketID: 1, NUMANodeID: 3},
+					7: {CoreID: 3, SocketID: 1, NUMANodeID: 3},
+				},
+			},
+			availableCPUs: cpuset.New(0, 1, 2, 3, 4, 5, 6, 7),
+			expect:        []int{0, 2, 1, 3, 4, 6, 5, 7},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			acc := newCPUAccumulator(logger, tc.topo, tc.availableCPUs, 0, CPUSortingStrategySpread)
+			result := acc.freeCPUs()
+			if !reflect.DeepEqual(result, tc.expect) {
+				t.Errorf("expected %v to equal %v", result, tc.expect)
+			}
+		})
+	}
+}
+
+func TestSortAvailableUncoreCaches(t *testing.T) {
+	logger, _ := ktesting.NewTestContext(t)
+	testCases := []struct {
+		description   string
+		topo          *topology.CPUTopology
+		availableCPUs cpuset.CPUSet
+		expect        []int
+	}{
+		{
+			description:   "topology with 1 (default) uncore cache, 0 cpus reserved",
+			topo:          topoDualSocketMultiNumaPerSocketHT,
+			availableCPUs: mustParseCPUSet(t, "0-79"),
+			expect:        []int{0},
+		},
+		{
+			description:   "topology with 2 uncore caches, multi numa per uncore, 2 cpus reserved",
+			topo:          topoDualSocketSubNumaPerSocketHTMonolithicUncore,
+			availableCPUs: mustParseCPUSet(t, "1-119,121-239"), // two cpu(s) from uncore0 reserved
+			expect:        []int{0, 1},
+		},
+		{
+			description:   "topology with 24 uncore caches, single numa per uncore, 3 cpus reserved",
+			topo:          topoDualSocketSingleNumaPerSocketSMTUncore,
+			availableCPUs: mustParseCPUSet(t, "0-90,92-151,153-282,284-383"), // two cpu(s) from uncore11 and one from uncore19 reserved
+			expect:        []int{11, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 19, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			acc := newCPUAccumulator(logger, tc.topo, tc.availableCPUs, 0, CPUSortingStrategyPacked)
+			result := acc.sortAvailableUncoreCaches()
 			if !reflect.DeepEqual(result, tc.expect) {
 				t.Errorf("expected %v to equal %v", result, tc.expect)
 			}
@@ -676,6 +902,15 @@ func TestTakeByTopologyNUMAPacked(t *testing.T) {
 			"",
 			mustParseCPUSet(t, "0-29,40-69,30,31,70,71"),
 		},
+		{
+			"allocate 2 cpus from non-uniform topology with 1 cpu reserved",
+			topoSingleSocketSingleNumaPerSocketPCoreHTECoreST,
+			StaticPolicyOptions{},
+			mustParseCPUSet(t, "1-27"), // 0 is reserved
+			2,
+			"",
+			mustParseCPUSet(t, "16-17"),
+		},
 		// Test cases for PreferAlignByUncoreCache
 		{
 			"take cpus from two full UncoreCaches and partial from a single UncoreCache",
@@ -851,7 +1086,7 @@ func TestTakeByTopologyWithSpreadPhysicalCPUsPreferredOption(t *testing.T) {
 			mustParseCPUSet(t, "0-287"),
 			12,
 			"",
-			mustParseCPUSet(t, "0-2,9-10,13-14,21-22,25-26,33"),
+			cpuset.New(0, 50, 57, 58, 71, 72, 79, 80, 87, 88, 95, 96),
 		},
 	}
 
