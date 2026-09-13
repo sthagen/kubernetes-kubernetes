@@ -27,7 +27,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -149,15 +148,14 @@ func (kl *Kubelet) getKubeletMappings(logger klog.Logger, idsPerPod uint32) (uin
 	// So we check for the kubelet user first, if it exist and getsubids is present, we expect
 	// to get _some_ configuration. If the user exist and getsubids doesn't give us any
 	// configuration, then we consider the remote down and fail to start the kubelet.
-	_, err := user.Lookup(kubeletUser)
+	found, err := getentUserExists(kubeletUser)
 	if err != nil {
-		var unknownUserErr user.UnknownUserError
-		if goerrors.As(err, &unknownUserErr) {
-			// if the user is not found, we assume that the user is not configured
-			logger.V(5).Info("user namespaces: user not found, using default mappings", "user", kubeletUser)
-			return defaultFirstID, defaultLen, nil
-		}
 		return 0, 0, err
+	}
+	if !found {
+		// if the user is not found, we assume that the user is not configured
+		logger.V(5).Info("user namespaces: user not found, using default mappings", "user", kubeletUser)
+		return defaultFirstID, defaultLen, nil
 	}
 
 	execName := "getsubids"
@@ -182,6 +180,24 @@ func (kl *Kubelet) getKubeletMappings(logger klog.Logger, idsPerPod uint32) (uin
 	}
 	logger.V(5).Info("user namespaces: user found, using mappings from getsubids", "user", kubeletUser)
 	return parseGetSubIdsOutput(string(outUids))
+}
+
+// getentUserExists checks name via getent(1), so it sees NSS accounts (sssd,
+// LDAP, FreeIPA) that a static (CGO_ENABLED=0) os/user would miss.
+func getentUserExists(name string) (bool, error) {
+	getent, err := exec.LookPath("getent")
+	if err != nil {
+		return false, nil // no getent: same as "not configured"
+	}
+	err = exec.Command(getent, "passwd", name).Run()
+	if err == nil {
+		return true, nil
+	}
+	var exitErr *exec.ExitError
+	if goerrors.As(err, &exitErr) && exitErr.ExitCode() == 2 {
+		return false, nil // getent(1): 2 = key not found
+	}
+	return false, fmt.Errorf("looking up user %q via getent: %w", name, err)
 }
 
 // Get a list of pods that have data directories.
@@ -2465,25 +2481,8 @@ func (kl *Kubelet) convertToAPIContainerStatuses(ctx context.Context, pod *v1.Po
 		// For non-running containers this will be the reported values.
 		// For non-resizable resources, these values will also be used.
 		resources := allocatedContainer.Resources.DeepCopy()
-		if resources.Limits != nil {
-			if cStatus.Resources != nil && cStatus.Resources.CPULimit != nil {
-				// If both the allocated & actual resources are at or below the minimum effective limit, preserve the
-				// allocated value in the API to avoid confusion and simplify comparisons.
-				if cStatus.Resources.CPULimit.MilliValue() > cm.MinMilliCPULimit ||
-					resources.Limits.Cpu().MilliValue() > cm.MinMilliCPULimit {
-					resources.Limits[v1.ResourceCPU] = cStatus.Resources.CPULimit.DeepCopy()
-				}
-			} else {
-				preserveOldResourcesValue(v1.ResourceCPU, oldStatus.Resources.Limits, resources.Limits)
-			}
-			if cStatus.Resources != nil && cStatus.Resources.MemoryLimit != nil {
-				resources.Limits[v1.ResourceMemory] = cStatus.Resources.MemoryLimit.DeepCopy()
-			} else {
-				preserveOldResourcesValue(v1.ResourceMemory, oldStatus.Resources.Limits, resources.Limits)
-			}
-		}
 		if resources.Requests != nil {
-			if cStatus.Resources != nil && cStatus.Resources.CPURequest != nil {
+			if cStatus.Resources != nil && cStatus.Resources.CPURequest != nil && !cStatus.Resources.CPURequest.IsZero() {
 				// If both the allocated & actual resources are at or below MinShares, preserve the
 				// allocated value in the API to avoid confusion and simplify comparisons.
 				if cStatus.Resources.CPURequest.MilliValue() > cm.MinShares ||
@@ -2497,6 +2496,29 @@ func (kl *Kubelet) convertToAPIContainerStatuses(ctx context.Context, pod *v1.Po
 				resources.Requests[v1.ResourceMemory] = cStatus.Resources.MemoryRequest.DeepCopy()
 			} else {
 				preserveOldResourcesValue(v1.ResourceMemory, oldStatus.Resources.Requests, resources.Requests)
+			}
+		}
+		if resources.Limits != nil {
+			if cStatus.Resources != nil && cStatus.Resources.CPULimit != nil && !cStatus.Resources.CPULimit.IsZero() {
+				// If both the allocated & actual resources are at or below the minimum effective limit, preserve the
+				// allocated value in the API to avoid confusion and simplify comparisons.
+				if cStatus.Resources.CPULimit.MilliValue() > cm.MinMilliCPULimit ||
+					resources.Limits.Cpu().MilliValue() > cm.MinMilliCPULimit {
+					resources.Limits[v1.ResourceCPU] = cStatus.Resources.CPULimit.DeepCopy()
+				}
+			} else {
+				// CPU quota is disabled for containers with exclusive CPUs.
+				// Default the CPU limit to match the request, as it must for exclusive CPU allocation.
+				if kl.containerManager.ContainerHasExclusiveCPUs(logger, pod, allocatedContainer) {
+					resources.Limits[v1.ResourceCPU] = resources.Requests[v1.ResourceCPU].DeepCopy()
+				} else {
+					preserveOldResourcesValue(v1.ResourceCPU, oldStatus.Resources.Limits, resources.Limits)
+				}
+			}
+			if cStatus.Resources != nil && cStatus.Resources.MemoryLimit != nil {
+				resources.Limits[v1.ResourceMemory] = cStatus.Resources.MemoryLimit.DeepCopy()
+			} else {
+				preserveOldResourcesValue(v1.ResourceMemory, oldStatus.Resources.Limits, resources.Limits)
 			}
 		}
 
@@ -2692,7 +2714,12 @@ func (kl *Kubelet) convertToAPIContainerStatuses(ctx context.Context, pod *v1.Po
 		if !utilfeature.DefaultFeatureGate.Enabled(features.ChangeContainerStatusOnKubeletRestart) {
 			if cStatus.State == kubecontainer.ContainerStateRunning {
 				if oldStatus, ok := oldStatuses[status.Name]; ok && oldStatus.Started != nil {
-					status.Started = oldStatus.Started
+					// A kubelet restart loses in-memory probe results, so preserve Started
+					// for the same container. A replacement must pass its own startup probe.
+					// See https://github.com/kubernetes/kubernetes/issues/141155
+					if oldStatus.ContainerID == status.ContainerID {
+						status.Started = oldStatus.Started
+					}
 				}
 			}
 		}

@@ -134,11 +134,11 @@ type SchedulingQueue interface {
 	MoveAllToActiveOrBackoffQueue(logger klog.Logger, event fwk.ClusterEvent, oldObj, newObj interface{}, preCheck PreEnqueueCheck)
 	// AddGenericPodGroup adds a PodGroup or CompositePodGroup object to the queue,
 	// requeuing all pods associated with the group.
-	AddGenericPodGroup(logger klog.Logger, gpg *framework.GenericPodGroup)
+	AddGenericPodGroup(logger klog.Logger, gpg *fwk.GenericPodGroup)
 	// UpdateGenericPodGroup updates an existing PodGroup or CompositePodGroup object in the queue.
-	UpdateGenericPodGroup(logger klog.Logger, gpg *framework.GenericPodGroup)
+	UpdateGenericPodGroup(logger klog.Logger, gpg *fwk.GenericPodGroup)
 	// DeleteGenericPodGroup removes a PodGroup or CompositePodGroup object from the queue.
-	DeleteGenericPodGroup(logger klog.Logger, gpg *framework.GenericPodGroup)
+	DeleteGenericPodGroup(logger klog.Logger, gpg *fwk.GenericPodGroup)
 
 	// Close closes the SchedulingQueue so that the goroutine which is
 	// waiting to pop items can exit gracefully.
@@ -557,12 +557,17 @@ func (p *PriorityQueue) isEntityWorthRequeuing(logger klog.Logger, entity framew
 	// For pod groups, if any pod is worth requeuing, the whole group is worth it.
 	// But we should prioritize higher strategies.
 	bestStrategy := queueSkip
+	hasPending := entity.HasPodsWithPendingPlugins()
 	for pInfo := range entity.ForEachPodInfo() {
 		strategy := p.isPodWorthRequeuing(logger, pInfo, event, oldObj, newObj, hintKeys)
 		if strategy > bestStrategy {
 			bestStrategy = strategy
 		}
 		if bestStrategy == queueImmediately {
+			return bestStrategy
+		}
+		// If no pods have pending plugins, the best strategy is queueAfterBackoff.
+		if !hasPending && bestStrategy == queueAfterBackoff {
 			return bestStrategy
 		}
 	}
@@ -1567,7 +1572,7 @@ func (p *PriorityQueue) deletePod(pod *v1.Pod) {
 
 // AddGenericPodGroup adds a PodGroup or CompositePodGroup object to the queue,
 // requeuing all pods associated with the group.
-func (p *PriorityQueue) AddGenericPodGroup(logger klog.Logger, gpg *framework.GenericPodGroup) {
+func (p *PriorityQueue) AddGenericPodGroup(logger klog.Logger, gpg *fwk.GenericPodGroup) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -1607,7 +1612,7 @@ func (p *PriorityQueue) AddGenericPodGroup(logger klog.Logger, gpg *framework.Ge
 }
 
 // UpdateGenericPodGroup updates an existing PodGroup or CompositePodGroup object in the queue.
-func (p *PriorityQueue) UpdateGenericPodGroup(logger klog.Logger, gpg *framework.GenericPodGroup) {
+func (p *PriorityQueue) UpdateGenericPodGroup(logger klog.Logger, gpg *fwk.GenericPodGroup) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -1629,7 +1634,7 @@ func (p *PriorityQueue) UpdateGenericPodGroup(logger klog.Logger, gpg *framework
 }
 
 // DeleteGenericPodGroup removes a PodGroup or CompositePodGroup object from the queue.
-func (p *PriorityQueue) DeleteGenericPodGroup(logger klog.Logger, gpg *framework.GenericPodGroup) {
+func (p *PriorityQueue) DeleteGenericPodGroup(logger klog.Logger, gpg *fwk.GenericPodGroup) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -2195,7 +2200,7 @@ func (p *PriorityQueue) runPreQueueingHintPlugins(logger klog.Logger, event fwk.
 func newPodGroupInfoForLookup(namespace, name string) *framework.QueuedPodGroupInfo {
 	return &framework.QueuedPodGroupInfo{
 		PodGroupInfo: &framework.PodGroupInfo{
-			GenericPodGroup: framework.NewGenericPodGroup(&schedulingv1beta1.PodGroup{
+			GenericPodGroup: fwk.NewGenericPodGroup(&schedulingv1beta1.PodGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: namespace,
 					Name:      name,
@@ -2208,7 +2213,7 @@ func newPodGroupInfoForLookup(namespace, name string) *framework.QueuedPodGroupI
 func newCompositePodGroupInfoForLookup(namespace, name string) *framework.QueuedPodGroupInfo {
 	return &framework.QueuedPodGroupInfo{
 		PodGroupInfo: &framework.PodGroupInfo{
-			GenericPodGroup: framework.NewGenericCompositePodGroup(&schedulingv1alpha3.CompositePodGroup{
+			GenericPodGroup: fwk.NewGenericCompositePodGroup(&schedulingv1alpha3.CompositePodGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: namespace,
 					Name:      name,

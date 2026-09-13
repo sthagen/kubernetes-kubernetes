@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	corev1helpers "k8s.io/component-helpers/scheduling/corev1"
 	fwk "k8s.io/kube-scheduler/framework"
-	"k8s.io/kubernetes/pkg/scheduler/util"
+	"k8s.io/kube-scheduler/util"
 )
 
 // PodTerminatingByPreemption returns true if the pod is in the termination state caused by scheduler preemption.
@@ -208,10 +208,6 @@ func GetPodPriority(p *v1.Pod, podGroupLister fwk.PodGroupLister, compositePodGr
 func FilterVictimsWithPDBViolation[T Victim](victims []T, pdbs []*policy.PodDisruptionBudget) (violatingVictims []ViolatingVictim[T], nonViolatingVictims []T) {
 	pdbsAllowed := make([]int32, len(pdbs))
 	podIsViolating := func(pod *v1.Pod) bool {
-		if len(pod.Labels) == 0 {
-			return false
-		}
-
 		for i, pdb := range pdbs {
 			if pdb.Namespace != pod.Namespace {
 				continue
@@ -221,8 +217,7 @@ func FilterVictimsWithPDBViolation[T Victim](victims []T, pdbs []*policy.PodDisr
 				// This object has an invalid selector, it does not match the pod
 				continue
 			}
-			// A PDB with a nil or empty selector matches nothing.
-			if selector.Empty() || !selector.Matches(labels.Set(pod.Labels)) {
+			if !selector.Matches(labels.Set(pod.Labels)) {
 				continue
 			}
 

@@ -18049,7 +18049,6 @@ func TestValidateServiceCreate(t *testing.T) {
 		tweakSvc                   func(svc *core.Service) // given a basic valid service, each test case can customize it
 		numErrs                    int
 		legacyIPs                  bool
-		disableNewTrafficDist      bool
 		disableRelaxedServiceNames bool
 	}{{
 		name:     "default",
@@ -19323,20 +19322,6 @@ func TestValidateServiceCreate(t *testing.T) {
 			},
 			numErrs: 1,
 		}, {
-			name: "invalid: trafficDistribution field set to PreferSameZone without feature gate",
-			tweakSvc: func(s *core.Service) {
-				s.Spec.TrafficDistribution = ptr.To("PreferSameZone")
-			},
-			numErrs:               1,
-			disableNewTrafficDist: true,
-		}, {
-			name: "invalid: trafficDistribution field set to PreferSameNode without feature gate",
-			tweakSvc: func(s *core.Service) {
-				s.Spec.TrafficDistribution = ptr.To("PreferSameNode")
-			},
-			numErrs:               1,
-			disableNewTrafficDist: true,
-		}, {
 
 			name: "valid: service name begins with a digit feature gate enabled",
 			tweakSvc: func(s *core.Service) {
@@ -19355,10 +19340,6 @@ func TestValidateServiceCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.disableNewTrafficDist {
-				featuregatetesting.SetFeatureGateEmulationVersionDuringTest(t, utilfeature.DefaultFeatureGate, version.MustParse("1.34"))
-			}
-
 			if tc.disableRelaxedServiceNames {
 				featuregatetesting.SetFeatureGateEmulationVersionDuringTest(t, utilfeature.DefaultFeatureGate, version.MustParse("1.36"))
 				featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
@@ -19367,8 +19348,7 @@ func TestValidateServiceCreate(t *testing.T) {
 			}
 
 			featuregatetesting.SetFeatureGatesDuringTest(t, utilfeature.DefaultFeatureGate, featuregatetesting.FeatureOverrides{
-				features.PreferSameTrafficDistribution: !tc.disableNewTrafficDist,
-				features.StrictIPCIDRValidation:        !tc.legacyIPs,
+				features.StrictIPCIDRValidation: !tc.legacyIPs,
 			})
 			svc := makeValidService()
 			tc.tweakSvc(&svc)
@@ -23839,20 +23819,25 @@ func TestValidateSecret(t *testing.T) {
 		secret core.Secret
 		valid  bool
 	}{
-		"valid":                                     {validSecret(), true},
-		"empty name":                                {emptyName, false},
-		"invalid name":                              {invalidName, false},
-		"empty namespace":                           {emptyNs, false},
-		"invalid namespace":                         {invalidNs, false},
-		"over max size":                             {overMaxSize, false},
-		"invalid key":                               {invalidKey, false},
-		"valid service-account-token secret":        {validServiceAccountTokenSecret(), true},
-		"empty service-account-token annotation":    {emptyTokenAnnotation, false},
-		"missing service-account-token annotation":  {missingTokenAnnotation, false},
+		"valid":             {validSecret(), true},
+		"empty name":        {emptyName, false},
+		"invalid name":      {invalidName, false},
+		"empty namespace":   {emptyNs, false},
+		"invalid namespace": {invalidNs, false},
+		"over max size":     {overMaxSize, false},
+		"invalid key":       {invalidKey, false},
+
+		"valid service-account-token secret": {validServiceAccountTokenSecret(), true},
+
+		"empty service-account-token annotation": {emptyTokenAnnotation, false},
+
+		"missing service-account-token annotation": {missingTokenAnnotation, false},
+
 		"missing service-account-token annotations": {missingTokenAnnotations, false},
-		"leading dot key":                           {leadingDotKey, true},
-		"dot key":                                   {dotKey, false},
-		"double dot key":                            {doubleDotKey, false},
+
+		"leading dot key": {leadingDotKey, true},
+		"dot key":         {dotKey, false},
+		"double dot key":  {doubleDotKey, false},
 	}
 
 	for name, tc := range tests {

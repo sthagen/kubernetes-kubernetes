@@ -21,6 +21,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"slices"
 	"testing"
 	"time"
@@ -970,9 +971,10 @@ type AllocatorTestCase struct {
 
 	expectResults []any
 	expectError   types.GomegaMatcher // can be used to check for no error or match specific error
+	expectErrorIs error               // optional error to check with errors.Is
 
-	// Test case setting expectNumAllocateOneInvocations do not run against the "stable" variant of the allocator,
-	// which doesn't provide the stats and also falls over with excessive runtime for them.
+	// Expected allocateOne invocations, asserted for every variant. A variant
+	// that searches differently overrides this through the map below.
 	expectNumAllocateOneInvocations int64
 
 	// expectNumAllocateOneInvocationsByChannel overrides expectNumAllocateOneInvocations with
@@ -1718,6 +1720,36 @@ func TestAllocator(t *testing.T,
 				deviceAllocationResult(req0, driverA, pool1, device1, false),
 			)},
 		},
+		"all-devices-of-invalid-pool": {
+			claimsToAllocate: objects(claimWithRequests(claim0, nil, resourceapi.DeviceRequest{
+				Name: req0,
+				Exactly: &resourceapi.ExactDeviceRequest{
+					AllocationMode:  resourceapi.DeviceAllocationModeAll,
+					DeviceClassName: classA,
+				},
+			})),
+			classes: objects(class(classA, driverA)),
+			slices: func() []*resourceapi.ResourceSlice {
+				// This simulates the problem that can
+				// (theoretically) occur when the resource
+				// slice controller wants to publish a pool
+				// with two slices but ends up creating some
+				// identical slices under different names
+				// because its informer cache was out-dated on
+				// another sync (see
+				// resourceslicecontroller.go).
+				sliceA := sliceWithOneDevice(slice1, node1, pool1, driverA).obj()
+				sliceA.Spec.Pool.ResourceSliceCount = 2
+				sliceB := sliceA.DeepCopy()
+				sliceB.Name += "-2"
+				return []*resourceapi.ResourceSlice{sliceA, sliceB}
+			}(),
+			node: node(node1, region1),
+
+			expectResults: nil,
+			expectError:   gomega.MatchError(gomega.ContainSubstring("claim claim-0, request req-0: asks for all devices, but resource pool driver-a/pool-1 is currently invalid")),
+			expectErrorIs: internal.ErrFailedAllocationOnNode,
+		},
 		"all-devices-with-consumed-counters": {
 			features: Features{
 				PartitionableDevices: true,
@@ -1798,6 +1830,7 @@ func TestAllocator(t *testing.T,
 
 			expectResults: nil,
 			expectError:   gomega.MatchError(gomega.ContainSubstring("claim claim-0, request req-0: asks for all devices, but resource pool driver-a/pool-1 is currently being updated")),
+			expectErrorIs: internal.ErrFailedAllocationOnNode,
 		},
 		"all-devices-plus-another": {
 			claimsToAllocate: objects(
@@ -2887,6 +2920,60 @@ func TestAllocator(t *testing.T,
 
 			expectError: gomega.MatchError(gomega.ContainSubstring("exceeds the claim limit")),
 		},
+		// Two counts that are each representable but together overflow the native
+		// int accumulator to a negative value, rejected before the sum is formed.
+		// The value comes from math.MaxInt so it also triggers on 32-bit builds.
+		"exact-count-total-overflows-claim-limit": {
+			claimsToAllocate: objects(claim(claim0).withRequests(
+				deviceRequest(req0, classA, int64(math.MaxInt/2+1)),
+				deviceRequest(req1, classA, int64(math.MaxInt/2+1)),
+			)),
+			classes:     objects(class(classA, driverA)),
+			expectError: gomega.MatchError(gomega.ContainSubstring("exceeds the claim limit")),
+		},
+		// Four counts that would wrap a naive int accumulator back to zero rather
+		// than negative; each is rejected against remaining capacity before summing.
+		"exact-count-total-would-wrap-to-zero": {
+			claimsToAllocate: objects(claim(claim0).withRequests(
+				deviceRequest(req0, classA, int64(math.MaxInt/2+1)),
+				deviceRequest(req1, classA, int64(math.MaxInt/2+1)),
+				deviceRequest(req2, classA, int64(math.MaxInt/2+1)),
+				deviceRequest(req3, classA, int64(math.MaxInt/2+1)),
+			)),
+			classes:     objects(class(classA, driverA)),
+			expectError: gomega.MatchError(gomega.ContainSubstring("exceeds the claim limit")),
+		},
+		// req0 fits on its own, so the rejection has to name req1 as the one
+		// that pushes the claim over.
+		"exact-count-sum-exceeds-claim-limit": {
+			claimsToAllocate: objects(claim(claim0).withRequests(
+				deviceRequest(req0, classA, 20),
+				deviceRequest(req1, classA, 20),
+			)),
+			classes: objects(class(classA, driverA)),
+			expectError: gomega.MatchError(gomega.And(
+				gomega.ContainSubstring("request "+req1),
+				gomega.ContainSubstring("exceeds the claim limit"),
+			)),
+		},
+		// Two counts whose sum exactly fills the per-claim limit both allocate;
+		// this pins the pre-flight comparison as > and not >=.
+		"exact-count-sum-exactly-fills-claim-limit": {
+			claimsToAllocate: objects(claim(claim0).withRequests(
+				deviceRequest(req0, classA, resourceapi.AllocationResultsMaxSize/2),
+				deviceRequest(req1, classA, resourceapi.AllocationResultsMaxSize/2),
+			)),
+			classes: objects(class(classA, driverA)),
+			slices:  unwrapResourceSlices(sliceWithMultipleDevices(slice1, node1, pool1, driverA, resourceapi.AllocationResultsMaxSize)),
+			node:    node(node1, region1),
+			expectResults: []any{allocationResult(
+				localNodeSelector(node1),
+				slices.Concat(
+					multipleDeviceAllocationResults(req0, driverA, pool1, resourceapi.AllocationResultsMaxSize/2, 0),
+					multipleDeviceAllocationResults(req1, driverA, pool1, resourceapi.AllocationResultsMaxSize/2, resourceapi.AllocationResultsMaxSize/2),
+				)...,
+			)},
+		},
 		"all-devices-invalid-CEL": {
 			claimsToAllocate: objects(claimWithRequests(claim0, nil, request(req0, classA, 500))),
 			classes:          objects(class(classA, driverA)),
@@ -3468,6 +3555,49 @@ func TestAllocator(t *testing.T,
 				localNodeSelector(node1),
 				deviceAllocationResult(req0SubReq1, driverA, pool1, device1, false),
 			)},
+		},
+		// A prioritized list is worth at least its smallest alternative, so the
+		// pre-flight check reads that. min(20, 24) leaves the claim over the
+		// limit before any device is looked at.
+		"prioritized-list-minimum-sum-exceeds-claim-limit": {
+			features: Features{PrioritizedList: true},
+			claimsToAllocate: objects(claim(claim0).withRequests(
+				deviceRequest(req0, classA, 20),
+				requestWithPrioritizedList(req1,
+					subRequest(subReq0, classA, 20),
+					subRequest(subReq1, classA, 24),
+				),
+			)),
+			classes: objects(class(classA, driverA)),
+			expectError: gomega.MatchError(gomega.And(
+				gomega.ContainSubstring("request "+req1),
+				gomega.ContainSubstring("exceeds the claim limit"),
+			)),
+		},
+		// The oversized alternative sits behind a device already allocated for the
+		// claim, which is what overflowed the per-request check. Only the pinned
+		// invocation count separates pruning it from descending into it.
+		"prioritized-list-overflowing-first-subrequest-is-pruned": {
+			features: Features{PrioritizedList: true},
+			claimsToAllocate: objects(claim(claim0).withRequests(
+				deviceRequest(req0, classA, 1),
+				requestWithPrioritizedList(req1,
+					subRequest(subReq0, classA, int64(math.MaxInt)),
+					subRequest(subReq1, classA, 1),
+				),
+			)),
+			classes: objects(class(classA, driverA)),
+			slices: unwrapResourceSlices(sliceWithDevices(slice1, node1, pool1, driverA,
+				device(device1, nil, nil),
+				device(device2, nil, nil),
+			)),
+			node: node(node1, region1),
+			expectResults: []any{allocationResult(
+				localNodeSelector(node1),
+				deviceAllocationResult(req0, driverA, pool1, device1, false),
+				deviceAllocationResult(req1SubReq1, driverA, pool1, device2, false),
+			)},
+			expectNumAllocateOneInvocations: 8,
 		},
 		"partitionable-devices-single-device": {
 			features: Features{
@@ -6662,6 +6792,66 @@ func TestAllocator(t *testing.T,
 				deviceRequestAllocationResult(req0, driverA, pool1, device1).withConsumedCapacity(&fixedShareID, nil),
 			)},
 		},
+		"consumable-capacity-dedicated-request-blocked-by-persisted-share": {
+			// device1 still carries a live share after allowMultipleAllocations flipped to false,
+			// so a dedicated request must not be handed the device on top of it.
+			features: Features{ConsumableCapacity: true},
+			allocatedSharedDeviceIDs: sets.New(
+				internal.MakeSharedDeviceID(MakeDeviceID(driverA, pool1, device1), &fixedShareID),
+			),
+			claimsToAllocate: objects(claimWithRequests(claim0, nil, request(req0, classA, 1))),
+			classes:          objects(class(classA, driverA)),
+			slices: unwrapResourceSlices(
+				sliceWithDevices(slice1, node1, resourcePool(pool1, 1), driverA,
+					device(device1, nil, nil),
+				),
+			),
+			node:          node(node1, region1),
+			expectResults: []any{},
+		},
+		"consumable-capacity-dedicated-request-falls-back-past-persisted-share": {
+			// The guard drops device1 without aborting the search, so the request still lands on device2.
+			features: Features{ConsumableCapacity: true},
+			allocatedSharedDeviceIDs: sets.New(
+				internal.MakeSharedDeviceID(MakeDeviceID(driverA, pool1, device1), &fixedShareID),
+			),
+			claimsToAllocate: objects(claimWithRequests(claim0, nil, request(req0, classA, 1))),
+			classes:          objects(class(classA, driverA)),
+			slices: unwrapResourceSlices(
+				sliceWithDevices(slice1, node1, resourcePool(pool1, 1), driverA,
+					device(device1, nil, nil),
+					device(device2, nil, nil),
+				),
+			),
+			node: node(node1, region1),
+			expectResults: []any{allocationResult(
+				localNodeSelector(node1),
+				deviceAllocationResult(req0, driverA, pool1, device2, false),
+			)},
+		},
+		"consumable-capacity-with-admin-access-request-allowed-over-persisted-share": {
+			// Admin access skips the availability checks, so the live share does not withhold device1.
+			features: Features{ConsumableCapacity: true, AdminAccess: true},
+			allocatedSharedDeviceIDs: sets.New(
+				internal.MakeSharedDeviceID(MakeDeviceID(driverA, pool1, device1), &fixedShareID),
+			),
+			claimsToAllocate: func() []wrapResourceClaim {
+				c := claimWithRequest(claim0, req0, classA)
+				c.Spec.Devices.Requests[0].Exactly.AdminAccess = new(true)
+				return []wrapResourceClaim{c}
+			}(),
+			classes: objects(class(classA, driverA)),
+			slices: unwrapResourceSlices(
+				sliceWithDevices(slice1, node1, resourcePool(pool1, 1), driverA,
+					device(device1, nil, nil),
+				),
+			),
+			node: node(node1, region1),
+			expectResults: []any{allocationResult(
+				localNodeSelector(node1),
+				deviceAllocationResult(req0, driverA, pool1, device1, true),
+			)},
+		},
 		"consumable-capacity-with-partitionable-device-multiple-capacity-pools": {
 			// This test case combines integration of PrioritizedList, PartitionableDevices, and ConsumableCapacity features.
 			features: Features{
@@ -9223,6 +9413,9 @@ func RunTestAllocator(t *testing.T,
 				matchError = gomega.Not(gomega.HaveOccurred())
 			}
 			g.Expect(err).To(matchError)
+			if tc.expectErrorIs != nil {
+				g.Expect(err).To(gomega.MatchError(tc.expectErrorIs))
+			}
 
 			t.Logf("name: %s", name)
 			// replace any share id with fixed value for testing

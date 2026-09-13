@@ -145,7 +145,11 @@ func (o orderedListSnapshot) OrderedListPrefix(prefix, continueKey string) ([]in
 	return o.Items, nil
 }
 
-func (o orderedListSnapshot) RangePrefix(prefix, continueKey string) iter.Seq2[*Element, error] {
+func (o orderedListSnapshot) RangePrefix(prefix, continueKey string) Range {
+	return prefixRange{o, prefix, continueKey}
+}
+
+func (o orderedListSnapshot) rangePrefix(prefix, continueKey string) iter.Seq2[*Element, error] {
 	return func(yield func(*Element, error) bool) {
 		for _, item := range o.Items {
 			elem, ok := item.(*Element)
@@ -160,7 +164,7 @@ func (o orderedListSnapshot) RangePrefix(prefix, continueKey string) iter.Seq2[*
 	}
 }
 
-func (o orderedListSnapshot) Count(prefix, continueKey string) int {
+func (o orderedListSnapshot) countPrefix(prefix, continueKey string) int {
 	return len(o.Items)
 }
 
@@ -200,40 +204,27 @@ func (l listSnapshot) OrderedListPrefix(prefix string, continueKey string) ([]in
 	return result, nil
 }
 
-func (l listSnapshot) RangePrefix(prefix, continueKey string) iter.Seq2[*Element, error] {
-	return func(yield func(*Element, error) bool) {
-		items, err := l.OrderedListPrefix(prefix, continueKey)
-		if err != nil {
-			yield(nil, err)
-			return
-		}
-		for _, item := range items {
-			// OrderedListPrefix has already checked every item is an *Element.
-			if !yield(item.(*Element), nil) {
-				return
-			}
-		}
+func (l listSnapshot) RangePrefix(prefix, continueKey string) Range {
+	items, err := l.OrderedListPrefix(prefix, continueKey)
+	if err != nil {
+		return failedRange{err}
 	}
+	elems := make(elements, 0, len(items))
+	for _, item := range items {
+		// OrderedListPrefix has already checked every item is an *Element.
+		elems = append(elems, item.(*Element))
+	}
+	return elems
 }
 
-// Count returns the number of items RangePrefix(prefix, continueKey) would
-// yield, by applying its filter without allocating or sorting.
-func (l listSnapshot) Count(prefix, continueKey string) int {
-	count := 0
-	for _, item := range l.Items {
-		elem, ok := item.(*Element)
-		if !ok {
-			continue
-		}
-		if len(continueKey) > 0 && continueKey > elem.Key {
-			continue
-		}
-		if !key.HasPathPrefix(elem.Key, prefix) {
-			continue
-		}
-		count++
-	}
-	return count
+type failedRange struct{ err error }
+
+func (r failedRange) All() iter.Seq2[*Element, error] {
+	return func(yield func(*Element, error) bool) { yield(nil, r.err) }
+}
+
+func (r failedRange) Count() int {
+	return 0
 }
 
 type sortableStoreElements []interface{}

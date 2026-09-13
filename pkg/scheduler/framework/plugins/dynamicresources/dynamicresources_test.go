@@ -1312,7 +1312,7 @@ func TestPreFilterReusesPendingAllocationWithNilNodeSelector(t *testing.T) {
 		},
 	})
 	cycleState := framework.NewCycleState()
-	cycleState.SetPodGroupSchedulingCycle(podGroupCycleState)
+	cycleState.SetPodGroupCycleState(podGroupCycleState)
 	testCtx.state = cycleState
 
 	nodeInfo := framework.NewNodeInfo()
@@ -1372,7 +1372,7 @@ func TestFilterReusesPendingAllocationRequiresDRAOptionalNodeOperations(t *testi
 		},
 	})
 	cycleState := framework.NewCycleState()
-	cycleState.SetPodGroupSchedulingCycle(podGroupCycleState)
+	cycleState.SetPodGroupCycleState(podGroupCycleState)
 	testCtx.state = cycleState
 
 	nodeInfo := framework.NewNodeInfo()
@@ -4262,7 +4262,7 @@ func testPlugin(tCtx ktesting.TContext) {
 					})
 				} else {
 					// PodGroup cycle state is cleared before asynchronous binding.
-					testCtx.state.(*framework.CycleState).SetPodGroupSchedulingCycle(nil)
+					testCtx.state.(*framework.CycleState).SetPodGroupCycleState(nil)
 
 					if tc.want.unreserveBeforePreBind != nil {
 						initialObjects = testCtx.listAll(tCtx)
@@ -4302,13 +4302,13 @@ func testPlugin(tCtx ktesting.TContext) {
 				initialObjects = testCtx.updateAPIServer(tCtx, initialObjects, tc.prepare.postfilter)
 				if len(tc.podGroups) > 0 {
 					pgInfo := &framework.PodGroupInfo{
-						GenericPodGroup: framework.NewGenericPodGroup(tc.podGroups[0]),
+						GenericPodGroup: fwk.NewGenericPodGroup(tc.podGroups[0]),
 						UnscheduledPods: []*v1.Pod{tc.pod},
 					}
 					mockSchedulingFunc := func(ctx context.Context) (*fwk.PodGroupAssignments, *fwk.Status) {
 						return nil, fwk.NewStatus(fwk.Unschedulable)
 					}
-					podGroupCycleState := testCtx.state.GetPodGroupSchedulingCycle()
+					podGroupCycleState := testCtx.state.GetPodGroupCycleState()
 					result, status := testCtx.p.PodGroupPostFilter(tCtx, podGroupCycleState, pgInfo, mockSchedulingFunc)
 					tCtx.Run("postfilter", func(tCtx ktesting.TContext) {
 						assert.Equal(tCtx, tc.want.podGroupPostFilterResult, result)
@@ -4642,7 +4642,7 @@ func setup(tCtx ktesting.TContext, args *config.DynamicResourcesArgs, nodes []*v
 		}
 	}
 	for _, podGroup := range podGroups {
-		tc.podGroupManager.AddGenericPodGroup(framework.NewGenericPodGroup(podGroup))
+		tc.podGroupManager.AddGenericPodGroup(fwk.NewGenericPodGroup(podGroup))
 	}
 	snapshot := internalcache.NewTestSnapshotWithPodGroups(nil, nil, podGroups)
 
@@ -4706,7 +4706,7 @@ func setup(tCtx ktesting.TContext, args *config.DynamicResourcesArgs, nodes []*v
 	state := framework.NewCycleState()
 	if len(podGroups) > 0 {
 		pgCycleState := framework.NewCycleState()
-		state.SetPodGroupSchedulingCycle(pgCycleState)
+		state.SetPodGroupCycleState(pgCycleState)
 	}
 	tc.state = state
 
@@ -6169,7 +6169,7 @@ func TestPodGroupPostFilter(t *testing.T) {
 			}
 
 			pgInfo := &framework.PodGroupInfo{
-				GenericPodGroup: framework.NewGenericPodGroup(tc.podGroups[0]),
+				GenericPodGroup: fwk.NewGenericPodGroup(tc.podGroups[0]),
 				UnscheduledPods: tc.unscheduledPods,
 			}
 

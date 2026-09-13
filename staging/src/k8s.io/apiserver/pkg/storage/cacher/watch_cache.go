@@ -68,8 +68,10 @@ type watchCacheEvent struct {
 	Key             string
 	ResourceVersion uint64
 	RecordTime      time.Time
-	// CacheReceived is the time the event was received by the cacher.
-	CacheReceived time.Time
+	// timeline carries the shared, pre-fan-out dispatch-lifecycle timestamps of
+	// this event (currently PointCacheReceived). Per-watcher points are filled in
+	// on delivery.
+	timeline metrics.DispatchTimeline
 }
 
 // watchCache implements a Store interface.
@@ -236,8 +238,9 @@ func (w *watchCache) processEvent(event watch.Event, resourceVersion uint64) err
 		Key:             key,
 		ResourceVersion: resourceVersion,
 		RecordTime:      recordTime,
-		CacheReceived:   cacheReceived,
 	}
+	wcEvent.timeline.MarkAt(metrics.PointStorageDecoded, recordTime)
+	wcEvent.timeline.MarkAt(metrics.PointCacheReceived, cacheReceived)
 
 	// We can call w.storage.Get() outside of a critical section,
 	// because the w.storage itself is thread-safe and the only
@@ -387,10 +390,14 @@ func (c *watchCache) waitUntilFreshAndGetList(ctx context.Context, key string, o
 	if err != nil {
 		return listResp{}, "", err
 	}
-	if exists {
-		return listResp{Items: []interface{}{obj}, ResourceVersion: readResourceVersion}, "", nil
+	if !exists {
+		return listResp{ResourceVersion: readResourceVersion, Range: store.EmptyRange()}, "", nil
 	}
-	return listResp{ResourceVersion: readResourceVersion}, "", nil
+	elem, ok := obj.(*store.Element)
+	if !ok {
+		return listResp{}, "", fmt.Errorf("non *store.Element returned from storage: %v", obj)
+	}
+	return listResp{ResourceVersion: readResourceVersion, Range: store.SingleElementRange(elem)}, "", nil
 }
 
 // WaitUntilFreshAndList returns list of pointers to `storeElement` objects along
@@ -448,15 +455,11 @@ func (w *watchCache) waitUntilFreshAndList(ctx context.Context, key string, opts
 }
 
 func (w *watchCache) waitAndListExactRV(ctx context.Context, key, continueKey string, resourceVersion uint64) (resp listResp, index string, err error) {
-	store, err := w.waitAndGetExactSnapshot(ctx, resourceVersion)
+	snap, err := w.waitAndGetExactSnapshot(ctx, resourceVersion)
 	if err != nil {
 		return listResp{}, "", err
 	}
-	items, err := store.OrderedListPrefix(key, continueKey)
-	return listResp{
-		Items:           items,
-		ResourceVersion: resourceVersion,
-	}, "", err
+	return listResp{ResourceVersion: resourceVersion, Range: snap.RangePrefix(key, continueKey)}, "", nil
 }
 
 func (w *watchCache) waitAndGetExactSnapshot(ctx context.Context, resourceVersion uint64) (store.Snapshot, error) {
@@ -495,14 +498,7 @@ func (w *watchCache) waitAndListLatestRV(ctx context.Context, minResourceVersion
 	if err != nil {
 		return listResp{}, "", err
 	}
-	items, err := snap.OrderedListPrefix(key, continueKey)
-	if err != nil {
-		return listResp{}, "", err
-	}
-	return listResp{
-		Items:           items,
-		ResourceVersion: resourceVersion,
-	}, index, nil
+	return listResp{ResourceVersion: resourceVersion, Range: snap.RangePrefix(key, continueKey)}, index, nil
 }
 
 func (w *watchCache) waitAndGetLatestSnapshot(ctx context.Context, minResourceVersion uint64, key, continueKey string, matchValues []storage.MatchValue) (snap store.Snapshot, resourceVersion uint64, index string, err error) {

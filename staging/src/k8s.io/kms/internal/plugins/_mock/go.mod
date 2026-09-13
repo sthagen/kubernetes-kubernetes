@@ -1,8 +1,8 @@
 module k8s.io/kms/plugins/mock
 
-go 1.26.0
+go 1.27.0
 
-godebug default=go1.26
+godebug default=go1.27
 
 require (
 	github.com/ThalesIgnite/crypto11 v1.2.5
@@ -15,9 +15,9 @@ require (
 	github.com/thales-e-security/pool v0.0.2 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/grpc v1.82.1 // indirect
+	google.golang.org/grpc v1.82.2 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
 

@@ -68,17 +68,6 @@ linters:
         text: comment on exported (method|function|type|const)|should have( a package)? comment|comment should be of the form|comment on exported (method|function|type|const)|should have( a package)? comment|comment should be of the form|exported (.+) should have comment( \(or a comment on this block\))? or be unexported|package comment should be of the form "(.+)...|comment on exported (.+) should be of the form "(.+)...|should have a package comment
         path-except: cmd/kubeadm
 
-      # The unused linter that comes from staticcheck currently does not handle types which implement
-      # a generic interface. The linter incorrectly reports the implementations of unexported
-      # interface methods as unused. See https://github.com/dominikh/go-tools/issues/1294.
-      # Rather than exporting the interface methods, which makes the error go away but changes the
-      # semantics of the code, we ignore this error for affected files.
-      # This can be removed when the staticcheck implementation of this rule is fixed, which may
-      # depend on https://github.com/golang/go/issues/63982.
-      - linters:
-          - unused
-        path: staging/src/k8s.io/client-go/util/workqueue/metrics.go
-
       # SSA Extract calls are allowed in tests.
       - linters:
           - forbidigo
@@ -147,7 +136,7 @@ linters:
       # Commentstart - Ignore commentstart issues for existing API group
       # TODO: For each existing API group, we aim to remove it over time.
       - text: "godoc for field .* should start with '.* ...'"
-        path: "staging/src/k8s.io/api/(apps|batch|certificates|core|resource|storagemigration)"
+        path: "staging/src/k8s.io/api/(core|resource|storagemigration)"
       
       # notimestamp: Legacy 'Timestamp' fields retained for backward compatibility
       - text: 'notimestamp: naming convention "notimestamp": field TokenRequestStatus.ExpirationTimestamp: prefer use of the term ''time'' over ''timestamp'''
@@ -241,7 +230,18 @@ linters:
       # OptionalOrRequired is being enabled over time. For now, each API group should be added to this list until we comb through each group and fix the missing tags.
       # The nonpointerstructs linter is included here as well as these two should be enabled hand-in-hand on each API group.
       - text: "must be marked as optional or required|is a non-pointer struct with no required fields."
-        path: "staging/src/k8s.io/api/(admissionregistration|autoscaling|certificates|core|extensions|networking|storage)"
+        path: "staging/src/k8s.io/api/(admissionregistration|autoscaling|certificates|core|extensions)"
+      
+      # nonpointerstructs/optionalorrequired - IngressBackend and ServiceBackendPort are "oneOf"-shaped
+      # structs (validation requires exactly one of Resource/Service, or Name/Number, to be set) but
+      # neither individual field is itself marked required, so the linter can't see the real cross-field
+      # constraint and would force the container to be marked +optional - which is misleading, since an
+      # empty value does fail validation. Suppressing rather than mismarking (per danwinship's review on
+      # #141944).
+      - text: "field HTTPIngressPath.Backend (is a non-pointer struct with no required fields. It must be marked as optional.|must be marked as optional or required)"
+        path: "staging/src/k8s.io/api/networking/"
+      - text: "field IngressServiceBackend.Port (is a non-pointer struct with no required fields. It must be marked as optional.|must be marked as optional or required)"
+        path: "staging/src/k8s.io/api/networking/v1/types.go"
       
       # OptionalOrRequired - Existing fields that are marked as both optional and required (based on standard optional vs kubebuilder:validation:Required) and should not be fixed.
       - text: "field (PortStatus|IngressPortStatus)\\.Error must not be marked as both optional and required"
@@ -289,6 +289,10 @@ linters:
         path: "staging/src/k8s.io/api/lifecycle/v1alpha1/types.go"
       - text: "optionalfields: field Eviction.Status should be a pointer."
         path: "staging/src/k8s.io/api/lifecycle/v1alpha1/types.go"
+      # VolumeAttachmentSpec.Source is a union type. Validation requires one of its child fields to be set,
+      # but nonpointerstructs does not understand that invariant.
+      - text: "nonpointerstructs: field VolumeAttachmentSpec.Source is a non-pointer struct with no required fields."
+        path: "staging/src/k8s.io/api/storage/(v1|v1alpha1|v1beta1)/types.go"
 
       - linters:
         - forbidigo
@@ -316,8 +320,8 @@ linters:
   settings: # please keep this alphabetized
     custom:
       logcheck:
-        # Installed there by hack/verify-golangci-lint.sh.
-        path: _output/local/bin/logcheck.so
+        # hack/tools/golangci-lint/main.go compiles this linter into golangci-lint.
+        type: module
         description: structured logging checker
         original-url: k8s.io/logtools/logcheck
         settings:
@@ -391,8 +395,8 @@ linters:
             # API design needed).
             -contextual k8s.io/client-go/plugin/pkg/client/auth/.*
       sorted:
-        # Installed there by hack/verify-golangci-lint.sh.
-        path: _output/local/bin/sorted.so
+        # hack/tools/golangci-lint/main.go compiles this linter into golangci-lint.
+        type: module
         description: check if feature gates are sorted
         original-url: k8s.io/kubernetes/hack/tools/golangci-lint/sorted
         settings:
@@ -406,7 +410,8 @@ linters:
             - test/e2e/feature/feature.go
             - test/e2e/environment/environment.go
       kubeapilinter:
-        path: _output/local/bin/kube-api-linter.so
+        # hack/tools/golangci-lint/main.go compiles this linter into golangci-lint.
+        type: module
         description: kube-api-linter and lints Kube like APIs based on API conventions and best practices.
         original-url: sigs.k8s.io/kube-api-linter
         settings:
@@ -541,6 +546,16 @@ linters:
       # Analyzers which are kept enabled are not
       # called out here, see https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#section-documentation
       # for the full list.
+      #
+      # We don't pro-actively modernize existing code, so checks need to be disabled
+      # for the base config unless we happen to pass the check already.
+      # For new language features (identified with e.g. "go 1.27" for a feature added in 1.27)
+      # we hold back enabling as hint to reduce the risk that usage of the feature makes
+      # backporting harder. Waiting until all supported releases support the feature is safe,
+      # but it's also okay to go faster because backports to very old releases become less
+      # likely over time and some features might be worth a hint sooner - use common sense.
+      #
+      # Please keep sorted alphabetically.
       disable:
         # Replace interface{} with any.
         #
@@ -549,6 +564,9 @@ linters:
         # consistency with existing code
         # and it's just syntactic sugar.
         - any
+        # go 1.27: can declare embedded fields inline
+        # TODO Kubernetes 1.39: limit to base config
+        - embedlit
         # Suggest replacing omitempty with omitzero for struct fields.
         #
         # Disabled because might interfere
@@ -567,13 +585,6 @@ linters:
         # context cancellation and also
         # addresses other pain points.
         - testingcontext
-        # Replace wg.Add(1)/go/wg.Done() with wg.Go.
-        #
-        # A useful hint leading to shorter code.
-        # Makes wait.Group obsolete.
-        # Please enable when all supported Kubernetes versions
-        # are on GoLang 1.25+
-        - waitgroup
 
     revive:
       # Only these rules are enabled.

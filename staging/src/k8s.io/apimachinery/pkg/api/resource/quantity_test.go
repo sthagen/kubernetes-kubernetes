@@ -542,6 +542,10 @@ func TestQuantityParse(t *testing.T) {
 		"-3.01i",
 		"-3.01e-",
 
+		// an exponent outside the int32 scale is rejected rather than truncated
+		// to an unrelated value; 1e4294967297 would otherwise parse as 1e1
+		"1e4294967297",
+
 		// trailing whitespace is forbidden
 		" 1",
 		"1 ",
@@ -550,6 +554,37 @@ func TestQuantityParse(t *testing.T) {
 		_, err := ParseQuantity(item)
 		if err == nil {
 			t.Errorf("%v parsed unexpectedly", item)
+		}
+	}
+}
+
+func TestInterpretExponentInt32Bounds(t *testing.T) {
+	// interpret parses the exponent at 64 bits but stores it in an int32 scale
+	// that is later negated, so it accepts [-MaxInt32, MaxInt32] and rejects
+	// anything past it, instead of narrowing it to an unrelated value. This
+	// checks interpret's suffix-layer bounds only, not what the rest of
+	// ParseQuantity does with an accepted exponent.
+	cases := []struct {
+		suffix  string
+		wantExp int32
+		wantOK  bool
+	}{
+		{"e14", 14, true},
+		{"E2147483647", 2147483647, true},   // MaxInt32
+		{"E-2147483647", -2147483647, true}, // -MaxInt32
+		{"E2147483648", 0, false},           // MaxInt32 + 1
+		{"E-2147483648", 0, false},          // MinInt32; -MinInt32 overflows int32
+		{"E4294967297", 0, false},           // 2^32 + 1, truncated to 1 today
+		{"E8589934592", 0, false},           // 2^33, truncated to 0 today
+		{"E9223372036854775807", 0, false},  // MaxInt64, truncated to -1 today
+		{"E9223372036854775808", 0, false},  // MaxInt64 + 1, past int64: ParseInt range error
+		{"E6024865272343", 0, false},        // far past int32
+	}
+	for _, tc := range cases {
+		base, exp, format, ok := quantitySuffixer.interpret(suffix(tc.suffix))
+		if ok != tc.wantOK || (ok && (exp != tc.wantExp || base != 10 || format != DecimalExponent)) {
+			t.Errorf("interpret(%q) = (base=%d, exp=%d, %v, ok=%t), want exp=%d ok=%t",
+				tc.suffix, base, exp, format, ok, tc.wantExp, tc.wantOK)
 		}
 	}
 }
@@ -838,6 +873,24 @@ func TestBinarySIPastEiArithmeticRoundTrip(t *testing.T) {
 		t.Errorf("String round trip changed the value: %s vs %s", q.String(), reparsed.String())
 	}
 }
+
+func TestBinarySIZeroExponentString(t *testing.T) {
+	table := []struct {
+		in   Quantity
+		want string
+	}{
+		{intQuantity(2000, 0, BinarySI), "2000"},
+		{intQuantity(-2000, 0, BinarySI), "-2000"},
+		{decQuantity(2000, 0, BinarySI), "2000"},
+		{decQuantity(-2000, 0, BinarySI), "-2000"},
+	}
+	for _, item := range table {
+		if e, a := item.want, item.in.String(); e != a {
+			t.Errorf("String() = %q, want %q", a, e)
+		}
+	}
+}
+
 func TestQuantityStringBelowNano(t *testing.T) {
 	// DecimalSI has no suffix below "n" (10^-9), so these values take the same
 	// exponent-notation fallback as the >"E" cases above. They are not reachable
@@ -1639,6 +1692,10 @@ func TestQuantityAsApproximateFloat64(t *testing.T) {
 		{decQuantity(0, 0, DecimalSI), 0.0},
 		{decQuantity(0, 0, DecimalExponent), 0.0},
 		{decQuantity(0, 0, BinarySI), 0.0},
+		{decQuantity(0, 500, DecimalSI), 0.0},
+		{intQuantity(0, 500, DecimalSI), 0.0},
+		{decQuantity(0, -500, DecimalSI), 0.0},
+		{intQuantity(0, -500, DecimalSI), 0.0},
 
 		{decQuantity(1, 0, DecimalSI), 1},
 		{decQuantity(1, 0, DecimalExponent), 1},
@@ -1710,6 +1767,10 @@ func TestQuantityAsFloat64Slow(t *testing.T) {
 		{decQuantity(0, 0, DecimalSI), 0.0},
 		{decQuantity(0, 0, DecimalExponent), 0.0},
 		{decQuantity(0, 0, BinarySI), 0.0},
+		{decQuantity(0, 500, DecimalSI), 0.0},
+		{intQuantity(0, 500, DecimalSI), 0.0},
+		{decQuantity(0, -500, DecimalSI), 0.0},
+		{intQuantity(0, -500, DecimalSI), 0.0},
 
 		{decQuantity(1, 0, DecimalSI), 1},
 		{decQuantity(1, 0, DecimalExponent), 1},
@@ -2188,15 +2249,15 @@ func TestParseQuantity(t *testing.T) {
 		{input: "9999999999999999999", wantAsInt64: nil, wantAsDec: ptrDec("9999999999999999999")},
 		{input: "-1E", wantAsInt64: ptr.To[int64](-1000000000000000000), wantAsDec: ptrDec("-1000000000000000000")},
 		{input: "1E", wantAsInt64: ptr.To[int64](1000000000000000000), wantAsDec: ptrDec("1000000000000000000")},
-		{input: "-1000000000000000000", wantAsInt64: nil, wantAsDec: ptrDec("-1000000000000000000"), canonical: "-1E"}, // should be wantAsInt64: <value>
-		{input: "1000000000000000000", wantAsInt64: nil, wantAsDec: ptrDec("1000000000000000000"), canonical: "1E"},    // should be wantAsInt64: <value>
+		{input: "-1000000000000000000", wantAsInt64: ptr.To[int64](-1000000000000000000), wantAsDec: ptrDec("-1000000000000000000"), canonical: "-1E"},
+		{input: "1000000000000000000", wantAsInt64: ptr.To[int64](1000000000000000000), wantAsDec: ptrDec("1000000000000000000"), canonical: "1E"},
 		// .0
 		{input: "-9999999999999999999.0", wantAsInt64: nil, wantAsDec: ptrDec("-9999999999999999999"), canonical: "-9999999999999999999"},
 		{input: "9999999999999999999.0", wantAsInt64: nil, wantAsDec: ptrDec("9999999999999999999"), canonical: "9999999999999999999"},
 		{input: "-1.0E", wantAsInt64: ptr.To[int64](-1000000000000000000), wantAsDec: ptrDec("-1000000000000000000"), canonical: "-1E"},
 		{input: "1.0E", wantAsInt64: ptr.To[int64](1000000000000000000), wantAsDec: ptrDec("1000000000000000000"), canonical: "1E"},
-		{input: "-1000000000000000000.0", wantAsInt64: nil, wantAsDec: ptrDec("-1000000000000000000"), canonical: "-1E"}, // should be wantAsInt64: <value>
-		{input: "1000000000000000000.0", wantAsInt64: nil, wantAsDec: ptrDec("1000000000000000000"), canonical: "1E"},    // should be wantAsInt64: <value>
+		{input: "-1000000000000000000.0", wantAsInt64: nil, wantAsDec: ptrDec("-1000000000000000000"), canonical: "-1E"},
+		{input: "1000000000000000000.0", wantAsInt64: nil, wantAsDec: ptrDec("1000000000000000000"), canonical: "1E"},
 		// 000m
 		{input: "-9999999999999999999000m", wantAsInt64: nil, wantAsDec: ptrDec("-9999999999999999999"), canonical: "-9999999999999999999"},
 		{input: "9999999999999999999000m", wantAsInt64: nil, wantAsDec: ptrDec("9999999999999999999"), canonical: "9999999999999999999"},
@@ -2208,10 +2269,10 @@ func TestParseQuantity(t *testing.T) {
 		{input: "-1000000000000000000.1", wantAsInt64: nil, wantAsDec: ptrDec("-1000000000000000000.1"), canonical: "-1000000000000000000100m"},
 		{input: "1000000000000000000.1", wantAsInt64: nil, wantAsDec: ptrDec("1000000000000000000.1"), canonical: "1000000000000000000100m"},
 		// +1
-		{input: "-1.000000000000000001E", wantAsInt64: nil, wantAsDec: ptrDec("-1000000000000000001"), canonical: "-1000000000000000001"}, // should be wantAsInt64: <value>
-		{input: "1.000000000000000001E", wantAsInt64: nil, wantAsDec: ptrDec("1000000000000000001"), canonical: "1000000000000000001"},    // should be wantAsInt64: <value>
-		{input: "-1000000000000000001", wantAsInt64: nil, wantAsDec: ptrDec("-1000000000000000001")},                                      // should be wantAsInt64: <value>
-		{input: "1000000000000000001", wantAsInt64: nil, wantAsDec: ptrDec("1000000000000000001")},                                        // should be wantAsInt64: <value>
+		{input: "-1.000000000000000001E", wantAsInt64: ptr.To[int64](-1000000000000000001), wantAsDec: ptrDec("-1000000000000000001"), canonical: "-1000000000000000001"},
+		{input: "1.000000000000000001E", wantAsInt64: ptr.To[int64](1000000000000000001), wantAsDec: ptrDec("1000000000000000001"), canonical: "1000000000000000001"},
+		{input: "-1000000000000000001", wantAsInt64: ptr.To[int64](-1000000000000000001), wantAsDec: ptrDec("-1000000000000000001")},
+		{input: "1000000000000000001", wantAsInt64: ptr.To[int64](1000000000000000001), wantAsDec: ptrDec("1000000000000000001")},
 
 		// min/max 20 digits
 		{input: "-10E", wantAsInt64: nil, wantAsDec: ptrDec("-10000000000000000000")},
@@ -2239,7 +2300,7 @@ func TestParseQuantity(t *testing.T) {
 
 		// min/max int64 - 1
 		{input: "-9223372036854775809", wantAsInt64: nil, wantAsDec: ptrDec("-9223372036854775809")},
-		{input: "9223372036854775806", wantAsInt64: nil, wantAsDec: ptrDec("9223372036854775806")}, // should be wantAsInt64: <value>
+		{input: "9223372036854775806", wantAsInt64: ptr.To[int64](9223372036854775806), wantAsDec: ptrDec("9223372036854775806")},
 		// .0
 		{input: "-9223372036854775809.0", wantAsInt64: nil, wantAsDec: ptrDec("-9223372036854775809"), canonical: "-9223372036854775809"},
 		{input: "9223372036854775806.0", wantAsInt64: nil, wantAsDec: ptrDec("9223372036854775806"), canonical: "9223372036854775806"}, // should be wantAsInt64: <value>
@@ -2251,8 +2312,8 @@ func TestParseQuantity(t *testing.T) {
 		{input: "9223372036854775806.1", wantAsInt64: nil, wantAsDec: ptrDec("9223372036854775806.1"), canonical: "9223372036854775806100m"},
 
 		// min/max int64
-		{input: "-9223372036854775808", wantAsInt64: nil, wantAsDec: ptrDec("-9223372036854775808")}, // should be wantAsInt64: <value>
-		{input: "9223372036854775807", wantAsInt64: nil, wantAsDec: ptrDec("9223372036854775807")},   // should be wantAsInt64: <value>
+		{input: "-9223372036854775808", wantAsInt64: ptr.To[int64](-9223372036854775808), wantAsDec: ptrDec("-9223372036854775808")},
+		{input: "9223372036854775807", wantAsInt64: ptr.To[int64](9223372036854775807), wantAsDec: ptrDec("9223372036854775807")},
 		// .0
 		{input: "-9223372036854775808.0", wantAsInt64: nil, wantAsDec: ptrDec("-9223372036854775808"), canonical: "-9223372036854775808"}, // should be wantAsInt64: <value>
 		{input: "9223372036854775807.0", wantAsInt64: nil, wantAsDec: ptrDec("9223372036854775807"), canonical: "9223372036854775807"},    // should be wantAsInt64: <value>
@@ -2264,7 +2325,7 @@ func TestParseQuantity(t *testing.T) {
 		{input: "9223372036854775807.1", wantAsInt64: nil, wantAsDec: ptrDec("9223372036854775807.1"), canonical: "9223372036854775807100m"},
 
 		// min/max int64 + 1
-		{input: "-9223372036854775807", wantAsInt64: nil, wantAsDec: ptrDec("-9223372036854775807")}, // should be wantAsInt64: <value>
+		{input: "-9223372036854775807", wantAsInt64: ptr.To[int64](-9223372036854775807), wantAsDec: ptrDec("-9223372036854775807")},
 		{input: "9223372036854775808", wantAsInt64: nil, wantAsDec: ptrDec("9223372036854775808")},
 		// .0
 		{input: "-9223372036854775807.0", wantAsInt64: nil, wantAsDec: ptrDec("-9223372036854775807"), canonical: "-9223372036854775807"}, // should be wantAsInt64: <value>

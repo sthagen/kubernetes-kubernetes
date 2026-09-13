@@ -19,6 +19,8 @@ package resource
 import (
 	"math"
 	"testing"
+
+	inf "gopkg.in/inf.v0"
 )
 
 func TestInt64AmountAsInt64(t *testing.T) {
@@ -31,7 +33,8 @@ func TestInt64AmountAsInt64(t *testing.T) {
 		{100, 0, 100, true},
 		{100, 1, 1000, true},
 		{100, -5, 0, false},
-		{100, 100, 0, false},
+		// overflow saturates to the sign-correct rail; ok stays false.
+		{100, 100, mostPositive, false},
 	} {
 		r, ok := int64Amount{value: test.value, scale: test.scale}.AsInt64()
 		if r != test.result {
@@ -208,7 +211,7 @@ func TestInt64AmountAsScaledInt64(t *testing.T) {
 		{"test when i.scale < scaled ", int64Amount{value: 100, scale: 0}, 5, 1, true},
 		{"test when i.scale = scaled", int64Amount{value: 100, scale: 1}, 1, 100, true},
 		{"test when i.scale > scaled and result doesn't overflow", int64Amount{value: 100, scale: 5}, 2, 100000, true},
-		{"test when i.scale > scaled and result overflows", int64Amount{value: 876, scale: 30}, 4, 0, false},
+		{"test when i.scale > scaled and result overflows (saturates to the sign-correct rail)", int64Amount{value: 876, scale: 30}, 4, mostPositive, false},
 		{"test when i.scale < 0 and fraction exists", int64Amount{value: 93, scale: -1}, 0, 10, true},
 		{"test when i.scale < 0 and fraction doesn't exist", int64Amount{value: 100, scale: -1}, 0, 10, true},
 		{"test when i.value < 0 and fraction exists", int64Amount{value: -1932, scale: 2}, 4, -20, true},
@@ -249,6 +252,32 @@ func TestScaleCanAlignInfScale(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.a.canAlignInfScale(tc.b); got != tc.want {
 				t.Fatalf("Scale(%d).canAlignInfScale(%d) = %t, want %t", tc.a, tc.b, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestScaleInfScale(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		scale  Scale
+		result inf.Scale
+	}{
+		{"positive scale flips sign", 3, -3},
+		{"negative scale flips sign", -3, 3},
+		{"zero", 0, 0},
+		{"MinInt32+1 flips sign", math.MinInt32 + 1, math.MaxInt32},
+		// Scale is an int32 and infScale returns inf.Scale(-s). Negating
+		// math.MinInt32 does not fit in an int32, so the sign is not flipped
+		// and the value stays math.MinInt32 - the same int-negation edge as
+		// -mostNegative for int64. This asserts that behavior of infScale
+		// directly (it is exercised on the inf.Dec path, e.g. ScaledValue on
+		// a Dec-backed Quantity; the int64 backend does not call it).
+		{"MinInt32 does not flip sign", math.MinInt32, math.MinInt32},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.scale.infScale(); got != test.result {
+				t.Errorf("%s: Scale(%d).infScale() = %d, want %d", test.name, test.scale, got, test.result)
 			}
 		})
 	}

@@ -573,13 +573,33 @@ func TestCacheWatcherDrainingNoBookmarkAfterResourceVersionSent(t *testing.T) {
 
 	// note that we can add three events even though the chanSize is two because
 	// one event has been popped off from the input chan
-	if !w.add(&watchCacheEvent{Object: makePod(5), ResourceVersion: 5, RecordTime: fakeClock.Now().Add(-2 * time.Second), CacheReceived: fakeClock.Now().Add(-1 * time.Second)}, time.NewTimer(1*time.Second)) {
+	if !w.add(&watchCacheEvent{
+		Object:          makePod(5),
+		ResourceVersion: 5,
+		RecordTime:      fakeClock.Now().Add(-2 * time.Second),
+		timeline: metrics.DispatchTimeline{
+			metrics.PointStorageDecoded:  fakeClock.Now().Add(-2 * time.Second),
+			metrics.PointCacheReceived:   fakeClock.Now().Add(-1 * time.Second),
+			metrics.PointDispatchStarted: fakeClock.Now().Add(-500 * time.Millisecond),
+			metrics.PointWatcherEnqueued: fakeClock.Now().Add(-500 * time.Millisecond),
+		},
+	}, time.NewTimer(1*time.Second)) {
 		t.Fatal("failed adding an even to the watcher")
 	}
 	if !w.nonblockingAdd(&watchCacheEvent{Type: watch.Bookmark, ResourceVersion: 10, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "10"}}}) {
 		t.Fatal("failed adding an even to the watcher")
 	}
-	if !w.add(&watchCacheEvent{Object: makePod(15), ResourceVersion: 15, RecordTime: fakeClock.Now().Add(-2 * time.Second), CacheReceived: fakeClock.Now().Add(-1 * time.Second)}, time.NewTimer(1*time.Second)) {
+	if !w.add(&watchCacheEvent{
+		Object:          makePod(15),
+		ResourceVersion: 15,
+		RecordTime:      fakeClock.Now().Add(-2 * time.Second),
+		timeline: metrics.DispatchTimeline{
+			metrics.PointStorageDecoded:  fakeClock.Now().Add(-2 * time.Second),
+			metrics.PointCacheReceived:   fakeClock.Now().Add(-1 * time.Second),
+			metrics.PointDispatchStarted: fakeClock.Now().Add(-500 * time.Millisecond),
+			metrics.PointWatcherEnqueued: fakeClock.Now().Add(-500 * time.Millisecond),
+		},
+	}, time.NewTimer(1*time.Second)) {
 		t.Fatal("failed adding an even to the watcher")
 	}
 	if w.add(&watchCacheEvent{Object: makePod(20), ResourceVersion: 20}, time.NewTimer(1*time.Second)) {
@@ -620,12 +640,18 @@ func TestCacheWatcherDrainingNoBookmarkAfterResourceVersionSent(t *testing.T) {
 	expected := `
 # HELP apiserver_watch_events_dispatch_duration_seconds [ALPHA] Histogram of watch event dispatch latency broken by resource type and pipeline stage. The 'total' stage is the end-to-end latency of a delivered event.
 # TYPE apiserver_watch_events_dispatch_duration_seconds histogram
+apiserver_watch_events_dispatch_duration_seconds_bucket{group="",resource="pods",stage="cacher_queue_latency",le="+Inf"} 2
+apiserver_watch_events_dispatch_duration_seconds_sum{group="",resource="pods",stage="cacher_queue_latency"} 1
+apiserver_watch_events_dispatch_duration_seconds_count{group="",resource="pods",stage="cacher_queue_latency"} 2
 apiserver_watch_events_dispatch_duration_seconds_bucket{group="",resource="pods",stage="storage_to_cache",le="+Inf"} 2
 apiserver_watch_events_dispatch_duration_seconds_sum{group="",resource="pods",stage="storage_to_cache"} 2
 apiserver_watch_events_dispatch_duration_seconds_count{group="",resource="pods",stage="storage_to_cache"} 2
 apiserver_watch_events_dispatch_duration_seconds_bucket{group="",resource="pods",stage="total",le="+Inf"} 2
 apiserver_watch_events_dispatch_duration_seconds_sum{group="",resource="pods",stage="total"} 4
 apiserver_watch_events_dispatch_duration_seconds_count{group="",resource="pods",stage="total"} 2
+apiserver_watch_events_dispatch_duration_seconds_bucket{group="",resource="pods",stage="watcher_queue_latency",le="+Inf"} 2
+apiserver_watch_events_dispatch_duration_seconds_sum{group="",resource="pods",stage="watcher_queue_latency"} 1
+apiserver_watch_events_dispatch_duration_seconds_count{group="",resource="pods",stage="watcher_queue_latency"} 2
 apiserver_watch_events_dispatch_duration_seconds_bucket{group="",resource="pods",stage="watcher_to_client_handler",le="+Inf"} 2
 apiserver_watch_events_dispatch_duration_seconds_sum{group="",resource="pods",stage="watcher_to_client_handler"} 0
 apiserver_watch_events_dispatch_duration_seconds_count{group="",resource="pods",stage="watcher_to_client_handler"} 2

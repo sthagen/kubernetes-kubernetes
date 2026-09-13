@@ -54,6 +54,7 @@ import (
 	etcdfeature "k8s.io/apiserver/pkg/storage/feature"
 	storagemetrics "k8s.io/apiserver/pkg/storage/metrics"
 	storagetesting "k8s.io/apiserver/pkg/storage/testing"
+	"k8s.io/apiserver/pkg/storage/testing/correctness"
 	"k8s.io/apiserver/pkg/storage/value"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
@@ -852,10 +853,10 @@ type setupOptions struct {
 
 type setupOption func(*setupOptions)
 
-func withClientConfig(config *embed.Config) setupOption {
+func withClientConfig(f func(config *embed.Config)) setupOption {
 	return func(options *setupOptions) {
 		options.client = func(t testing.TB) *kubernetes.Client {
-			return testserver.RunEtcd(t, config)
+			return testserver.RunEtcd(t, f)
 		}
 	}
 }
@@ -892,7 +893,7 @@ func withCodec(codec runtime.Codec) setupOption {
 
 func withDefaults(options *setupOptions) {
 	options.client = func(t testing.TB) *kubernetes.Client {
-		return testserver.RunEtcd(t, nil)
+		return testserver.RunEtcd(t)
 	}
 	options.codec = apitesting.TestCodec(codecs, examplev1.SchemeGroupVersion)
 	options.newFunc = newPod
@@ -1422,4 +1423,9 @@ func TestPrefixStats(t *testing.T) {
 
 		})
 	}
+}
+
+func TestCorrectness(t *testing.T) {
+	ctx, store, _ := testSetup(t)
+	correctness.RunTestCorrectness(ctx, t, store, "")
 }

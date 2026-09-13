@@ -564,6 +564,9 @@
           "description": "selector can be used to match multiple param objects based on their labels. Supply selector: {} to match all resources of the ParamKind.\n\nIf multiple params are found, they are all evaluated with the policy expressions and the results are ANDed together.\n\nOne of `name` or `selector` must be set, but `name` and `selector` are mutually exclusive properties. If one is set, the other must be unset."
         }
       },
+      "required": [
+        "parameterNotFoundAction"
+      ],
       "type": "object",
       "x-kubernetes-map-type": "atomic"
     },
@@ -1885,6 +1888,9 @@
           "description": "selector can be used to match multiple param objects based on their labels. Supply selector: {} to match all resources of the ParamKind.\n\nIf multiple params are found, they are all evaluated with the policy expressions and the results are ANDed together.\n\nOne of `name` or `selector` must be set, but `name` and `selector` are mutually exclusive properties. If one is set, the other must be unset."
         }
       },
+      "required": [
+        "parameterNotFoundAction"
+      ],
       "type": "object",
       "x-kubernetes-map-type": "atomic"
     },
@@ -2095,7 +2101,7 @@
         },
         "data": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.runtime.RawExtension",
-          "description": "Data is the serialized representation of the state."
+          "description": "data is the serialized representation of the state."
         },
         "kind": {
           "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
@@ -2103,10 +2109,10 @@
         },
         "metadata": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
-          "description": "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
+          "description": "metadata is the standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
         },
         "revision": {
-          "description": "Revision indicates the revision of the state represented by Data.",
+          "description": "revision indicates the revision of the state represented by Data.",
           "format": "int64",
           "type": "integer"
         }
@@ -2171,15 +2177,15 @@
         },
         "metadata": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
-          "description": "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
+          "description": "metadata is the standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
         },
         "spec": {
           "$ref": "#/definitions/io.k8s.api.apps.v1.DaemonSetSpec",
-          "description": "The desired behavior of this daemon set. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
+          "description": "spec defines the desired behavior of this daemon set. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
         },
         "status": {
           "$ref": "#/definitions/io.k8s.api.apps.v1.DaemonSetStatus",
-          "description": "The current status of this daemon set. This data may be out of date by some window of time. Populated by the system. Read-only. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
+          "description": "status is the current status of this daemon set. This data may be out of date by some window of time. Populated by the system. Read-only. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
         }
       },
       "required": [
@@ -2199,22 +2205,22 @@
       "properties": {
         "lastTransitionTime": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time",
-          "description": "Last time the condition transitioned from one status to another."
+          "description": "lastTransitionTime is the last time the condition transitioned from one status to another."
         },
         "message": {
-          "description": "A human readable message indicating details about the transition.",
+          "description": "message is a human readable string indicating details about the transition.",
           "type": "string"
         },
         "reason": {
-          "description": "The reason for the condition's last transition.",
+          "description": "reason for the condition's last transition.",
           "type": "string"
         },
         "status": {
-          "description": "Status of the condition, one of True, False, Unknown.",
+          "description": "status of the condition, one of True, False, Unknown.",
           "type": "string"
         },
         "type": {
-          "description": "Type of DaemonSet condition.",
+          "description": "type of DaemonSet condition.",
           "type": "string"
         }
       },
@@ -2259,26 +2265,26 @@
       "description": "DaemonSetSpec is the specification of a daemon set.",
       "properties": {
         "minReadySeconds": {
-          "description": "The minimum number of seconds for which a newly created DaemonSet pod should be ready without any of its container crashing, for it to be considered available. Defaults to 0 (pod will be considered available as soon as it is ready).",
+          "description": "minReadySeconds is the minimum number of seconds for which a newly created DaemonSet pod should be ready without any of its container crashing, for it to be considered available. Defaults to 0 (pod will be considered available as soon as it is ready).",
           "format": "int32",
           "type": "integer"
         },
         "revisionHistoryLimit": {
-          "description": "The number of old history to retain to allow rollback. This is a pointer to distinguish between explicit zero and not specified. Defaults to 10.",
+          "description": "revisionHistoryLimit is the maximum number of old revisions to retain to allow rollback. This is a pointer to distinguish between explicit zero and not specified. Defaults to 10.",
           "format": "int32",
           "type": "integer"
         },
         "selector": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector",
-          "description": "A label query over pods that are managed by the daemon set. Must match in order to be controlled. It must match the pod template's labels. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors"
+          "description": "selector is the label query to identify pods that are managed by the daemon set. Must match in order to be controlled. It must match the pod template's labels. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors"
         },
         "template": {
           "$ref": "#/definitions/io.k8s.api.core.v1.PodTemplateSpec",
-          "description": "An object that describes the pod that will be created. The DaemonSet will create exactly one copy of this pod on every node that matches the template's node selector (or on every node if no node selector is specified). The only allowed template.spec.restartPolicy value is \"Always\". More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller#pod-template"
+          "description": "template describes the pod that will be created. The DaemonSet will create exactly one copy of this pod on every node that matches the template's node selector (or on every node if no node selector is specified). The only allowed template.spec.restartPolicy value is \"Always\". More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller#pod-template"
         },
         "updateStrategy": {
           "$ref": "#/definitions/io.k8s.api.apps.v1.DaemonSetUpdateStrategy",
-          "description": "An update strategy to replace existing DaemonSet pods with new pods."
+          "description": "updateStrategy to replace existing DaemonSet pods with new pods."
         }
       },
       "required": [
@@ -2291,12 +2297,12 @@
       "description": "DaemonSetStatus represents the current status of a daemon set.",
       "properties": {
         "collisionCount": {
-          "description": "Count of hash collisions for the DaemonSet. The DaemonSet controller uses this field as a collision avoidance mechanism when it needs to create the name for the newest ControllerRevision.",
+          "description": "collisionCount is the number of hash collisions for the DaemonSet. The DaemonSet controller uses this field as a collision avoidance mechanism when it needs to create the name for the newest ControllerRevision.",
           "format": "int32",
           "type": "integer"
         },
         "conditions": {
-          "description": "Represents the latest available observations of a DaemonSet's current state.",
+          "description": "conditions lists the latest available observations of a DaemonSet's current state.",
           "items": {
             "$ref": "#/definitions/io.k8s.api.apps.v1.DaemonSetCondition"
           },
@@ -2309,22 +2315,22 @@
           "x-kubernetes-patch-strategy": "merge"
         },
         "currentNumberScheduled": {
-          "description": "The number of nodes that are running at least 1 daemon pod and are supposed to run the daemon pod. More info: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/",
+          "description": "currentNumberScheduled is the number of nodes that are running at least 1 daemon pod and are supposed to run the daemon pod. More info: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/",
           "format": "int32",
           "type": "integer"
         },
         "desiredNumberScheduled": {
-          "description": "The total number of nodes that should be running the daemon pod (including nodes correctly running the daemon pod). More info: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/",
+          "description": "desiredNumberScheduled is the total number of nodes that should be running the daemon pod (including nodes correctly running the daemon pod). More info: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/",
           "format": "int32",
           "type": "integer"
         },
         "numberAvailable": {
-          "description": "The number of nodes that should be running the daemon pod and have one or more of the daemon pod running and available (ready for at least spec.minReadySeconds)",
+          "description": "numberAvailable is the number of nodes that should be running the daemon pod and have one or more of the daemon pod running and available (ready for at least spec.minReadySeconds).",
           "format": "int32",
           "type": "integer"
         },
         "numberMisscheduled": {
-          "description": "The number of nodes that are running the daemon pod, but are not supposed to run the daemon pod. More info: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/",
+          "description": "numberMisscheduled is the number of nodes that are running the daemon pod, but are not supposed to run the daemon pod. More info: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/",
           "format": "int32",
           "type": "integer"
         },
@@ -2334,17 +2340,17 @@
           "type": "integer"
         },
         "numberUnavailable": {
-          "description": "The number of nodes that should be running the daemon pod and have none of the daemon pod running and available (ready for at least spec.minReadySeconds)",
+          "description": "numberUnavailable is the number of nodes that should be running the daemon pod and have none of the daemon pod running and available (ready for at least spec.minReadySeconds).",
           "format": "int32",
           "type": "integer"
         },
         "observedGeneration": {
-          "description": "The most recent generation observed by the daemon set controller.",
+          "description": "observedGeneration is the most recent generation observed by the daemon set controller.",
           "format": "int64",
           "type": "integer"
         },
         "updatedNumberScheduled": {
-          "description": "The total number of nodes that are running updated daemon pod",
+          "description": "updatedNumberScheduled is the total number of nodes that are running updated daemon pod.",
           "format": "int32",
           "type": "integer"
         }
@@ -2362,10 +2368,10 @@
       "properties": {
         "rollingUpdate": {
           "$ref": "#/definitions/io.k8s.api.apps.v1.RollingUpdateDaemonSet",
-          "description": "Rolling update config params. Present only if type = \"RollingUpdate\"."
+          "description": "rollingUpdate config params. Present only if type = \"RollingUpdate\"."
         },
         "type": {
-          "description": "Type of daemon set update. Can be \"RollingUpdate\" or \"OnDelete\". Default is RollingUpdate.",
+          "description": "type of daemon set update. Can be \"RollingUpdate\" or \"OnDelete\". Default is RollingUpdate.",
           "type": "string"
         }
       },
@@ -2384,15 +2390,15 @@
         },
         "metadata": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
-          "description": "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
+          "description": "metadata is the standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
         },
         "spec": {
           "$ref": "#/definitions/io.k8s.api.apps.v1.DeploymentSpec",
-          "description": "Specification of the desired behavior of the Deployment."
+          "description": "spec defines the desired behavior of the Deployment."
         },
         "status": {
           "$ref": "#/definitions/io.k8s.api.apps.v1.DeploymentStatus",
-          "description": "Most recently observed status of the Deployment."
+          "description": "status is the most recently observed status of the Deployment."
         }
       },
       "required": [
@@ -2412,26 +2418,26 @@
       "properties": {
         "lastTransitionTime": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time",
-          "description": "Last time the condition transitioned from one status to another."
+          "description": "lastTransitionTime is the last time the condition transitioned from one status to another."
         },
         "lastUpdateTime": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time",
-          "description": "The last time this condition was updated."
+          "description": "lastUpdateTime is the last time this condition was updated."
         },
         "message": {
-          "description": "A human readable message indicating details about the transition.",
+          "description": "message is a human readable string indicating details about the transition.",
           "type": "string"
         },
         "reason": {
-          "description": "The reason for the condition's last transition.",
+          "description": "reason for the condition's last transition.",
           "type": "string"
         },
         "status": {
-          "description": "Status of the condition, one of True, False, Unknown.",
+          "description": "status of the condition, one of True, False, Unknown.",
           "type": "string"
         },
         "type": {
-          "description": "Type of deployment condition.",
+          "description": "type of deployment condition.",
           "type": "string"
         }
       },
@@ -2445,7 +2451,7 @@
           "type": "string"
         },
         "items": {
-          "description": "Items is the list of Deployments.",
+          "description": "items is the list of Deployments.",
           "items": {
             "$ref": "#/definitions/io.k8s.api.apps.v1.Deployment"
           },
@@ -2457,7 +2463,7 @@
         },
         "metadata": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta",
-          "description": "Standard list metadata."
+          "description": "metadata is the standard list metadata."
         }
       },
       "required": [
@@ -2476,41 +2482,41 @@
       "description": "DeploymentSpec is the specification of the desired behavior of the Deployment.",
       "properties": {
         "minReadySeconds": {
-          "description": "Minimum number of seconds for which a newly created pod should be ready without any of its container crashing, for it to be considered available. Defaults to 0 (pod will be considered available as soon as it is ready)",
+          "description": "minReadySeconds is the minimum number of seconds for which a newly created pod should be ready without any of its container crashing, for it to be considered available. Defaults to 0 (pod will be considered available as soon as it is ready).",
           "format": "int32",
           "type": "integer"
         },
         "paused": {
-          "description": "Indicates that the deployment is paused.",
+          "description": "paused indicates that the deployment is paused.",
           "type": "boolean"
         },
         "progressDeadlineSeconds": {
-          "description": "The maximum time in seconds for a deployment to make progress before it is considered to be failed. The deployment controller will continue to process failed deployments and a condition with a ProgressDeadlineExceeded reason will be surfaced in the deployment status. Note that progress will not be estimated during the time a deployment is paused. Defaults to 600s.",
+          "description": "progressDeadlineSeconds is the maximum time in seconds for a deployment to make progress before it is considered to be failed. The deployment controller will continue to process failed deployments and a condition with a ProgressDeadlineExceeded reason will be surfaced in the deployment status. Note that progress will not be estimated during the time a deployment is paused. Defaults to 600s.",
           "format": "int32",
           "type": "integer"
         },
         "replicas": {
-          "description": "Number of desired pods. This is a pointer to distinguish between explicit zero and not specified. Defaults to 1.",
+          "description": "replicas is the desired number of pods. This is a pointer to distinguish between explicit zero and not specified. Defaults to 1.",
           "format": "int32",
           "type": "integer"
         },
         "revisionHistoryLimit": {
-          "description": "The number of old ReplicaSets to retain to allow rollback. This is a pointer to distinguish between explicit zero and not specified. Defaults to 10.",
+          "description": "revisionHistoryLimit is the maximum number of old ReplicaSets to retain to allow rollback. This is a pointer to distinguish between explicit zero and not specified. Defaults to 10.",
           "format": "int32",
           "type": "integer"
         },
         "selector": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector",
-          "description": "Label selector for pods. Existing ReplicaSets whose pods are selected by this will be the ones affected by this deployment. It must match the pod template's labels."
+          "description": "selector is a label selector for pods. Existing ReplicaSets whose pods are selected by this will be the ones affected by this deployment. It must match the pod template's labels."
         },
         "strategy": {
           "$ref": "#/definitions/io.k8s.api.apps.v1.DeploymentStrategy",
-          "description": "The deployment strategy to use to replace existing pods with new ones.",
+          "description": "strategy to use to replace existing Deployment pods with new ones.",
           "x-kubernetes-patch-strategy": "retainKeys"
         },
         "template": {
           "$ref": "#/definitions/io.k8s.api.core.v1.PodTemplateSpec",
-          "description": "Template describes the pods that will be created. The only allowed template.spec.restartPolicy value is \"Always\"."
+          "description": "template describes the pods that will be created. The only allowed template.spec.restartPolicy value is \"Always\"."
         }
       },
       "required": [
@@ -2523,17 +2529,17 @@
       "description": "DeploymentStatus is the most recently observed status of the Deployment.",
       "properties": {
         "availableReplicas": {
-          "description": "Total number of available non-terminating pods (ready for at least minReadySeconds) targeted by this deployment.",
+          "description": "availableReplicas is the total number of available non-terminating pods (ready for at least minReadySeconds) targeted by this deployment.",
           "format": "int32",
           "type": "integer"
         },
         "collisionCount": {
-          "description": "Count of hash collisions for the Deployment. The Deployment controller uses this field as a collision avoidance mechanism when it needs to create the name for the newest ReplicaSet.",
+          "description": "collisionCount is the number of hash collisions for the Deployment. The Deployment controller uses this field as a collision avoidance mechanism when it needs to create the name for the newest ReplicaSet.",
           "format": "int32",
           "type": "integer"
         },
         "conditions": {
-          "description": "Represents the latest available observations of a deployment's current state.",
+          "description": "conditions lists the latest available observations of a deployment's current state.",
           "items": {
             "$ref": "#/definitions/io.k8s.api.apps.v1.DeploymentCondition"
           },
@@ -2546,32 +2552,32 @@
           "x-kubernetes-patch-strategy": "merge"
         },
         "observedGeneration": {
-          "description": "The generation observed by the deployment controller.",
+          "description": "observedGeneration is the generation observed by the deployment controller.",
           "format": "int64",
           "type": "integer"
         },
         "readyReplicas": {
-          "description": "Total number of non-terminating pods targeted by this Deployment with a Ready Condition.",
+          "description": "readyReplicas is the total number of non-terminating pods targeted by this Deployment with a Ready Condition.",
           "format": "int32",
           "type": "integer"
         },
         "replicas": {
-          "description": "Total number of non-terminating pods targeted by this deployment (their labels match the selector).",
+          "description": "replicas is the total number of non-terminating pods targeted by this deployment (their labels match the selector).",
           "format": "int32",
           "type": "integer"
         },
         "terminatingReplicas": {
-          "description": "Total number of terminating pods targeted by this deployment. Terminating pods have a non-null .metadata.deletionTimestamp and have not yet reached the Failed or Succeeded .status.phase.\n\nThis is a beta field and requires enabling DeploymentReplicaSetTerminatingReplicas feature (enabled by default).",
+          "description": "terminatingReplicas is the number of terminating pods targeted by this deployment. Terminating pods have a non-null .metadata.deletionTimestamp and have not yet reached the Failed or Succeeded .status.phase.\n\nThis is a beta field and requires enabling DeploymentReplicaSetTerminatingReplicas feature (enabled by default).",
           "format": "int32",
           "type": "integer"
         },
         "unavailableReplicas": {
-          "description": "Total number of unavailable pods targeted by this deployment. This is the total number of pods that are still required for the deployment to have 100% available capacity. They may either be pods that are running but not yet available or pods that still have not been created.",
+          "description": "unavailableReplicas is the total number of unavailable pods targeted by this deployment. This is the total number of pods that are still required for the deployment to have 100% available capacity. They may either be pods that are running but not yet available or pods that still have not been created.",
           "format": "int32",
           "type": "integer"
         },
         "updatedReplicas": {
-          "description": "Total number of non-terminating pods targeted by this deployment that have the desired template spec.",
+          "description": "updatedReplicas is total number of non-terminating pods targeted by this deployment that have the desired template spec.",
           "format": "int32",
           "type": "integer"
         }
@@ -2583,10 +2589,10 @@
       "properties": {
         "rollingUpdate": {
           "$ref": "#/definitions/io.k8s.api.apps.v1.RollingUpdateDeployment",
-          "description": "Rolling update config params. Present only if DeploymentStrategyType = RollingUpdate."
+          "description": "rollingUpdate config params. Present only if type = RollingUpdate."
         },
         "type": {
-          "description": "Type of deployment. Can be \"Recreate\" or \"RollingUpdate\". Default is RollingUpdate.",
+          "description": "type of deployment. Can be \"Recreate\" or \"RollingUpdate\". Default is RollingUpdate.",
           "type": "string"
         }
       },
@@ -2605,15 +2611,15 @@
         },
         "metadata": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
-          "description": "If the Labels of a ReplicaSet are empty, they are defaulted to be the same as the Pod(s) that the ReplicaSet manages. Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
+          "description": "metadata is the standard object metadata. If the Labels of a ReplicaSet are empty, they are defaulted to be the same as the Pod(s) that the ReplicaSet manages. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
         },
         "spec": {
           "$ref": "#/definitions/io.k8s.api.apps.v1.ReplicaSetSpec",
-          "description": "Spec defines the specification of the desired behavior of the ReplicaSet. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
+          "description": "spec defines the specification of the desired behavior of the ReplicaSet. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
         },
         "status": {
           "$ref": "#/definitions/io.k8s.api.apps.v1.ReplicaSetStatus",
-          "description": "Status is the most recently observed status of the ReplicaSet. This data may be out of date by some window of time. Populated by the system. Read-only. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
+          "description": "status is the most recently observed status of the ReplicaSet. This data may be out of date by some window of time. Populated by the system. Read-only. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
         }
       },
       "required": [
@@ -2633,22 +2639,22 @@
       "properties": {
         "lastTransitionTime": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time",
-          "description": "The last time the condition transitioned from one status to another."
+          "description": "lastTransitionTime is the last time the condition transitioned from one status to another."
         },
         "message": {
-          "description": "A human readable message indicating details about the transition.",
+          "description": "message is a human readable string indicating details about the transition.",
           "type": "string"
         },
         "reason": {
-          "description": "The reason for the condition's last transition.",
+          "description": "reason for the condition's last transition.",
           "type": "string"
         },
         "status": {
-          "description": "Status of the condition, one of True, False, Unknown.",
+          "description": "status of the condition, one of True, False, Unknown.",
           "type": "string"
         },
         "type": {
-          "description": "Type of replica set condition.",
+          "description": "type of replica set condition.",
           "type": "string"
         }
       },
@@ -2693,22 +2699,22 @@
       "description": "ReplicaSetSpec is the specification of a ReplicaSet.",
       "properties": {
         "minReadySeconds": {
-          "description": "Minimum number of seconds for which a newly created pod should be ready without any of its container crashing, for it to be considered available. Defaults to 0 (pod will be considered available as soon as it is ready)",
+          "description": "minReadySeconds is the minimum number of seconds for which a newly created pod should be ready without any of its container crashing, for it to be considered available. Defaults to 0 (pod will be considered available as soon as it is ready)",
           "format": "int32",
           "type": "integer"
         },
         "replicas": {
-          "description": "Replicas is the number of desired pods. This is a pointer to distinguish between explicit zero and unspecified. Defaults to 1. More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset",
+          "description": "replicas is the number of desired pods. This is a pointer to distinguish between explicit zero and unspecified. Defaults to 1. More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset",
           "format": "int32",
           "type": "integer"
         },
         "selector": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector",
-          "description": "Selector is a label query over pods that should match the replica count. Label keys and values that must match in order to be controlled by this replica set. It must match the pod template's labels. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors"
+          "description": "selector is a label query over pods that should match the replica count. Label keys and values that must match in order to be controlled by this replica set. It must match the pod template's labels. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors"
         },
         "template": {
           "$ref": "#/definitions/io.k8s.api.core.v1.PodTemplateSpec",
-          "description": "Template is the object that describes the pod that will be created if insufficient replicas are detected. More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/#pod-template"
+          "description": "template is the object that describes the pod that will be created if insufficient replicas are detected. More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/#pod-template"
         }
       },
       "required": [
@@ -2720,12 +2726,12 @@
       "description": "ReplicaSetStatus represents the current status of a ReplicaSet.",
       "properties": {
         "availableReplicas": {
-          "description": "The number of available non-terminating pods (ready for at least minReadySeconds) for this replica set.",
+          "description": "availableReplicas is the number of available non-terminating pods (ready for at least minReadySeconds) for this ReplicaSet.",
           "format": "int32",
           "type": "integer"
         },
         "conditions": {
-          "description": "Represents the latest available observations of a replica set's current state.",
+          "description": "conditions lists the latest available observations of a ReplicaSet's current state.",
           "items": {
             "$ref": "#/definitions/io.k8s.api.apps.v1.ReplicaSetCondition"
           },
@@ -2738,27 +2744,27 @@
           "x-kubernetes-patch-strategy": "merge"
         },
         "fullyLabeledReplicas": {
-          "description": "The number of non-terminating pods that have labels matching the labels of the pod template of the replicaset.",
+          "description": "fullyLabeledReplicas is the number of non-terminating pods that have labels matching the labels of the pod template of the ReplicaSet.",
           "format": "int32",
           "type": "integer"
         },
         "observedGeneration": {
-          "description": "ObservedGeneration reflects the generation of the most recently observed ReplicaSet.",
+          "description": "observedGeneration reflects the generation of the most recently observed ReplicaSet.",
           "format": "int64",
           "type": "integer"
         },
         "readyReplicas": {
-          "description": "The number of non-terminating pods targeted by this ReplicaSet with a Ready Condition.",
+          "description": "readyReplicas is the number of non-terminating pods targeted by this ReplicaSet with a Ready Condition.",
           "format": "int32",
           "type": "integer"
         },
         "replicas": {
-          "description": "Replicas is the most recently observed number of non-terminating pods. More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset",
+          "description": "replicas is the most recently observed number of non-terminating pods. More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset",
           "format": "int32",
           "type": "integer"
         },
         "terminatingReplicas": {
-          "description": "The number of terminating pods for this replica set. Terminating pods have a non-null .metadata.deletionTimestamp and have not yet reached the Failed or Succeeded .status.phase.\n\nThis is a beta field and requires enabling DeploymentReplicaSetTerminatingReplicas feature (enabled by default).",
+          "description": "terminatingReplicas is the number of terminating pods for this ReplicaSet. Terminating pods have a non-null .metadata.deletionTimestamp and have not yet reached the Failed or Succeeded .status.phase.\n\nThis is a beta field and requires enabling DeploymentReplicaSetTerminatingReplicas feature (enabled by default).",
           "format": "int32",
           "type": "integer"
         }
@@ -2773,11 +2779,11 @@
       "properties": {
         "maxSurge": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.util.intstr.IntOrString",
-          "description": "The maximum number of nodes with an existing available DaemonSet pod that can have an updated DaemonSet pod during during an update. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). This can not be 0 if MaxUnavailable is 0. Absolute number is calculated from percentage by rounding up to a minimum of 1. Default value is 0. Example: when this is set to 30%, at most 30% of the total number of nodes that should be running the daemon pod (i.e. status.desiredNumberScheduled) can have their a new pod created before the old pod is marked as deleted. The update starts by launching new pods on 30% of nodes. Once an updated pod is available (Ready for at least minReadySeconds) the old DaemonSet pod on that node is marked deleted. If the old pod becomes unavailable for any reason (Ready transitions to false, is evicted, or is drained) an updated pod is immediately created on that node without considering surge limits. Allowing surge implies the possibility that the resources consumed by the daemonset on any given node can double if the readiness check fails, and so resource intensive daemonsets should take into account that they may cause evictions during disruption."
+          "description": "maxSurge is the maximum number of nodes with an existing available DaemonSet pod that can have an updated DaemonSet pod during an update. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). This can not be 0 if MaxUnavailable is 0. Absolute number is calculated from percentage by rounding up to a minimum of 1. Default value is 0. Example: when this is set to 30%, at most 30% of the total number of nodes that should be running the daemon pod (i.e. status.desiredNumberScheduled) can have their a new pod created before the old pod is marked as deleted. The update starts by launching new pods on 30% of nodes. Once an updated pod is available (Ready for at least minReadySeconds) the old DaemonSet pod on that node is marked deleted. If the old pod becomes unavailable for any reason (Ready transitions to false, is evicted, or is drained) an updated pod is immediately created on that node without considering surge limits. Allowing surge implies the possibility that the resources consumed by the daemonset on any given node can double if the readiness check fails, and so resource intensive daemonsets should take into account that they may cause evictions during disruption."
         },
         "maxUnavailable": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.util.intstr.IntOrString",
-          "description": "The maximum number of DaemonSet pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of total number of DaemonSet pods at the start of the update (ex: 10%). Absolute number is calculated from percentage by rounding up. This cannot be 0 if MaxSurge is 0 Default value is 1. Example: when this is set to 30%, at most 30% of the total number of nodes that should be running the daemon pod (i.e. status.desiredNumberScheduled) can have their pods stopped for an update at any given time. The update starts by stopping at most 30% of those DaemonSet pods and then brings up new DaemonSet pods in their place. Once the new pods are available, it then proceeds onto other DaemonSet pods, thus ensuring that at least 70% of original number of DaemonSet pods are available at all times during the update."
+          "description": "maxUnavailable is the maximum number of DaemonSet pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of total number of DaemonSet pods at the start of the update (ex: 10%). Absolute number is calculated from percentage by rounding up. This cannot be 0 if MaxSurge is 0 Default value is 1. Example: when this is set to 30%, at most 30% of the total number of nodes that should be running the daemon pod (i.e. status.desiredNumberScheduled) can have their pods stopped for an update at any given time. The update starts by stopping at most 30% of those DaemonSet pods and then brings up new DaemonSet pods in their place. Once the new pods are available, it then proceeds onto other DaemonSet pods, thus ensuring that at least 70% of original number of DaemonSet pods are available at all times during the update."
         }
       },
       "type": "object"
@@ -2787,11 +2793,11 @@
       "properties": {
         "maxSurge": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.util.intstr.IntOrString",
-          "description": "The maximum number of pods that can be scheduled above the desired number of pods. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). This can not be 0 if MaxUnavailable is 0. Absolute number is calculated from percentage by rounding up. Defaults to 25%. Example: when this is set to 30%, the new ReplicaSet can be scaled up immediately when the rolling update starts, such that the total number of old and new pods do not exceed 130% of desired pods. Once old pods have been killed, new ReplicaSet can be scaled up further, ensuring that total number of pods running at any time during the update is at most 130% of desired pods."
+          "description": "maxSurge is the maximum number of pods that can be scheduled above the desired number of pods. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). This can not be 0 if MaxUnavailable is 0. Absolute number is calculated from percentage by rounding up. Defaults to 25%. Example: when this is set to 30%, the new ReplicaSet can be scaled up immediately when the rolling update starts, such that the total number of old and new pods do not exceed 130% of desired pods. Once old pods have been killed, new ReplicaSet can be scaled up further, ensuring that total number of pods running at any time during the update is at most 130% of desired pods."
         },
         "maxUnavailable": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.util.intstr.IntOrString",
-          "description": "The maximum number of pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). Absolute number is calculated from percentage by rounding down. This can not be 0 if MaxSurge is 0. Defaults to 25%. Example: when this is set to 30%, the old ReplicaSet can be scaled down to 70% of desired pods immediately when the rolling update starts. Once new pods are ready, old ReplicaSet can be scaled down further, followed by scaling up the new ReplicaSet, ensuring that the total number of pods available at all times during the update is at least 70% of desired pods."
+          "description": "maxUnavailable is the maximum number of pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). Absolute number is calculated from percentage by rounding down. This can not be 0 if MaxSurge is 0. Defaults to 25%. Example: when this is set to 30%, the old ReplicaSet can be scaled down to 70% of desired pods immediately when the rolling update starts. Once new pods are ready, old ReplicaSet can be scaled down further, followed by scaling up the new ReplicaSet, ensuring that the total number of pods available at all times during the update is at least 70% of desired pods."
         }
       },
       "type": "object"
@@ -2801,10 +2807,10 @@
       "properties": {
         "maxUnavailable": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.util.intstr.IntOrString",
-          "description": "The maximum number of pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). Absolute number is calculated from percentage by rounding up. This can not be 0. Defaults to 1. This field is beta-level and is enabled by default. The field applies to all pods in the range 0 to Replicas-1. That means if there is any unavailable pod in the range 0 to Replicas-1, it will be counted towards MaxUnavailable. This setting might not be effective for the OrderedReady podManagementPolicy. That policy ensures pods are created and become ready one at a time."
+          "description": "maxUnavailable is the maximum number of pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). Absolute number is calculated from percentage by rounding up. This can not be 0. Defaults to 1. This field is beta-level and is enabled by default. The field applies to all pods in the range 0 to Replicas-1. That means if there is any unavailable pod in the range 0 to Replicas-1, it will be counted towards MaxUnavailable. This setting might not be effective for the OrderedReady podManagementPolicy. That policy ensures pods are created and become ready one at a time."
         },
         "partition": {
-          "description": "Partition indicates the ordinal at which the StatefulSet should be partitioned for updates. During a rolling update, all pods from ordinal Replicas-1 to Partition are updated. All pods from ordinal Partition-1 to 0 remain untouched. This is helpful in being able to do a canary based deployment. The default value is 0.",
+          "description": "partition indicates the ordinal at which the StatefulSet should be partitioned for updates. During a rolling update, all pods from ordinal Replicas-1 to Partition are updated. All pods from ordinal Partition-1 to 0 remain untouched. This is helpful in being able to do a canary based deployment. The default value is 0.",
           "format": "int32",
           "type": "integer"
         }
@@ -2824,15 +2830,15 @@
         },
         "metadata": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
-          "description": "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
+          "description": "metadata is the standard object metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
         },
         "spec": {
           "$ref": "#/definitions/io.k8s.api.apps.v1.StatefulSetSpec",
-          "description": "Spec defines the desired identities of pods in this set."
+          "description": "spec defines the desired identities of pods in this set."
         },
         "status": {
           "$ref": "#/definitions/io.k8s.api.apps.v1.StatefulSetStatus",
-          "description": "Status is the current status of Pods in this StatefulSet. This data may be out of date by some window of time."
+          "description": "status is the current status of Pods in this StatefulSet. This data may be out of date by some window of time."
         }
       },
       "required": [
@@ -2852,22 +2858,22 @@
       "properties": {
         "lastTransitionTime": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time",
-          "description": "Last time the condition transitioned from one status to another."
+          "description": "lastTransitionTime is the last time the condition transitioned from one status to another."
         },
         "message": {
-          "description": "A human readable message indicating details about the transition.",
+          "description": "message is a human readable string indicating details about the transition.",
           "type": "string"
         },
         "reason": {
-          "description": "The reason for the condition's last transition.",
+          "description": "reason for the condition's last transition.",
           "type": "string"
         },
         "status": {
-          "description": "Status of the condition, one of True, False, Unknown.",
+          "description": "status of the condition, one of True, False, Unknown.",
           "type": "string"
         },
         "type": {
-          "description": "Type of statefulset condition.",
+          "description": "type of statefulset condition.",
           "type": "string"
         }
       },
@@ -2923,11 +2929,11 @@
       "description": "StatefulSetPersistentVolumeClaimRetentionPolicy describes the policy used for PVCs created from the StatefulSet VolumeClaimTemplates.",
       "properties": {
         "whenDeleted": {
-          "description": "WhenDeleted specifies what happens to PVCs created from StatefulSet VolumeClaimTemplates when the StatefulSet is deleted. The default policy of `Retain` causes PVCs to not be affected by StatefulSet deletion. The `Delete` policy causes those PVCs to be deleted.",
+          "description": "whenDeleted specifies what happens to PVCs created from StatefulSet VolumeClaimTemplates when the StatefulSet is deleted. The default policy of `Retain` causes PVCs to not be affected by StatefulSet deletion. The `Delete` policy causes those PVCs to be deleted.",
           "type": "string"
         },
         "whenScaled": {
-          "description": "WhenScaled specifies what happens to PVCs created from StatefulSet VolumeClaimTemplates when the StatefulSet is scaled down. The default policy of `Retain` causes PVCs to not be affected by a scaledown. The `Delete` policy causes the associated PVCs for any excess pods above the replica count to be deleted.",
+          "description": "whenScaled specifies what happens to PVCs created from StatefulSet VolumeClaimTemplates when the StatefulSet is scaled down. The default policy of `Retain` causes PVCs to not be affected by a scaledown. The `Delete` policy causes the associated PVCs for any excess pods above the replica count to be deleted.",
           "type": "string"
         }
       },
@@ -2937,7 +2943,7 @@
       "description": "A StatefulSetSpec is the specification of a StatefulSet.",
       "properties": {
         "minReadySeconds": {
-          "description": "Minimum number of seconds for which a newly created pod should be ready without any of its container crashing for it to be considered available. Defaults to 0 (pod will be considered available as soon as it is ready)",
+          "description": "minReadySeconds is the minimum number of seconds for which a newly created pod should be ready without any of its container crashing for it to be considered available. Defaults to 0 (pod will be considered available as soon as it is ready)",
           "format": "int32",
           "type": "integer"
         },
@@ -2998,7 +3004,7 @@
       "description": "StatefulSetStatus represents the current state of a StatefulSet.",
       "properties": {
         "availableReplicas": {
-          "description": "Total number of available pods (ready for at least minReadySeconds) targeted by this statefulset.",
+          "description": "availableReplicas is the number of available non-terminating pods (ready for at least minReadySeconds) targeted by this StatefulSet.",
           "format": "int32",
           "type": "integer"
         },
@@ -3008,7 +3014,7 @@
           "type": "integer"
         },
         "conditions": {
-          "description": "Represents the latest available observations of a statefulset's current state.",
+          "description": "conditions lists the latest available observations of a StatefulSet's current state.",
           "items": {
             "$ref": "#/definitions/io.k8s.api.apps.v1.StatefulSetCondition"
           },
@@ -3045,7 +3051,7 @@
           "type": "integer"
         },
         "updateRevision": {
-          "description": "updateRevision, if not empty, indicates the version of the StatefulSet used to generate Pods in the sequence [replicas-updatedReplicas,replicas)",
+          "description": "updateRevision indicates the version of the StatefulSet used to generate Pods in the sequence [replicas-updatedReplicas,replicas)",
           "type": "string"
         },
         "updatedReplicas": {
@@ -3064,10 +3070,10 @@
       "properties": {
         "rollingUpdate": {
           "$ref": "#/definitions/io.k8s.api.apps.v1.RollingUpdateStatefulSetStrategy",
-          "description": "RollingUpdate is used to communicate parameters when Type is RollingUpdateStatefulSetStrategyType."
+          "description": "rollingUpdate is used to communicate parameters when Type is RollingUpdateStatefulSetStrategyType."
         },
         "type": {
-          "description": "Type indicates the type of the StatefulSetUpdateStrategy. Default is RollingUpdate.",
+          "description": "type indicates the type of the StatefulSetUpdateStrategy. Default is RollingUpdate.",
           "type": "string"
         }
       },
@@ -4583,15 +4589,15 @@
         },
         "metadata": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
-          "description": "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
+          "description": "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
         },
         "spec": {
           "$ref": "#/definitions/io.k8s.api.batch.v1.CronJobSpec",
-          "description": "Specification of the desired behavior of a cron job, including the schedule. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
+          "description": "spec is the specification of the desired behavior of a cron job, including the schedule. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
         },
         "status": {
           "$ref": "#/definitions/io.k8s.api.batch.v1.CronJobStatus",
-          "description": "Current status of a cron job. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
+          "description": "status is the current status of a cron job. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
         }
       },
       "required": [
@@ -4645,38 +4651,38 @@
       "description": "CronJobSpec describes how the job execution will look like and when it will actually run.",
       "properties": {
         "concurrencyPolicy": {
-          "description": "Specifies how to treat concurrent executions of a Job. Valid values are:\n\n- \"Allow\" (default): allows CronJobs to run concurrently; - \"Forbid\": forbids concurrent runs, skipping next run if previous run hasn't finished yet; - \"Replace\": cancels currently running job and replaces it with a new one",
+          "description": "concurrencyPolicy specifies how to treat concurrent executions of a Job. Valid values are:\n\n- \"Allow\" (default): allows CronJobs to run concurrently; - \"Forbid\": forbids concurrent runs, skipping next run if previous run hasn't finished yet; - \"Replace\": cancels currently running job and replaces it with a new one",
           "type": "string"
         },
         "failedJobsHistoryLimit": {
-          "description": "The number of failed finished jobs to retain. Value must be non-negative integer. Defaults to 1.",
+          "description": "failedJobsHistoryLimit is the number of failed finished jobs to retain. Value must be non-negative integer. Defaults to 1.",
           "format": "int32",
           "type": "integer"
         },
         "jobTemplate": {
           "$ref": "#/definitions/io.k8s.api.batch.v1.JobTemplateSpec",
-          "description": "Specifies the job that will be created when executing a CronJob."
+          "description": "jobTemplate specifies the job that will be created when executing a CronJob."
         },
         "schedule": {
-          "description": "The schedule in Cron format, see https://en.wikipedia.org/wiki/Cron.",
+          "description": "schedule is the schedule in Cron format, see https://en.wikipedia.org/wiki/Cron.",
           "type": "string"
         },
         "startingDeadlineSeconds": {
-          "description": "Optional deadline in seconds for starting the job if it misses scheduled time for any reason.  Missed jobs executions will be counted as failed ones.",
+          "description": "startingDeadlineSeconds is the optional deadline in seconds for starting the job if it misses scheduled time for any reason.  Missed jobs executions will be counted as failed ones.",
           "format": "int64",
           "type": "integer"
         },
         "successfulJobsHistoryLimit": {
-          "description": "The number of successful finished jobs to retain. Value must be non-negative integer. Defaults to 3.",
+          "description": "successfulJobsHistoryLimit is the number of successful finished jobs to retain. Value must be non-negative integer. Defaults to 3.",
           "format": "int32",
           "type": "integer"
         },
         "suspend": {
-          "description": "This flag tells the controller to suspend subsequent executions, it does not apply to already started executions.  Defaults to false.",
+          "description": "suspend is a flag that tells the controller to suspend subsequent executions, it does not apply to already started executions.  Defaults to false.",
           "type": "boolean"
         },
         "timeZone": {
-          "description": "The time zone name for the given schedule, see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones. If not specified, this will default to the time zone of the kube-controller-manager process. The set of valid time zone names and the time zone offset is loaded from the system-wide time zone database by the API server during CronJob validation and the controller manager during execution. If no system-wide time zone database can be found a bundled version of the database is used instead. If the time zone name becomes invalid during the lifetime of a CronJob or due to a change in host configuration, the controller will stop creating new new Jobs and will create a system event with the reason UnknownTimeZone. More information can be found in https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/#time-zones",
+          "description": "timeZone is the time zone name for the given schedule, see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones. If not specified, this will default to the time zone of the kube-controller-manager process. The set of valid time zone names and the time zone offset is loaded from the system-wide time zone database by the API server during CronJob validation and the controller manager during execution. If no system-wide time zone database can be found a bundled version of the database is used instead. If the time zone name becomes invalid during the lifetime of a CronJob or due to a change in host configuration, the controller will stop creating new new Jobs and will create a system event with the reason UnknownTimeZone. More information can be found in https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/#time-zones",
           "type": "string"
         }
       },
@@ -4721,15 +4727,15 @@
         },
         "metadata": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
-          "description": "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
+          "description": "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
         },
         "spec": {
           "$ref": "#/definitions/io.k8s.api.batch.v1.JobSpec",
-          "description": "Specification of the desired behavior of a job. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
+          "description": "spec is the specification of the desired behavior of a job. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
         },
         "status": {
           "$ref": "#/definitions/io.k8s.api.batch.v1.JobStatus",
-          "description": "Current status of a job. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
+          "description": "status is the current status of a job. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
         }
       },
       "required": [
@@ -4749,26 +4755,26 @@
       "properties": {
         "lastProbeTime": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time",
-          "description": "Last time the condition was checked."
+          "description": "lastProbeTime is the last time the condition was checked."
         },
         "lastTransitionTime": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time",
-          "description": "Last time the condition transit from one status to another."
+          "description": "lastTransitionTime is the last time the condition transit from one status to another."
         },
         "message": {
-          "description": "Human readable message indicating details about last transition.",
+          "description": "message is human readable message indicating details about last transition.",
           "type": "string"
         },
         "reason": {
-          "description": "(brief) reason for the condition's last transition.",
+          "description": "reason is the brief reason for the condition's last transition.",
           "type": "string"
         },
         "status": {
-          "description": "Status of the condition, one of True, False, Unknown.",
+          "description": "status is the status of the condition, one of True, False, Unknown.",
           "type": "string"
         },
         "type": {
-          "description": "Type of job condition, Complete or Failed.",
+          "description": "type is the type of job condition, Complete or Failed.",
           "type": "string"
         }
       },
@@ -4814,10 +4820,10 @@
       "properties": {
         "disruptionMode": {
           "$ref": "#/definitions/io.k8s.api.scheduling.v1alpha3.WorkloadPodGroupDisruptionMode",
-          "description": "DisruptionMode defines the mode in which the Job's pods can be disrupted. One of Single, All. This field is immutable after creation: it may not be added or removed, and the selected mode may not be changed."
+          "description": "disruptionMode defines the mode in which the Job's pods can be disrupted. One of Single, All. This field is immutable after creation: it may not be added or removed, and the selected mode may not be changed."
         },
         "resourceClaims": {
-          "description": "ResourceClaims defines which ResourceClaims may be shared among Pods in the Job. Pods consume the devices allocated to a PodGroup's claim by defining a claim in its own Spec.ResourceClaims that matches the PodGroup's claim exactly. The claim must have the same name and refer to the same ResourceClaim or ResourceClaimTemplate. At most 4 claims may be set, matching the limit on the resulting PodGroup. This list is immutable after creation: entries may neither be added, removed, nor modified.",
+          "description": "resourceClaims defines which ResourceClaims may be shared among Pods in the Job. Pods consume the devices allocated to a PodGroup's claim by defining a claim in its own Spec.ResourceClaims that matches the PodGroup's claim exactly. The claim must have the same name and refer to the same ResourceClaim or ResourceClaimTemplate. At most 4 claims may be set, matching the limit on the resulting PodGroup. This list is immutable after creation: entries may neither be added, removed, nor modified.",
           "items": {
             "$ref": "#/definitions/io.k8s.api.scheduling.v1alpha3.WorkloadPodGroupResourceClaim"
           },
@@ -4831,11 +4837,11 @@
         },
         "schedulingConstraints": {
           "$ref": "#/definitions/io.k8s.api.scheduling.v1alpha3.WorkloadPodGroupSchedulingConstraints",
-          "description": "SchedulingConstraints defines scheduling constraints (e.g. topology) for the Job's pods. This field is immutable after creation."
+          "description": "schedulingConstraints defines scheduling constraints (e.g. topology) for the Job's pods. This field is immutable after creation."
         },
         "schedulingPolicy": {
           "$ref": "#/definitions/io.k8s.api.scheduling.v1alpha3.WorkloadPodGroupSchedulingPolicy",
-          "description": "SchedulingPolicy defines the scheduling policy for this Job. Exactly one of Basic or Gang must be set. This field is immutable after creation: the policy may not be added or removed. The policy variant (basic/gang) is frozen by hand-written validation; only schedulingPolicy.gang.minCount may be changed."
+          "description": "schedulingPolicy defines the scheduling policy for this Job. Exactly one of Basic or Gang must be set. This field is immutable after creation: the policy may not be added or removed. The policy variant (basic/gang) is frozen by hand-written validation; only schedulingPolicy.gang.minCount may be changed."
         }
       },
       "type": "object"
@@ -4844,17 +4850,17 @@
       "description": "JobSpec describes how the job execution will look like.",
       "properties": {
         "activeDeadlineSeconds": {
-          "description": "Specifies the duration in seconds relative to the startTime that the job may be continuously active before the system tries to terminate it; value must be positive integer. If a Job is suspended (at creation or through an update), this timer will effectively be stopped and reset when the Job is resumed again.",
+          "description": "activeDeadlineSeconds specifies the duration in seconds relative to the startTime that the job may be continuously active before the system tries to terminate it; value must be positive integer. If a Job is suspended (at creation or through an update), this timer will effectively be stopped and reset when the Job is resumed again.",
           "format": "int64",
           "type": "integer"
         },
         "backoffLimit": {
-          "description": "Specifies the number of retries before marking this job failed. Defaults to 6, unless backoffLimitPerIndex (only Indexed Job) is specified. When backoffLimitPerIndex is specified, backoffLimit defaults to 2147483647.",
+          "description": "backoffLimit specifies the number of retries before marking this job failed. Defaults to 6, unless backoffLimitPerIndex (only Indexed Job) is specified. When backoffLimitPerIndex is specified, backoffLimit defaults to 2147483647.",
           "format": "int32",
           "type": "integer"
         },
         "backoffLimitPerIndex": {
-          "description": "Specifies the limit for the number of retries within an index before marking this index as failed. When enabled the number of failures per index is kept in the pod's batch.kubernetes.io/job-index-failure-count annotation. It can only be set when Job's completionMode=Indexed, and the Pod's restart policy is Never. The field is immutable.",
+          "description": "backoffLimitPerIndex specifies the limit for the number of retries within an index before marking this index as failed. When enabled the number of failures per index is kept in the pod's batch.kubernetes.io/job-index-failure-count annotation. It can only be set when Job's completionMode=Indexed, and the Pod's restart policy is Never. The field is immutable.",
           "format": "int32",
           "type": "integer"
         },
@@ -4863,12 +4869,12 @@
           "type": "string"
         },
         "completions": {
-          "description": "Specifies the desired number of successfully finished pods the job should be run with.  Setting to null means that the success of any pod signals the success of all pods, and allows parallelism to have any positive value.  Setting to 1 means that parallelism is limited to 1 and the success of that pod signals the success of the job. More info: https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/",
+          "description": "completions specifies the desired number of successfully finished pods the job should be run with.  Setting to null means that the success of any pod signals the success of all pods, and allows parallelism to have any positive value.  Setting to 1 means that parallelism is limited to 1 and the success of that pod signals the success of the job. More info: https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/",
           "format": "int32",
           "type": "integer"
         },
         "managedBy": {
-          "description": "ManagedBy field indicates the controller that manages a Job. The k8s Job controller reconciles jobs which don't have this field at all or the field value is the reserved string `kubernetes.io/job-controller`, but skips reconciling Jobs with a custom value for this field. The value must be a valid domain-prefixed path (e.g. acme.io/foo) - all characters before the first \"/\" must be a valid subdomain as defined by RFC 1123. All characters trailing the first \"/\" must be valid HTTP Path characters as defined by RFC 3986. The value cannot exceed 63 characters. This field is immutable.",
+          "description": "managedBy field indicates the controller that manages a Job. The k8s Job controller reconciles jobs which don't have this field at all or the field value is the reserved string `kubernetes.io/job-controller`, but skips reconciling Jobs with a custom value for this field. The value must be a valid domain-prefixed path (e.g. acme.io/foo) - all characters before the first \"/\" must be a valid subdomain as defined by RFC 1123. All characters trailing the first \"/\" must be valid HTTP Path characters as defined by RFC 3986. The value cannot exceed 63 characters. This field is immutable.",
           "type": "string"
         },
         "manualSelector": {
@@ -4876,18 +4882,18 @@
           "type": "boolean"
         },
         "maxFailedIndexes": {
-          "description": "Specifies the maximal number of failed indexes before marking the Job as failed, when backoffLimitPerIndex is set. Once the number of failed indexes exceeds this number the entire Job is marked as Failed and its execution is terminated. When left as null the job continues execution of all of its indexes and is marked with the `Complete` Job condition. It can only be specified when backoffLimitPerIndex is set. It can be null or up to completions. It is required and must be less than or equal to 10^4 when is completions greater than 10^5.",
+          "description": "maxFailedIndexes specifies the maximal number of failed indexes before marking the Job as failed, when backoffLimitPerIndex is set. Once the number of failed indexes exceeds this number the entire Job is marked as Failed and its execution is terminated. When left as null the job continues execution of all of its indexes and is marked with the `Complete` Job condition. It can only be specified when backoffLimitPerIndex is set. It can be null or up to completions. It is required and must be less than or equal to 10^4 when is completions greater than 10^5.",
           "format": "int32",
           "type": "integer"
         },
         "parallelism": {
-          "description": "Specifies the maximum desired number of pods the job should run at any given time. The actual number of pods running in steady state will be less than this number when ((.spec.completions - .status.successful) < .spec.parallelism), i.e. when the work left to do is less than max parallelism. More info: https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/",
+          "description": "parallelism specifies the maximum desired number of pods the job should run at any given time. The actual number of pods running in steady state will be less than this number when ((.spec.completions - .status.successful) < .spec.parallelism), i.e. when the work left to do is less than max parallelism. More info: https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/",
           "format": "int32",
           "type": "integer"
         },
         "podFailurePolicy": {
           "$ref": "#/definitions/io.k8s.api.batch.v1.PodFailurePolicy",
-          "description": "Specifies the policy of handling failed pods. In particular, it allows to specify the set of actions and conditions which need to be satisfied to take the associated action. If empty, the default behaviour applies - the counter of failed pods, represented by the jobs's .status.failed field, is incremented and it is checked against the backoffLimit. This field cannot be used in combination with restartPolicy=OnFailure."
+          "description": "podFailurePolicy specifies the policy of handling failed pods. In particular, it allows to specify the set of actions and conditions which need to be satisfied to take the associated action. If empty, the default behaviour applies - the counter of failed pods, represented by the jobs's .status.failed field, is incremented and it is checked against the backoffLimit. This field cannot be used in combination with restartPolicy=OnFailure."
         },
         "podReplacementPolicy": {
           "description": "podReplacementPolicy specifies when to create replacement Pods. Possible values are: - TerminatingOrFailed means that we recreate pods\n  when they are terminating (has a metadata.deletionTimestamp) or failed.\n- Failed means to wait until a previously created Pod is fully terminated (has phase\n  Failed or Succeeded) before creating a replacement Pod.\n\nWhen using podFailurePolicy, Failed is the the only allowed value. TerminatingOrFailed and Failed are allowed values when podFailurePolicy is not in use.",
@@ -4899,7 +4905,7 @@
         },
         "selector": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector",
-          "description": "A label query over pods that should match the pod count. Normally, the system sets this field for you. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors"
+          "description": "selector is a label query over pods that should match the pod count. Normally, the system sets this field for you. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors"
         },
         "successPolicy": {
           "$ref": "#/definitions/io.k8s.api.batch.v1.SuccessPolicy",
@@ -4911,7 +4917,7 @@
         },
         "template": {
           "$ref": "#/definitions/io.k8s.api.core.v1.PodTemplateSpec",
-          "description": "Describes the pod that will be created when executing a job. The only allowed template.spec.restartPolicy values are \"Never\" or \"OnFailure\". More info: https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/"
+          "description": "template describes the pod that will be created when executing a job. The only allowed template.spec.restartPolicy values are \"Never\" or \"OnFailure\". More info: https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/"
         },
         "ttlSecondsAfterFinished": {
           "description": "ttlSecondsAfterFinished limits the lifetime of a Job that has finished execution (either Complete or Failed). If this field is set, ttlSecondsAfterFinished after the Job finishes, it is eligible to be automatically deleted. When the Job is being deleted, its lifecycle guarantees (e.g. finalizers) will be honored. If this field is unset, the Job won't be automatically deleted. If this field is set to zero, the Job becomes eligible to be deleted immediately after it finishes.",
@@ -4990,11 +4996,11 @@
       "properties": {
         "metadata": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
-          "description": "Standard object's metadata of the jobs created from this template. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
+          "description": "metadata is the standard object's metadata of the jobs created from this template. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"
         },
         "spec": {
           "$ref": "#/definitions/io.k8s.api.batch.v1.JobSpec",
-          "description": "Specification of the desired behavior of the job. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
+          "description": "spec is the specification of the desired behavior of the job. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
         }
       },
       "required": [
@@ -5006,7 +5012,7 @@
       "description": "PodFailurePolicy describes how failed pods influence the backoffLimit.",
       "properties": {
         "rules": {
-          "description": "A list of pod failure policy rules. The rules are evaluated in order. Once a rule matches a Pod failure, the remaining of the rules are ignored. When no rule matches the Pod failure, the default handling applies - the counter of pod failures is incremented and it is checked against the backoffLimit. At most 20 elements are allowed.",
+          "description": "rules is a list of pod failure policy rules. The rules are evaluated in order. Once a rule matches a Pod failure, the remaining of the rules are ignored. When no rule matches the Pod failure, the default handling applies - the counter of pod failures is incremented and it is checked against the backoffLimit. At most 20 elements are allowed.",
           "items": {
             "$ref": "#/definitions/io.k8s.api.batch.v1.PodFailurePolicyRule"
           },
@@ -5020,15 +5026,15 @@
       "description": "PodFailurePolicyOnExitCodesRequirement describes the requirement for handling a failed pod based on its container exit codes. In particular, it lookups the .state.terminated.exitCode for each app container and init container status, represented by the .status.containerStatuses and .status.initContainerStatuses fields in the Pod status, respectively. Containers completed with success (exit code 0) are excluded from the requirement check.",
       "properties": {
         "containerName": {
-          "description": "Restricts the check for exit codes to the container with the specified name. When null, the rule applies to all containers. When specified, it should match one the container or initContainer names in the pod template.",
+          "description": "containerName restricts the check for exit codes to the container with the specified name. When null, the rule applies to all containers. When specified, it should match one the container or initContainer names in the pod template.",
           "type": "string"
         },
         "operator": {
-          "description": "Represents the relationship between the container exit code(s) and the specified values. Containers completed with success (exit code 0) are excluded from the requirement check. Possible values are:\n\n- In: the requirement is satisfied if at least one container exit code\n  (might be multiple if there are multiple containers not restricted\n  by the 'containerName' field) is in the set of specified values.\n- NotIn: the requirement is satisfied if at least one container exit code\n  (might be multiple if there are multiple containers not restricted\n  by the 'containerName' field) is not in the set of specified values.\nAdditional values are considered to be added in the future. Clients should react to an unknown operator by assuming the requirement is not satisfied.",
+          "description": "operator represents the relationship between the container exit code(s) and the specified values. Containers completed with success (exit code 0) are excluded from the requirement check. Possible values are:\n\n- In: the requirement is satisfied if at least one container exit code\n  (might be multiple if there are multiple containers not restricted\n  by the 'containerName' field) is in the set of specified values.\n- NotIn: the requirement is satisfied if at least one container exit code\n  (might be multiple if there are multiple containers not restricted\n  by the 'containerName' field) is not in the set of specified values.\nAdditional values are considered to be added in the future. Clients should react to an unknown operator by assuming the requirement is not satisfied.",
           "type": "string"
         },
         "values": {
-          "description": "Specifies the set of values. Each returned container exit code (might be multiple in case of multiple containers) is checked against this set of values with respect to the operator. The list of values must be ordered and must not contain duplicates. Value '0' cannot be used for the In operator. At least one element is required. At most 255 elements are allowed.",
+          "description": "values specifies the set of values. Each returned container exit code (might be multiple in case of multiple containers) is checked against this set of values with respect to the operator. The list of values must be ordered and must not contain duplicates. Value '0' cannot be used for the In operator. At least one element is required. At most 255 elements are allowed.",
           "items": {
             "format": "int32",
             "type": "integer"
@@ -5047,11 +5053,11 @@
       "description": "PodFailurePolicyOnPodConditionsPattern describes a pattern for matching an actual pod condition type.",
       "properties": {
         "status": {
-          "description": "Specifies the required Pod condition status. To match a pod condition it is required that the specified status equals the pod condition status. Defaults to True.",
+          "description": "status specifies the required Pod condition status. To match a pod condition it is required that the specified status equals the pod condition status. Defaults to True.",
           "type": "string"
         },
         "type": {
-          "description": "Specifies the required Pod condition type. To match a pod condition it is required that specified type equals the pod condition type.",
+          "description": "type specifies the required Pod condition type. To match a pod condition it is required that specified type equals the pod condition type.",
           "type": "string"
         }
       },
@@ -5064,15 +5070,15 @@
       "description": "PodFailurePolicyRule describes how a pod failure is handled when the requirements are met. One of onExitCodes and onPodConditions, but not both, can be used in each rule.",
       "properties": {
         "action": {
-          "description": "Specifies the action taken on a pod failure when the requirements are satisfied. Possible values are:\n\n- FailJob: indicates that the pod's job is marked as Failed and all\n  running pods are terminated.\n- FailIndex: indicates that the pod's index is marked as Failed and will\n  not be restarted.\n- Ignore: indicates that the counter towards the .backoffLimit is not\n  incremented and a replacement pod is created.\n- Count: indicates that the pod is handled in the default way - the\n  counter towards the .backoffLimit is incremented.\nAdditional values are considered to be added in the future. Clients should react to an unknown action by skipping the rule.",
+          "description": "action specifies the action taken on a pod failure when the requirements are satisfied. Possible values are:\n\n- FailJob: indicates that the pod's job is marked as Failed and all\n  running pods are terminated.\n- FailIndex: indicates that the pod's index is marked as Failed and will\n  not be restarted.\n- Ignore: indicates that the counter towards the .backoffLimit is not\n  incremented and a replacement pod is created.\n- Count: indicates that the pod is handled in the default way - the\n  counter towards the .backoffLimit is incremented.\nAdditional values are considered to be added in the future. Clients should react to an unknown action by skipping the rule.",
           "type": "string"
         },
         "onExitCodes": {
           "$ref": "#/definitions/io.k8s.api.batch.v1.PodFailurePolicyOnExitCodesRequirement",
-          "description": "Represents the requirement on the container exit codes."
+          "description": "onExitCodes represents the requirement on the container exit codes."
         },
         "onPodConditions": {
-          "description": "Represents the requirement on the pod conditions. The requirement is represented as a list of pod condition patterns. The requirement is satisfied if at least one pattern matches an actual pod condition. At most 20 elements are allowed.",
+          "description": "onPodConditions represents the requirement on the pod conditions. The requirement is represented as a list of pod condition patterns. The requirement is satisfied if at least one pattern matches an actual pod condition. At most 20 elements are allowed.",
           "items": {
             "$ref": "#/definitions/io.k8s.api.batch.v1.PodFailurePolicyOnPodConditionsPattern"
           },
@@ -5151,7 +5157,8 @@
           "type": "string"
         },
         "metadata": {
-          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
+          "description": "metadata is the standard object's metadata."
         },
         "spec": {
           "$ref": "#/definitions/io.k8s.api.certificates.v1.CertificateSigningRequestSpec",
@@ -5296,7 +5303,8 @@
       },
       "required": [
         "request",
-        "signerName"
+        "signerName",
+        "usages"
       ],
       "type": "object"
     },
@@ -5514,7 +5522,7 @@
           "type": "string"
         },
         "stubPKCS10Request": {
-          "description": "A PKCS#10 certificate signing request (DER-serialized) generated by Kubelet using the subject private key.\n\nMost signer implementations will ignore the contents of the CSR except to extract the subject public key. The API server automatically verifies the CSR signature during admission, so the signer does not need to repeat the verification.  CSRs generated by kubelet are completely empty.\n\nThe subject public key must be one of RSA3072, RSA4096, ECDSAP256, ECDSAP384, ECDSAP521, or ED25519. Note that this list may be expanded in the future.\n\nSigner implementations do not need to support all key types supported by kube-apiserver and kubelet.  If a signer does not support the key type used for a given PodCertificateRequest, it must deny the request by setting a status.conditions entry with a type of \"Denied\" and a reason of \"UnsupportedKeyType\". It may also suggest a key type that it does support in the message field.",
+          "description": "stubPKCS10Request is a PKCS#10 certificate signing request (DER-serialized) generated by Kubelet using the subject private key.\n\nMost signer implementations will ignore the contents of the CSR except to extract the subject public key. The API server automatically verifies the CSR signature during admission, so the signer does not need to repeat the verification.  CSRs generated by kubelet are completely empty.\n\nThe subject public key must be one of RSA3072, RSA4096, ECDSAP256, ECDSAP384, ECDSAP521, or ED25519. Note that this list may be expanded in the future.\n\nSigner implementations do not need to support all key types supported by kube-apiserver and kubelet.  If a signer does not support the key type used for a given PodCertificateRequest, it must deny the request by setting a status.conditions entry with a type of \"Denied\" and a reason of \"UnsupportedKeyType\". It may also suggest a key type that it does support in the message field.",
           "format": "byte",
           "type": "string"
         },
@@ -5745,7 +5753,7 @@
           "type": "string"
         },
         "pkixPublicKey": {
-          "description": "The PKIX-serialized public key the signer will issue the certificate to.\n\nThe key must be one of RSA3072, RSA4096, ECDSAP256, ECDSAP384, ECDSAP521, or ED25519. Note that this list may be expanded in the future.\n\nSigner implementations do not need to support all key types supported by kube-apiserver and kubelet.  If a signer does not support the key type used for a given PodCertificateRequest, it must deny the request by setting a status.conditions entry with a type of \"Denied\" and a reason of \"UnsupportedKeyType\". It may also suggest a key type that it does support in the message field.\n\nDeprecated: This field is replaced by StubPKCS10Request. If StubPKCS10Request is set, this field must be empty.  Signer implementations should extract the public key from the StubPKCS10Request field.",
+          "description": "pkixPublicKey is the PKIX-serialized public key the signer will issue the certificate to.\n\nThe key must be one of RSA3072, RSA4096, ECDSAP256, ECDSAP384, ECDSAP521, or ED25519. Note that this list may be expanded in the future.\n\nSigner implementations do not need to support all key types supported by kube-apiserver and kubelet.  If a signer does not support the key type used for a given PodCertificateRequest, it must deny the request by setting a status.conditions entry with a type of \"Denied\" and a reason of \"UnsupportedKeyType\". It may also suggest a key type that it does support in the message field.\n\nDeprecated: This field is replaced by StubPKCS10Request. If StubPKCS10Request is set, this field must be empty.  Signer implementations should extract the public key from the StubPKCS10Request field.",
           "format": "byte",
           "type": "string"
         },
@@ -5758,7 +5766,7 @@
           "type": "string"
         },
         "proofOfPossession": {
-          "description": "A proof that the requesting kubelet holds the private key corresponding to pkixPublicKey.\n\nIt is contructed by signing the ASCII bytes of the pod's UID using `pkixPublicKey`.\n\nkube-apiserver validates the proof of possession during creation of the PodCertificateRequest.\n\nIf the key is an RSA key, then the signature is over the ASCII bytes of the pod UID, using RSASSA-PSS from RFC 8017 (as implemented by the golang function crypto/rsa.SignPSS with nil options).\n\nIf the key is an ECDSA key, then the signature is as described by [SEC 1, Version 2.0](https://www.secg.org/sec1-v2.pdf) (as implemented by the golang library function crypto/ecdsa.SignASN1)\n\nIf the key is an ED25519 key, the the signature is as described by the [ED25519 Specification](https://ed25519.cr.yp.to/) (as implemented by the golang library crypto/ed25519.Sign).\n\nDeprecated: This field is replaced by StubPKCS10Request. If StubPKCS10Request is set, this field must be empty.",
+          "description": "proofOfPossession is a proof that the requesting kubelet holds the private key corresponding to pkixPublicKey.\n\nIt is contructed by signing the ASCII bytes of the pod's UID using `pkixPublicKey`.\n\nkube-apiserver validates the proof of possession during creation of the PodCertificateRequest.\n\nIf the key is an RSA key, then the signature is over the ASCII bytes of the pod UID, using RSASSA-PSS from RFC 8017 (as implemented by the golang function crypto/rsa.SignPSS with nil options).\n\nIf the key is an ECDSA key, then the signature is as described by [SEC 1, Version 2.0](https://www.secg.org/sec1-v2.pdf) (as implemented by the golang library function crypto/ecdsa.SignASN1)\n\nIf the key is an ED25519 key, the the signature is as described by the [ED25519 Specification](https://ed25519.cr.yp.to/) (as implemented by the golang library crypto/ed25519.Sign).\n\nDeprecated: This field is replaced by StubPKCS10Request. If StubPKCS10Request is set, this field must be empty.",
           "format": "byte",
           "type": "string"
         },
@@ -5775,7 +5783,7 @@
           "type": "string"
         },
         "stubPKCS10Request": {
-          "description": "A PKCS#10 certificate signing request (DER-serialized) generated by Kubelet using the subject private key.\n\nMost signer implementations will ignore the contents of the CSR except to extract the subject public key. The API server automatically verifies the CSR signature during admission, so the signer does not need to repeat the verification.  CSRs generated by kubelet are completely empty.\n\nThe subject public key must be one of RSA3072, RSA4096, ECDSAP256, ECDSAP384, ECDSAP521, or ED25519. Note that this list may be expanded in the future.\n\nSigner implementations do not need to support all key types supported by kube-apiserver and kubelet.  If a signer does not support the key type used for a given PodCertificateRequest, it must deny the request by setting a status.conditions entry with a type of \"Denied\" and a reason of \"UnsupportedKeyType\". It may also suggest a key type that it does support in the message field.",
+          "description": "stubPKCS10Request is a PKCS#10 certificate signing request (DER-serialized) generated by Kubelet using the subject private key.\n\nMost signer implementations will ignore the contents of the CSR except to extract the subject public key. The API server automatically verifies the CSR signature during admission, so the signer does not need to repeat the verification.  CSRs generated by kubelet are completely empty.\n\nThe subject public key must be one of RSA3072, RSA4096, ECDSAP256, ECDSAP384, ECDSAP521, or ED25519. Note that this list may be expanded in the future.\n\nSigner implementations do not need to support all key types supported by kube-apiserver and kubelet.  If a signer does not support the key type used for a given PodCertificateRequest, it must deny the request by setting a status.conditions entry with a type of \"Denied\" and a reason of \"UnsupportedKeyType\". It may also suggest a key type that it does support in the message field.",
           "format": "byte",
           "type": "string"
         },
@@ -7892,6 +7900,9 @@
           "description": "Will be used to create a stand-alone PVC to provision the volume. The pod in which this EphemeralVolumeSource is embedded will be the owner of the PVC, i.e. the PVC will be deleted together with the pod.  The name of the PVC will be `<pod name>-<volume name>` where `<volume name>` is the name from the `PodSpec.Volumes` array entry. Pod validation will reject the pod if the concatenated name is not valid for a PVC (for example, too long).\n\nAn existing PVC with that name that is not owned by the pod will *not* be used for the pod to avoid using an unrelated volume by mistake. Starting the pod is then blocked until the unrelated PVC is removed. If such a pre-created PVC is meant to be used by the pod, the PVC has to updated with an owner reference to the pod once the pod exists. Normally this should not be necessary, but it may be useful when manually reconstructing a broken cluster.\n\nThis field is read-only and no changes will be made by Kubernetes to the PVC after it has been created.\n\nRequired, must not be nil."
         }
       },
+      "required": [
+        "volumeClaimTemplate"
+      ],
       "type": "object"
     },
     "io.k8s.api.core.v1.Event": {
@@ -8028,7 +8039,8 @@
           "description": "Time of the last occurrence observed"
         }
       },
-      "type": "object"
+      "type": "object",
+      "x-kubernetes-map-type": "atomic"
     },
     "io.k8s.api.core.v1.EventSource": {
       "description": "EventSource contains information for an event.",
@@ -8497,8 +8509,7 @@
       },
       "required": [
         "targetPortal",
-        "iqn",
-        "lun"
+        "iqn"
       ],
       "type": "object"
     },
@@ -8557,8 +8568,7 @@
       },
       "required": [
         "targetPortal",
-        "iqn",
-        "lun"
+        "iqn"
       ],
       "type": "object"
     },
@@ -8693,14 +8703,14 @@
           "additionalProperties": {
             "$ref": "#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
           },
-          "description": "Default resource requirement limit value by resource name if resource limit is omitted.",
+          "description": "Default specifies resource limit values by resource name. These are applied to containers which do not specify their own limits for those resources.",
           "type": "object"
         },
         "defaultRequest": {
           "additionalProperties": {
             "$ref": "#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
           },
-          "description": "DefaultRequest is the default resource requirement request value by resource name if resource request is omitted.",
+          "description": "DefaultRequest specifies resource request values by resource name. These are applied to containers which do not specify their own requests for those resources.",
           "type": "object"
         },
         "max": {
@@ -8895,9 +8905,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "status"
-      ],
       "type": "object"
     },
     "io.k8s.api.core.v1.NFSVolumeSource": {
@@ -11729,7 +11736,7 @@
         },
         "divisor": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity",
-          "description": "Specifies the output format of the exposed resources, defaults to \"1\""
+          "description": "Divisor optionally indicates how the resource from the container should be scaled. If unset or 0, the resource is not scaled (divisor is treated as 1)."
         },
         "resource": {
           "description": "Required: resource to select",
@@ -12000,7 +12007,7 @@
       "required": [
         "gateway",
         "system",
-        "secretRef"
+        "volumeName"
       ],
       "type": "object"
     },
@@ -12051,7 +12058,7 @@
       "required": [
         "gateway",
         "system",
-        "secretRef"
+        "volumeName"
       ],
       "type": "object"
     },
@@ -12768,6 +12775,9 @@
           "type": "string"
         }
       },
+      "required": [
+        "volumeName"
+      ],
       "type": "object"
     },
     "io.k8s.api.core.v1.StorageOSVolumeSource": {
@@ -12794,6 +12804,9 @@
           "type": "string"
         }
       },
+      "required": [
+        "volumeName"
+      ],
       "type": "object"
     },
     "io.k8s.api.core.v1.Sysctl": {
@@ -13300,6 +13313,9 @@
           "description": "required specifies hard node constraints that must be met."
         }
       },
+      "required": [
+        "required"
+      ],
       "type": "object"
     },
     "io.k8s.api.core.v1.VolumeProjection": {
@@ -13791,7 +13807,8 @@
         "count",
         "lastObservedTime"
       ],
-      "type": "object"
+      "type": "object",
+      "x-kubernetes-map-type": "atomic"
     },
     "io.k8s.api.flowcontrol.v1.ExemptPriorityLevelConfiguration": {
       "description": "ExemptPriorityLevelConfiguration describes the configurable aspects of the handling of exempt requests. In the mandatory exempt configuration object the values in the fields here can be modified by authorized users, unlike the rest of the `spec`.",
@@ -15012,6 +15029,9 @@
           "description": "spec is the desired state of the IngressClass. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status"
         }
       },
+      "required": [
+        "spec"
+      ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
         {
@@ -15098,6 +15118,9 @@
           "description": "parameters is a link to a custom resource containing additional configuration for the controller. This is optional if the controller does not require extra parameters."
         }
       },
+      "required": [
+        "controller"
+      ],
       "type": "object"
     },
     "io.k8s.api.networking.v1.IngressList": {
@@ -15188,10 +15211,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "port",
-        "protocol"
-      ],
       "type": "object"
     },
     "io.k8s.api.networking.v1.IngressRule": {
@@ -22531,9 +22550,6 @@
           "description": "spec represents the specification of the CSI Driver."
         }
       },
-      "required": [
-        "spec"
-      ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
         {
@@ -22661,9 +22677,6 @@
           "description": "status contains health and status information for the node's storage."
         }
       },
-      "required": [
-        "spec"
-      ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
         {
@@ -22755,9 +22768,6 @@
           "x-kubernetes-patch-strategy": "merge"
         }
       },
-      "required": [
-        "drivers"
-      ],
       "type": "object"
     },
     "io.k8s.api.storage.v1.CSINodeStatus": {
@@ -23028,9 +23038,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "audience"
-      ],
       "type": "object"
     },
     "io.k8s.api.storage.v1.VolumeAttachment": {
@@ -23164,9 +23171,6 @@
           "description": "detachError represents the last error encountered during detach operation, if any. This field must only be set by the entity completing the detach operation, i.e. the external-attacher."
         }
       },
-      "required": [
-        "attached"
-      ],
       "type": "object"
     },
     "io.k8s.api.storage.v1.VolumeAttributesClass": {
@@ -23197,7 +23201,8 @@
         }
       },
       "required": [
-        "driverName"
+        "driverName",
+        "parameters"
       ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
@@ -23297,6 +23302,9 @@
           "description": "Status of the migration."
         }
       },
+      "required": [
+        "spec"
+      ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
         {
@@ -23401,6 +23409,9 @@
           "description": "Status of the migration."
         }
       },
+      "required": [
+        "spec"
+      ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
         {
@@ -24200,7 +24211,7 @@
       "type": "object"
     },
     "io.k8s.apimachinery.pkg.api.resource.Quantity": {
-      "description": "Quantity is a fixed-point representation of a number. It provides convenient marshaling/unmarshaling in JSON and YAML, in addition to String() and AsInt64() accessors.\n\nThe serialization format is:\n\n\t<quantity>        ::= <signedNumber><suffix>\n\t    (Note that <suffix> may be empty, from the \"\" case in <decimalSI>.)\n\t<digit>           ::= 0 | 1 | ... | 9\n\t<digits>          ::= <digit> | <digit><digits>\n\t<number>          ::= <digits> | <digits>.<digits> | <digits>. | .<digits>\n\t<sign>            ::= \"+\" | \"-\"\n\t<signedNumber>    ::= <number> | <sign><number>\n\t<suffix>          ::= <binarySI> | <decimalExponent> | <decimalSI>\n\t<binarySI>        ::= Ki | Mi | Gi | Ti | Pi | Ei\n\t    (International System of units; See: http://physics.nist.gov/cuu/Units/binary.html)\n\t<decimalSI>       ::= n | u | m | \"\" | k | M | G | T | P | E\n\t    (Note that 1024 = 1Ki but 1000 = 1k; I didn't choose the capitalization.)\n\t<decimalExponent> ::= \"e\" <signedNumber> | \"E\" <signedNumber>\n\nA decimal quantity is not capped at 2^63-1 in magnitude, and no quantity is limited to three decimal places: \"18446744073709551616\" keeps its value, and \"1.2345\" keeps its precision (String reports it as \"1234500u\"). Parsing does cap a binarySI quantity, silently, at 2^63-1: \"8Ei\" parses as 2^63-1. Parsing also preserves a value only down to nano, rounding a finer non-zero value away from zero, so \"0.9n\" becomes \"1n\". The int64 accessors round and may overflow on top of that: see Value, MilliValue and ScaledValue.\n\nWhen a Quantity is parsed from a string, it will remember the type of suffix it had, and will use the same type again when it is serialized.\n\nBefore serializing, Quantity will be put in \"canonical form\". This means that Exponent/suffix will be adjusted up or down (with a corresponding increase or decrease in Mantissa) such that:\n\n  - No precision is lost\n  - No fractional digits will be emitted\n  - The exponent (or suffix) is as large as possible.\n\nThe sign will be omitted unless the number is negative.\n\nExamples:\n\n  - 1.5 will be serialized as \"1500m\"\n  - 1.5Gi will be serialized as \"1536Mi\"\n\nNote that the quantity will NEVER be internally represented by a floating point number. That is the whole point of this exercise.\n\nNon-canonical values will still parse as long as they are well formed, but will be re-emitted in their canonical form. (So always use canonical form, or don't diff.)\n\nThis format is intended to make it difficult to use these numbers without writing some sort of special handling code in the hopes that that will cause implementors to also use a fixed point implementation.",
+      "description": "Quantity is a fixed-point representation of a number. It provides convenient marshaling/unmarshaling in JSON and YAML, in addition to String() and AsInt64() accessors.\n\nThe serialization format is:\n\n- `<quantity>`: `<signedNumber><suffix>`\n\n- `<digit>`: `0 | 1 | ... | 9`\n\n- `<digits>`: `<digit> | <digit><digits>`\n\n- `<number>`: `<digits> | <digits>.<digits> | <digits>. | .<digits>`\n\n- `<sign>`: `\"+\" | \"-\"`\n\n- `<signedNumber>`: `<number> | <sign><number>`\n\n- `<signedDigits>`: `<digits> | <sign><digits>`\n\n- `<suffix>`: `<binarySI> | <decimalExponent> | <decimalSI>`\n\n- `<binarySI>`: `Ki | Mi | Gi | Ti | Pi | Ei`\n\n- `<decimalSI>`: `n | u | m | \"\" | k | M | G | T | P | E`\n\n- `<decimalExponent>`: `\"e\" <signedDigits> | \"E\" <signedDigits>`\n\nNote that `<suffix>` may be empty, from the `\"\"` case in `<decimalSI>`. For `<binarySI>`, 1024 = 1Ki but 1000 = 1k; I didn't choose the capitalization. See http://physics.nist.gov/cuu/Units/binary.html.\n\nA decimal quantity is not capped at 2^63-1 in magnitude, and no quantity is limited to three decimal places: \"18446744073709551616\" keeps its value, and \"1.2345\" keeps its precision (String reports it as \"1234500u\"). Parsing does cap a binarySI quantity, silently, at 2^63-1: \"8Ei\" parses as 2^63-1. Parsing also preserves a value only down to nano, rounding a finer non-zero value away from zero, so \"0.9n\" becomes \"1n\". The int64 accessors round and may overflow on top of that: see Value, MilliValue and ScaledValue.\n\nWhen a Quantity is parsed from a string, it will remember the type of suffix it had, and will use the same type again when it is serialized.\n\nBefore serializing, Quantity will be put in \"canonical form\". This means that Exponent/suffix will be adjusted up or down (with a corresponding increase or decrease in Mantissa) such that:\n\n- No precision is lost\n\n- No fractional digits will be emitted\n\n- The exponent (or suffix) is as large as possible.\n\nThe sign will be omitted unless the number is negative.\n\nExamples:\n\n- 1.5 will be serialized as \"1500m\"\n\n- 1.5Gi will be serialized as \"1536Mi\"\n\nNote that the quantity will NEVER be internally represented by a floating point number. That is the whole point of this exercise.\n\nNon-canonical values will still parse as long as they are well formed, but will be re-emitted in their canonical form. (So always use canonical form, or don't diff.)\n\nThis format is intended to make it difficult to use these numbers without writing some sort of special handling code in the hopes that that will cause implementors to also use a fixed point implementation.",
       "type": "string"
     },
     "io.k8s.apimachinery.pkg.apis.meta.v1.APIGroup": {
@@ -24459,8 +24470,7 @@
         "type",
         "status",
         "lastTransitionTime",
-        "reason",
-        "message"
+        "reason"
       ],
       "type": "object"
     },

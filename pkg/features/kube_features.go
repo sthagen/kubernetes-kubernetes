@@ -357,13 +357,6 @@ const (
 	// Deployments and replica sets can now also track terminating pods via .status.terminatingReplicas.
 	DeploymentReplicaSetTerminatingReplicas featuregate.Feature = "DeploymentReplicaSetTerminatingReplicas"
 
-	// owner: @aojea
-	//
-	// The apiservers with the MultiCIDRServiceAllocator feature enable, in order to support live migration from the old bitmap ClusterIP
-	// allocators to the new IPAddress allocators introduced by the MultiCIDRServiceAllocator feature, performs a dual-write on
-	// both allocators. This feature gate disables the dual write on the new Cluster IP allocators.
-	DisableAllocatorDualWrite featuregate.Feature = "DisableAllocatorDualWrite"
-
 	// owner: @ffromani
 	// beta: v1.33
 	//
@@ -727,12 +720,6 @@ const (
 	// Enables kubelet to support memory QoS with cgroups v2.
 	MemoryQoS featuregate.Feature = "MemoryQoS"
 
-	// owner: @aojea
-	// kep: https://kep.k8s.io/1880
-	//
-	// Enables the dynamic configuration of Service IP ranges
-	MultiCIDRServiceAllocator featuregate.Feature = "MultiCIDRServiceAllocator"
-
 	// owner: torredil
 	// kep: https://kep.k8s.io/4876
 	//
@@ -764,12 +751,6 @@ const (
 	// Allows kube-proxy to use netlink directly for nftables operations,
 	// rather than executing the nft command-line binary.
 	NFTablesNetlink featuregate.Feature = "NFTablesNetlink"
-
-	// owner: @danwinship
-	// kep: https://kep.k8s.io/3866
-	//
-	// Allows running kube-proxy with `--mode nftables`.
-	NFTablesProxyMode featuregate.Feature = "NFTablesProxyMode"
 
 	// owner: @michaelasp
 	//
@@ -929,12 +910,6 @@ const (
 	//
 	// Enables PortForward to be proxied with a websocket client
 	PortForwardWebsockets featuregate.Feature = "PortForwardWebsockets"
-
-	// owner: @danwinship
-	// kep: https://kep.k8s.io/3015
-	//
-	// Enables PreferSameZone and PreferSameNode values for trafficDistribution
-	PreferSameTrafficDistribution featuregate.Feature = "PreferSameTrafficDistribution"
 
 	// owner: @jessfraz
 	//
@@ -1531,13 +1506,6 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.Beta},
 	},
 
-	DisableAllocatorDualWrite: {
-		{Version: version.MustParse("1.31"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.33"), Default: false, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.34"), Default: true, PreRelease: featuregate.GA},
-		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove after MultiCIDRServiceAllocator is GA
-	},
-
 	DisableCPUQuotaWithExclusiveCPUs: {
 		{Version: version.MustParse("1.33"), Default: true, PreRelease: featuregate.Beta},
 		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Deprecated},
@@ -1811,13 +1779,6 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 		{Version: version.MustParse("1.37"), Default: true, PreRelease: featuregate.Beta},
 	},
 
-	MultiCIDRServiceAllocator: {
-		{Version: version.MustParse("1.27"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.31"), Default: false, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.33"), Default: true, PreRelease: featuregate.GA},
-		{Version: version.MustParse("1.34"), Default: true, PreRelease: featuregate.GA, LockToDefault: true}, // remove in 1.37 (locked to default in 1.34)
-	},
-
 	MutableCSINodeAllocatableCount: {
 		{Version: version.MustParse("1.33"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.34"), Default: false, PreRelease: featuregate.Beta},
@@ -1841,12 +1802,6 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 
 	NFTablesNetlink: {
 		{Version: version.MustParse("1.37"), Default: true, PreRelease: featuregate.Beta},
-	},
-
-	NFTablesProxyMode: {
-		{Version: version.MustParse("1.29"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.31"), Default: true, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.33"), Default: true, PreRelease: featuregate.GA, LockToDefault: true},
 	},
 
 	NodeControllerLeaseCircuitBreaker: {
@@ -1968,12 +1923,6 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	PortForwardWebsockets: {
 		{Version: version.MustParse("1.30"), Default: false, PreRelease: featuregate.Alpha},
 		{Version: version.MustParse("1.31"), Default: true, PreRelease: featuregate.Beta},
-	},
-
-	PreferSameTrafficDistribution: {
-		{Version: version.MustParse("1.33"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.34"), Default: true, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.35"), Default: true, PreRelease: featuregate.GA, LockToDefault: true},
 	},
 
 	ProcMountType: {
@@ -2264,18 +2213,6 @@ var defaultVersionedKubernetesFeatureGates = map[featuregate.Feature]featuregate
 	apiextensionsfeatures.CRDObservedGenerationTracking: {
 		{Version: version.MustParse("1.35"), Default: false, PreRelease: featuregate.Beta},
 		{Version: version.MustParse("1.36"), Default: true, PreRelease: featuregate.Beta},
-	},
-
-	apiextensionsfeatures.CRDValidationRatcheting: {
-		{Version: version.MustParse("1.28"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.30"), Default: true, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.33"), Default: true, PreRelease: featuregate.GA, LockToDefault: true},
-	},
-
-	apiextensionsfeatures.CustomResourceFieldSelectors: {
-		{Version: version.MustParse("1.30"), Default: false, PreRelease: featuregate.Alpha},
-		{Version: version.MustParse("1.31"), Default: true, PreRelease: featuregate.Beta},
-		{Version: version.MustParse("1.32"), Default: true, LockToDefault: true, PreRelease: featuregate.GA},
 	},
 
 	genericfeatures.APIResponseCompression: {
@@ -2576,8 +2513,6 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 
 	DeploymentReplicaSetTerminatingReplicas: {},
 
-	DisableAllocatorDualWrite: {MultiCIDRServiceAllocator},
-
 	DisableCPUQuotaWithExclusiveCPUs: {},
 
 	DisableNodeKubeProxyVersion: {},
@@ -2686,8 +2621,6 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 
 	MemoryQoS: {},
 
-	MultiCIDRServiceAllocator: {},
-
 	MutableCSINodeAllocatableCount: {},
 
 	MutablePVNodeAffinity: {},
@@ -2697,8 +2630,6 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 	MutableSchedulingDirectivesForSuspendedJobs: {},
 
 	NFTablesNetlink: {},
-
-	NFTablesProxyMode: {},
 
 	NodeControllerLeaseCircuitBreaker: {featuregate.Feature(clientfeatures.AtomicFIFO)},
 
@@ -2747,8 +2678,6 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 	PodsAPI: {},
 
 	PortForwardWebsockets: {},
-
-	PreferSameTrafficDistribution: {},
 
 	ProcMountType: {UserNamespacesSupport},
 
@@ -2866,10 +2795,6 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 	WorkloadWithJob: {GenericWorkload},
 
 	apiextensionsfeatures.CRDObservedGenerationTracking: {},
-
-	apiextensionsfeatures.CRDValidationRatcheting: {},
-
-	apiextensionsfeatures.CustomResourceFieldSelectors: {},
 
 	genericfeatures.APIResponseCompression: {},
 
